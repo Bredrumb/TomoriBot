@@ -50,22 +50,13 @@ export interface StatusPageRendererInput {
 export type StatusControlRow = ActionRowData<ButtonComponentData> | ActionRowData<StringSelectMenuComponentData>;
 
 export interface StatusDashboardIdentity {
-  /** The persona to preserve in subsequent category and page routes. */
   selectedPersonaId?: number | null;
-  /** Fresh personas used only when the Persona category is visible. */
   personas?: readonly TomoriState[];
-  /** Entry offset for the visible Persona selector range. */
   personaSelectStart?: number;
 }
 
 type DashboardPageField = SummaryEmbedOptions["fields"][number] | { separator: true };
 
-/**
- * Common Components V2 page shape used by the status and stats dashboards.
- *
- * Both surfaces already produce localized field arrays. Sharing the layout primitive keeps their
- * flows from independently deciding where interactive rows belong.
- */
 export interface DashboardPage extends Omit<SummaryEmbedOptions, "fields" | "thumbnailUrl"> {
   fields: DashboardPageField[];
   thumbnailUrl?: string;
@@ -85,10 +76,7 @@ function fieldText(locale: string, field: SummaryEmbedOptions["fields"][number])
   return field.inline ? `**${name}:** ${value}` : `**${name}**\n${value}`;
 }
 
-/**
- * Renders status-style field arrays into a Components V2 container.
- * Action rows are placed before the body so category navigation remains visible above long status values.
- */
+// Action rows sit before the body so category navigation stays visible above long status values.
 export function buildDashboardPagePayload(input: StatusPageRendererInput): {
   components: TopLevelComponentData[];
   flags: MessageFlags.IsComponentsV2;
@@ -167,10 +155,6 @@ export function buildDashboardPagePayload(input: StatusPageRendererInput): {
   );
 }
 
-/**
- * Renders persistent category controls. Persona is a normal global route; an optional selected
- * persona ID is carried on every button while the dashboard is displaying a persona.
- */
 function categoryButtonRows(
   _interactionId: string,
   locale: string,
@@ -389,9 +373,6 @@ export function dashboardPayload(
   });
 }
 
-/**
- * Displays a private status dashboard. Persistent controls are handled by the global route registry.
- */
 export async function renderStatusPageDashboard(
   interaction: ChatInputCommandInteraction,
   locale: string,

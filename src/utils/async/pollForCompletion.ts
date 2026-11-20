@@ -6,19 +6,13 @@ interface PollResult<T> {
   error?: string;
 }
 
-/** Configuration for the polling loop */
 export interface PollOptions<T> {
-  /** Function called each iteration to check completion status */
   pollFn: () => Promise<PollResult<T>>;
-  /** Milliseconds between poll attempts */
   intervalMs: number;
-  /** Maximum number of poll attempts before timeout */
   maxAttempts: number;
-  /** Optional callback invoked before each poll with the current attempt number */
   onPoll?: (attempt: number) => void;
-  /** Label for log messages (e.g. "GoogleVideoGeneration") */
   logLabel?: string;
-  /** Stops polling at the next wait or attempt boundary; the remote job itself is not cancelled. */
+  // Local polling stops at the next wait or attempt boundary when aborted, without cancelling the remote job itself.
   abortSignal?: AbortSignal;
 }
 
@@ -40,17 +34,6 @@ function waitForNextPoll(intervalMs: number, signal: AbortSignal | undefined): P
   });
 }
 
-/**
- * Generic async polling utility for long-running operations.
- * Repeatedly calls pollFn at the specified interval until:
- *   1. pollFn returns { done: true, result } → resolves with result
- *   2. pollFn returns { done: true, error } → rejects with error
- *   3. maxAttempts is exceeded → rejects with timeout error
- *   4. abortSignal fires → rejects with a cancellation error
- *
- * @param options - Polling configuration
- * @throws Error if the operation fails or times out
- */
 export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> {
   const { pollFn, intervalMs, maxAttempts, onPoll, logLabel, abortSignal } = options;
 
@@ -76,7 +59,6 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
       return pollResult.result;
     }
 
-    // Log progress periodically (every 5th attempt)
     if (attempt % 5 === 0) {
       log.info(`${logLabel ?? "Poll"}: still waiting (attempt ${attempt}/${maxAttempts})`);
     }

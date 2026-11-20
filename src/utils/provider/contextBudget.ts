@@ -7,19 +7,12 @@ import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 
-/**
- * The context window history truncation works against, and the reply budget it reserves first.
- */
 export interface ContextBudget {
   exact?: boolean;
   contextLength: number;
   outputReserve: number;
 }
 
-/**
- * Resolves the budget the live pipeline truncates against, or null for a provider whose window
- * TomoriBot does not know (truncation is then skipped).
- */
 export async function resolveContextBudget(
   tomoriState: TomoriState,
   refreshLiveLimits = true,
@@ -30,9 +23,7 @@ export async function resolveContextBudget(
 
   const limits = await resolveModelLimits(tomoriState, refreshLiveLimits);
   if (!limits.contextWindow) return null;
-  // Reserve exactly what the request builder sends: over-reserving drops history that would have fit.
-  // The one exception is an OpenRouter model with no known ceiling, whose request omits max_tokens:
-  // the default reply budget is reserved so a long channel still trims instead of overflowing.
+  // Match the output cap so history stays intact, except unknown-ceiling OpenRouter models reserve default budget.
   return {
     contextLength: limits.contextWindow,
     outputReserve: resolveChatMaxOutputTokens({
@@ -44,9 +35,6 @@ export async function resolveContextBudget(
   };
 }
 
-/**
- * Drops the oldest history exchanges until the context fits the provider's budget.
- */
 export async function applyProviderContextTruncation(
   contextItems: StructuredContextItem[],
   tomoriState: TomoriState,

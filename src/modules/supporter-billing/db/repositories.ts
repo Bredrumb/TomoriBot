@@ -752,12 +752,7 @@ export class SupporterWebhookEventRepository {
     return row ? parseWebhookEvent(row) : null;
   }
 
-  /**
-   * F9: bound growth of the webhook-event idempotency table. Each row is a duplicate-delivery
-   * receipt, so `cutoff` MUST be well past Patreon's retry/replay window (default 30 days),
-   * because deleting a row younger than that would let a replayed delivery re-process. Deletes by
-   * `received_at` so the retention window is measured from intake.
-   */
+  // The cutoff must exceed Patreon's retry window because deleting a receipt early permits a replay to be processed again.
   async purgeAgedEvents(cutoff: Date): Promise<WebhookEventPurgeResult> {
     const rows = await this.client`
       DELETE FROM supporter_webhook_events
@@ -850,7 +845,6 @@ export class SupporterUsageStatisticsRepository {
     });
   }
 
-  /** @returns False when a row for the same provider request already exists. */
   async record(params: RecordSupporterUsageParams): Promise<boolean> {
     const rows = await this.client`
       INSERT INTO supporter_usage_statistics (
@@ -888,7 +882,6 @@ export class SupporterUsageStatisticsRepository {
 class SupporterCapabilityMarkerRepository {
   public constructor(private readonly client: SQL = defaultSql) {}
 
-  /** @returns The server's Discord ID, or null when the server has no model configuration row. */
   async setServerCapabilityFunded(
     serverId: number,
     capability: SubscriptionCapability,

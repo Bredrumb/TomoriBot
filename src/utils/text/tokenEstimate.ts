@@ -1,61 +1,21 @@
-/**
- * Shared character-based token estimator (the "Track A" fallback).
- *
- * These primitives are the single source of truth for "how many tokens is this
- * text, roughly?": used both by `/tool estimate cost` (when a provider exposes
- * no live token-counting API) and by the post-turn stat recorder
- * (`recordUsageStats`), so the two surfaces always agree on the same ratios.
- *
- * Important caveats (kept identical to the original cost.ts notes):
- * - Tokenization varies a lot by language (English vs Japanese), punctuation/JSON,
- *   and provider/model. These numbers are intentionally "ballpark".
- * - Japanese tokenizes denser than ~4 chars/token, so this over-counts JP-heavy
- *   text, so acceptable for rough statistics / cost estimates, never billing truth.
- * - Tool/function schemas (JSON) tokenize a bit denser than natural-language prose.
- */
 import type { StructuredContextItem } from "@/types/misc/context";
 
-/** Approximate characters per token for natural-language prose. */
 const CHARS_PER_TOKEN_TEXT = 4;
 
-/** Approximate characters per token for JSON-ish strings (tool/function schemas). */
 const CHARS_PER_TOKEN_JSON = 3.5;
 
-/**
- * Normalized, provider-agnostic token usage for a single provider response.
- *
- * The streaming orchestrator collapses every provider's native usage shape
- * (OpenAI `prompt_tokens`/`completion_tokens`, OpenRouter camelCase, Anthropic
- * flat `input_tokens`/`output_tokens`, Gemini `usageMetadata`) into this one
- * shape (see {@link normalizeProviderUsage}), so downstream consumers: the
- * post-turn stat recorder above all: never branch on provider.
- */
 export interface TokenUsage {
-  /** Total input processed, including cache reads and writes. */
+  // Normalized total including cacheReadTokens and cacheWriteTokens so downstream callers never add them twice or
+  // branch per provider.
   inputTokens: number;
-  /** Reported cache-read subset of inputTokens; absent means unknown. */
   cacheReadTokens?: number;
-  /** Reported cache-write subset of inputTokens; absent means unknown. */
   cacheWriteTokens?: number;
-  /** Real completion/output tokens billed for this response (incl. reasoning). */
+  // Normalized output total including reasoning tokens (such as Gemini thoughtsTokenCount) because providers bill
+  // them at the output rate.
   outputTokens: number;
-  /** Provider-reported charge in USD, when the provider returns one (OpenRouter `usage.cost`). */
   costUsd?: number;
 }
 
-/**
- * Normalize any provider's raw usage object into {@link TokenUsage}.
- *
- * Accepts the union of every shape the adapters surface in `metadata.usage`
- * (or, for Anthropic, flat on metadata): snake_case OpenAI, camelCase
- * OpenRouter, Anthropic `input_tokens`/`output_tokens`, and Gemini
- * `promptTokenCount`/`candidatesTokenCount` (+ `thoughtsTokenCount`, billed as
- * output). Returns null when no usable token counts are present, so callers can
- * cleanly fall back to the character estimate.
- *
- * @param raw - A provider usage object (or metadata that contains one), any shape.
- * @returns Normalized usage, or null if nothing parseable was found.
- */
 export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (!raw || typeof raw !== "object") return null;
   const u = raw as Record<string, unknown>;
@@ -97,9 +57,7 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (typeof u.input_tokens === "number") {
     inputTokens += (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
   }
-  // Output: completion/output tokens, Gemini candidates count. Gemini bills
-  //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
-  //    add them to avoid undercounting reasoning models.
+  // Add Gemini thoughtsTokenCount because reasoning tokens are billed at the output rate outside candidatesTokenCount.
   const outputTokens =
     num("completion_tokens", "completionTokens", "output_tokens", "outputTokens", "candidatesTokenCount") +
     num("thoughtsTokenCount");
@@ -113,17 +71,8 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   return usage;
 }
 
-/**
- * Sum the real per-response usage across all stream segments of one turn.
- *
- * A tool-using turn issues one provider request per tool-loop iteration, each
- * returning its own {@link TokenUsage}; the provider bills each request, so the
- * turn's true token cost is the sum across segments (both input and output).
- * Returns null when no segment surfaced real usage, signalling the caller to
- * fall back to the character estimate for the whole turn.
- *
- * Cache fields and cost are known only when every segment that reported usage reported that field.
- */
+// Every segment's inputTokens is summed because each tool-loop iteration is a separate billed request, and partial
+// cache or cost fields are dropped.
 export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }>): TokenUsage | null {
   let total: TokenUsage | null = null;
   for (const result of streamResults) {
@@ -143,30 +92,14 @@ export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }
   return total;
 }
 
-/**
- * Estimate token count from a prose character count.
- */
 export function charsToTokensText(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_TEXT);
 }
 
-/**
- * Estimate token count for JSON-ish strings (tools, schemas), which tokenize
- * slightly denser than prose.
- */
 export function charsToTokensJson(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_JSON);
 }
 
-/**
- * Approximate input tokens for an already-built context.
- *
- * Sums the character length of every text part across all context items and applies
- * the standard text ratio ({@link charsToTokensText}). Non-text parts (images/videos)
- * are intentionally not counted, so this is a deliberately rough estimate.
- * @param contextItems - The assembled runtime-parity context
- * @returns Estimated input token count
- */
 export function estimateContextItemsTokens(contextItems: StructuredContextItem[]): number {
   let totalChars = 0;
   for (const item of contextItems) {

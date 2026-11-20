@@ -28,7 +28,8 @@ function tokenKey(guildMcpId: number): string {
   return String(guildMcpId);
 }
 
-/** Config reads carry `oauth_status`, so the cache is invalidated only after a status change commits. */
+// Config reads carry oauth_status, so the guild MCP config cache is invalidated only after a status-changing
+// transaction commits.
 async function withGrantLock<T>(
   context: McpOAuthGrantContext,
   operation: (tx: SQL, markStatusChanged: () => void) => Promise<T>,
@@ -110,7 +111,6 @@ async function getMcpAccessToken(context: McpOAuthGrantContext): Promise<McpAcce
   }
 }
 
-/** Expires a rejected token so the next read refreshes it once; a grant that cannot refresh needs sign-in instead. */
 async function replaceRejectedMcpAccessToken(
   context: McpOAuthGrantContext,
   rejected: string,
@@ -139,7 +139,8 @@ async function replaceRejectedMcpAccessToken(
   return getMcpAccessToken(context);
 }
 
-/** Records the union of requested and challenged scopes, so Reconnect asks for everything the server wanted. */
+// Requested scopes are merged with challengedScope because servers may omit prior scopes, ensuring Reconnect asks for
+// all needed scopes.
 async function requireMcpReauthorization(context: McpOAuthGrantContext, challengedScope?: string): Promise<void> {
   coordinator.forget(tokenKey(context.guildMcpId));
   try {
@@ -198,7 +199,8 @@ export async function createMcpFetchAuthorization(
   };
 }
 
-/** Reconnect replaced the grant without anything rejecting the cached token, so `invalidate` would not match it. */
+// Cache eviction uses forget instead of invalidate because Reconnect replaces the grant out-of-band without a
+// rejected token to match.
 export function forgetMcpAccessToken(guildMcpId: number): void {
   coordinator.forget(tokenKey(guildMcpId));
 }

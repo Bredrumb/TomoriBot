@@ -9,171 +9,81 @@ import {
   runForcedGc,
 } from "@/utils/misc/processMemory";
 
-/**
- * ============================================================================
- * GUARD CONFIGURATION
- * All security limits and thresholds centralized here for easy tuning
- * ============================================================================
- */
-
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
-export const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
+export const GUARDS_ENABLED = IS_PRODUCTION;
 
 const MESSAGE_RATE_LIMITS = {
-  /**
-   * Maximum concurrent messages a single user can have active (processing + queued)
-   * across ALL servers. Prevents a single user from spamming the bot.
-   * @default 3 in production, Infinity in development
-   */
   MAX_USER_ACTIVE_MESSAGES: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_USER_ACTIVE_MESSAGES || "3", 10)
     : Number.POSITIVE_INFINITY,
 
-  /**
-   * Maximum concurrent messages a single server can have active (processing + queued)
-   * across ALL channels. Prevents a single server from monopolizing bot resources.
-   * @default 10 in production, Infinity in development
-   */
   MAX_SERVER_ACTIVE_MESSAGES: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_SERVER_ACTIVE_MESSAGES || "10", 10)
     : Number.POSITIVE_INFINITY,
 } as const;
 
 export const MEDIA_LIMITS = {
-  /**
-   * Default total number of messages fetched for context building.
-   * Actual runtime limit is configurable per server via /config message-fetch-limit.
-   * @default 80
-   */
   MESSAGE_FETCH_LIMIT: DEFAULT_MESSAGE_FETCH_LIMIT,
 
-  /**
-   * Number of most recent messages that can contain full media (images, videos, GIFs)
-   * Messages beyond this window will have media replaced with text placeholders
-   * @default 10 messages
-   */
   MEDIA_CONTEXT_WINDOW: Number.parseInt(process.env.MEDIA_CONTEXT_WINDOW || "10", 10),
 
-  /**
-   * Maximum size per individual media file in MB (for conversation context)
-   * Larger files will be rejected or downscaled
-   * @default 10 MB
-   */
   MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "10", 10),
 
-  /**
-   * Maximum size per individual GIF file in MB (for process_gif tool in dev)
-   * GIFs larger than this will be rejected before processing
-   * @default 50 MB
-   */
   MAX_GIF_SIZE_MB: Number.parseInt(process.env.MAX_GIF_SIZE_MB || "50", 10),
 } as const;
 
 export const PERSONA_LIMITS = {
-  /**
-   * Maximum size for persona avatar attachments (create/generate commands)
-   * Used for image processing operations (download, crop, base64 encode)
-   * @default 10 MB (matches Discord's standard upload limit)
-   */
+  // Capped at 10 MB by default because that matches Discord's standard upload limit.
   MAX_AVATAR_SIZE_MB: Number.parseInt(process.env.MAX_AVATAR_SIZE_MB || "10", 10),
 } as const;
 
 export const IMPORT_LIMITS = {
-  /**
-   * Maximum size for data export JSON files (personal/server memories)
-   * @default 2 MB
-   */
   MAX_DATA_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_DATA_IMPORT_SIZE_MB || "2", 10),
 
-  /**
-   * Maximum size for persona preset PNG files (image + embedded metadata)
-   * @default 10 MB
-   */
   MAX_PERSONA_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_PERSONA_IMPORT_SIZE_MB || "10", 10),
 
-  /**
-   * Maximum compressed size for a Character Card V3 (`.charx`) archive. An
-   * archive carries an asset tree whose expanded size the download bound cannot
-   * describe, so this value is a separate knob from the PNG/JSON bound.
-   * @default 10 MB
-   */
+  // Separate knob from PNG/JSON bounds because a compressed .charx archive carries an asset tree whose expanded size
+  // the download bound cannot describe.
   MAX_CHARX_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_CHARX_IMPORT_SIZE_MB || "10", 10),
 
-  /**
-   * Maximum decompressed size of the `card.json` payload inside a `.charx`
-   * archive. Only the card is decompressed; this bound is what stops a
-   * compressed bomb from spending memory on the one entry that is read.
-   * @default 4 MB
-   */
+  // Decompressed card.json cap prevents zip bombs on extraction, because card.json is the only .charx archive entry
+  // decompressed.
   MAX_CHARX_CARD_SIZE_MB: Number.parseInt(process.env.MAX_CHARX_CARD_SIZE_MB || "4", 10),
 
-  /**
-   * Maximum number of assets a `.charx` card may declare before the import is
-   * refused. Assets are not imported, so this only bounds the header scan.
-   * @default 500
-   */
+  // Header-scan cap on declared .charx assets, because assets are never imported and only the zip central directory
+  // scan needs bounding.
   MAX_CHARX_ASSETS: Number.parseInt(process.env.MAX_CHARX_ASSETS || "500", 10),
 
-  /**
-   * Maximum declared total size of a `.charx` card's embedded assets. Sizes come
-   * from the zip central directory, so a hostile tree is refused without being
-   * decompressed.
-   * @default 256 MB
-   */
+  // Declared asset total is checked from the zip central directory, so a hostile asset tree is rejected without
+  // decompressing entries.
   MAX_CHARX_ASSET_TOTAL_MB: Number.parseInt(process.env.MAX_CHARX_ASSET_TOTAL_MB || "256", 10),
 } as const;
 
 const PERSONA_RATE_LIMITS = {
-  /**
-   * Maximum persona operations (create/generate) per user per 24 hours
-   * Prevents volume-based DDoS via rapid successive uploads
-   * @default 25 in production, Infinity in development
-   */
   MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_PERSONA_OPERATIONS_PER_DAY || "25", 10)
     : Number.POSITIVE_INFINITY,
 } as const;
 
 const IMPORT_RATE_LIMITS = {
-  /**
-   * Maximum import operations per user per 24 hours
-   * Prevents volume-based DDoS via rapid successive imports
-   * @default 50 in production, Infinity in development
-   */
   MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_IMPORT_OPERATIONS_PER_DAY || "50", 10)
     : Number.POSITIVE_INFINITY,
 } as const;
 
 const DOCUMENT_RATE_LIMITS = {
-  /**
-   * Maximum document upload operations per user per 24 hours
-   * Prevents volume-based DDoS via rapid successive document uploads
-   * @default 20 in production, Infinity in development
-   */
   MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_DOCUMENT_OPERATIONS_PER_DAY || "20", 10)
     : Number.POSITIVE_INFINITY,
 } as const;
 
 const AVATAR_RATE_LIMITS = {
-  /**
-   * Maximum avatar changes per server (guild) per 24 hours
-   * Note: This is a guild-level quota, not user-level
-   * Prevents server avatar spam attacks
-   * @default 30 in production, Infinity in development
-   */
   MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
     ? Number.parseInt(process.env.MAX_AVATAR_OPERATIONS_PER_DAY || "30", 10)
     : Number.POSITIVE_INFINITY,
 } as const;
 
 export const FETCH_LIMITS = {
-  /**
-   * Maximum fetch response size in MB (byte size check via HEAD request)
-   * Prevents downloading excessively large webpages into memory
-   * @default 5 MB in production, 50 MB in development
-   */
   // NaN defeats both HEAD rejection and the streaming caps used by native fetch and Crawl4AI.
   MAX_FETCH_SIZE_MB: z.coerce
     .number()
@@ -182,76 +92,30 @@ export const FETCH_LIMITS = {
     .catch(GUARDS_ENABLED ? 5 : 50)
     .parse(process.env.MAX_FETCH_SIZE_MB ?? (GUARDS_ENABLED ? 5 : 50)),
 
-  /**
-   * Base maximum character count for fetch content
-   * This is dynamically reduced based on memory status using percentage cuts
-   * @default 50000 characters
-   */
   FETCH_CHAR_LIMIT: 50000,
 
-  /**
-   * Percentage cuts applied to FETCH_CHAR_LIMIT based on memory status
-   * Safe mode: 100% (50k chars)
-   * Warning mode: 30% (15k chars)
-   * Critical mode: 4% (2k chars)
-   */
-  MEMORY_REDUCTION_WARNING: 0.3, // 30% of base limit
-  MEMORY_REDUCTION_CRITICAL: 0.04, // 4% of base limit
+  MEMORY_REDUCTION_WARNING: 0.3,
+  MEMORY_REDUCTION_CRITICAL: 0.04,
 } as const;
 
 export const STREAMING_LIMITS = {
-  /**
-   * Maximum number of message flushes per stream session
-   * Prevents malicious prompts from causing excessive Discord API calls
-   * Each flush = 1 Discord message sent (semantically complete chunks)
-   * @default 40 in production, Infinity in development
-   */
   MAX_FLUSH_COUNT: GUARDS_ENABLED ? 40 : Number.POSITIVE_INFINITY,
 } as const;
 
-/**
- * Returns memory protection configuration, read lazily from process.env.
- * Must be a function (not a const) so values are read after secrets are
- * loaded in index.ts, so module-level consts evaluate before getAppSecrets() runs.
- */
+// Kept as a lazy function rather than a module-level const because module evaluation runs before getAppSecrets()
+// loads env overrides in index.ts.
 function MEMORY_PROTECTION() {
   return {
-    /**
-     * Total container memory limit in MB (AWS instance/ECS task limit).
-     * Set CONTAINER_MEMORY_LIMIT_MB in your environment to match actual allocation.
-     * @default 1024 MB
-     */
     CONTAINER_MEMORY_LIMIT_MB: Number.parseInt(process.env.CONTAINER_MEMORY_LIMIT_MB || "1024", 10),
 
-    /**
-     * Warning threshold as a fraction of total RSS (0.0 - 1.0).
-     * When exceeded, reduce media processing aggressiveness.
-     * @default 0.75 (75%)
-     */
     MEMORY_WARNING_THRESHOLD: Number.parseFloat(process.env.MEMORY_WARNING_THRESHOLD || "0.75"),
 
-    /**
-     * Critical threshold as a fraction of total RSS (0.0 - 1.0).
-     * When exceeded, enter emergency mode (text-only, force GC).
-     * @default 0.85 (85%)
-     */
     MEMORY_CRITICAL_THRESHOLD: Number.parseFloat(process.env.MEMORY_CRITICAL_THRESHOLD || "0.85"),
 
-    /**
-     * Emergency cooldown period in milliseconds after entering critical mode.
-     * During this time, all media processing is disabled.
-     * @default 60000 (1 minute)
-     */
     EMERGENCY_COOLDOWN_MS: Number.parseInt(process.env.EMERGENCY_COOLDOWN_MS || "60000", 10),
   };
 }
 
-/**
- * ============================================================================
- * MEMORY GUARD (Global Singleton)
- * Monitors total process memory and triggers circuit breaker when necessary
- * ============================================================================
- */
 export type MemoryStatus = "safe" | "warning" | "critical";
 
 export interface MemoryCheckResult {
@@ -260,7 +124,7 @@ export interface MemoryCheckResult {
   memoryLimitMB: number;
   percentUsed: number;
   shouldProcessMedia: boolean;
-  reducedMediaWindow?: number; // Suggested reduced media window during warning
+  reducedMediaWindow?: number;
 }
 
 interface MemoryEmergencyEvent {
@@ -330,14 +194,9 @@ class MemoryGuard {
   private isInEmergencyMode = false;
   private emergencyModeEnteredAt = 0;
 
-  /**
-   * Checks global process memory usage and returns status
-   * This is called BEFORE processing any media to prevent OOM
-   */
   checkMemory(): MemoryCheckResult {
     const protection = MEMORY_PROTECTION();
 
-    // Disabled in development
     if (!GUARDS_ENABLED) {
       return {
         status: "safe",
@@ -348,9 +207,7 @@ class MemoryGuard {
       };
     }
 
-    // Use RSS (Resident Set Size): the total memory the OS has allocated to this
-    // process, including heap, native buffers, and shared libraries. This is what
-    // the kernel's OOM killer tracks, so it's the correct metric for preventing crashes.
+    // Measure RSS rather than heap because the kernel OOM killer tracks total resident process memory.
     const rssBytes = process.memoryUsage().rss;
     const limitBytes = protection.CONTAINER_MEMORY_LIMIT_MB * 1024 * 1024;
 
@@ -402,7 +259,7 @@ class MemoryGuard {
         memoryLimitMB: protection.CONTAINER_MEMORY_LIMIT_MB,
         percentUsed,
         shouldProcessMedia: true,
-        reducedMediaWindow: 5, // Reduce to only last 5 messages
+        reducedMediaWindow: 5,
       };
     }
 
@@ -415,10 +272,6 @@ class MemoryGuard {
     };
   }
 
-  /**
-   * Enters emergency mode when critical RSS threshold is exceeded.
-   * Triggers garbage collection and sets cooldown timer.
-   */
   private enterEmergencyMode(rssUsedMB: number, percentUsed: number): void {
     const protection = MEMORY_PROTECTION();
     this.isInEmergencyMode = true;
@@ -450,15 +303,11 @@ class MemoryGuard {
     forceGarbageCollection();
   }
 
-  /**
-   * Gets the current media window based on memory status
-   * Dynamically reduces window during high memory pressure
-   */
   getMediaWindow(): number {
     const memCheck = this.checkMemory();
 
     if (memCheck.status === "critical") {
-      return 0; // No media in critical mode
+      return 0;
     }
 
     if (memCheck.status === "warning" && memCheck.reducedMediaWindow) {
@@ -468,35 +317,24 @@ class MemoryGuard {
     return MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW;
   }
 
-  /**
-   * Gets the current fetch character limit based on memory status
-   * Dynamically reduces fetch size during high memory pressure
-   * @returns Maximum characters allowed for fetch tool
-   */
   getFetchCharLimit(): number {
     const memCheck = this.checkMemory();
 
     if (memCheck.status === "critical") {
-      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL); // 4% = 2k chars
+      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL);
     }
 
     if (memCheck.status === "warning") {
-      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_WARNING); // 30% = 15k chars
+      return Math.floor(FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_WARNING);
     }
 
-    return FETCH_LIMITS.FETCH_CHAR_LIMIT; // 100% = 50k chars in safe mode
+    return FETCH_LIMITS.FETCH_CHAR_LIMIT;
   }
 
-  /**
-   * Gets the current memory status without full check result
-   */
   getStatus(): MemoryStatus {
     return this.checkMemory().status;
   }
 
-  /**
-   * Manually force emergency mode exit (for testing or admin commands)
-   */
   forceExitEmergencyMode(): void {
     log.warn("Manually forcing exit from emergency mode");
     this.isInEmergencyMode = false;
@@ -506,67 +344,29 @@ class MemoryGuard {
 
 export const memoryGuard = new MemoryGuard();
 
-/**
- * ============================================================================
- * QUOTA TRACKING SYSTEM
- * In-memory quota tracking for volume-based DDoS protection
- * ============================================================================
- */
-
-/**
- * Quota entry tracking usage count and reset timestamp
- */
 interface QuotaEntry {
-  /**
-   * Number of operations used within the current 24-hour window
-   */
   count: number;
 
-  /**
-   * Unix timestamp (milliseconds) when the quota resets (24 hours from first operation)
-   */
+  // Epoch milliseconds matching Date.now(), so expiry checks compare in the same unit.
   resetAt: number;
 }
 
-/**
- * Quota tracking result returned by check functions
- */
 interface QuotaCheckResult {
-  /**
-   * Whether the operation is allowed (quota not exceeded)
-   */
   allowed: boolean;
 
-  /**
-   * Unix timestamp when the quota resets (if quota exceeded)
-   */
   resetAt?: number;
 
-  /**
-   * Current operation count (if quota exceeded)
-   */
   current?: number;
 
-  /**
-   * Maximum allowed operations (if quota exceeded)
-   */
   max?: number;
 }
 
-const personaQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const documentQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
-const avatarQuotaMap = new Map<string, QuotaEntry>(); // Key: guildId (server-level)
+const personaQuotaMap = new Map<string, QuotaEntry>();
+const importQuotaMap = new Map<string, QuotaEntry>();
+const documentQuotaMap = new Map<string, QuotaEntry>();
+const avatarQuotaMap = new Map<string, QuotaEntry>();
 
-/** Length of every daily quota window: a fixed 24 hours from the first reserved operation. */
 const DAILY_QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/**
- * ============================================================================
- * RATE LIMIT GUARDS
- * Centralized rate limiting logic for messages and media
- * ============================================================================
- */
 
 interface RateLimitResult {
   allowed: boolean;
@@ -575,10 +375,6 @@ interface RateLimitResult {
   maxLimit?: number;
 }
 
-/**
- * Checks if a user has exceeded their message rate limit
- * @param userActiveCount - Current number of active messages for this user
- */
 export function checkUserRateLimit(userActiveCount: number): RateLimitResult {
   if (!GUARDS_ENABLED) {
     return { allowed: true };
@@ -598,10 +394,6 @@ export function checkUserRateLimit(userActiveCount: number): RateLimitResult {
   return { allowed: true };
 }
 
-/**
- * Checks if a server has exceeded their message rate limit
- * @param serverActiveCount - Current number of active messages for this server
- */
 export function checkServerRateLimit(serverActiveCount: number): RateLimitResult {
   if (!GUARDS_ENABLED) {
     return { allowed: true };
@@ -621,26 +413,8 @@ export function checkServerRateLimit(serverActiveCount: number): RateLimitResult
   return { allowed: true };
 }
 
-/**
- * ============================================================================
- * QUOTA CHECK/INCREMENT FUNCTIONS
- * Volume-based DDoS protection for upload operations
- * ============================================================================
- */
-
-/**
- * Reserves one slot in a daily quota map, creating or resetting the window as needed.
- *
- * Check and increment happen in one synchronous step so two concurrent callers cannot both read
- * the same count and each treat themselves as under the limit.
- *
- * @param quotaMap - Caller's own quota scope, keyed by whichever identifier that scope counts
- * @param key - Identifier the scope counts against
- * @param limit - Daily operation ceiling for this scope
- * @returns Quota check result; when allowed, the slot is already reserved
- */
+// Check and increment stay in one synchronous call so concurrent callers cannot both pass before the count updates.
 function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit: number): QuotaCheckResult {
-  // Disabled in development
   if (!GUARDS_ENABLED) {
     return { allowed: true };
   }
@@ -648,7 +422,6 @@ function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit
   const now = Date.now();
   const quota = quotaMap.get(key);
 
-  // First operation or expired quota - create with count 1 (atomically reserve)
   if (!quota || now >= quota.resetAt) {
     quotaMap.set(key, {
       count: 1,
@@ -666,61 +439,36 @@ function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit
     };
   }
 
-  // Atomically increment and return success
   quota.count++;
   return { allowed: true };
 }
 
-/**
- * Atomically checks and reserves a persona operation quota slot
- * Combines check and increment into a single operation to prevent race conditions
- * @returns Quota check result - if allowed, quota is already reserved
- */
 export function reservePersonaQuota(userId: string): QuotaCheckResult {
   return reserveDailyQuota(personaQuotaMap, userId, PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
-/**
- * Atomically checks and reserves an import operation quota slot
- * Combines check and increment into a single operation to prevent race conditions
- * @returns Quota check result - if allowed, quota is already reserved
- */
 export function reserveImportQuota(userId: string): QuotaCheckResult {
   return reserveDailyQuota(importQuotaMap, userId, IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
-/**
- * Atomically checks and reserves a document upload quota slot
- * Combines check and increment into a single operation to prevent race conditions
- * @returns Quota check result - if allowed, quota is already reserved
- */
 export function reserveDocumentQuota(userId: string): QuotaCheckResult {
   return reserveDailyQuota(documentQuotaMap, userId, DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
-/**
- * Atomically checks and reserves an avatar change quota slot
- * Combines check and increment into a single operation to prevent race conditions
- * Note: This is a guild-level quota, not user-level
- * @returns Quota check result - if allowed, quota is already reserved
- */
 export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
   return reserveDailyQuota(avatarQuotaMap, guildId, AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
-/** Format the same memory reading used for branching, since emergency clearing can change the next sample. */
+// Formats the caller's existing MemoryCheckResult rather than resampling, because emergency clearing can alter the
+// next reading.
 export function formatMemoryStatus(check: MemoryCheckResult): string {
   return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
 }
 
-/**
- * Initializes the quota cleanup interval
- * Removes expired quota entries every hour to prevent memory leaks
- * Should be called once during application startup
- * @public Dynamically loaded by `src/init/timers.ts` on main and release.
- */
+// Must be called once at startup because it does not guard against duplicate intervals.
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function initializeQuotaCleanup(): void {
-  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
   setInterval(() => {
     const now = Date.now();

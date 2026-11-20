@@ -166,11 +166,8 @@ function buildNavigationRow(
   };
 }
 
-/**
- * Two pickers share this screen, and a Components V2 message may not repeat a custom ID. The
- * trailing segment names the picker rather than its contents, so the mounted guide set can change
- * without orphaning a message that is still on screen.
- */
+// Custom IDs suffix the picker ID instead of guide contents because Components V2 forbids duplicate IDs and changing
+// guides would orphan live messages.
 function buildProviderSelectRow(
   locale: string,
   pickerId: string,
@@ -262,9 +259,7 @@ export function buildHelpDashboardPayload(
   const { category, page, variant } = resolveHelpSelection(categoryId, pageId, variantId);
   const activeVariant = variant ?? page.variants?.[0];
   const pageVariables = page.variables?.(locale) ?? {};
-  // The picker footer belongs to whichever node declares the picker, so it needs that node's
-  // variables rather than the page's: a variant scoped to one subsection would otherwise render the
-  // page's tokens and leave its own unresolved.
+  // Merge node-level variables last so subsection pickers do not leave variant-scoped tokens unresolved.
   const variantVariables = { ...pageVariables, ...activeVariant?.variables?.(locale) };
   const content: ComponentInContainerData[] = [
     buildCategoryRow(locale, category.id),

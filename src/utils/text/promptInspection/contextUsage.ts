@@ -17,11 +17,8 @@ const CONTEXT_SEGMENT_ORDER: readonly ContextSegmentId[] = [
 
 export type ContextCellId = ContextSegmentId | "free" | "reserved";
 
-/**
- * Colored squares are the only color Discord renders identically on desktop and mobile: an
- * `ansi` code block loses its colors on mobile, which would leave the legend unreadable there.
- * Nine squares exist, so the segment list cannot grow past seven without merging two.
- */
+// Colored squares are used because Discord strips ansi block colors on mobile, and only nine squares exist so
+// segments cannot exceed seven.
 const CONTEXT_CELL_SQUARES: Readonly<Record<ContextCellId, string>> = {
   instructions: "🟥",
   persona: "🟧",
@@ -34,7 +31,6 @@ const CONTEXT_CELL_SQUARES: Readonly<Record<ContextCellId, string>> = {
   reserved: "⬜",
 };
 
-/** One circle per segment square, drawn for a segment smaller than one cell. */
 const CONTEXT_SEGMENT_CIRCLES: Readonly<Record<ContextSegmentId, string>> = {
   instructions: "🔴",
   persona: "🟠",
@@ -45,7 +41,6 @@ const CONTEXT_SEGMENT_CIRCLES: Readonly<Record<ContextSegmentId, string>> = {
   tools: "🟤",
 };
 
-/** A full Record so that adding a context tag fails type checking until it is given a segment. */
 const TAG_SEGMENTS: Readonly<Record<ContextItemTag, ContextSegmentId>> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: "instructions",
   [ContextItemTag.SYSTEM_HUMANIZER_RULES]: "instructions",
@@ -81,16 +76,11 @@ interface ContextSegmentUsage {
 }
 
 export interface ContextUsage {
-  /** Non-empty segments in {@link CONTEXT_SEGMENT_ORDER}. */
   segments: ContextSegmentUsage[];
   inputTokens: number;
 }
 
-/**
- * Estimates how many input tokens each part of the prompt costs, with the same character
- * ratios as `/tool estimate cost`. Media parts are skipped because their cost differs per
- * provider, and provider tool schemas count toward the tools segment.
- */
+// Media parts are skipped because their token cost differs per provider.
 export function measureContextUsage(
   contextItems: readonly StructuredContextItem[],
   providerTools: readonly Record<string, unknown>[] | null,
@@ -122,30 +112,19 @@ const CONTEXT_GRID_CELLS = CONTEXT_GRID_COLUMNS * CONTEXT_GRID_ROWS;
 interface ContextGridPart {
   id: ContextCellId;
   tokens: number;
-  /** The square, or for a segment smaller than one cell, its circle. */
   glyph: string;
 }
 
 export interface ContextGrid {
-  /** Every part in display order, including zero-cell ones, for the legend. */
   parts: ContextGridPart[];
-  /** The denominator for percentages: the window when it is known, else the input itself. */
   capacityTokens: number;
   tokensPerCell: number;
-  /** Whether any segment is drawn as a circle, which the scale line then explains. */
   hasCircles: boolean;
   rows: string[];
 }
 
-/**
- * Lays the usage out as a 10x20 grid where each cell is 0.5% of the window.
- *
- * Free space is measured against the truncation budget rather than the raw window, and the gap
- * between them is drawn as reserved, so the free cells run out exactly where the live pipeline
- * starts dropping history. Any non-empty segment keeps at least one cell so a small slice stays
- * visible, and one smaller than a cell is drawn as a circle so that floor does not pass for its
- * size; the legend carries the exact figures.
- */
+// Free space tracks the truncation budget so free cells match history drops, and segments under one cell draw a
+// circle so their floor stays distinct.
 export function layoutContextGrid(usage: ContextUsage, budget: ContextBudget | null): ContextGrid {
   const parts: Array<{ id: ContextCellId; tokens: number }> = usage.segments.map(({ id, tokens }) => ({ id, tokens }));
 
@@ -194,10 +173,6 @@ export function layoutContextGrid(usage: ContextUsage, budget: ContextBudget | n
   };
 }
 
-/**
- * Largest-remainder allocation of `totalCells` in proportion to `weights`, with a floor of one cell
- * for every non-zero weight that `keepVisible` selects.
- */
 function allocateCells(
   weights: readonly number[],
   totalCells: number,

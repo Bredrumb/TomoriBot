@@ -1,22 +1,3 @@
-/**
- * @file download-tokenizers.ts
- * @description Downloads tokenizer assets from HuggingFace for the logit-bias system.
- *
- * Usage:
- *   bun run setup:tokenizers                     # Download missing families
- *   bun run setup:tokenizers --force             # Re-download all families
- *   bun run setup:tokenizers --family gemma3     # Download a specific family only
- *   HF_TOKEN=hf_xxx bun run setup:tokenizers    # Use HuggingFace auth token (required for gated models)
- *
- * Gated Models:
- *   Most tokenizer repos require accepting a HuggingFace license agreement and a PAT.
- *   Without HF_TOKEN, gated repos return 401/403 and the family is skipped with a warning.
- *
- * Exit codes:
- *   0: all families downloaded (or already present)
- *   1: one or more families failed or were access-denied
- */
-
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { createHash } from "node:crypto";
@@ -46,9 +27,6 @@ const force = args.includes("--force");
 const familyFlagIndex = args.indexOf("--family");
 const targetFamily = familyFlagIndex !== -1 ? args[familyFlagIndex + 1] : null;
 
-/**
- * Builds the HuggingFace resolve URL for a specific file in a repo.
- */
 function buildAssetUrl(family: TokenizerFamily, file: string): string {
   const remotePath = family.paths?.[file] ?? file;
   return family.source === "github"
@@ -61,10 +39,6 @@ function isAssetComplete(filePath: string, expectedHash?: string): boolean {
   return !expectedHash || createHash("sha256").update(fs.readFileSync(filePath)).digest("hex") === expectedHash;
 }
 
-/**
- * Checks whether all required files for a family already exist on disk and
- * are non-empty. Returns true only if every file passes.
- */
 function isFamilyComplete(familyName: string, family: TokenizerFamily): boolean {
   for (const file of family.files) {
     const filePath = path.join(TOKENIZER_BASE_DIR, familyName, file);
@@ -73,15 +47,6 @@ function isFamilyComplete(familyName: string, family: TokenizerFamily): boolean 
   return true;
 }
 
-/**
- * Downloads a single file from HuggingFace to the destination path.
- * Streams the response body directly to disk via Bun.write() to avoid
- * buffering large tokenizer files in memory.
- *
- * @param url     - Full HuggingFace resolve URL
- * @param destPath - Absolute path to write the downloaded file
- * @param hfToken  - Optional HuggingFace PAT for gated model access
- */
 async function downloadFile(
   url: string,
   destPath: string,
@@ -129,11 +94,6 @@ async function downloadFile(
   return "ok";
 }
 
-/**
- * Prints the HuggingFace access-denied guidance for a gated model family.
- * @param familyName - The tokenizer family name (e.g. "gemma3")
- * @param hasToken   - Whether HF_TOKEN was provided in the environment
- */
 function printAccessDeniedGuide(familyName: string, repo: string, hasToken: boolean): void {
   if (hasToken) {
     console.warn(`  ⚠ ${familyName}: access denied — your HF_TOKEN may not have access to this repo.`);
@@ -147,14 +107,6 @@ function printAccessDeniedGuide(familyName: string, repo: string, hasToken: bool
   }
 }
 
-/**
- * Downloads all files for a single tokenizer family.
- * Skips the family entirely if complete and --force is not set.
- *
- * @param familyName - Key from manifest (e.g. "gemma3")
- * @param hfToken    - Optional HuggingFace PAT
- * @returns The result status for this family
- */
 async function downloadFamily(
   familyName: string,
   family: TokenizerFamily,

@@ -177,9 +177,8 @@ describe("mergeConsecutiveSameRole", () => {
   });
 
   it("treats a tool_calls assistant turn as a merge boundary (preserves wiring, no orphan)", () => {
-    // Mirrors the OpenAI-compatible array when strict_role_alternation is ON and function/tool
-    // history follows a trailing dialogue assistant turn. Merging the two adjacent assistant turns
-    // would drop the second's top-level tool_calls and orphan the matching tool result.
+    // Merging adjacent assistant turns when strict_role_alternation is ON would drop tool_calls and orphan the
+    // matching tool result.
     const input = [
       { role: "user", content: "hi" },
       { role: "assistant", content: "let me check that" },
@@ -193,14 +192,11 @@ describe("mergeConsecutiveSameRole", () => {
 
     const merged = mergeConsecutiveSameRole(input) as unknown as Array<Record<string, unknown>>;
 
-    // The plain dialogue assistant turn is preserved as its own (still-string) turn; not merged.
     expect(merged[1]).toEqual({ role: "assistant", content: "let me check that" });
 
-    // The tool_calls turn survives intact with its wiring.
     const toolCallsTurn = merged.find((m) => Array.isArray(m.tool_calls));
     expect((toolCallsTurn?.tool_calls as Array<{ id: string }> | undefined)?.[0]?.id).toBe("call_1");
 
-    // The tool result's tool_call_id still references a surviving tool_calls entry (no orphan).
     const toolMsg = merged.find((m) => m.role === "tool");
     const referenced = merged.some(
       (m) =>

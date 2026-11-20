@@ -18,7 +18,6 @@ describe("memory scope identifier", () => {
   it("falls back to the account id in a DM, where there is no guild", () => {
     const context = makeContext({ isThread: () => false }, "user-222222222222222222");
 
-    // A DM memory is scoped to the account, so the guild branch must not be invented.
     expect(memoryServerDiscId(context, MISSING_ID_ERROR)).toBe("user-222222222222222222");
   });
 

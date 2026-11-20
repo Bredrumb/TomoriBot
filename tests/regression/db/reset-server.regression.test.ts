@@ -1,12 +1,3 @@
-/**
- * Regression harness: the atomic server configuration reset.
- *
- * Covers resetRepository.resetServerConfiguration: every accepted singleton returning to its DDL
- * defaults, both preserve sets surviving, all 11 collections emptied, missing split rows repaired,
- * quota usage and short-term-memory data surviving, and rollback leaving no partial state.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { DEFAULT_HUMANIZER_SETTINGS, type HumanizerSettings } from "@/constants/humanizer";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
@@ -22,17 +13,11 @@ const CONTROL_SERVER_DISC_ID = "_rt_reset_control_001";
 let targetServerId = 0;
 let personaId = 0;
 let userId = 0;
-/** A server whose rows the reset created from scratch, holding pristine DDL defaults. */
 let controlServerId = 0;
 let seedLlmId: number | null = null;
 
-/**
- * Reads one table's classified reset columns for a server.
- *
- * Uses `unsafe` because column and table identifiers cannot be bound as parameters. The identifiers
- * come from the reset classification constant, never from test input, and the server id is still
- * passed as a bound parameter.
- */
+// SQL identifiers cannot be parameterized, so unsafe is required and stays safe because names come from the reset
+// constant with serverId bound.
 async function readResetColumns(
   table: string,
   columns: readonly string[],
@@ -47,7 +32,6 @@ async function countRows(table: string, serverId: number): Promise<number> {
   return (rows[0] as { n: number }).n;
 }
 
-/** Writes a non-default value into every singleton the reset claims to restore. */
 async function dirtyEverySingleton(serverId: number): Promise<void> {
   await testSql`
     INSERT INTO server_chat_configs (server_id) VALUES (${serverId})
@@ -167,7 +151,6 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
   }
 }
 
-/** Puts one row in each of the 11 collections the reset empties. */
 async function fillEveryCollection(serverId: number): Promise<void> {
   await testSql`
     INSERT INTO server_auto_trigger_persona_overrides (server_id, channel_disc_id, persona_id)
@@ -252,9 +235,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
     `;
     controlServerId = controlRow.server_id;
 
-    // The control server has no config rows at all, so the reset creates them through its INSERT
-    // branch. Comparing against it exercises a different branch from the target's ON CONFLICT
-    // path, which is what makes a missing `= DEFAULT` visible.
+    // Resetting an empty control server exercises the INSERT branch so missing `= DEFAULT` clauses surface against the
+    // target's ON CONFLICT path.
     await resetRepository.resetServerConfiguration(controlServerId);
 
     await dirtyEverySingleton(targetServerId);

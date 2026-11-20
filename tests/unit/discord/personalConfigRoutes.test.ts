@@ -97,21 +97,11 @@ import {
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * The single place this suite says which channels are text channels in the fake guild. Routes that
- * confirm a spotlight channel read `guild.channels.cache`, so a channel missing here is rejected as
- * not a text channel in this guild.
- */
 function makeChannelCache(channelIds: string[]): Map<string, RouteGuildChannel> {
   // ChannelType.GuildText is 0; the route guard rejects anything else.
   return new Map(channelIds.map((id) => [id, { type: 0, name: `channel-${id.slice(-4)}` }]));
 }
 
-/**
- * Every source file that compares `route.action`. The handler-parity gate unions their matches, so a
- * slice that moves handler branches into a new module adds its path here instead of editing the
- * assertion it would otherwise have to weaken.
- */
 const PERSONAL_CONFIG_HANDLER_SOURCES = [
   "src/utils/discord/interactions/personalConfigRoutes.ts",
   "src/utils/discord/interactions/personalConfigModalOpenRoutes.ts",
@@ -167,12 +157,6 @@ function collectComponents(value: unknown): ObservedComponent[] {
   return [...current, ...Object.values(record).flatMap(collectComponents)];
 }
 
-/**
- * The suite pins its actor's Discord snowflake because spotlight fingerprints bind the writable
- * scope to it, so the shared row arrives with this suite's actor and nothing else overridden. The
- * routes read the numeric id as required while the schema types it optional, so the row the suite
- * hands over carries the shared fixture's id explicitly.
- */
 function makeUser(overrides: Partial<UserRow> = {}): UserRow & { user_id: number } {
   const row = createUserRow({ user_disc_id: "user-123", ...overrides });
   return { ...row, user_id: row.user_id ?? 1 };
@@ -186,14 +170,8 @@ const SUITE_ACTOR: RouteInteraction["user"] = {
   displayAvatarURL: () => "https://cdn.example.invalid/tester.png",
 };
 
-/** The shared route fake, typed as the interaction the personal routes and global router accept. */
 type PersonalInteraction = RouteInteraction & GlobalRoutableInteraction;
 
-/**
- * A route interaction from this suite's actor in this suite's guild. `resolveScope` answers
- * `guild-123`/`user-123` whatever the interaction says, so a fake left on the shared factory's own
- * identity would dispatch as a different actor than the scope the route writes for.
- */
 function makePersonalInteraction(options: RouteInteractionOptions = {}): PersonalInteraction {
   return createRouteInteraction({
     guildId: "guild-123",
@@ -202,11 +180,6 @@ function makePersonalInteraction(options: RouteInteractionOptions = {}): Persona
   }) as PersonalInteraction;
 }
 
-/**
- * Positional wrapper over {@link createPersona}. The suite names personas by the lineage IDs it
- * asserts on, so the wrapper keeps those call sites reading as identity triples while the row shape
- * itself lives in the shared factory.
- */
 function makePersona(personaId: number, lineageId: number, name: string, isAlter = false): TomoriState {
   return createPersona({
     persona_id: personaId,
@@ -230,11 +203,6 @@ function makeParameterConfig(provider: string): UserSavedProviderConfigRow {
   } as unknown as UserSavedProviderConfigRow;
 }
 
-/**
- * A complete active-spotlight row. Production reads `channelDiscId`, `personaIds`,
- * `autoTriggerPersonaId`, and `expiresAt` from these rows, and the suite's own guild and actor fill
- * the three identity columns, so a call site states only the channel and the persona selection.
- */
 function makeSpotlight(
   channelDiscId: string,
   overrides: Partial<PersonalSpotlightStatus> = {},
@@ -252,7 +220,6 @@ function makeSpotlight(
   };
 }
 
-/** What the loaders report per capability when the account has no saved provider for it. */
 const EMPTY_ROUTING_ROWS: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
   speech_design: { capability: "speech_design", activeModelName: null, storedProvider: null, storedModelName: null },
   speech_clone: { capability: "speech_clone", activeModelName: null, storedProvider: null, storedModelName: null },
@@ -277,11 +244,6 @@ const EMPTY_CAPABILITY_PROVIDERS: Record<PersonalConfigManagedCapability, string
   video: [],
 };
 
-/**
- * Display info for an account with no saved providers. The loader always reports every capability
- * key, so a fixture that only varies the Fallbacks fields states those and inherits the rest rather
- * than omitting keys the rendered page does not read.
- */
 function makeModelDisplayInfo(
   overrides: Partial<Omit<PersonalConfigModelDisplayInfo, "routingRows" | "eligibleProvidersForCapability">> & {
     routingRows?: Partial<Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>>;
@@ -678,10 +640,6 @@ describe("personalConfigPanelCatalog", () => {
     expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(route);
   });
 
-  /**
-   * Route objects whose every field must survive a build and parse. One row per route so a codec
-   * regression names the field it lost instead of failing one 543-line test.
-   */
   const MODAL_AND_CONTROL_ROUTES: ReadonlyArray<readonly [string, PersonalConfigPanelRoute]> = [
     ["language-open", { action: "language-open", locale: "en-US" }],
     ["language-submit", { action: "language-submit", locale: "en-US", nonce: "nonce123456" }],
@@ -760,12 +718,8 @@ describe("personalConfigPanelCatalog", () => {
     expect(parsePersonalConfigPanelRoute(requireRoute(buildPersonalConfigRouteId(route)))).toEqual(route);
   });
 
-  // Pins the personal-config v2 wire contract: each literal custom ID and the exact route it must
-  // decode to. Encoding and decoding through one shared codec table cannot catch a field reordering,
-  // because both sides move together and a round-trip still succeeds; only literal bytes can. These
-  // strings were generated from the parser before the codec table existed, so they are the record of
-  // what already-open panels in a client will send. Regenerating them from the code under test would
-  // defeat the point.
+  // Literal wire strings pin field order for already-open clients because encoding and
+  // decoding through the shared codec table would still pass if fields were reordered.
   const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, PersonalConfigPanelRoute]> = [
     [
       "personal-config:v2:category:en-US:profile:general",
@@ -1063,11 +1017,6 @@ describe("personalConfigPanelCatalog", () => {
     expect(declared.filter((action) => !pinned.has(action))).toEqual([]);
   });
 
-  /**
-   * The retry codec accepts a four-segment form (no lineage) and a five-segment form
-   * (lineage present). Each pair is one case: the round-trip proves the field survives, and the
-   * field-absence assertions prove the shorter form does not fabricate the longer form's fields.
-   */
   const RETRY_ROUTES: ReadonlyArray<
     readonly [string, PersonalConfigPanelRoute, PersonalConfigPanelRoute, readonly string[]]
   > = [
@@ -1240,23 +1189,8 @@ describe("personalConfigPanelCatalog", () => {
   });
 
   it("keeps worst-case custom ID length at or below 100 characters for every action", () => {
-    // Realistic maxima justification:
-    // - locale: 7 characters ("zh-Hans") gives language expansion headroom for BCP-47 tags.
-    // - channelId: 20 digits covers the maximum unsigned 64-bit snowflake ID.
-    // - hours: 6 digits (999999) matches the max_length constraint of the duration modal text input.
-    // - blockIdx: 3 digits (999) covers up to 50,000 personas in 50-persona blocks.
-    // - chooserPage: 3 digits (999) covers up to 1,000 range pages.
-    // - start: 5 digits (99999) covers pagination offsets up to 100,000 rows.
-    // - autoIdx: 2 digits (50) is bounded by SPOTLIGHT_PERSONA_PAGE_SIZE (50).
-    // - mask: 10 characters ("b33j9ynrb3") is the full 50-bit base36 mask for a 50-persona block.
-    // - fp: 8 characters ("a1b2c3d4") produced by SHA-256 base64url fingerprint prefix.
-    // - nonce: 12 characters ("nonce1234567") produced by createNonce.
-    // - lineageId: 7 digits (9999999) covers auto-increment database primary keys.
-    // - provider: 24 characters ("custom~endpoint~provider") covers realistic custom provider identifiers.
-    // - capability: "embedding" (9 chars) is the longest PersonalConfigManagedCapability.
-    // - category: "advanced" (8 chars) is the longest PersonalConfigCategory.
-    // - page: "response-modes" (14 chars) is the longest PersonalConfigPage.
-    // - mode: "follow" (6 chars) is the longest deliberate trigger/tool mode.
+    // Worst-case values exercise maximum Discord/DB bounds (20-digit snowflake, 50-bit base36
+    // mask, 6-digit hours, longest enum literals) because custom IDs must stay <= 100 chars.
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
     expect(actions.length).toBe(66);
 
@@ -1298,7 +1232,6 @@ describe("personalConfigPanelCatalog", () => {
         const validRoute = requireRoute(validId);
         expect(parsePersonalConfigPanelRoute(validRoute)).not.toBeNull();
 
-        // Dropping one segment from the end
         const segmentsDropped = validRoute.segments.slice(0, -1);
         if (segmentsDropped.length >= 2) {
           const droppedParsedRoute = {
@@ -1313,7 +1246,6 @@ describe("personalConfigPanelCatalog", () => {
           }
         }
 
-        // For 4-segment retry, dropping one segment drops to 3 segments which must fail closed
         if (action === "retry" && !("lineageId" in route && route.lineageId !== undefined)) {
           const droppedTwice = {
             namespace: validRoute.namespace,
@@ -1323,7 +1255,6 @@ describe("personalConfigPanelCatalog", () => {
           expect(parsePersonalConfigPanelRoute(droppedTwice)).toBeNull();
         }
 
-        // Appending one extra segment to the end
         const appendedParsedRoute = {
           namespace: validRoute.namespace,
           version: validRoute.version,
@@ -1334,10 +1265,6 @@ describe("personalConfigPanelCatalog", () => {
     }
   });
 
-  /**
-   * Custom IDs a client could construct but the parser must refuse. Each row names the rule it
-   * exercises so a loosened parse reports which grammar rule it broke.
-   */
   const MALFORMED_ROUTES: ReadonlyArray<readonly [string, string]> = [
     ["foreign namespace", "other:v2:category:en-US:profile:general"],
     ["retired v1 version", "personal-config:v1:category:en-US:profile:general"],
@@ -1452,7 +1379,6 @@ describe("personalConfigOperations invariants", () => {
   it("setAppearance validates and updates physical appearance tags", async () => {
     const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => makeUser());
 
-    // Empty tags clears
     const clearResult = await personalConfigOperations.setAppearance({
       userId: 1,
       userDiscId: "user-123",
@@ -1461,7 +1387,6 @@ describe("personalConfigOperations invariants", () => {
     expect(clearResult).toEqual({ status: "success", tags: [] });
     expect(updateSpy).toHaveBeenCalledWith(1, { physical_appearance_tags: [] });
 
-    // Valid tags updates
     const validResult = await personalConfigOperations.setAppearance({
       userId: 1,
       userDiscId: "user-123",
@@ -1614,10 +1539,8 @@ describe("timezone modal fractional offsets", () => {
   });
 });
 
-// The route converts each empty modal field to null before the operation sees it, and null is what
-// `applyUserInfoBatch` turns into "inherit". Storing "" instead would be a distinct, non-null value
-// that permanently defeats the live-Discord-name fallback, and the operations-level tests cannot
-// catch it because they are handed nulls directly.
+// Empty modal fields must map to null (inherit) rather than "" because "" permanently
+// overrides the live Discord name fallback and operations tests only see pre-normalized nulls.
 describe("naming modal empty fields mean inherit", () => {
   it("submits a blank or whitespace-only field to the operation as null, not an empty string", async () => {
     const calls: string[] = [];
@@ -1660,10 +1583,8 @@ describe("personalConfigPanelCatalog Models routes", () => {
   });
 
   it("carries a colon-bearing provider through the codec without corrupting the segment grammar", () => {
-    // A colon is the segment separator, so an unencoded provider would make
-    // buildInteractionRouteId throw during panel render. The codec owns this encoding now, and the
-    // generated round-trip covers only colon-free providers, so this pins the composition rather
-    // than encodeProviderParam and the codec table separately.
+    // Colons separate route segments and generated round-trips only use colon-free providers,
+    // so this pins encodeProviderParam composition inside the codec.
     const provider = "custom:123456789";
     const customId = buildPersonalConfigRouteId({
       action: "model-modal-submit",
@@ -2757,8 +2678,8 @@ describe("Models panel rendering", () => {
     expect(payloadJson).toContain("personal-config:v2:randomizer-set:en-US:openrouter:off");
     expect(payloadJson).toContain("personal-config:v2:randomizer-set:en-US:openrouter:on");
 
-    // The primary model is chosen on Switch Models, so the Fallbacks page deliberately no longer
-    // restates it or the provider. A regression that reintroduces either belongs to this assertion.
+    // Fallbacks omits the primary model and provider because Switch Models owns them, so
+    // neither may reappear on this page.
     expect(payloadJson).not.toContain("Secondary");
     expect(payloadJson).not.toContain("Claude 3.5 Sonnet");
 
@@ -2770,7 +2691,6 @@ describe("Models panel rendering", () => {
       localizedCopy("en-US", "commands.personal.config.fallbacks_provider_select_placeholder"),
     );
 
-    // Effective behavior quote sits directly under the buttons row.
     expect(payloadJson).toContain("> I try the primary model first");
   });
 });
@@ -2814,7 +2734,7 @@ describe("Model assignment writes on modal submit", () => {
           user_saved_config_id: 1,
           user_id: 1,
           provider: "openrouter",
-          enabled_capabilities: [], // currently disabled (uses server default)
+          enabled_capabilities: [],
           assigned_capabilities: ["text"],
           llm_id: 101,
         } as unknown as UserSavedProviderConfigRow,
@@ -2839,7 +2759,6 @@ describe("Model assignment writes on modal submit", () => {
       customId,
     });
 
-    // Simulate modal value for model ID 102
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("102");
 
@@ -2864,7 +2783,7 @@ describe("Model assignment writes on modal submit", () => {
           user_saved_config_id: 1,
           user_id: 1,
           provider: "openrouter",
-          enabled_capabilities: ["text"], // already active override!
+          enabled_capabilities: ["text"],
           assigned_capabilities: ["text"],
           llm_id: 101,
         } as unknown as UserSavedProviderConfigRow,
@@ -2906,7 +2825,7 @@ describe("Model assignment writes on modal submit", () => {
   it("fails closed on modal submit when the chosen model is no longer available", async () => {
     const calls: string[] = [];
     const { dependencies, telemetry } = makeDependencies(calls, {
-      loadAvailableModelsForCapability: async () => [], // model 999 no longer exists
+      loadAvailableModelsForCapability: async () => [],
     });
 
     const route = createPersonalConfigInteractionRoute(dependencies);
@@ -3531,15 +3450,12 @@ describe("Range pagination workflow", () => {
 });
 
 describe("Operations that own their cache invalidation", () => {
-  // These seven call repository methods that do NOT invalidate internally, so the operations layer
-  // is the only thing that evicts the stale row. The redundant invalidations elsewhere in this file
-  // sit after methods that do self-invalidate and are safe to drop; these are not. Removing one is
-  // invisible to every other test, which is why this asserts the call directly.
+  // These seven operations call repository methods that do not self-invalidate, so only
+  // asserting invalidateUserCache directly catches an accidental eviction removal.
   it("invalidates the user cache for every operation whose repository method does not", async () => {
     const userCacheModule = await import("@/utils/cache/userCache");
-    // Every spy here is restored in the finally block. Bun shares module state across a test lane,
-    // so an unrestored repository mock silently breaks unrelated suites: leaving applyUserInfoBatch
-    // stubbed made the UpdateUserInfoTool suite fail while this file passed in isolation.
+    // Bun shares module state across a test lane, so every repository spy must be restored in
+    // finally to avoid silently leaking stubs into unrelated suites.
     const invalidateSpy = spyOn(userCacheModule, "invalidateUserCache").mockImplementation(() => {});
     const repoSpies = [
       spyOn(userRepository, "setLanguage").mockImplementation(async () => true),
@@ -3751,7 +3667,6 @@ describe("Fallbacks submission re-resolution and invariants", () => {
   type AvailableModels =
     ReturnType<typeof llmModelRepo.loadAvailableModelsForProvider> extends Promise<infer T> ? T : never;
 
-  /** Stubs the reads `setFallbacks` makes and captures the user-level chain it writes. */
   function stubFallbackSubmission(options: {
     rows: UserSavedProviderConfigRow[];
     chain: FallbackModelRef[];
@@ -4413,8 +4328,8 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
   });
 
   it("emits one persona option per lineage and never exceeds Discord's option cap", () => {
-    // Naming preferences are lineage-keyed, so two personas can legitimately share a lineage.
-    // Discord rejects a repeated option value outright with COMPONENT_OPTION_VALUE_DUPLICATED.
+    // Two personas can share a lineage, so options must deduplicate by lineage because Discord
+    // rejects duplicate option values with COMPONENT_OPTION_VALUE_DUPLICATED.
     const shared = [makePersona(1, 10, "Tomori"), makePersona(2, 10, "Tomori (alter)")];
     const many = Array.from({ length: 40 }, (_, index) => makePersona(100 + index, 200 + index, `P${index}`));
 
@@ -4447,9 +4362,8 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
   });
 
   it("renders both spotlight multi-selects as checkbox groups, never file uploads", () => {
-    // RawDiscordComponent.type is a bare number, so TypeScript accepts any of them. Component type 19
-    // is FileUpload and 22 is CheckboxGroup: picking 19 renders an upload box that submits no values,
-    // which for the unchecked-means-remove modal means every presented row is treated as unchecked.
+    // RawDiscordComponent.type is a bare number, so pinning 22 (CheckboxGroup) catches
+    // FileUpload (19), which submits no values and would delete every row on unchecked-means-remove.
     const setModal = buildSpotlightSetModal("en-US", "nonce123456", "123456789012345678", 0, 0, "a1b2c3d4", [
       { id: 1, name: "Tomori", isAlter: false },
       { id: 2, name: "Mirri", isAlter: true },
@@ -4484,9 +4398,8 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
   });
 
   it("resolves every composed Response Modes locale key to real text", () => {
-    // check-locales matches literal dot-notation strings only, so a key built from a template is
-    // invisible to it and a missing half would render its own key to the user with every gate green.
-    // Only `mode_` is still composed; the receipt handlers build it from the route's mode.
+    // check-locales only sees literal dot-notation keys, so this verifies dynamically composed
+    // `mode_` keys exist instead of rendering raw locale keys.
     for (const mode of ["off", "follow", "on"] as const) {
       const key = `commands.personal.config.mode_${mode}`;
       expect(localizer("en-US", key)).not.toBe(key);
@@ -4523,7 +4436,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             );
             if (!container) throw new Error("Expected the panel container");
 
-            // Find DTM action row and its surrounding text displays
             const dtmRowIndex = container.components.findIndex(
               (c) =>
                 c.type === ComponentType.ActionRow &&
@@ -4547,7 +4459,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             const dtmEffectDisplay = container.components[dtmRowIndex + 1] as TextDisplayComponentData;
             expect(dtmEffectDisplay.type).toBe(ComponentType.TextDisplay);
 
-            // Verify DTM effect sentence
             if (!isGuild) {
               expect(dtmEffectDisplay.content).toBe("> Deliberate Trigger Mode does not apply in direct messages");
             } else {
@@ -4559,7 +4470,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
               );
             }
 
-            // Verify DTM button styling and disabled states
             const dtmRow = container.components[dtmRowIndex] as ActionRowData<InteractionButtonComponentData>;
             expect(dtmRow.components).toHaveLength(3);
             const [dtmOff, dtmFollow, dtmOn] = dtmRow.components;
@@ -4579,7 +4489,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(dtmOn.style).toBe(dtmMode === "on" ? ButtonStyle.Secondary : ButtonStyle.Secondary);
             expect(dtmOn.disabled).toBe(dtmMode === "on");
 
-            // Find Tool Mode action row and its surrounding text displays
             const toolRowIndex = container.components.findIndex(
               (c) =>
                 c.type === ComponentType.ActionRow &&
@@ -4603,7 +4512,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             const toolEffectDisplay = container.components[toolRowIndex + 1] as TextDisplayComponentData;
             expect(toolEffectDisplay.type).toBe(ComponentType.TextDisplay);
 
-            // Verify Tool Mode effect sentence
             const isToolActive = toolMode === "on" || (toolMode === "follow" && isGuild && serverFlag);
             expect(toolEffectDisplay.content).toBe(
               isToolActive
@@ -4611,7 +4519,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
                 : "> All my tools are always available",
             );
 
-            // Verify Tool Mode button styling and disabled states
             const toolRow = container.components[toolRowIndex] as ActionRowData<InteractionButtonComponentData>;
             expect(toolRow.components).toHaveLength(3);
             const [toolOff, toolFollow, toolOn] = toolRow.components;
@@ -4631,7 +4538,6 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(toolOn.style).toBe(toolMode === "on" ? ButtonStyle.Secondary : ButtonStyle.Secondary);
             expect(toolOn.disabled).toBe(toolMode === "on");
 
-            // Ensure no retired status prose exists in the payload
             const serialized = JSON.stringify(payload);
             expect(serialized).not.toContain("(Off)");
             expect(serialized).not.toContain("(On)");
@@ -4762,12 +4668,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       readStatus: "fresh",
     });
     const privacyJson = JSON.stringify(privacyPayload);
-    // Section headers
     expect(privacyJson).toContain("**Your Data**");
     expect(privacyJson).toContain("**Cross-Server [STM](");
-    // Cross-server STM section footer
     expect(privacyJson).toContain("-# `/personal memories` always persist across servers, but not STM");
-    // State control buttons and effect quote
     expect(privacyJson).toContain("personal-config:v2:crossserver-set:en-US:off");
     expect(privacyJson).toContain("personal-config:v2:crossserver-set:en-US:on");
     expect(privacyJson).toContain("> I cannot remember recent conversations with you");
@@ -5358,8 +5261,8 @@ describe("Stable spotlight identity and destructive safety", () => {
     const personaGroup = setModal.components.find((c) => c.component?.custom_id?.startsWith("personas_"));
     expect(personaGroup?.component?.type).toBe(22);
 
-    // A persona catalog is a dropdown. This assertion previously pinned 21 (RadioGroup), which
-    // type-checks, renders nothing locally, and 400s in Discord past ten options.
+    // A persona catalog uses StringSelect (3) because RadioGroup (21) type-checks and renders
+    // nothing locally yet 400s in Discord past ten options.
     const autoComp = autoModal.components.find((c) => c.component?.custom_id?.startsWith("auto_trigger_"));
     expect(autoComp?.component?.type).toBe(3);
 
@@ -6038,9 +5941,6 @@ describe("Persona reachability beyond one modal", () => {
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", personas);
     // Second block, its first three personas selected, the third chosen as auto-trigger.
     const mask = encodeSpotlightMask(0b111n);
-    // A holder rather than a bare `let`: TypeScript narrows `let` to its `null` initializer and does
-    // not see the closure assignment, and the holder keeps `null` as the unwritten state the
-    // assertion below rejects.
     const captured: { written: { personaIds: number[]; autoTriggerPersonaId: number | null } | null } = {
       written: null,
     };
@@ -6121,9 +6021,8 @@ describe("Persona reachability beyond one modal", () => {
 });
 
 describe("Raw modal component types and their option bounds", () => {
-  // Discord rejects a RadioGroup or CheckboxGroup outside 2-10 options with BASE_TYPE_BAD_LENGTH,
-  // while a StringSelect holds 25. `RawDiscordComponent.type` is a bare number, so nothing but a
-  // test distinguishes them: a catalog behind a RadioGroup type-checks and 400s at runtime.
+  // RawDiscordComponent.type is a bare number, so pinning 3 (StringSelect, up to 25)
+  // catches RadioGroup/CheckboxGroup (2-10), which type-check yet 400 in Discord.
   const RADIO = 21;
   const CHECKBOX = 22;
   const STRING_SELECT = 3;
@@ -6134,8 +6033,8 @@ describe("Raw modal component types and their option bounds", () => {
     const options = (control?.options ?? []) as Array<{ value: string; label: string; default?: boolean }>;
 
     expect(control?.type).toBe(STRING_SELECT);
-    // Asserted in order, not sorted: the picker follows LOCALE_DISPLAY_ORDER so it reads the same
-    // as the docs language switcher and the README row. Sorting here would hide a reshuffle.
+    // Asserted in LOCALE_DISPLAY_ORDER instead of sorted so an accidental picker reshuffle
+    // away from the docs switcher and README order fails here.
     expect(options).toEqual([
       { value: "en-US", label: "English", default: false },
       { value: "ja", label: "日本語", default: true },
@@ -6782,7 +6681,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const onRoute = parsePersonalConfigPanelRoute(requireRoute(onButton?.customId ?? ""));
         expect(onRoute).toEqual({ action: "crossserver-set", locale: "en-US", enabled: true });
 
-        // Effective behavior quote row below
         const payloadJson = JSON.stringify(payload);
         expect(payloadJson).toContain("> I cannot remember recent conversations with you");
       });
@@ -6999,31 +6897,26 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const offButton = buttonRow?.components.find((b) => b.label === "Off");
         const onButton = buttonRow?.components.find((b) => b.label === "On");
 
-        // Off is the selection: disabled Secondary
         expect(offButton).toBeDefined();
         expect(offButton?.style).toBe(ButtonStyle.Secondary);
         expect(offButton?.disabled).toBe(true);
 
-        // On is an unavailable alternative: disabled Secondary
         expect(onButton).toBeDefined();
         expect(onButton?.style).toBe(ButtonStyle.Secondary);
         expect(onButton?.disabled).toBe(true);
 
         const payloadJson = JSON.stringify(payload);
-        // Precondition explained in prose
         expect(payloadJson).toContain(
           JSON.stringify(
             formatPanelProse("-# Model Randomizer requires at least one configured fallback model."),
           ).slice(1, -1),
         );
-        // Effective behavior quote is Off
         expect(payloadJson).toContain("> I try the primary model first");
       });
 
       it("keeps On selected from the stored flag when every fallback was cleared, while the behavior sentence reports the effective Off", () => {
-        // Clearing all five fallback slots leaves model_randomizer_enabled true, so this state is
-        // reachable. Showing Off here would deny a stored value that resumes the moment a fallback
-        // returns, so the selection tracks storage and the quote row tracks effect.
+        // Clearing all fallback slots leaves model_randomizer_enabled true, so the button tracks
+        // stored state (ready to resume) while the quote tracks effective Off.
         const payload = buildPersonalConfigPanelPayload({
           locale: "en-US",
           category: "models",
@@ -7062,7 +6955,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const offButton = buttonRow?.components.find((b) => b.label === "Off");
         const onButton = buttonRow?.components.find((b) => b.label === "On");
 
-        // On is the stored selection, so it stays disabled Secondary rather than being rewritten to Off.
         expect(onButton?.style).toBe(ButtonStyle.Secondary);
         expect(onButton?.disabled).toBe(true);
 
@@ -7082,7 +6974,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     });
 
     describe("Server Model Fallback state control rendering and custom IDs", () => {
-      /** The section's own control row, told apart from the randomizer row that shares the page. */
       function findServerFallbackRow(
         payload: PersonalConfigPanelPayload,
       ): ActionRowData<InteractionButtonComponentData> {
@@ -7272,9 +7163,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
-        // No DB write performed
         expect(calls.filter((c) => c.startsWith("setCrossServerStm"))).toHaveLength(0);
-        // Still repaints from authoritative state with noChangesReceipt
         const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
@@ -7494,7 +7383,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         ]);
         expect(blockSelect?.disabled).toBe(false);
 
-        // Block count 3 <= 25, so no pagination row
         const paginationButtons = components.filter((c) => c.customId?.includes(":s-blk-p:"));
         expect(paginationButtons).toHaveLength(0);
 
@@ -7531,7 +7419,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(blockSelect?.options?.[0]).toEqual({ value: "0", label: "Personas 1-50" });
         expect(blockSelect?.options?.[24]).toEqual({ value: "24", label: "Personas 1201-1250" });
 
-        // Block count 27 > 25, pagination row must be present
         const paginationButtons = components.filter((c) => c.customId?.includes(":s-blk-p:"));
         expect(paginationButtons.length).toBeGreaterThan(0);
       });
@@ -7604,7 +7491,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const cancelBtn = components.find((c) => c.customId?.includes(":s-auto-c:"));
         expect(cancelBtn).toBeDefined();
 
-        // blockCount 3 <= 25, no pagination row
         const paginationButtons = components.filter((c) => c.customId?.includes(":s-auto-p:"));
         expect(paginationButtons).toHaveLength(0);
       });
@@ -7675,7 +7561,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const cancelBtn = components.find((c) => c.customId?.includes(":spotlight-remove-cancel:"));
         expect(cancelBtn).toBeDefined();
 
-        // blockCount 3 <= 25, no pagination row
         const paginationButtons = components.filter((c) => c.customId?.includes(":s-rem-p:"));
         expect(paginationButtons).toHaveLength(0);
       });

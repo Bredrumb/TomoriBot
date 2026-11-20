@@ -11,22 +11,6 @@ import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
 } from "@/utils/provider/providerUsage";
-/**
- * Provider-agnostic vision inspection: resolve a vision model, call it with an image, and
- * return its text.
- *
- * Two callers need the same thing from different angles. `AnalyzeImageTool` answers a chat
- * model's question about an image it cannot see; `/persona generate` asks a vision model to
- * describe an uploaded avatar so a non-vision primary model can write the persona. Both must
- * pair the credentials they send with the model codename they name, because the vision model
- * can be saved under a different provider than the active text model, each with its own
- * encrypted key.
- *
- * That pairing is the reason this module exists rather than each caller resolving for itself:
- * `resolveCapabilityCredentials` can land on a provider that differs from the cached
- * `tomoriState.vision_llm` row, so the two are reconciled here against
- * `getResolvedCapabilityModelId` before any request goes out.
- */
 
 import { GoogleGenAI, type Part } from "@google/genai";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -51,18 +35,14 @@ import { normalizeProviderUsage, type TokenUsage } from "@/utils/text/tokenEstim
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 
-/** An image ready for a provider payload, as base64 plus the MIME type that decodes it. */
+// Raw base64 payload paired with its MIME type because provider adapters embed data directly alongside mimeType.
 export interface VisionImage {
   data: string;
   mimeType: string;
 }
 
-/**
- * Chat-completions endpoints for the OpenAI-compatible providers.
- *
- * A provider missing here has no compatible transport, so it is rejected instead of falling
- * back to an OpenAI URL that would receive a foreign bearer key.
- */
+// Explicit map with no OpenAI fallback so an unsupported provider is rejected instead of leaking a foreign bearer key
+// to OpenAI.
 const PROVIDER_CHAT_COMPLETIONS_URLS: Record<string, string> = {
   openrouter: "https://openrouter.ai/api/v1/chat/completions",
   zai: ZAI_GENERAL_CHAT_COMPLETIONS_URL,
@@ -71,23 +51,19 @@ const PROVIDER_CHAT_COMPLETIONS_URLS: Record<string, string> = {
   nvidia: "https://integrate.api.nvidia.com/v1/chat/completions",
 };
 
-/** Google-family providers share the GenAI SDK and accept images as inline parts. */
 const GOOGLE_SDK_PROVIDERS = new Set(["google", "vertex", "vertexexpress"]);
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 
-/**
- * Wall-clock ceiling for one caption call. A Discord interaction has no useful margin left by
- * the time a persona is being generated, so a stalled vision provider must not hold the flow.
- */
+// Caps a single caption call at 60s by default because persona generation leaves little Discord interaction margin
+// for a stalled provider.
 const parsedVisionCaptionTimeoutMs = Number.parseInt(process.env.VISION_CAPTION_TIMEOUT_MS ?? "", 10);
 const VISION_CAPTION_TIMEOUT_MS =
   Number.isFinite(parsedVisionCaptionTimeoutMs) && parsedVisionCaptionTimeoutMs > 0
     ? parsedVisionCaptionTimeoutMs
     : 60_000;
 
-/** Why a vision call could not produce text. Callers map these to their own user-facing copy. */
 type VisionCallFailureReason =
   | "credentials_unavailable"
   | "no_vision_model"
@@ -98,7 +74,6 @@ type VisionCallFailureReason =
 export interface VisionCallResult {
   ok: boolean;
   text?: string;
-  /** The provider that actually served the call, which is not always the cached one. */
   provider?: string;
   model?: string;
   failure?: { reason: VisionCallFailureReason; detail?: string };
@@ -106,14 +81,8 @@ export interface VisionCallResult {
   toolFailure?: ToolFailure;
 }
 
-/**
- * Resolves the vision model whose credentials were actually returned.
- *
- * The capability resolver reports a model id alongside the key, and the cached
- * `tomoriState.vision_llm` predates any personal BYOK override. Reloading on mismatch keeps
- * the transport (chosen from the credentials) and the codename (sent to the transport) from
- * describing two different models.
- */
+// Mismatched model IDs reload from DB because cached vision_llm predates personal BYOK overrides, pairing the
+// credential transport with its codename.
 async function resolveVisionModelForCredentials(
   creds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>,
   cachedVisionLlm: LlmRow | null | undefined,
@@ -125,13 +94,8 @@ async function resolveVisionModelForCredentials(
   return cachedVisionLlm ?? null;
 }
 
-/**
- * Resolves the backend model string for a provider.
- *
- * A custom endpoint's `llm_codename` is a local catalog value while the backend model string
- * lives on the endpoint row, so sending the catalog value is rejected as an unknown model.
- * Backends that ignore the field entirely (KoboldCpp and similar) keep the codename.
- */
+// Custom endpoints use customEndpointModelName because llm_codename is a local catalog key rejected by backends;
+// backends ignoring model keep llmCodename.
 export function resolveVisionApiModelName(
   provider: string,
   llmCodename: string,
@@ -150,21 +114,15 @@ export function resolveVisionApiModelName(
   return customEndpointModelName?.trim() || llmCodename;
 }
 
-/**
- * Describes images with a configured vision model and returns its text.
- *
- * @param prompt - What to ask about the image. The caller owns this text: a chat question and
- *                 a persona appearance caption want different things from the same pixels.
- * @param timeoutMs - Wall-clock ceiling for the call. Omit to use `VISION_CAPTION_TIMEOUT_MS`.
- *                    A caller that already enforces its own deadline passes it here instead of
- *                    layering a second, shorter one that would silently win.
- */
+// Callers enforcing their own deadline must pass timeoutMs rather than only abortSignal, since fallback
+// VISION_CAPTION_TIMEOUT_MS can silently win.
 export async function analyzeImageWithVisionModel(input: {
   serverId: number;
   locale?: string;
   image: VisionImage;
   prompt: string;
-  /** Cached vision row, used only when the resolved credentials name the same model. */
+  // Cached vision row is only a fast-path hint, because a resolved credential for a different model reloads the
+  // matching row instead.
   cachedVisionLlm?: LlmRow | null;
   userId?: number | null;
   abortSignal?: AbortSignal;
@@ -251,7 +209,6 @@ export async function analyzeImageWithVisionModel(input: {
   }
 }
 
-/** Raised when a provider has no vision transport, so the caller can name it to the user. */
 class UnsupportedVisionProviderError extends Error {
   constructor(public provider: string) {
     super(`Provider "${provider}" has no vision transport.`);
@@ -277,9 +234,7 @@ async function dispatchVisionRequest(
     return await callAnthropicVision(apiKey, model, image, prompt, signal);
   }
 
-  // The custom check needs the stored name, not the canonical one: a custom provider is keyed
-  // by connection (`custom:17`), and canonicalizing it to `custom` first would lose the
-  // connection the endpoint URL is looked up from.
+  // Pass rawProvider (custom:<id>) rather than canonical custom so resolveChatCompletionsUrl keeps the connection ID.
   const endpointUrl = resolveChatCompletionsUrl(rawProvider, creds.customEndpoint?.endpoint_url ?? null);
   if (!endpointUrl) {
     throw new UnsupportedVisionProviderError(provider);
@@ -296,12 +251,8 @@ async function dispatchVisionRequest(
   );
 }
 
-/**
- * Null when the provider has no compatible transport.
- *
- * @param provider - The stored provider name. A custom endpoint is `custom:<connectionId>`, so
- *                   it must not be canonicalized before it reaches this function.
- */
+// Provider must be the stored name without prior canonicalization, because custom endpoints use custom:<connectionId>
+// and return null otherwise.
 export function resolveChatCompletionsUrl(provider: string, customEndpointUrl?: string | null): string | null {
   const knownUrl = PROVIDER_CHAT_COMPLETIONS_URLS[provider.trim().toLowerCase()];
   if (knownUrl) return knownUrl;
@@ -342,7 +293,6 @@ async function callGoogleSdkVision(
   return text;
 }
 
-/** Builds the GenAI client a Google-family provider needs; each authenticates differently. */
 function buildGoogleClient(provider: string, apiKey: string): GoogleGenAI {
   if (provider === "vertex") {
     return createVertexClient(parseVertexCompositeKey(apiKey));

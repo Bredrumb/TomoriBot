@@ -10,12 +10,12 @@ import { OAUTH_CALLBACK_PATH } from "@/utils/oauth/settings";
 
 export const OAUTH_CLIENT_METADATA_PATH = "/oauth/client.json";
 
-/** `getOAuthPublicBaseUrl` admits plain HTTP only for a loopback origin. */
+// A protocol check suffices here because getOAuthPublicBaseUrl admits plain HTTP only for loopback origins.
 export function isLoopbackPublicBaseUrl(publicBaseUrl: string): boolean {
   return new URL(publicBaseUrl).protocol === "http:";
 }
 
-/** A public client: there is no secret to store or rotate, so PKCE is the only proof of possession. */
+// This registers a public client with no secret to store or rotate, so PKCE serves as the sole proof of possession.
 export function buildMcpOAuthClientMetadata(publicBaseUrl: string) {
   return {
     client_id: `${publicBaseUrl}${OAUTH_CLIENT_METADATA_PATH}`,
@@ -40,12 +40,6 @@ const defaultDependencies: McpOAuthClientDependencies = {
   fetchFn: createMcpOAuthDiscoveryFetch(),
 };
 
-/**
- * Uses the client metadata document where the server accepts one, and otherwise one Dynamic Client
- * Registration per issuer and redirect URI.
- *
- * @throws McpOAuthDiscoveryError When registration returns a confidential client
- */
 export async function resolveMcpOAuthClientId(
   server: McpAuthorizationServer,
   publicBaseUrl: string,

@@ -26,7 +26,7 @@ export type QuotaType = (typeof QUOTA_TYPES)[number];
 
 export type ModerationRemovalList = "user-blacklist" | "whitelist-channel" | "whitelist-role" | "persona-channel";
 
-/** Entries one removal checklist modal presents: five checkbox groups of ten. */
+// Capacity is 50 because a Discord removal modal holds up to five checkbox groups of ten entries each.
 export const MODERATION_REMOVAL_MODAL_CAPACITY = 50;
 
 export type UserBlacklistRemovalTarget =
@@ -197,11 +197,8 @@ const quotaTypeField: RouteFieldCodec<"quotaType", QuotaType> = {
   decode: (v) => parseQuotaType(v),
 };
 
-/**
- * Authoritative codec table for all moderation routes with fixed-width arguments.
- * Keyed by semantic action to guarantee compile-time exhaustiveness.
- * Preserves the exact v1 wire format: wire token, locale, and ordered field serialization.
- */
+// Field order and wire tokens must preserve the v1 wire format so existing moderation panel components remain
+// routable.
 export const MODERATION_ROUTE_CODECS: ModerationRouteCodecs = {
   category: {
     wireToken: "category",
@@ -343,9 +340,6 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ModerationFixedAction, Moder
   MODERATION_ROUTE_CODECS,
 );
 
-/**
- * Encodes a typed route object through the authoritative codec table or target variant builder into route segments.
- */
 export function buildModerationRouteSegments(route: ModerationPanelRoute): string[] {
   if (route.action === "user-blacklist-remove-prompt" || route.action === "user-blacklist-remove-confirm") {
     if (route.target.source === "personalization") {
@@ -356,9 +350,6 @@ export function buildModerationRouteSegments(route: ModerationPanelRoute): strin
   return buildRouteSegments(MODERATION_ROUTE_CODECS[route.action], route);
 }
 
-/**
- * Builds a custom ID from a typed route object using the authoritative codec table and exact target variants.
- */
 export function buildModerationRouteId(route: ModerationPanelRoute): string {
   return buildInteractionRouteId(
     MODERATION_ROUTE_NAMESPACE,

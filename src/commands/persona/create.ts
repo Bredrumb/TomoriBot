@@ -1,9 +1,5 @@
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
-/**
- * Preset Create Command
- * Manual personality creation with simple form fields
- */
 
 import type {
   ChatInputCommandInteraction,
@@ -72,11 +68,6 @@ function buildCreateResultPayload(
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("create").setDescription(localizer("en-US", "commands.persona.create.description"));
 
-/**
- * Executes the 'create' command
- * Manual personality creation with simple form input
- *
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -87,7 +78,6 @@ export async function execute(
   let replyUsesComponentsV2 = false;
 
   try {
-    // Check if command is run in a guild (server-only command)
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -114,7 +104,7 @@ export async function execute(
         placeholder: "commands.persona.create.modal.character_desc_placeholder",
         required: true,
         style: TextInputStyle.Paragraph,
-        maxLength: memoryLimits.maxAttributeLength, // Use runtime config limit (default: 2000)
+        maxLength: memoryLimits.maxAttributeLength,
       },
       {
         customId: EXAMPLE_USER_ID,
@@ -123,7 +113,7 @@ export async function execute(
         placeholder: "commands.persona.create.modal.example_user_placeholder",
         required: false,
         style: TextInputStyle.Paragraph,
-        maxLength: memoryLimits.maxSampleDialogueLength, // Use runtime config limit (default: 2000)
+        maxLength: memoryLimits.maxSampleDialogueLength,
       },
       {
         customId: EXAMPLE_BOT_ID,
@@ -131,7 +121,7 @@ export async function execute(
         placeholder: "commands.persona.create.modal.example_bot_placeholder",
         required: false,
         style: TextInputStyle.Paragraph,
-        maxLength: memoryLimits.maxSampleDialogueLength, // Use runtime config limit (default: 2000)
+        maxLength: memoryLimits.maxSampleDialogueLength,
       },
       {
         customId: FILE_UPLOAD_ID,
@@ -151,7 +141,7 @@ export async function execute(
         modalTitleKey: "commands.persona.create.modal.title",
         components: modalComponents,
       },
-      true, // Auto-defer with public reply
+      true,
     );
 
     if (modalResult.outcome !== "submit") {
@@ -192,7 +182,7 @@ export async function execute(
       return;
     }
 
-    // Validate content lengths (server-side validation, modal maxLength can be bypassed)
+    // Re-validated server-side because Discord modal maxLength limits can be bypassed.
     const descValidation = validateAttribute(characterDesc);
     if (!descValidation.isValid) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -239,7 +229,6 @@ export async function execute(
       }
     }
 
-    // Reserve persona operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reservePersonaQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -259,7 +248,6 @@ export async function execute(
     if (imageAttachment) {
       const memCheck = memoryGuard.checkMemory();
       if (memCheck.status === "critical") {
-        // Preserve modal inputs for user convenience
         const embed = new EmbedBuilder()
           .setTitle(localizedStatusTitle(locale, "rate_limit.error_memory_critical_title", ColorCode.ERROR))
           .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
@@ -374,7 +362,6 @@ export async function execute(
 
     log.success("Created preset passed validation");
 
-    // Get image for export (uploaded image or server avatar)
     let pngBuffer: Buffer;
 
     if (imageBuffer) {
@@ -391,7 +378,6 @@ export async function execute(
         return;
       }
     } else {
-      // Use server avatar
       try {
         const avatarBuffer = await getServerAvatar(interaction.guild, client);
         pngBuffer = await centerCropToSquare(avatarBuffer);
@@ -437,8 +423,6 @@ export async function execute(
       name: filename,
     });
 
-    // Detect DM context (create is guild-only, so this stays false) and
-    //     assemble the Components V2 result container.
     const isDM = !interaction.guild;
 
     const descriptionPreview = characterDesc.length > 200 ? `${characterDesc.substring(0, 200)}...` : characterDesc;
@@ -452,10 +436,8 @@ export async function execute(
         body: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
       });
     }
-    // Create is guild-only, so the Import Now button is always present: the
-    // next-steps copy references both the right-aligned PNG and the button.
-    // Next Steps is the last section, so the avatar thumbnail attaches here and
-    // the Import Now button lands tightly beneath it.
+    // Next Steps stays the last section so thumbnail-section attaches the avatar beside it and places Import Now
+    // directly beneath, matching the next-steps copy.
     sections.push({
       titleKey: "commands.persona.create.success_next_steps_title",
       bodyKey: "commands.persona.create.success_next_steps_description",
@@ -479,8 +461,6 @@ export async function execute(
       ...(isDM ? { footerKey: "commands.persona.create.avatar_update_skipped_dm" } : {}),
     };
 
-    // Send the result. Create is guild-only, so attach the manager-only
-    //     "Import Now" button to import the new persona as an alter in place.
     if (!interaction.guild) {
       await modalSubmitInteraction.editReply(buildCreateResultPayload(successContainerOptions, attachment));
       replyUsesComponentsV2 = true;
@@ -510,7 +490,6 @@ export async function execute(
       });
     }
 
-    // Quota already reserved at step 5 - no increment needed
     log.success(`Preset created successfully for: ${characterName}`);
   } catch (error) {
     log.error("Error in preset create command:", error);

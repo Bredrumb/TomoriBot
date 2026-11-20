@@ -14,7 +14,8 @@ export interface PreparedGeneratedImage {
   promptAttachment?: AttachmentBuilder;
 }
 
-/** One forbidden XML 1.0 character makes the entire XMP packet unreadable to strict parsers. */
+// XML 1.0 parsers reject an entire XMP packet on a single forbidden character, so illegal code points must be
+// stripped.
 function removeXmlIllegalCharacters(value: string): string {
   return Array.from(value, (character) => {
     const codePoint = character.codePointAt(0) ?? 0;
@@ -67,7 +68,6 @@ function buildPromptAttachment(locale: string, prompt: string, negativePrompt?: 
   return new AttachmentBuilder(Buffer.from(lines.join("\n"), "utf8"), { name: GENERATED_IMAGE_PROMPT_FILENAME });
 }
 
-/** Keep provider formats and their full prompts together while respecting the upload limit. */
 export async function prepareGeneratedImage(
   image: Buffer,
   prompt: string,

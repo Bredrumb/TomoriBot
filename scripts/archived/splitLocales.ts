@@ -1,13 +1,6 @@
-/**
- * One-time script to split the monolithic locale files into category-based directories.
- * Run with: bun run scripts/maintenance/splitLocales.ts
- * After verifying output, delete src/locales/en-US.ts and src/locales/ja.ts.
- */
-
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-/** Maps category file name → the top-level locale keys it will contain. */
 const CATEGORY_MAPPING: Record<string, string[]> = {
   general: ["general", "rate_limit", "events", "reminders"],
   commands: ["commands"],
@@ -16,11 +9,6 @@ const CATEGORY_MAPPING: Record<string, string[]> = {
   bridges: ["matrix"],
 };
 
-/**
- * Serializes a JavaScript value to a TypeScript source string using template literals
- * for strings and proper indentation for objects. Handles nested objects, arrays,
- * and special characters (backticks, `${`) that need escaping inside template literals.
- */
 function serializeToTS(value: unknown, depth = 0): string {
   const childIndent = "  ".repeat(depth + 1);
   const closingIndent = "  ".repeat(depth);

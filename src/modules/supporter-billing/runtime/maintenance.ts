@@ -6,16 +6,13 @@ import { log } from "@/utils/misc/logger";
 import { MemberKeyRepository, withMemberKeyLock } from "@/modules/supporter-billing/db/repositories/memberKeys";
 
 export interface SupporterBillingMaintenanceResult {
-  /** Finished (expired/consumed) OAuth-state rows deleted this run. */
   purgedOAuthStates: number;
-  /** Aged webhook-event idempotency rows deleted this run. */
   purgedWebhookEvents: number;
   purgedUsageStatistics: number;
 }
 
 export interface RunSupporterBillingMaintenanceOptions {
   now?: Date;
-  /** DB client used to construct the default repositories (ignored when a repository is injected). */
   client?: SQL;
   oauthStateRepository?: Pick<OAuthStateRepository, "purgeFinishedStates">;
   webhookEventRepository?: Pick<SupporterWebhookEventRepository, "purgeAgedEvents">;

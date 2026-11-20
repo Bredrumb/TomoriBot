@@ -6,19 +6,13 @@ import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
 import { isHostedPolicyEnvironment } from "@/utils/misc/hostedPolicy";
 import type { UserRow } from "@/types/db/schema";
 
-/**
- * The Privacy Policy governs the hosted instance only, so a self-hosted bot does not expose
- * this leaf. Registering it anyway would offer a link to a policy that does not apply.
- */
+// Gated on hosted environments because the Privacy Policy applies only to the hosted bot and would mislead
+// self-hosted users.
 export const isCommandEnabled = (): boolean => isHostedPolicyEnvironment();
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("privacy-policy").setDescription(localizer("en-US", "commands.legal.privacy-policy.description"));
 
-/**
- * Executes the 'privacy-policy' command
- * Shows a link to the Privacy Policy on the docs site with dynamic locale support
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

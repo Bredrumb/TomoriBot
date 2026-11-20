@@ -151,7 +151,6 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     nextConfig.model_randomizer_enabled = fallbackSettings.model_randomizer_enabled;
     const personalFallbackIds = fallbackSettings.fallback_model_refs.filter((r) => r.type === "llm").map((r) => r.id);
     nextConfig.fallback_llm_ids = personalFallbackIds;
-    // custom_endpoint_url/name/ctx are no longer on user saved configs; resolved from custom_endpoints at runtime
   }
 
   if (activeConfigs.embedding?.embedding_model_id) {

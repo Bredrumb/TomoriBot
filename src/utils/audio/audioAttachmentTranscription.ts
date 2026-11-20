@@ -24,9 +24,9 @@ import {
 
 const AUDIO_EXTENSION_REGEX = /\.(aac|flac|m4a|mp3|mpga|oga|ogg|opus|wav)$/i;
 
-/** OpenRouter's upstream transcription providers stop at 60 seconds, so waiting longer cannot help. */
+// OpenRouter's upstream transcription providers stop at 60 seconds, so waiting longer cannot help.
 const HOSTED_TRANSCRIPTION_TIMEOUT_MS = 60_000;
-/** OpenRouter rejects inline audio past its 25 MB upload cap on most providers. */
+// Limit stays at 24 MiB because OpenRouter rejects inline audio past its 25 MB upload cap on most providers.
 const HOSTED_TRANSCRIPTION_MAX_AUDIO_BYTES = 24 * 1024 * 1024;
 
 type AudioAttachmentFailureReason =
@@ -45,7 +45,6 @@ export interface AudioAttachmentTranscriptionResult {
   failureDetails?: string;
 }
 
-/** Returns true if the attachment is an audio file by MIME type or extension. */
 export function isAudioAttachment(attachment: Pick<Attachment, "contentType" | "name">): boolean {
   const mimeType = attachment.contentType?.toLowerCase() ?? "";
   if (mimeType.startsWith("audio/")) {
@@ -167,11 +166,8 @@ async function transcribeWithHostedModel(
   }
 }
 
-/**
- * Transcribes a message's first audio attachment through the sender's and then the server's target.
- *
- * Only a failed attempt moves on to the next target; audio that transcribes to nothing is final.
- */
+// Only a failed transcription falls back from the sender's target to the server's target, so empty transcripts are
+// final.
 export async function transcribeMessageAudioAttachment(
   message: Message,
   serverId: number,

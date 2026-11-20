@@ -8,19 +8,11 @@ import {
 import type { ChannelPromptMode } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
-/**
- * Resolved per-channel system prompt override.
- * `null` (cached) means the channel has no override : a negative-cache hit.
- */
 export type ChannelPromptOverride = {
   prompt: string;
   mode: ChannelPromptMode;
 };
 
-/**
- * In-memory TTL store for per-channel system prompt overrides.
- * Repository writes invalidate this store after successful override changes.
- */
 const channelPromptCache = new Map<string, { override: ChannelPromptOverride | null; expiresAt: number }>();
 
 const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
@@ -29,9 +21,8 @@ function getCacheKey(serverId: number, channelDiscId: string): string {
   return `${serverId}:${channelDiscId}`;
 }
 
-/**
- * Returns the cached override (or cached `null` for "no override"), or `undefined` on miss/expiry.
- */
+// Cached null represents a negative hit (no override) so callers can distinguish it from undefined on cache miss or
+// expiry.
 export function getChannelPromptCacheEntry(
   serverId: number,
   channelDiscId: string,

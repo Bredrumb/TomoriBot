@@ -26,6 +26,7 @@ import {
   getChannelTurnAbortSignal,
   isActiveNaturalStopTurn,
   isNudgeOutputActive,
+  isSuppressedTurnOutputActive,
   selfReplySuppressionUntil,
 } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
@@ -59,23 +60,16 @@ import { isMessageProxyInstanceBotPresent } from "@/utils/messageProxy/guildPres
 import type { Message } from "discord.js";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
-/**
- * Whether a moderator has timed the bot out in this guild.
- *
- * Reads the cached member only. Fetching would turn a per-turn gate into a Discord round trip,
- * and a stale answer is self-correcting: the send path still classifies the resulting 50013.
- */
+// Cache-only lookup avoids a per-turn Discord round trip, and stale state self-corrects because the send path handles
+// 50013.
 function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
   if (!client.user) return false;
   const botMember = guild.members.cache.get(client.user.id);
   return botMember?.isCommunicationDisabled() ?? false;
 }
 
-/**
- * Admission runs before the trigger user is loaded or registered, so their stored language
- * preference is unavailable; the invoker's client locale and then the guild locale are the best
- * signals at this depth.
- */
+// Admission runs before user registration or DB load, so stored user locale is unavailable and invoker or guild
+// locale is used.
 function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
   return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
 }
@@ -117,6 +111,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     conditioningInteraction: input.conditioningInteraction,
     nudgeSceneCatcherPersonaId: input.nudgeSceneCatcherPersonaId,
     borrowsTriggerMessage: input.borrowsTriggerMessage,
+    suppressSelfReply: input.suppressSelfReply,
     carriedExpressionDelivery: input.carriedExpressionDelivery,
     onGenerationResult: input.onGenerationResult,
     onQueueDiscard: input.onQueueDiscard,
@@ -196,6 +191,11 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     return ignored("seed_placeholder");
   }
 
+  if (!incoming.isManuallyTriggered && isLikelySelfMessage && isSuppressedTurnOutputActive(channel.id)) {
+    updateSelfReplyChainState(channel.id, false);
+    return ignored("self_reply_suppressed");
+  }
+
   const suppressionUntil = selfReplySuppressionUntil.get(channel.id);
   if (
     !incoming.isManuallyTriggered &&
@@ -273,10 +273,8 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     // No person is behind this chain to credit, and late gateway echoes of nudge output also land here.
     return ignored("persona_chain_without_origin");
   }
-  // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
-  // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
-  // to the author there would resolve the DM owner (and thus the DM's server key) to the
-  // bot itself, so prefer the channel's recipient whenever the author is the client user.
+  // System turns in DMs often pass a bot-authored message as trigger, so prefer the DM recipient over author to
+  // avoid resolving the DM owner to the bot.
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
   // A webhook's author ID is never a person (persona webhooks are even pooled per channel), so a system turn
   // anchored on one is credited to the bot account; Matrix relays keep their bridge webhook identity.
@@ -338,16 +336,14 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
       return blocked("cannot_send_in_channel");
     }
 
-    // A timed-out member keeps every permission bit, so the check above passes while Discord
-    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, so it
-    // has to be read from the member rather than inferred from permissions.
+    // Timed-out members retain all permission bits even though Discord rejects sends with 50013, so check timeout
+    // state on the member.
     if (isBotTimedOut(channel.guild, client)) {
       return blocked("bot_timed_out_in_guild");
     }
 
-    // Backstop for whatever the two checks above cannot see. They both reason about state that
-    // should predict a refusal; this one reacts to a refusal that actually happened, so it holds
-    // for causes not yet identified. Cleared the moment a send lands.
+    // Reactive backstop for unseen send refusals (cleared once a send lands) when permission and timeout checks
+    // still pass.
     if (getBlockedSendReason(channel.id)) {
       return blocked("recent_send_refused");
     }
@@ -440,10 +436,8 @@ async function resolveMessageProxyRecord(
     return null;
   }
 
-  // Client-owned webhooks (persona replies, user impersonation) can never be message-proxy reposts.
-  // Skipping them avoids guaranteed transport misses that would stall this message's admission for
-  // the full retry cap and extend live speedbump waits. Managed webhook ownership is verified
-  // before this check, so a proxy member may safely share a persona's display name.
+  // Skip client-owned webhooks to avoid proxy transport retries, because managed webhook ownership is verified
+  // beforehand so proxy members can safely share persona names.
   if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
     return null;
   }
@@ -521,7 +515,6 @@ async function resolveMessageProxyRecord(
   return record;
 }
 
-/** @internal Exported for focused admission regression tests. */
 export async function evaluateMessageProxyOriginalSpeedbump(args: {
   incoming: ChatIncoming;
   userDiscId: string;
@@ -733,9 +726,8 @@ function createNaturalStopPatterns(): RegExp[] {
     "ちょっと待って",
   ];
 
-  // Only the single-word English stops take a word boundary. The Japanese phrases must stay
-  // unwrapped: Japanese writes without inter-word spaces, so a boundary would reject every
-  // natural form that continues past the phrase (「もういい」 inside 「もういいよ」).
+  // Only English stops take word boundaries, because Japanese lacks spaces and boundaries reject natural
+  // continuations (such as 「もういい」 inside 「もういいよ」).
   const patterns: RegExp[] = [];
   for (const stop of basicStops) {
     patterns.push(new RegExp(wrapWithWordBoundary(stop), "iu"));
@@ -783,10 +775,8 @@ export async function resolveAdmissionChannelScope(
   }
 
   if (channel instanceof DMChannel) {
-    // A DM's synthetic server key is its human recipient, which is a property of the
-    // channel and not of whoever authored the trigger message. Guilds get this for free
-    // via guild.id; DMs must not fall back to the author or a bot-authored trigger
-    // message would key the lookup to the bot and report the DM as unconfigured.
+    // Key DMs on the human recipient rather than message author so bot-authored system triggers do not resolve the
+    // DM to the bot itself.
     const serverDiscId = incoming.systemTriggerIdentity?.serverDiscId ?? channel.recipientId ?? userDiscId;
     log.info(`Processing DM from user ${userDiscId} in channel ${channel.id}`);
     return {
@@ -864,12 +854,8 @@ async function loadEarlyTomoriState(
   }
 }
 
-/**
- * Downstream reply-target readers must use this instance rather than the channel cache, because the
- * capped cache can evict the target and webhook trust is recorded per message object.
- *
- * @internal Exported for focused admission regression tests.
- */
+// Downstream callers must reuse this returned Message instead of channel cache, because cache eviction drops it and
+// webhook trust lives per object.
 export async function resolveReferencedMessage(message: Message): Promise<Message | null> {
   const referenceId = message.reference?.messageId;
   if (!referenceId || !("messages" in message.channel)) {
@@ -885,7 +871,6 @@ export async function resolveReferencedMessage(message: Message): Promise<Messag
   return referencedMessage;
 }
 
-/** @internal Exported for focused admission regression tests. */
 export async function shouldBlockReplyToOtherBot(args: {
   incoming: ChatIncoming;
   earlyAllPersonas: TomoriState[];

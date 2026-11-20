@@ -27,8 +27,7 @@ type NaiImageParamOverrides = Pick<
   "nai_steps" | "nai_scale" | "nai_sampler" | "nai_noise_schedule" | "nai_cfg_rescale"
 >;
 
-// Fallbacks for servers that never saved a value through /config. The per-server overrides in
-// `server_novelai_imagegen_configs` are the supported way to tune these.
+// Fallback defaults for unconfigured servers; per-server tuning belongs in server_novelai_imagegen_configs.
 const DEFAULT_NAI_IMAGE_STEPS = 23;
 const DEFAULT_NAI_IMAGE_SCALE = 5;
 const DEFAULT_NAI_IMAGE_SAMPLER: NaiImageSampler = "k_euler_ancestral";

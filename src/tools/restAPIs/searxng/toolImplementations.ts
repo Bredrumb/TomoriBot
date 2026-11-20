@@ -1,16 +1,3 @@
-/**
- * SearXNG Tool Implementations.
- *
- * Function-call wrappers consumed by `webSearch/searxngEngine.ts`. Mirrors the
- * `brave/toolImplementations.ts` shape (validate args → call service → format
- * result into a ToolResult) so the engine layer can treat both providers
- * symmetrically.
- *
- * Image search additionally downloads + validates URLs and sends them to
- * Discord as attachments (same UX as Brave image search) by piggybacking
- * on the existing helpers.
- */
-
 import { AttachmentBuilder } from "discord.js";
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
@@ -31,10 +18,8 @@ import sharp from "sharp";
 import { searxngSearch, formatSearxngResults, extractSearxngImageUrls } from "./searxngService";
 import type { SearxngCategory } from "./types";
 
-// How many valid images to actually send to Discord (default 3, max 10).
 const SEARXNG_IMAGE_COUNT = Math.min(Math.max(1, Number.parseInt(process.env.SEARXNG_IMAGE_COUNT ?? "3", 10) || 3), 10);
-// How many candidate URLs to pull from SearXNG and validate (default 10, max 20).
-// Larger than SEARXNG_IMAGE_COUNT to absorb expected hotlink-protection failures.
+// Candidate validation pool exceeds SEARXNG_IMAGE_COUNT so hotlink-protection failures do not starve results.
 const SEARXNG_IMAGE_POOL = Math.min(
   Math.max(SEARXNG_IMAGE_COUNT, Number.parseInt(process.env.SEARXNG_IMAGE_POOL ?? "10", 10) || 10),
   20,
@@ -57,11 +42,6 @@ function createToolResult(
   };
 }
 
-/**
- * Execute a generic text-like search via SearXNG and return a formatted
- * ToolResult. Image category has its own implementation below because it also
- * downloads + posts attachments to Discord.
- */
 async function searxngTextLikeSearch(
   query: string,
   category: Exclude<SearxngCategory, "images">,
@@ -77,8 +57,6 @@ async function searxngTextLikeSearch(
 
   const formatted = formatSearxngResults(result.data, category, count);
 
-  // Encourage agentic follow-up fetches when URLs are present (same hook
-  //    used by Brave web/news/video results).
   const enhanced = addFetchCapabilityReminder(formatted);
 
   return createToolResult(true, `SearXNG ${category} search completed`, {
@@ -119,10 +97,6 @@ export async function searxng_category_search(
   }
 }
 
-/**
- * Compress an image to fit Discord's per-attachment size limit. Returns the
- * compressed buffer on success.
- */
 async function compressImage(imageUrl: string): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> {
   try {
     const response = await safeDownload(imageUrl, {
@@ -153,9 +127,6 @@ async function compressImage(imageUrl: string): Promise<{ success: boolean; buff
   }
 }
 
-/**
- * HEAD-probe + optional compression for a single image URL.
- */
 async function validateImageUrl(imageUrl: string): Promise<{
   url: string;
   valid: boolean;
@@ -206,10 +177,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       return createToolResult(false, "Invalid or missing query parameter", "Query is required");
     }
     const query = args.query;
-    // LLM-requested count caps at 10. When the LLM specifies a count, use 3×
-    // as the validation pool (capped at 30) so hotlink failures don't exhaust
-    // candidates before reaching sendCount. When no count is given, fall back
-    // to the SEARXNG_IMAGE_POOL env-var default.
+    // Use a 3x validation pool when count is specified so hotlink failures do not leave sendCount short.
     const sendCount =
       typeof args.count === "number" && args.count > 0 ? Math.min(Math.floor(args.count), 10) : SEARXNG_IMAGE_COUNT;
     const pool = typeof args.count === "number" ? Math.min(sendCount * 3, 30) : SEARXNG_IMAGE_POOL;
@@ -219,9 +187,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       return createToolResult(false, "SearXNG image search failed", result.error);
     }
 
-    // Filter out AVIF (Discord display issues) then cap to the resolved pool
-    //    before validation. Pool is larger than the send count to absorb
-    //    expected hotlink-protection failures from aggregated engines.
+    // Drop AVIF candidates before capping the pool because Discord fails to display AVIF images inline.
     const allUrls = extractSearxngImageUrls(result.data);
     const imageUrls = allUrls.filter((u) => !u.toLowerCase().includes(".avif")).slice(0, pool);
 
@@ -233,7 +199,6 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
     }
 
     if (!context?.channel) {
-      // No Discord channel, so fall back to text-format listing.
       return createToolResult(true, "SearXNG image search completed (text fallback)", {
         results: formatSearxngResults(result.data, "images"),
         status: "completed",
@@ -294,8 +259,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       });
     }
 
-    // Build Discord attachments, so cap to sendCount after validation
-    //    so pool failures don't cause us to send more than intended.
+    // Cap to sendCount after validation because the candidate pool is sized 3x larger than requested.
     const toSend = validated.slice(0, sendCount);
     const attachments: AttachmentBuilder[] = [];
     const compressionFlags: boolean[] = [];

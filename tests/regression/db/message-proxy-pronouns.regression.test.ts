@@ -6,11 +6,6 @@ import { userNamingRepository } from "@/utils/db/repositories/UserNamingReposito
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
-/**
- * One-time pronoun seed regression. A PluralKit member's public pronouns reach the synthetic
- * user's own `pronouns` setting on the attestation that first registers the identity, and no
- * later attestation touches that column again.
- */
 const SEED_KEY = "0f1e2d3c-4b5a-4968-8778-99aabbccddee";
 const EMPTY_KEY = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 const EDIT_KEY = "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e";

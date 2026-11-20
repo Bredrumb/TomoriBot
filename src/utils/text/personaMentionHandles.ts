@@ -20,13 +20,8 @@ export interface PersonaMentionCatalog {
   targetIndex: ParticipantTargetIndex;
 }
 
-/**
- * Builds a lookup for persona-directed `@name` text that should remain a plain
- * trigger token instead of being stripped as an unresolved Discord user mention.
- *
- * Values are canonical trigger words without the leading `@`; callers emit them
- * as `@${value}` so deliberate trigger mode can route the generated message.
- */
+// Map values omit the leading `@`, so callers must emit `@` plus the value for deliberate trigger routing instead of
+// stripping unresolved mentions.
 export function buildPersonaMentionCatalog(personas: readonly PersonaMentionSource[]): PersonaMentionCatalog {
   const map = new Map<string, string>();
   const aliases: ParticipantAlias[] = [];

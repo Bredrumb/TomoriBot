@@ -182,16 +182,8 @@ export class NvidiaProvider
     return await isListedInOpenAIModelCatalog({ provider: "nvidia", url: NVIDIA_MODELS_URL, modelId: codename });
   }
 
-  /**
-   * Validates a key with a one-token completion rather than `/v1/models`, which NIM serves without
-   * authentication and so accepted any string, including mistyped and expired keys.
-   *
-   * Only 401/403 fail validation. NIM retires hosted models often and queues free-tier requests,
-   * so a 404, 410, 429, or 5xx from the probe model says nothing about the key. NIM authenticates
-   * before it queues (a bad key is refused in under a second even on a model that holds valid
-   * requests for minutes), so a streaming probe still waiting for headers at the deadline has
-   * already passed authentication.
-   */
+  // NIM serves /v1/models unauthenticated and authenticates before queueing, so only 401/403 fail this completion
+  // probe while timeouts or other errors pass.
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), NVIDIA_KEY_VALIDATION_TIMEOUT_MS);
@@ -505,7 +497,6 @@ export class NvidiaProvider
     }
   }
 
-  /** Resolve web-search tools for preset generation, or undefined if not needed. */
   private async getPresetGenerationTools(
     request: ProviderPresetGenerationRequest,
   ): Promise<Array<Record<string, unknown>> | undefined> {

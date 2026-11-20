@@ -66,13 +66,15 @@ const MODAL_DESCRIPTION_MAX = 100;
 const TEXT_PLACEHOLDER_MAX = 100;
 const SELECT_PLACEHOLDER_MAX = 150;
 const OPTION_TEXT_MAX = 100;
-/** Custom titles allow 80 characters, but 25 of them at full length would crowd the 4,000-character message. */
+// Capped at 40 instead of the 80-char custom title limit because 25 full-length titles would crowd Discord's
+// 4,000-char message budget.
 const LIST_TITLE_MAX = 40;
-/** Leaves room for the headings, tips, and footer inside Discord's 4,000-character message budget. */
+// Budget is 2,400 chars so headings, tips, and footer still fit inside Discord's 4,000-char message limit.
 const LIST_TEXT_BUDGET = 2400;
-/** A row lists this many scoped personas before folding the rest into a count, so one row stays one line. */
+// Caps displayed scoped persona names at 3 before folding the rest into a count so each row stays on one line.
 const SCOPE_NAMES_SHOWN = 3;
-/** Rows, Toggle Availability options, and editable entries one page shows; one slot stays free for Add. */
+// Page size is 12 so one page of rows, Toggle Availability options, and editable entries leaves a select slot free
+// for Add.
 export const NUDGE_STUDIO_PAGE_SIZE = 12;
 
 type CategoryKeys = Record<NaturalNudgeCategory, string>;
@@ -217,7 +219,6 @@ export function studioEntryOwnerName(entry: StudioEntry, personaNames: ReadonlyM
   return ownerId === undefined ? null : (personaNames.get(ownerId) ?? String(ownerId));
 }
 
-/** The edit modal and its fingerprint; the owner comes from the selected persona, never from the client. */
 export function personaNudgeFormTarget(
   entry: StudioEntry,
 ): { ownerId: number; idleNudgeId: string; fp: string } | null {
@@ -238,7 +239,8 @@ export function personaNudgeFormTarget(
   };
 }
 
-/** Deleted personas stay in a stored scope, so they are skipped here and a scope with none left reads as null. */
+// Deleted personas remain in stored scopes, so missing IDs are skipped and an empty result returns null instead of
+// raw IDs.
 function scopeNames(
   locale: string,
   scope: readonly number[] | undefined,
@@ -293,7 +295,6 @@ function text(content: string): ComponentInContainerData {
 export interface NudgeStudioRenderInput {
   locale: string;
   view: NudgeStudioView;
-  /** Page of the Toggle Availability menu, clamped to the pages the category has. */
   page?: number;
   receipt?: PanelReceipt;
 }
@@ -469,13 +470,10 @@ function label(
 }
 
 export interface IdleNudgeFormModalOptions {
-  /** The submit route this surface owns; omitted uses the Nudge Studio route. */
   customId?: string;
-  /** Overrides the add or edit title, for the surface's own copy. */
   titleKey?: string;
 }
 
-/** Opens prefilled from `current` when editing, so the modal itself is where a custom idle nudge is read. */
 export function buildIdleNudgeFormModal(
   locale: string,
   category: NaturalNudgeCategory,
@@ -584,7 +582,6 @@ export interface ChecklistOption {
   checked: boolean;
 }
 
-/** Number of Checkbox Groups a checklist of `count` options takes. */
 export function checklistGroupCount(count: number): number {
   return Math.ceil(count / DISCORD_CHECKBOX_GROUP_OPTIONS_MAX);
 }
@@ -635,11 +632,8 @@ export function buildNudgeChecklistModal(
   };
 }
 
-/**
- * Checkbox options for Toggle Availability: every persona, checked when it may use the idle nudge, so an
- * idle nudge that is off opens with nothing checked. Personas past what one modal holds are left out, and
- * the submit leaves unpresented personas as they are.
- */
+// Truncated to one Discord modal's component capacity because the submit handler leaves unpresented personas
+// unchanged.
 export function availabilityOptions(personas: readonly TomoriState[], entry: StudioEntry): ChecklistOption[] {
   return personas
     .flatMap((persona) => (persona.persona_id ? [{ id: persona.persona_id, name: persona.persona_nickname }] : []))
@@ -670,7 +664,6 @@ export function buildAvailabilityModal(
   );
 }
 
-/** A persona-owned row may only enable or disable its own owner, so its checklist holds one option. */
 function personaAvailabilityOptions(locale: string, entry: StudioEntry, ownerName: string): ChecklistOption[] {
   return [
     {
@@ -710,7 +703,6 @@ export function buildPersonaAvailabilityModal(
   );
 }
 
-/** Removal keys tag their source, so one checklist can present server and persona entries without mixing them up. */
 function studioRemovalKey(entry: StudioEntry): string | null {
   if (entry.custom) return `c:${entry.custom.custom_idle_nudge_id}`;
   const ownerId = entry.definition.ownerPersonaId;
@@ -739,7 +731,6 @@ export function parseStudioRemovalKey(
     : null;
 }
 
-/** Checkbox options for removal: the editable entries on the visible page, all checked. */
 export function removalOptions(entries: readonly StudioEntry[]): ChecklistOption[] {
   return entries.flatMap((entry) => {
     const value = studioRemovalKey(entry);

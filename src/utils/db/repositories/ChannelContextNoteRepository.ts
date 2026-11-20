@@ -1,22 +1,8 @@
-/**
- * ChannelContextNoteRepository: manages per-channel context note entries.
- *
- * Covered table: channel_context_notes.
- *
- * Per-channel data is server-local and transient (not exported per-server),
- * so this repository implements no IRepository interface.
- */
 import { invalidateChannelContextNoteCache, type ChannelContextNote } from "@/utils/cache/channelContextNoteCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
 class ChannelContextNoteRepository {
-  /**
-   * Returns the per-channel context note, or null if none is set.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   */
   async getChannelContextNote(serverId: number, channelDiscId: string): Promise<ChannelContextNote | null> {
     try {
       const rows = await sql`
@@ -38,13 +24,8 @@ class ChannelContextNoteRepository {
     }
   }
 
-  /**
-   * Upserts a per-channel context note and invalidates its cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   * @param depth         - Injection depth (0 = closest to reply, max 100)
-   */
+  // Depth counts backward from the reply (0 is closest to the reply, max 100) so callers order injections
+  // consistently.
   async setChannelContextNote(serverId: number, channelDiscId: string, note: string, depth: number): Promise<boolean> {
     try {
       await sql`
@@ -64,12 +45,6 @@ class ChannelContextNoteRepository {
     }
   }
 
-  /**
-   * Deletes the per-channel context note for a single channel and invalidates its cache.
-   *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord snowflake ID of the channel
-   */
   async deleteChannelContextNote(serverId: number, channelDiscId: string): Promise<boolean> {
     try {
       await sql`

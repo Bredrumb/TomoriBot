@@ -136,11 +136,7 @@ export class SupporterRequestDeniedError extends ProviderRequestDeniedError {
 
 const alertedCapacityFailures = new WeakSet<OpenRouterLimitError>();
 
-/**
- * With the funding that paid for the failed request, an OpenRouter limit rejection is also translated,
- * because the member key's own cap means a spent allowance while the account balance and in-flight
- * budget are operator capacity that no member caused.
- */
+// The member key cap means a spent allowance, while account balance and in-flight limits reflect operator capacity.
 export function findSupporterRequestDeniedError(
   error: unknown,
   funding?: SupporterFundingContext | null,

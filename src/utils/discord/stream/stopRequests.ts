@@ -18,7 +18,6 @@ export type StreamStopRequest = {
 
 const stopObservers = new Map<string, Set<() => void>>();
 
-/** Auxiliary requests need the same interruption events as provider streams. */
 export function observeStopRequest(channelId: string, observer: () => void): () => void {
   const observers = stopObservers.get(channelId) ?? new Set();
   observers.add(observer);
@@ -32,13 +31,8 @@ export function observeStopRequest(channelId: string, observer: () => void): () 
 
 const activeStopRequests = new Map<string, StreamStopRequest>();
 
-/**
- * Requester ids raised by the delivery layer itself rather than by a user or another turn.
- *
- * These are scoped to the stream that raised them: unlike a `/kill`, they carry no
- * stopContext and have no meaning once that stream ends, so any exit path that does not
- * surface them as a stop must clear them before the next turn reads the registry.
- */
+// Internal stop ids apply only to the raising stream, so exit paths not surfacing them as stops must clear them
+// before the next turn reads the registry.
 export const INTERNAL_STOP_REQUESTER_IDS: ReadonlySet<string> = new Set([
   "speaker_guard",
   "send_message_limit",

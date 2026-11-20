@@ -170,8 +170,6 @@ describe("humanizeString", () => {
   });
 });
 
-// With the humanizer probabilities, 0.1 removes a comma and flushes emphasis, 0.5 flushes a comma
-// and keeps emphasis, and 0.9 keeps both.
 const ROLL_REMOVE_COMMA_FLUSH_EMPHASIS = 0.1;
 const ROLL_FLUSH_COMMA_KEEP_EMPHASIS = 0.5;
 

@@ -105,10 +105,7 @@ const fpField: RouteFieldCodec<"fp", string> = {
 const CUSTOM_KEY_SEGMENT = /^custom\.(\d+)$/;
 const PERSONA_KEY_SEGMENT = /^persona\.(\d+)\.([A-Za-z0-9_-]{1,24})$/;
 
-/**
- * Route segments cannot hold `:`, so a custom key travels as `custom.<id>` and a persona key as
- * `persona.<owner>.<localId>`; no built-in category is named either prefix.
- */
+// Route segments split on ":", so custom and persona keys encode as dot prefixes that no built-in key shares.
 const keyField: RouteFieldCodec<"key", string> = {
   key: "key",
   encode: (value) =>
@@ -178,7 +175,7 @@ export function buildNudgeStudioRouteId(route: NudgeStudioRoute): string {
   );
 }
 
-/** Segments after the namespace and version, for `buildPaginationRow`, which adds those itself. */
+// Namespace and version segments are omitted here because buildPaginationRow prepends them itself.
 export function buildNudgeStudioRouteSegments(route: NudgeStudioRoute): string[] {
   return buildRouteSegments(CODECS[route.action], route);
 }

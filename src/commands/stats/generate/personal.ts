@@ -14,9 +14,6 @@ import { gatherPersonalCardData } from "@/utils/stats/personalCardGatherer";
 import { renderPersonalCard, CARD_W, getPersonalCardHeight } from "@/utils/stats/statsInfographic";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 
-/**
- * Configures the /stats generate personal subcommand: renders the caller's Personal Wrapped card.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("personal")
@@ -41,10 +38,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Sends the caller's Personal Wrapped card as a public PNG. Fully-private users are refused
- * before the reply is deferred so the refusal stays ephemeral.
- */
+// Privacy refusal must run before `deferReply` because Discord locks visibility at deferral, keeping the refusal
+// ephemeral while the PNG stays public.
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

@@ -25,9 +25,6 @@ const sourceDir = resolve(rootDir, "src");
 const largeLineThreshold = readNumberArg("--large-lines", 500);
 const thinLineThreshold = readNumberArg("--thin-lines", 120);
 const oversizedImplementationNames = new Set(["runtime.ts", "orchestrator.ts", "turnRunner.ts"]);
-// Path patterns that indicate the "facade-rename" anti-pattern: a god file moved into
-// an internals dumping ground (core/, internals/, _impl/) with a generic *Implementation.ts
-// or *Internals.ts name. See docs/refactor/refactor-integrity-audit.md "Facade-rename smell".
 const facadeRenamePathPattern = /\/(core|internals|_impl)\/[^/]+(Implementation|Internals)\.ts$/;
 const knownLargeImplementationPaths = new Set([
   "src/utils/chat/turnRunner.ts",
@@ -40,8 +37,7 @@ const knownLargeImplementationPaths = new Set([
   "src/utils/db/repositoryWriteSql.ts",
   "src/utils/text/contextBuilder.ts",
   "src/utils/discord/streamOrchestrator.ts",
-  // Phase 5.5c facade-rename targets: added so the existing
-  // "thin facade to large file" finding fires until they're truly decomposed.
+  // Facade-rename targets kept here so "thin facade to large file" still fires until decomposed.
   "src/utils/text/context/core/builderImplementation.ts",
   "src/utils/discord/stream/core/orchestratorImplementation.ts",
   "src/utils/metrics/status/commandImplementation.ts",
@@ -138,11 +134,6 @@ function isKnownFacadeTarget(file: SourceFile): boolean {
   );
 }
 
-// Catches the "moved a god file into core/<x>Implementation.ts" anti-pattern dynamically,
-// so future occurrences are flagged without anyone editing the hardcoded path lists.
-// A file that lives at .../{core,internals,_impl}/*{Implementation,Internals}.ts AND is
-// >largeLineThreshold lines is treated as an implementation god file for purposes of the
-// "thin facade to large file" check.
 function matchesFacadeRenamePattern(file: SourceFile): boolean {
   return facadeRenamePathPattern.test(file.repoPath) && file.lineCount > largeLineThreshold;
 }
@@ -237,9 +228,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // Any *ReadSql.ts or *WriteSql.ts file anywhere under src/utils/db/ is a
-  // regression: all SQL must be inlined as private methods on the owning
-  // Repository class. These sibling files were deleted in Phase 5.5e Stage C.
   for (const file of files) {
     if (!file.repoPath.startsWith("src/utils/db/")) continue;
     if (/(?:Read|Write)Sql\.ts$/.test(file.repoPath)) {
@@ -253,9 +241,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // In src/utils/db/repositories/, every file must be a Repository class,
-  // the index barrel, or the IRepository interface. Any other .ts file at
-  // that depth is a domain file that leaked into the repository layer.
   const repoDir = "src/utils/db/repositories/";
   const allowedRepoFilenames = /^(index|IRepository|.*Repository)\.ts$/;
   for (const file of files) {

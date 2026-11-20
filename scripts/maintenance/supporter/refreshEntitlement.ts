@@ -1,11 +1,3 @@
-/**
- * Refresh supporter entitlement state from Patreon.
- *
- * Usage:
- *   bun run scripts/maintenance/supporter/refreshEntitlement.ts --discord-user-id 123
- *   bun run scripts/maintenance/supporter/refreshEntitlement.ts --supporter-identity-id 42
- *   bun run scripts/maintenance/supporter/refreshEntitlement.ts --all
- */
 import { SupporterIdentityRepository } from "@/modules/supporter-billing";
 import {
   refreshPatreonEntitlementForIdentity,

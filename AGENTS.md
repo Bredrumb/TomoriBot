@@ -50,7 +50,9 @@ proposed follow-up's premise in source before suggesting it.
    - Use path alias imports (`@/*`) for `src/*`.
    - Avoid `any`; use typed interfaces/schemas.
    - Full conventions: `docs/en/contributing/development-tasks.md` (Coding Conventions section).
-2. Default to zero new comments.
+2. Write no comments by default.
+   - Write no JSDoc. The only allowed block directive is a single-line `/** @public <caller> */`
+     for Knip exemptions on release-only or dynamically imported exports.
    - Write one only for what the code cannot say: an external quirk (Discord, a provider, a
      library), a security or redaction reason, an ordering, cache, or acknowledgement invariant, why
      a constant has its value, what a sentinel or dense regex means, a measured performance
@@ -62,7 +64,6 @@ proposed follow-up's premise in source before suggesting it.
      Use the punctuation that names the relationship: colon when the second half explains the first,
      `, so` when causal, parentheses for an aside, period or semicolon between independent clauses,
      plain hyphen for numeric ranges. In `ja`, use `：`, `。`, and `（）`. Enforced by `prose-dash`.
-   - Skip `@param`/`@returns` that repeat the name or type; the signature already states it.
    - Full policy: `docs/en/contributing/policies/comments.md`. Audit with `bun run audit-comments`.
      For how prose reads, use the `lint-prose` skill.
 3. Keep real identities and meta-dates out of public prose.

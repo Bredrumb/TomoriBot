@@ -70,31 +70,23 @@ type NudgePersona = TomoriState & { persona_id: number };
 interface ChannelCounter {
   count: number;
   target: number;
-  /** Nonzero while the channel rests after a check; counting starts over with a new roll afterwards. */
   restUntil: number;
 }
 
-/**
- * Human messages per listed channel since a persona last spoke there, a thread counting toward its
- * parent. Kept in memory, because a restart only resets the counts to 0, which delays the next check
- * slightly.
- */
+// Kept in memory rather than persisted because a restart only resets counts to 0, slightly delaying the next check.
 class ActiveNudgeCounter {
   private readonly channels = new Map<string, ChannelCounter>();
-  /** Empty checks in a row per channel, which double the next rest; a fire clears it. */
   private readonly emptyStreaks = new Map<string, number>();
 
   isTracking(channelId: string): boolean {
     return this.channels.has(channelId);
   }
 
-  /** A persona spoke, so the conversation has Tomori in it again; a rest still runs out first. */
   reset(channelId: string, now: number): void {
     const counter = this.channels.get(channelId);
     if (!counter || counter.restUntil <= now) this.channels.delete(channelId);
   }
 
-  /** True when this message trips a check; the next message then starts a fresh roll. */
   recordHuman(
     channelId: string,
     range: { min: number; max: number },
@@ -141,7 +133,6 @@ export class ActiveNudgeCheckBudget extends NudgeRequestBudget {
   }
 }
 
-/** What happened in a channel after its check started, which decides whether the moment is still there. */
 interface ChannelWatch {
   humans: number;
   personaSpoke: boolean;
@@ -159,17 +150,12 @@ async function isPersonaMessage(client: Client, message: Message): Promise<boole
 export interface ActiveNudgeCheck {
   client: Client;
   channel: GuildTextBasedChannel;
-  /** The allow-listed channel: the channel itself, or a thread's parent. */
   listedChannelId: string;
   guildId: string;
   serverId: number;
   heat: number;
 }
 
-/**
- * The cheap part of Active Nudges, run on every guild message: count human messages in allowed channels,
- * reset on persona messages, and start one check when the rolled count trips.
- */
 export async function observeActiveNudgeMessage(client: Client, message: Message): Promise<void> {
   if (!message.inGuild() || message.system) return;
   const channel = message.channel;
@@ -224,10 +210,6 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return copy;
 }
 
-/**
- * Interests of the eligible personas as matcher options, one per distinct label, with every persona
- * that holds it. Personas whose new labels would overflow the budget sit this check out.
- */
 export function buildMatcherOptions(
   personas: readonly NudgePersona[],
   configs: ReadonlyMap<number, PersonaNaturalNudgeConfig>,
@@ -259,7 +241,6 @@ export function buildMatcherOptions(
   };
 }
 
-/** Personas who already spoke in the matcher's window; none of them may take the turn. */
 function spokeInWindow(
   window: readonly Message[],
   personas: readonly TomoriState[],
@@ -273,10 +254,8 @@ function spokeInWindow(
   return spoke;
 }
 
-/**
- * A fire row stores where it spoke, so a thread fire is mapped back to its parent. A thread that left
- * the cache counts on its own; one that fired within the hour is almost always still cached.
- */
+// Reads only the gateway cache because recent thread fires within the hour are almost always cached, avoiding REST
+// fetches for evicted threads.
 function listedChannelOf(client: Client, channelId: string): string {
   const channel = client.channels.cache.get(channelId);
   return channel?.isThread() ? (channel.parentId ?? channelId) : channelId;
@@ -289,7 +268,6 @@ interface CheckSettings {
   checkCap: number;
 }
 
-/** The fresh-read checks Phase A and the re-check share; a string names the abort reason. */
 async function checkSettingsAndCaps(
   check: ActiveNudgeCheck,
   personas: readonly NudgePersona[],
@@ -344,7 +322,6 @@ async function checkSettingsAndCaps(
   };
 }
 
-/** Personas that may speak here: talkativeness above 0 and allowed in the channel. */
 async function loadSpeakers(
   check: ActiveNudgeCheck,
   personas: readonly NudgePersona[],
@@ -380,10 +357,6 @@ function personaTickets(
   );
 }
 
-/**
- * Another warm persona takes the turn. Rarely-talked-to personas get more tickets, and replies to a
- * detour raise their count, so the boost corrects itself.
- */
 async function drawDetour(
   check: ActiveNudgeCheck,
   excluded: ReadonlySet<number>,
@@ -427,11 +400,6 @@ export interface ActiveNudgeCheckOptions {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * One Active Nudge check: Phase A reads fresh settings and caps, one matcher call picks an interest or
- * `none`, and after a short delay the re-check confirms the moment before a plain turn. Any doubt
- * resolves to saying nothing.
- */
 export async function runActiveNudgeCheck(
   check: ActiveNudgeCheck,
   options: ActiveNudgeCheckOptions = {},
@@ -544,23 +512,17 @@ export async function runActiveNudgeCheck(
   }
 }
 
-/** The Phase A matcher inputs the re-check repeats, so the second call's interest ID means the same interest. */
+// Reuses Phase A's exact shuffled options so the rematch choice ID still identifies the same interest.
 interface RematchPlan {
   options: readonly MatcherOption[];
   choice: string;
 }
 
 interface RecheckOutcome {
-  /** Abort reason, or null when the moment is still there. */
   reason: string | null;
-  /** The one extra matcher call made when the delay filled the Phase A evidence window. */
   rematch?: MatcherResult;
 }
 
-/**
- * The cheap checks again, read fresh, after the delay; when new human messages filled the evidence
- * window, the matcher runs once more and only the same interest may speak.
- */
 async function recheckBeforeSend(
   check: ActiveNudgeCheck,
   speaker: NudgePersona,
@@ -609,7 +571,6 @@ async function recheckBeforeSend(
   return { reason: null, rematch: rematched };
 }
 
-/** A plain turn on the newest message, with no brief or agenda: the persona reacts as itself. */
 async function speak(
   check: ActiveNudgeCheck,
   speaker: NudgePersona,

@@ -1,19 +1,4 @@
-/**
- * Inspect or revoke supporter server sponsorships.
- *
- * List active sponsorships for a sponsor:
- *   bun run scripts/maintenance/supporter/sponsorship.ts --list --discord-user-id 123
- *   bun run scripts/maintenance/supporter/sponsorship.ts --list --supporter-identity-id 42
- *
- * Revoke a sponsorship (dry-run by default, add --execute to apply):
- *   bun run scripts/maintenance/supporter/sponsorship.ts --revoke --sponsorship-id 7
- *   bun run scripts/maintenance/supporter/sponsorship.ts --revoke --server-disc-id 999 --execute
- *
- * NOTE: A script-side revoke updates the database but does NOT invalidate a
- * live bot's in-memory caches. For a running deployment, prefer the in-Discord
- * "/subscribe" revoke flow; use this script for out-of-band/abuse cases and
- * allow the affected server's cache TTL to lapse (or restart the bot).
- */
+// Script-side revocation does not invalidate live caches, so use /subscribe or wait for cache expiry or restart.
 import {
   SupporterIdentityRepository,
   SupporterSponsorshipRepository,

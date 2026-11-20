@@ -1,10 +1,4 @@
-/**
- * Enum of 28 emotion categories for emoji and sticker classification
- * Used by /expressions initialize command
- * to categorize emojis/stickers based on their visual emotional expression
- * All members are consumed dynamically by schemas and classifier prompts.
- * @public
- */
+/** @public Enum members are consumed dynamically by schemas and classifier prompts. */
 export enum EmotionKey {
   ADMIRATION = "admiration",
   AMUSEMENT = "amusement",
@@ -36,34 +30,18 @@ export enum EmotionKey {
   NEUTRAL = "neutral",
 }
 
-/**
- * Get all emotion keys as an array (useful for LLM prompting)
- */
 export const getAllEmotionKeys = (): string[] => {
   return Object.values(EmotionKey);
 };
 
-/**
- * Emotion keys intentionally excluded from the manual `/expressions manage`
- * picker. The full 28-key taxonomy is retained everywhere else (AI classification,
- * storage, any future classifier) , so these three are simply hidden from the manual
- * dropdown so it fits within Discord's 25-option string-select limit. Each was chosen
- * because it is rare in actual emoji/sticker art and folds cleanly into a neighbor:
- *   - grief       → sadness
- *   - remorse     → embarrassment / sadness
- *   - realization → surprise / curiosity
- */
+// Three rare keys hidden from the `/expressions manage` dropdown so it fits Discord's 25-option select limit, while
+// AI and storage keep all 28.
 const MANUAL_EDIT_EXCLUDED_EMOTIONS: readonly EmotionKey[] = [
   EmotionKey.GRIEF,
   EmotionKey.REMORSE,
   EmotionKey.REALIZATION,
 ];
 
-/**
- * Get the curated 25-emotion subset offered in the manual expression-edit select menu.
- * Derived from the full taxonomy minus {@link MANUAL_EDIT_EXCLUDED_EMOTIONS} so it stays
- * in sync if the enum changes. Order follows the EmotionKey declaration order.
- */
 export const getManualEditEmotionKeys = (): string[] => {
   return getAllEmotionKeys().filter((key) => !MANUAL_EDIT_EXCLUDED_EMOTIONS.includes(key as EmotionKey));
 };

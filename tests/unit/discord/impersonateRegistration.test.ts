@@ -6,10 +6,6 @@ import { ApplicationCommandOptionType } from "discord.js";
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * The raw payload the command builders serialize onto the wire: snake_case at the root, and an
- * option tree that nests one level deeper than the builder-facing union exposes.
- */
 type CommandPayload = {
   contexts?: number[];
   default_member_permissions?: string;
@@ -65,9 +61,8 @@ describe("/impersonate root registration", () => {
     expect(userOption).toBeDefined();
     expect(userOption?.type).toBe(ApplicationCommandOptionType.User);
 
-    // /impersonate user takes ONLY the target. The bot generates the message itself via
-    // tomoriChat(isUserImpersonation), so a `message` option here would be a field the user
-    // must fill and the command then discards.
+    // /impersonate user generates the message itself via tomoriChat(isUserImpersonation), so
+    // adding a message option would force the user to fill a field the command discards.
     expect(user?.options?.length).toBe(1);
     expect(user?.options?.some((option) => option.name === "message")).toBe(false);
 

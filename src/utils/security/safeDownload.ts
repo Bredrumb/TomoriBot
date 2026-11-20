@@ -1,9 +1,3 @@
-/**
- * Safe Download Utility
- * Provides size-limited, timeout-protected file downloads for Discord attachments
- * Prevents DDoS attacks via oversized files or slow download attacks
- */
-
 import { log } from "@/utils/misc/logger";
 import {
   type FetchUserRemoteUrlOptions,
@@ -13,90 +7,37 @@ import {
 import { readBoundedResponse, ResponseSizeError } from "@/utils/security/boundedResponse";
 
 export interface SafeDownloadOptions {
-  /**
-   * Maximum file size in MB
-   */
   maxSizeMB: number;
 
-  /**
-   * Timeout in milliseconds (default: 10000ms / 10 seconds)
-   */
   timeoutMs?: number;
 
-  /**
-   * Known file size from Discord attachment metadata (in bytes)
-   * If provided, size check occurs before download attempt
-   */
+  // File size in bytes (unlike maxSizeMB in megabytes), so callers can pass attachment byte counts for pre-download
+  // rejection.
   knownSize?: number;
 
-  /**
-   * Additional fetch options such as provider-required headers.
-   * The timeout AbortSignal is always applied by safeDownload.
-   */
   requestInit?: Omit<RequestInit, "signal">;
 
-  /**
-   * Optional external AbortSignal (e.g. from ToolContext.abortSignal).
-   * When fired, it also aborts the internal timeout controller early.
-   */
   externalSignal?: AbortSignal;
 
-  /** Pass `getEndpointRemotePolicy()` only for an operator-registered service, because unset keeps member media off private networks. */
+  // Left unset for member-supplied URLs so downloads stay off private networks; only operator-registered services
+  // pass getEndpointRemotePolicy().
   remotePolicy?: FetchUserRemoteUrlOptions;
 }
 
 export interface SafeDownloadResult {
-  /**
-   * Whether the download succeeded
-   */
   success: boolean;
 
-  /**
-   * Downloaded file buffer (only if success === true)
-   */
   buffer?: Buffer;
 
-  /**
-   * Response Content-Type header, when the server provided one
-   */
   contentType?: string;
 
-  /**
-   * Error type if download failed.
-   *
-   * `blocked_by_policy` means the SSRF gate refused the URL and no request was
-   * ever sent, so it is never a transport problem and must not be retried against
-   * the same URL.
-   */
+  // A blocked_by_policy error means the SSRF gate refused the URL before any request was sent, so callers must not
+  // retry or treat it as a transport failure.
   error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response" | "blocked_by_policy";
 
-  /**
-   * Additional error details for logging/debugging
-   */
   details?: string;
 }
 
-/**
- * Safely download a file with size and timeout protections
- *
- * @param url - URL to download from
- * @param options - Download options (maxSizeMB, timeoutMs, knownSize)
- *
- * @example
- * ```typescript
- * const result = await safeDownload(attachment.url, {
- *   maxSizeMB: 8,
- *   timeoutMs: 10000,
- *   knownSize: attachment.size
- * });
- *
- * if (!result.success) {
- *   // Handle error based on result.error
- * }
- *
- * const imageBuffer = result.buffer;
- * ```
- */
 export async function safeDownload(url: string, options: SafeDownloadOptions): Promise<SafeDownloadResult> {
   // Signed attachment queries authorize access, so logs retain only the download origin.
   let urlOrigin: string;
@@ -125,9 +66,8 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   }
 
   if (url.startsWith("data:")) {
-    // Early rejection: base64 is ~1.33x the size of the raw data.
-    // Using 0.75x of string length gives a safe lower-bound estimate of the byte size.
-    // If the estimate itself exceeds the max, it's definitively too large.
+    // Base64 expands raw bytes by ~1.33x, so 0.75x of URI length is a lower bound that safely rejects oversized data
+    // URIs before decoding.
     const estimatedSizeBytes = url.length * 0.75;
     if (estimatedSizeBytes > maxSizeBytes) {
       log.warn(
@@ -271,9 +211,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     }
 
     if (error instanceof RemoteUrlPolicyError) {
-      // Logged at warn, not error: an unreachable-by-policy URL (a plain-HTTP
-      // image host, a redirect to a private address) is an expected outcome of
-      // user-supplied content, not an incident.
+      // Warn rather than error because policy-blocked URLs are expected from untrusted user links, not incidents.
       log.warn("Download blocked by URL policy", {
         errorType: "download_blocked_by_policy",
         metadata: {

@@ -1,37 +1,3 @@
-/**
- * Tracked-media optimizer with per-scope strategies.
- *
- * Two policies, chosen by path (see scripts/lib/media.ts):
- *
- *  • personas/** + assets/img/**  → "lossless-fit"
- *      Re-encode losslessly (max deflate + adaptive filtering, metadata stripped)
- *      at native resolution. These are already near-optimally encoded, so a file is
- *      only downscaled (long edge capped at DEFAULT_MAX_DIMENSION, default 768px) when
- *      lossless alone cannot reach DEFAULT_LIMIT_BYTES. Color stays Δ0; only
- *      resolution drops, and only when necessary. Same format in/out.
- *
- *  • .github/release/**  → "release-card"
- *      Release cards are web-viewed showcase art where WebP crushes PNG. A static
- *      PNG/JPEG card is converted to WebP (DEFAULT_RELEASE_WEBP_QUALITY, default 90) at full
- *      resolution, the old file is removed, and sibling release-notes.md references
- *      are rewritten. A GIF stays a GIF because its author chose the format for the release
- *      post; it is replaced only by a smaller re-encode. Files that are ALREADY WebP are left
- *      untouched because re-encoding a lossy format every run would accumulate generational
- *      artifacts.
- *      NOTE: published GitHub release bodies hotlink raw/release and must be updated
- *      separately (the command prints the exact `gh release edit` reminder per tag).
- *
- * The budget and the encoder settings are constants in scripts/lib/media.ts, not environment
- * overrides, so every contributor computes the same result. None of them are tunable per run.
- *
- * A lossless-fit file is only overwritten when the result is actually smaller, so
- * the command is idempotent and safe to re-run.
- *
- * Usage:
- *   bun run compress-media                 # process every in-scope media file
- *   bun run compress-media --dry-run       # report what would change, write nothing
- *   bun run compress-media personas/shy    # only paths containing this substring
- */
 import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { config } from "dotenv";
 import sharp from "sharp";
@@ -47,16 +13,15 @@ import {
 
 config({ quiet: true });
 
-/** Smallest long-edge we will downscale to before giving up (keeps art recognizable). */
+// Smallest long-edge pixel floor before giving up, so downscaled art stays recognizable.
 const MIN_DIMENSION = 96;
 
-/** Lossless PNG encoder settings: NO `effort`/`palette` (those trigger lossy quantisation). */
+// Sharp enables lossy quantization when PNG effort or palette options are set, so omit them to keep encoding strictly
+// lossless.
 const PNG_LOSSLESS = { compressionLevel: 9, adaptiveFiltering: true } as const;
 
-/** Lowercased extension without the dot. */
 const extOf = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
 
-/** Encode a sharp pipeline losslessly in the file's own format; null if unsupported. */
 async function encodeLossless(pipeline: ReturnType<typeof sharp>, ext: string): Promise<Buffer | null> {
   switch (ext) {
     case "png":
@@ -70,7 +35,6 @@ async function encodeLossless(pipeline: ReturnType<typeof sharp>, ext: string): 
   }
 }
 
-/** Result of acting on one file. `newPath` differs from the source only on a WebP conversion. */
 type Outcome = {
   path: string;
   newPath: string;
@@ -78,22 +42,15 @@ type Outcome = {
   newSize: number;
   written: boolean;
   note: string;
-  /** Tag (e.g. "v0.7.990") whose published release body still needs updating, if any. */
   releaseTagToUpdate?: string;
-  /** Sibling markdown files whose references were rewritten. */
   refsUpdated?: string[];
 };
 
-/**
- * "lossless-fit": lossless@native first, then lossless at progressively smaller
- * caps until it fits the budget. Writes only when smaller than the original.
- */
 async function runLosslessFit(file: CompressTarget, limit: number, maxDim: number, dryRun: boolean): Promise<Outcome> {
   const ext = extOf(file.path);
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
   const isMultiFrameExt = ext === "gif" || ext === "webp";
 
-  // Lossless at native resolution: preferred (full quality).
   const native = await encodeLossless(sharp(input, { animated: isMultiFrameExt }), ext);
   if (!native) {
     return {
@@ -128,7 +85,7 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
         downscaledTo = cap;
       }
       if (resized && resized.length <= limit) break;
-      cap = Math.floor(cap * 0.85); // shrink ~15% and retry
+      cap = Math.floor(cap * 0.85);
     }
   }
 
@@ -142,7 +99,6 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   return { path: file.path, newPath: file.path, oldSize: file.size, newSize, written: improved && !dryRun, note };
 }
 
-/** Replace `oldName` with `newName` in every sibling .md file; returns the files changed. */
 function rewriteSiblingReferences(filePath: string, oldName: string, newName: string, dryRun: boolean): string[] {
   const dir = filePath.slice(0, filePath.lastIndexOf("/"));
   const updated: string[] = [];
@@ -157,11 +113,6 @@ function rewriteSiblingReferences(filePath: string, oldName: string, newName: st
   return updated;
 }
 
-/**
- * "release-card": keep a GIF in place unless a native re-encode is smaller; convert any other
- * non-WebP card to WebP at full resolution, remove the source, and rewrite sibling markdown
- * references. Already-WebP files are skipped to avoid lossy generational re-encoding.
- */
 async function runReleaseCard(file: CompressTarget, quality: number, dryRun: boolean): Promise<Outcome> {
   const ext = extOf(file.path);
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
@@ -200,14 +151,13 @@ async function runReleaseCard(file: CompressTarget, quality: number, dryRun: boo
 
   let refsUpdated: string[] = [];
   if (!dryRun) {
-    writeFileSync(newPath, webp); // write the .webp ...
-    rmSync(file.path); //            ... and drop the old format
+    writeFileSync(newPath, webp);
+    rmSync(file.path);
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, false);
   } else {
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, true);
   }
 
-  // Derive the release tag so we can remind the user to fix the published body.
   const tag = file.path.slice(RELEASE_PREFIX.length).split("/")[0];
 
   const note = `→ webp q${quality} @native`;

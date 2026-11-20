@@ -1,11 +1,3 @@
-/**
- * Google Gemini provider implementation
- * Implements the LLMProvider interface for Google's Gemini AI models
- *
- * Now uses the modular streaming architecture with StreamOrchestrator
- * and GoogleStreamAdapter for better code organization and maintainability.
- */
-
 import { pickHumanizerSettings } from "@/constants/humanizer";
 import { ApiError, GoogleGenAI, type HarmBlockThreshold, type HarmCategory } from "@google/genai";
 import { MODEL_LOOKUP_TIMEOUT_MS, reportModelLookupFailure } from "@/utils/provider/modelCatalogLookup";
@@ -71,14 +63,6 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { buildStreamContext } from "@/utils/provider/streamContext";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-/**
- * Gets the default Google Gemini model with a robust fallback chain:
- * 1. First checks the cached is_default LLM from the database
- * 2. Falls back to database query for is_default model if cache is not ready
- * 3. Falls back to first non-deprecated model from database
- * 4. Throws error if no models are available
- * @returns Promise<string> - The default model codename
- */
 async function getDefaultGoogleModel(): Promise<string> {
   const providerName = "google";
 
@@ -239,9 +223,6 @@ export class GoogleProvider
     return await callGoogleDecisions(request);
   }
 
-  /**
-   * Get provider information and capabilities
-   */
   getInfo(): ProviderInfo {
     return googleProviderInfo;
   }
@@ -272,10 +253,6 @@ export class GoogleProvider
     }
   }
 
-  /**
-   * Validate a Google API key through the authenticated models endpoint
-   * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
-   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("API key is too short or empty");
@@ -375,11 +352,6 @@ export class GoogleProvider
     return await generateRoleplaySummaryGoogle(request);
   }
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * Uses the enhanced tool adapter that handles both built-in and MCP tools
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
@@ -454,13 +426,11 @@ export class GoogleProvider
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 
-      // Use the enhanced tool adapter to get all tools (built-in + MCP)
-      // Pass the pre-filtered MCP function names to ensure centralized filtering
       const googleAdapter = getGoogleToolAdapter();
       const allToolsConfig = await googleAdapter.getAllToolsInGoogleFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        finalMcpFunctionNames, // Pass filtered MCP functions from centralized filtering
+        finalMcpFunctionNames,
       );
 
       log.info(
@@ -474,18 +444,10 @@ export class GoogleProvider
     }
   }
 
-  /**
-   * Uses the cached database default with database and available-model fallbacks.
-   * @returns Promise<string> - The default model codename
-   */
   async getDefaultModel(): Promise<string> {
     return await getDefaultGoogleModel();
   }
 
-  /**
-   * Convert provider-specific configuration from TomoriState
-   * @returns Promise<GoogleProviderConfig> - Provider-specific configuration object
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<GoogleProviderConfig> {
     // Shared with the context truncator so the reserve and the request never drift.
     const maxOutputTokens = await resolveRequestMaxOutputTokens(tomoriState);
@@ -554,8 +516,6 @@ export class GoogleProvider
         ...(temperature !== undefined && {
           temperature,
         }),
-        // Only include topK/topP if user has configured non-neutral values
-        // Neutral: topK=0 (disabled) and topP=1.0 (full probability distribution)
         ...(!topKDisabled &&
           tomoriState.config.llm_top_k > 0 && {
             topK: tomoriState.config.llm_top_k,
@@ -564,8 +524,6 @@ export class GoogleProvider
           tomoriState.config.llm_top_p < 1.0 && {
             topP: tomoriState.config.llm_top_p,
           }),
-        // Only include penalty params if user has configured non-neutral values
-        // Neutral: frequencyPenalty=0.0, presencePenalty=0.0
         ...(frequencyPenalty !== undefined && {
           frequencyPenalty,
         }),
@@ -577,8 +535,7 @@ export class GoogleProvider
       }),
     };
 
-    // Only attach tools for models that explicitly support function calling.
-    // This prevents Google API 400 errors on models like gemma-3-27b-it.
+    // Omit tools when unsupported because models such as gemma-3-27b-it return HTTP 400.
     if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
@@ -586,11 +543,6 @@ export class GoogleProvider
     return config;
   }
 
-  /**
-   * Stream LLM response directly to a Discord channel
-   * Now uses the modular streaming architecture with StreamOrchestrator and GoogleStreamAdapter
-   * This maintains the exact same interface for full backward compatibility
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

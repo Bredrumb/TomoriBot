@@ -37,10 +37,6 @@ const NONCE = "nonce-abc-12345";
 
 const SETUP_ROUTES_SOURCE = readFileSync("src/utils/discord/interactions/setupRoutes.ts", "utf8");
 
-/**
- * Actions a control or a modal actually emits. The codec must declare exactly these: a declared
- * action with no producer is unreachable in a client and only keeps a dead handler arm alive.
- */
 const EMITTED_ACTIONS: SetupWizardAction[] = [
   "cancel",
   "endpoint-connection",
@@ -58,14 +54,12 @@ const EMITTED_ACTIONS: SetupWizardAction[] = [
   "option-action",
 ];
 
-/** Members of the `SetupWizardAction` union, read from the declaration that defines the codec. */
 function declaredActions(): SetupWizardAction[] {
   const union = SETUP_ROUTES_SOURCE.match(/export type SetupWizardAction =([\s\S]*?);/);
   // The declaration's own string literals are the union members by construction.
   return union ? [...union[1].matchAll(/"([a-z-]+)"/g)].map((match) => match[1] as SetupWizardAction) : [];
 }
 
-/** Actions the dispatcher's switch handles, read from its own case labels. */
 function dispatchedActions(): string[] {
   return [...SETUP_ROUTES_SOURCE.matchAll(/case "([a-z-]+)":(?= \{|\s+case )/g)].map((match) => match[1]);
 }
@@ -113,7 +107,6 @@ const CATALOGS: SetupSettingsCatalogs = {
   promptTexts: new Map([["Tomori Default", "You are Tomori."]]),
 };
 
-/** Every control-bearing payload the wizard can render, in the states that expose each control. */
 function renderedPayloads(): Array<[string, unknown]> {
   const wizard = (
     draft: SetupDraftRecord,
@@ -208,7 +201,6 @@ function renderedPayloads(): Array<[string, unknown]> {
   ];
 }
 
-/** Terminal states, which carry no control a stale press could reach. */
 function terminalPayloads(): Array<[string, unknown]> {
   return [
     ["cancelled", buildSetupCancelledPayload(LOCALE)],
@@ -231,11 +223,6 @@ function terminalPayloads(): Array<[string, unknown]> {
   ];
 }
 
-/**
- * Route coverage for the `/setup` codec: every declared action parses, the dispatcher handles
- * every declared action, and the actions the real panels and modals emit are exactly the declared
- * set, so a removed control, a renamed action, an unhandled arm, or an orphaned action fails here.
- */
 describe("setup wizard route coverage", () => {
   it("declares a codec whose actions the dispatcher all handles", () => {
     const declared = declaredActions();

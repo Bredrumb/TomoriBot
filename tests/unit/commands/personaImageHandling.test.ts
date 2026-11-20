@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { planImageHandling } from "@/commands/persona/generate";
 
-/**
- * The four image cases `/persona generate` documents are decided here rather than inline in
- * the command, because the command branch is untestable without a Discord interaction and the
- * cases are the part that must not drift.
- */
 describe("persona generate image handling", () => {
   test("case 2: no image never reaches this decision, and an unattachable image fails", () => {
     // No vision anywhere and nothing extracted is the only case that stops generation.

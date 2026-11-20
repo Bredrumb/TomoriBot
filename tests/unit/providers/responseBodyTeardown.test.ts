@@ -8,12 +8,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-/**
- * Builds an SSE response whose underlying source reports whether it was cancelled.
- *
- * @param close - Leave false to model a server that has not ended the body yet, which is the
- *   state every abandoned stream is really in.
- */
 function sseResponse(payloads: string[], close: boolean): { response: Response; wasCancelled: () => boolean } {
   let cancelled = false;
   const encoder = new TextEncoder();
@@ -57,17 +51,8 @@ describe("SSE consumer releases abandoned response bodies", () => {
   });
 });
 
-/**
- * `releaseLock` reads like teardown but only detaches the reader: the body stays open and holds its
- * buffers and connection. Four adapters shipped that way and retained one stream source per
- * abandoned request, which only surfaced through a production heap diff.
- *
- * This is a source-level heuristic rather than a proof. It cannot tie a specific `getReader` call to
- * a specific `cancel`, so it catches the regression that actually happened (teardown reverting to
- * `releaseLock`, or a new reader with no teardown at all) and nothing subtler. It exists because
- * `novelaiService` and `safeHttpFetchEngine` reach their readers only through a live provider response or
- * the SSRF gate, which would otherwise leave those sites with no net at all.
- */
+// This source scan exists because novelaiService and safeHttpFetchEngine only reach their readers behind live
+// responses or the SSRF gate, leaving no unit hook.
 describe("no response body reader relies on releaseLock alone", () => {
   it("pairs every file that reads a response body with a cancel call", async () => {
     const offenders: string[] = [];

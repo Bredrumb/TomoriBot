@@ -14,11 +14,8 @@ const limitResponseSchema = z.object({
 
 export type OpenRouterLimitSource = (typeof OPENROUTER_LIMIT_SOURCES)[number];
 
-/**
- * Identified by `error.metadata.limit_source`, because the status alone cannot separate an exhausted
- * key cap from the account balance or in-flight budget, and OpenRouter documents the key cap as both
- * 402 and 403.
- */
+// OpenRouter key caps share 402/403 with balance and concurrency limits, so this classifies by
+// error.metadata.limit_source instead of status alone.
 export class OpenRouterLimitError extends Error {
   constructor(
     public readonly limitSource: OpenRouterLimitSource,

@@ -40,7 +40,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": null,
       "deliberateTriggerMode": false,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   },
@@ -85,7 +84,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": null,
       "deliberateTriggerMode": true,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   },
@@ -135,7 +133,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": 2,
       "deliberateTriggerMode": false,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   },
@@ -180,7 +177,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": null,
       "deliberateTriggerMode": false,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   },
@@ -225,7 +221,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": null,
       "deliberateTriggerMode": true,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   },
@@ -271,7 +266,6 @@
       "autoTriggerPersonaId": null,
       "alwaysReplyFallbackPersonaId": null,
       "deliberateTriggerMode": false,
-      "isAutochatDtmExemptChannel": false,
       "allowedPersonaIds": null
     }
   }

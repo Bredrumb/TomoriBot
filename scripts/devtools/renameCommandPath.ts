@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function main() {
@@ -18,11 +18,8 @@ async function main() {
   console.log(`Renaming command path: /${oldPath} -> /${newPath}`);
   console.log(apply ? "Mode: APPLY (writing changes)" : "Mode: DRY-RUN (no changes will be written)");
 
-  // Both boundaries are load-bearing. Without the lookbehind, a single-word rename such as
-  // "memory" to "memories" also rewrites the /memory segment inside documented source paths
-  // (src/commands/memory/personal/export.ts) and inside URLs, because the following character
-  // is a slash. A command mention in prose is only ever preceded by whitespace, a backtick,
-  // a quote, or a bracket, never by an identifier character, a slash, or a dot.
+  // Keep both boundaries so single-word renames never rewrite path segments inside file paths or URLs (e.g.
+  // /memory/personal/).
   const oldPathRegex = new RegExp(`(?<![A-Za-z0-9_./-])(/${escapeRegExp(oldPath)})(?![a-zA-Z0-9_-])`, "g");
 
   const docGlobs = [

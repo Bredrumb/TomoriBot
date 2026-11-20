@@ -43,7 +43,6 @@ interface Policy {
   floatingAliases?: boolean;
 }
 
-/** models.dev: a community-maintained, open-source database of model prices, limits, and capabilities. */
 const SOURCE_URL = "https://models.dev/api.json";
 const DECISION_SOURCE_URL = "https://openrouter.ai/api/v1/models?output_modalities=decisions";
 const CATALOG_URL = new URL("../../src/db/seed/catalog/models.ts", import.meta.url);
@@ -67,7 +66,7 @@ export function seenKey(entry: Pick<SeenEntry, "provider" | "table" | "codename"
   return `${entry.provider}\u0000${entry.table}\u0000${entry.codename}`;
 }
 
-/** Reads a table's catalog rows; tests pass a frozen snapshot so the source fixture never goes stale. */
+// Catalog lookup callback so tests pass a frozen snapshot instead of coupling to live catalog changes.
 export type CatalogLookup = (table: ModelTable) => Array<Pick<LlmInput, "provider" | "codename">>;
 
 function catalogRows(table: ModelTable): Array<LlmInput | ImageInput | VideoInput | DecisionInput> {
@@ -455,10 +454,7 @@ export function sourceAdvisories(source: SourceCatalog): {
 
 const rowsLabel = (count: number): string => (count === 1 ? "1 new row" : `${count} new rows`);
 
-/**
- * Aphel's openers for the drift PR, picked by ISO week so consecutive weekly runs never repeat.
- * Every opener must work for any row count, including zero (a run that only records free variants).
- */
+// Every opener must work for count === 0, because runs that only record free variants still pick one by ISO week.
 const APHEL_GREETINGS: ((count: number) => string)[] = [
   (count) =>
     `Ugh. The model list changed again. I drafted ${rowsLabel(count)} nobody asked for. They're in the checklist below. Write their descriptions or delete them, I don't care which. Okay, I care a little. Delete the bad ones.`,
@@ -503,11 +499,8 @@ function collapsible(summary: string, items: string[], intro?: string): string[]
   ];
 }
 
-/**
- * Render the drift PR body in Aphel's voice.
- * GitHub turns every single newline in a PR body into a hard break, so each paragraph and list item
- * must stay on one source line.
- */
+// GitHub turns every single newline in a PR body into a hard break, so each paragraph and list item must stay on one
+// source line.
 export function report(
   candidates: Candidate[],
   free: Candidate[],

@@ -14,7 +14,6 @@ import {
 
 export { releaseVideoQuotaUnits as releaseVideoQuota } from "@/utils/db/repositories/QuotaRepository";
 
-/** Shares the same shape as image quota checks for consistency. */
 export interface VideoQuotaCheckResult {
   allowed: boolean;
   reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled";
@@ -27,25 +26,15 @@ export interface VideoQuotaClaim extends VideoQuotaCheckResult {
   reservation: QuotaReservation | null;
 }
 
-/**
- * Get or create server's video quota configuration.
- * Creates default config if not exists (3 daily user quota, unlimited serverwide).
- * Lower default than image quotas because video generation is more expensive.
- */
 export async function getVideoQuotaConfig(serverId: number): Promise<VideoQuotaConfigRow> {
   return getOrCreateVideoConfig(serverId);
 }
 
-/**
- * Check if user can generate a video based on daily quota.
- * Returns remaining quota and whether generation is allowed.
- */
 async function checkUserDailyVideoQuota(
   serverId: number,
   userDiscId: string,
   config: VideoQuotaConfigRow,
 ): Promise<VideoQuotaCheckResult> {
-  // If daily user quota is 0 (unlimited), allow
   if (config.daily_user_quota === 0) {
     return { allowed: true };
   }
@@ -74,14 +63,10 @@ async function checkUserDailyVideoQuota(
   };
 }
 
-/**
- * Check if server has remaining server-wide video quota.
- */
 async function checkServerwideVideoQuota(
   serverId: number,
   config: VideoQuotaConfigRow,
 ): Promise<VideoQuotaCheckResult> {
-  // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
   }
@@ -119,10 +104,6 @@ async function checkServerwideVideoQuota(
   };
 }
 
-/**
- * Check all video quotas (user daily + server-wide).
- * Returns combined result indicating if generation is allowed.
- */
 export async function checkVideoQuota(serverId: number, userDiscId: string): Promise<VideoQuotaCheckResult> {
   const read = await getVideoConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();
@@ -151,10 +132,8 @@ export async function checkVideoQuota(serverId: number, userDiscId: string): Pro
   }
 }
 
-/**
- * Claim one video generation on both counters or neither.
- * A database failure throws, so the caller refuses instead of spending an uncounted generation.
- */
+// Atomic reservation across both counters throws QuotaUnavailableError on DB failure, so callers fail closed instead
+// of spending uncounted video quota.
 export async function reserveVideoQuota(serverId: number, userDiscId: string): Promise<VideoQuotaClaim> {
   const read = await getVideoConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();

@@ -57,13 +57,8 @@ export const MAX_SERVER_MEMORY_PAGE_SIZE = 24;
 export const MAX_DOCUMENT_PAGE_SIZE = 24;
 export const MAX_STM_OPTIONS_PER_GROUP = 10;
 const MAX_STM_GROUPS = 5;
-/**
- * Ceiling on entries one removal modal can present.
- *
- * The submit handler derives its clear set from the rows it presented, so a route reading a
- * different group count than the modal built would see nothing checked and clear every entry.
- * Both sides read this instead of repeating the product.
- */
+// Shared ceiling for modal builder and submit handler because the submit route derives cleared entries from presented
+// rows and a mismatch would wipe unshown entries.
 export const MAX_STM_MANAGEABLE_ENTRIES = MAX_STM_OPTIONS_PER_GROUP * MAX_STM_GROUPS;
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 
@@ -708,9 +703,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
 
       const personaOptions: SelectMenuComponentOptionData[] = visibleLineages.map(([lineage, sharing]) => {
         const representative = personaRepresentativeForLineage(sharing, lineage);
-        // The selected lineage's loaded rows are the freshest count available for it; every other
-        // lineage falls back to zero rather than to a guess, because this number renders as
-        // authoritative and an eligibility flag cannot say how many.
+        // Selected lineage uses loaded row count while others fall back to counts or zero because flags lack counts.
         const count = lineage === selectedLineageId ? memories.length : (memoryCountsByLineage?.get(lineage) ?? 0);
         return {
           label: safeSelectOptionText(
@@ -1011,8 +1004,7 @@ ${localizer(locale, "commands.memories.documents_description")}`,
       }
     }
 
-    // The thumbnail belongs to the persona scope only: serverwide documents have no persona whose
-    // face could stand for them. Only the heading belongs in the narrower Section layout.
+    // Omit the Section thumbnail for serverwide documents because serverwide scopes have no persona avatar.
     components.push(
       buildOptionalThumbnailSection(
         documentsHeading,
@@ -1299,8 +1291,7 @@ ${localizer(locale, "commands.memories.documents_description")}`,
           personaId: selectedPersonaId,
           documentId: selectedDocument.document_id,
         }),
-        // A history document is still a document, so the button names the object rather than its
-        // source. The route below keeps the two apart because their removal flows differ.
+        // Label history removals as documents while keeping separate route handlers because deletion flows differ.
         label: localizer(locale, "commands.memories.document_remove_button"),
         disabled: writesDisabled,
       });

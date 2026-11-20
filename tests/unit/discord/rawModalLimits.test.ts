@@ -1,12 +1,3 @@
-/**
- * Structural limit tests for the raw modal payloads the `/config` panel sends.
- *
- * Discord validates a modal as a whole: one out-of-range control rejects the entire payload with
- * a 400, so the button appears to do nothing. The builders that map an unbounded collection onto
- * a String Select or Checkbox Group are the ones that can drift past a limit as a workspace grows.
- * These cases drive builders across all runtime locales, roster sizes, and catalog-growth boundaries.
- */
-
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
@@ -47,7 +38,6 @@ const LABEL = 18;
 const RADIO_GROUP = 21;
 const CHECKBOX_GROUP = 22;
 
-/** Server 9, the id-derived nickname, and "only the first entry is a main persona" are this suite's defaults. */
 function makePersona(personaId: number, nickname = `Persona ${personaId}`): TomoriState {
   return createPersona({
     server_id: 9,
@@ -69,7 +59,6 @@ function makeNoticeDefinitions(count: number): ToolNoticeDefinition[] {
   }));
 }
 
-/** Roster sizes spanning both sides of the 25-option ceiling, including its exact boundary. */
 const ROSTER_SIZES = [1, 2, 23, 24, 25, 26, 60, 200];
 
 describe("raw config modal limits", () => {
@@ -139,7 +128,7 @@ describe("raw config modal limits", () => {
       const channelWrapper = payload.components[0];
       const channelInner = channelWrapper.component as { type: number } | undefined;
       expect(channelWrapper.type).toBe(LABEL);
-      expect(channelInner?.type).toBe(8); // Channel Select
+      expect(channelInner?.type).toBe(8);
       expect(channelWrapper.label).toBe(localizer(locale, "commands.config.random-trigger.add.channel_label"));
       expect(channelWrapper.description).toBe(
         localizer(locale, "commands.config.random-trigger.add.channel_description"),
@@ -153,7 +142,7 @@ describe("raw config modal limits", () => {
       const settingsInput = settingsWrapper?.component as
         | { type: number; value?: string; placeholder?: string }
         | undefined;
-      expect(settingsInput?.type).toBe(4); // Text Input
+      expect(settingsInput?.type).toBe(4);
       expect(settingsWrapper?.description).toBe(
         localizer(locale, "commands.config.panel.random_trigger_settings_description"),
       );
@@ -172,22 +161,18 @@ describe("raw config modal limits", () => {
 
   it("chunks the Notice Visibility catalog at 10, 11, and 50 entries without exceeding modal limits", () => {
     for (const locale of RUNTIME_LOCALES) {
-      // 10 entries fit into exactly one Checkbox Group
       const modal10 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(10));
       assertWithinDiscordLimits(modal10, `notices-10/${locale}`);
       expect(modal10.components.length).toBe(1);
 
-      // 11 entries chunk into two Checkbox Groups
       const modal11 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(11));
       assertWithinDiscordLimits(modal11, `notices-11/${locale}`);
       expect(modal11.components.length).toBe(2);
 
-      // 50 entries chunk into exactly five Checkbox Groups (the 5-component modal boundary)
       const modal50 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(50));
       assertWithinDiscordLimits(modal50, `notices-50/${locale}`);
       expect(modal50.components.length).toBe(5);
 
-      // 51 entries produce 6 groups, which violates the 5-component modal boundary
       const modal51 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(51));
       const result51 = validateRawModalLimits(modal51);
       expect(result51.valid).toBe(false);
@@ -196,7 +181,6 @@ describe("raw config modal limits", () => {
   });
 
   it("adversarially rejects title, component, and option boundary violations", () => {
-    // Title: 45 accepted, 46 rejected
     const validTitlePayload: RawModalPayload = {
       title: "a".repeat(45),
       custom_id: "modal_title_test",
@@ -221,7 +205,6 @@ describe("raw config modal limits", () => {
     expect(titleResult.valid).toBe(false);
     expect(titleResult.violations.some((v) => v.code === "MODAL_TITLE_OVERSIZED")).toBe(true);
 
-    // Modal components: 0 rejected, 6 rejected
     const emptyComponentsPayload: RawModalPayload = {
       title: "Test",
       custom_id: "modal_comp_empty",
@@ -231,7 +214,6 @@ describe("raw config modal limits", () => {
     expect(emptyResult.valid).toBe(false);
     expect(emptyResult.violations.some((v) => v.code === "MODAL_COMPONENTS_EMPTY")).toBe(true);
 
-    // Checkbox Group: 10 options accepted, 11 rejected
     const tenCheckboxPayload: RawModalPayload = {
       title: "Checkboxes",
       custom_id: "modal_check_10",
@@ -274,7 +256,6 @@ describe("raw config modal limits", () => {
     expect(check11Result.valid).toBe(false);
     expect(check11Result.violations.some((v) => v.code === "MODAL_OPTION_COUNT_INVALID")).toBe(true);
 
-    // Radio Group: 10 options accepted, 11 rejected
     const elevenRadioPayload: RawModalPayload = {
       title: "Radio",
       custom_id: "modal_radio_11",
@@ -317,7 +298,6 @@ describe("raw config modal limits", () => {
       expect(result.violations.some((violation) => violation.code === "MODAL_OPTION_COUNT_INVALID")).toBe(count < 2);
     }
 
-    // String Select: 25 options accepted, 26 rejected
     const twentySixSelectPayload: RawModalPayload = {
       title: "Select",
       custom_id: "modal_sel_26",
@@ -340,7 +320,6 @@ describe("raw config modal limits", () => {
     expect(sel26Result.valid).toBe(false);
     expect(sel26Result.violations.some((v) => v.code === "MODAL_OPTION_COUNT_INVALID")).toBe(true);
 
-    // Duplicate custom_id
     const duplicateIdPayload: RawModalPayload = {
       title: "Duplicate",
       custom_id: "modal_dup",
@@ -361,7 +340,6 @@ describe("raw config modal limits", () => {
     expect(dupResult.valid).toBe(false);
     expect(dupResult.violations.some((v) => v.code === "CUSTOM_ID_DUPLICATE")).toBe(true);
 
-    // Label length: 45 accepted, 46 rejected
     const overlongLabelPayload: RawModalPayload = {
       title: "Field Label",
       custom_id: "modal_lbl",
@@ -377,7 +355,6 @@ describe("raw config modal limits", () => {
     expect(lblResult.valid).toBe(false);
     expect(lblResult.violations.some((v) => v.code === "MODAL_FIELD_LABEL_OVERSIZED")).toBe(true);
 
-    // Description length: 100 accepted, 101 rejected
     const overlongDescPayload: RawModalPayload = {
       title: "Field Desc",
       custom_id: "modal_desc",
@@ -394,7 +371,6 @@ describe("raw config modal limits", () => {
     expect(descResult.valid).toBe(false);
     expect(descResult.violations.some((v) => v.code === "MODAL_FIELD_DESCRIPTION_OVERSIZED")).toBe(true);
 
-    // Checkbox Group option description: 100 accepted, 101 rejected
     const checkboxDesc100Payload: RawModalPayload = {
       title: "Checkboxes",
       custom_id: "modal_cb_desc_ok",
@@ -431,7 +407,6 @@ describe("raw config modal limits", () => {
     expect(checkboxDescResult.valid).toBe(false);
     expect(checkboxDescResult.violations.some((v) => v.code === "SELECT_OPTION_DESCRIPTION_OVERSIZED")).toBe(true);
 
-    // Radio Group option description: 100 accepted, 101 rejected
     const radioDesc101Payload: RawModalPayload = {
       title: "Radio",
       custom_id: "modal_rd_desc",

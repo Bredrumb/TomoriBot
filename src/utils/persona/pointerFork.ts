@@ -1,13 +1,8 @@
 import type { TomoriState } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 
-/**
- * Materializes a preset-pointer persona before its first per-server asset write.
- *
- * A pointer persona shares its preset's stored assets, so writing an avatar or sprite through one
- * would mutate every server pointing at that preset. Forking first is what keeps preset storage
- * immutable.
- */
+// Must run before writing an avatar or sprite on a pointer persona, because pointers share preset storage and writing
+// directly would mutate every server.
 export async function forkPointerForAvatarChange(
   selectedPersona: Pick<TomoriState, "persona_id" | "is_pointer">,
 ): Promise<boolean> {

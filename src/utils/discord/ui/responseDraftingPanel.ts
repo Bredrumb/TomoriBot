@@ -33,7 +33,7 @@ export type DraftPicker =
   | { slot: "reviewer"; provider: string | null; start: number }
   | { slot: "checker"; start: number };
 export const DRAFT_CLEAR_VALUE = "__none__";
-/** None, Previous, and Next reserve three of Discord's 25 options. */
+// Page size subtracts 3 from Discord's 25-option cap because None, Previous, and Next each occupy one select slot.
 export const DRAFT_CHECKER_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX - 3;
 
 export const DRAFT_REVIEW_ITEMS_FIELD = "draft_items";

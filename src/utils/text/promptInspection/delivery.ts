@@ -16,10 +16,8 @@ import { buildJsonSnapshot, buildRequestConfig, buildTextSnapshot } from "@/util
 
 export type PromptSnapshotFormat = "text" | "json";
 
-/**
- * Whether a member may receive the full prompt text. Token counts stay visible to everyone; the
- * text itself carries other members' memories and the server's prompts, so it is gated.
- */
+// Prompt text is gated because it exposes other members' memories and server prompts, while token counts stay visible
+// to everyone.
 export function canViewPromptText(
   memberPermissions: { has(permission: "ManageGuild"): boolean } | null,
   tomoriState: TomoriState,
@@ -32,15 +30,10 @@ export interface PromptSnapshotDelivery {
   format: PromptSnapshotFormat;
   guildId: string;
   locale: string;
-  /** `/tool prompt snapshot` points users at its own options; `/context` has buttons instead. */
   includeRerunHints: boolean;
   editReply(options: InteractionEditReplyOptions): Promise<unknown>;
 }
 
-/**
- * Answers on the deferred ephemeral reply rather than by DM: a snapshot is a one-time debugging
- * view, not a backup worth keeping, and the reply is already private to the requester.
- */
 export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): Promise<void> {
   const { inspection, format, locale } = delivery;
   const { selectedPersona, providerName, modelName, toolsData } = inspection;
@@ -134,10 +127,8 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
   });
 }
 
-/**
- * Discord renders message attachments above embeds, so the file rides inside a Components V2
- * container instead, where a File component can follow the text and sit at the bottom.
- */
+// Components V2 places the File component below the text because Discord renders standard message attachments above
+// embeds.
 function buildSnapshotCard(
   title: string,
   body: string,

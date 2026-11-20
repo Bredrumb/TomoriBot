@@ -1,16 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
 
-/**
- * Request-degradation helpers shared by streaming provider adapters.
- *
- * Adapters use the same attempts at two failure points: an unsuccessful fetch
- * and a provider error event received before the stream is committed. A stream
- * is committed only after its first meaningful chunk is yielded; adapters must
- * never transparently restart after that point because doing so could duplicate
- * text, reasoning, tool calls, or usage observed by the consumer.
- */
+// Adapters must not retry degradation attempts once the first meaningful chunk is yielded because restarting
+// mid-stream duplicates observed output.
 
-/** Preferred order for probing request parameters that a backend may reject. */
 const PARAM_DROP_PRIORITY = [
   "top_p",
   "top_k",
@@ -24,7 +16,6 @@ const PARAM_DROP_PRIORITY = [
   "stop",
 ] as const;
 
-/** Maximum number of message-derived attempts that an adapter may enqueue per request. */
 export const MAX_TARGETED_DEGRADATION_ATTEMPTS = 3;
 
 const REJECTABLE_PARAM_TOKENS = [
@@ -35,10 +26,8 @@ const REJECTABLE_PARAM_TOKENS = [
   "cache_control",
 ] as const;
 
-/**
- * Tokens that are also ordinary English words, so only a quoted mention names the field. A bare
- * "options" in prose would otherwise drop Ollama's `options.num_ctx` and silently shrink context.
- */
+// Word-like keys require quotes when matching errors because bare 'options' in prose would otherwise drop Ollama's
+// options.num_ctx and shrink context.
 const QUOTED_ONLY_PARAM_TOKENS: ReadonlySet<string> = new Set(["options"]);
 
 function errorNamesParam(errorMessage: string, param: string): boolean {
@@ -46,7 +35,6 @@ function errorNamesParam(errorMessage: string, param: string): boolean {
   return new RegExp(pattern, "i").test(errorMessage);
 }
 
-/** A request body paired with the label adapters use in recovery logs. */
 export interface DegradationAttempt {
   label: string;
   body: Record<string, unknown>;
@@ -62,7 +50,6 @@ export function areDegradationBodiesEqual(left: Record<string, unknown>, right: 
   );
 }
 
-/** The built-in reason that made an HTTP or SSE error eligible for degradation. */
 export type DegradableErrorKind =
   | "generic_400"
   | "parameter_rejection_400"
@@ -71,51 +58,28 @@ export type DegradableErrorKind =
   | "opaque_5xx"
   | "provider_specific";
 
-/** Input supplied to built-in and provider-specific degradation classifiers. */
 export interface DegradableErrorInput {
   statusCode: number | null;
   message: string;
 }
 
-/** Provider hook for recognizing additional errors without forking the shared logic. */
 type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolean;
 
 export interface ClassifyDegradableErrorOptions extends DegradableErrorInput {
   extraClassifiers?: readonly ExtraDegradationClassifier[];
-  /**
-   * Treat any 502 as a parameter-incompatibility signal. Only router-style
-   * providers (OpenRouter) should enable this: their 502s often mean "the
-   * selected backend rejected the request", whereas a direct provider's 502
-   * is almost always a genuine outage that degradation cannot fix.
-   */
+  // Intended only for router providers such as OpenRouter because their 502s often reflect backend rejection while
+  // direct 502s mean outages.
   degradeOn502?: boolean;
-  /**
-   * Treat a 5xx whose message carries no diagnostic content as a parameter-incompatibility
-   * signal. Some backends (NVIDIA NIM on the vLLM V2 runner) report an unsupported request key
-   * as an internal server error instead of a parameter rejection, and when streaming they do it
-   * mid-SSE after a 200, so nothing else in the ladder can see it.
-   *
-   * The generic-message gate is what keeps this safe: a real outage returns descriptive text
-   * (`Service temporarily overloaded`) and still fails fast into key/model fallback rather than
-   * walking the whole ladder against a dead endpoint.
-   */
+  // Enabled for backends such as NVIDIA NIM vLLM V2 because they emit opaque 5xx mid-SSE on unsupported keys, while
+  // generic gating keeps outages failing fast.
   degradeOnOpaque5xx?: boolean;
 }
 
 export interface BuildDegradationAttemptsOptions {
   mandatoryKeys: ReadonlySet<string>;
-  /** Adapter-owned message transformer because multimodal message shapes differ. */
   stripImages?: (messages: unknown) => unknown;
-  /**
-   * Keys the adapter injects itself (via `mutateRequestBody`) rather than deriving from user
-   * settings. Without this they are indistinguishable from junk and sort into the unknown tail,
-   * so a backend that drops support for one is never probed. Declared keys are probed first, ahead
-   * of the user's own samplers.
-   *
-   * Declare only keys that are safe to drop. A key that changes the shape of the reply belongs in
-   * the adapter's mandatory set instead, since probing it early would find a "working" request
-   * that silently lost a capability.
-   */
+  // Only safe-to-drop adapter-injected keys belong here so they probe before samplers, while reply-shaping keys stay
+  // in mandatoryKeys to prevent silent loss.
   priorityKeys?: readonly string[];
 }
 
@@ -153,11 +117,6 @@ function hasCacheControl(body: Record<string, unknown>): boolean {
   );
 }
 
-/**
- * True when an upstream error message carries no diagnostic content of its own, so the status
- * code is the only evidence available. Trailing punctuation is stripped because backends are
- * inconsistent about it and a lone period would otherwise defeat the match.
- */
 function isLikelyGenericErrorMessage(message: string): boolean {
   const normalized = message
     .trim()
@@ -188,10 +147,6 @@ function isParameterRejectionError(message: string): boolean {
   );
 }
 
-/**
- * Extract known droppable parameter names from an upstream error message.
- * Only parameters present on the failing request are returned.
- */
 export function extractRejectedParams(errorMessage: string, requestBody: Record<string, unknown>): string[] {
   return REJECTABLE_PARAM_TOKENS.filter((param) => {
     if (param === "cache_control" ? !hasCacheControl(requestBody) : !(param in requestBody)) return false;
@@ -199,16 +154,10 @@ export function extractRejectedParams(errorMessage: string, requestBody: Record<
   });
 }
 
-/**
- * True when an upstream error message names any droppable request parameter. Unlike
- * {@link extractRejectedParams} this takes no request body, so it answers the weaker question
- * user-facing error copy needs: did the endpoint blame a parameter at all?
- */
 export function errorMessageNamesRejectableParam(errorMessage: string): boolean {
   return REJECTABLE_PARAM_TOKENS.some((param) => errorNamesParam(errorMessage, param));
 }
 
-/** Classify whether an HTTP response or SSE error can be retried with fewer parameters. */
 export function classifyDegradableError({
   statusCode,
   message,
@@ -237,7 +186,6 @@ export function classifyDegradableError({
   return null;
 }
 
-/** Operator-facing label for a degradation trigger, shared so adapter logs stay comparable. */
 function describeDegradableErrorKind(kind: DegradableErrorKind): string {
   switch (kind) {
     case "generic_400":
@@ -255,47 +203,28 @@ function describeDegradableErrorKind(kind: DegradableErrorKind): string {
   }
 }
 
-/** Log label for whichever signal made a failed attempt eligible for a retry. */
 function describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
   if (kind) return describeDegradableErrorKind(kind);
   if (queuedImageStrip) return "a multimodal/image-input rejection";
   return "an error naming request parameters";
 }
 
-/** Input for one retry decision at either failure point: an unsuccessful fetch or a pre-commit SSE error. */
 export interface DegradationRetryPlanInput extends DegradableErrorInput {
-  /** The ladder being walked; the queue callbacks may append to it. */
   attempts: DegradationAttempt[];
-  /** Index of the attempt that just failed. */
   attemptIndex: number;
-  /** Body of the failed attempt, which a queue callback clones and trims. */
   body: Record<string, unknown>;
-  /** Provider policy for the shared classifier, minus the status and message it already receives. */
   classifyOptions?: Omit<ClassifyDegradableErrorOptions, "statusCode" | "message">;
   prepareAttempts: () => void;
   queueTargetedAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
   queueImageStripAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
 }
 
-/** What the adapter should say when it retries with a degraded payload. */
 export interface DegradationRetryPlan {
-  /** Log label for whichever signal justified the retry. */
   trigger: string;
 }
 
-/**
- * Decide whether a failed attempt should be retried with a degraded payload, queueing the two
- * targeted retries as a side effect. Returns null when nothing justified a retry or the ladder
- * has no rung left to try.
- *
- * A message that names a droppable request param is sufficient evidence on its own, so a queued
- * targeted or image-strip attempt justifies the retry even when the generic status and wording
- * classifier finds nothing.
- *
- * The queue callbacks run before the remaining-attempt check because queueing appends to the
- * ladder: the final rung's failure is still allowed to extend it, and that check reads the
- * updated length.
- */
+// Queue callbacks run before the remaining-attempt check because queueing appends to attempts, allowing even the
+// final rung's failure to extend the ladder.
 export function planDegradationRetry(input: DegradationRetryPlanInput): DegradationRetryPlan | null {
   const queuedTargeted = input.queueTargetedAttempt(input.attemptIndex, input.body, input.message);
   const queuedImageStrip = input.queueImageStripAttempt(input.attemptIndex, input.body, input.message);
@@ -311,10 +240,6 @@ export function planDegradationRetry(input: DegradationRetryPlanInput): Degradat
   return { trigger: describeDegradationTrigger(kind, queuedImageStrip) };
 }
 
-/**
- * Build the bounded static degradation ladder for a request body.
- * Duplicate bodies are removed while preserving attempt order.
- */
 export function buildDegradationAttempts(
   baseBody: Record<string, unknown>,
   { mandatoryKeys, stripImages, priorityKeys = [] }: BuildDegradationAttemptsOptions,
@@ -333,11 +258,8 @@ export function buildDegradationAttempts(
     addAttempt("probe_drop_cache_control", cloneWithoutKeys(probeBaseline, ["cache_control"]));
   }
 
-  // Declared injected keys are probed before the user's samplers. Each rung drops one key from the
-  // same baseline and the ladder stops at the first success, so ordering is pure latency: whichever
-  // rung wins ships the identical payload either way. Probing an adapter-injected key first reaches
-  // that rung in two requests instead of eight, and it is the better first hypothesis anyway
-  // because the user never asked for the key.
+  // Probe adapter-injected priority keys before user samplers because the user never asked for them and reaching that
+  // rung sooner cuts retries.
   const probeRank = (key: string): number => {
     const priorityIdx = priorityKeys.indexOf(key);
     if (priorityIdx !== -1) return priorityIdx;
@@ -393,12 +315,8 @@ export function createDegradationQueue(baseBody: Record<string, unknown>, option
   return { attempts, prepareAttempts };
 }
 
-/**
- * Detect endpoint errors that reject image/multimodal message content rather
- * than a sampler parameter. Covers vLLM deployments launched without
- * `--enable-multimodal` (surfaced as a 500) and common "no vision support"
- * phrasings from other OpenAI-compatible backends.
- */
+// Multimodal rejections are matched by message because vLLM without --enable-multimodal returns HTTP 500 and
+// OpenAI-compatible backends vary their wording.
 export function isMultimodalRejectionError(message: string): boolean {
   const normalized = message.toLowerCase();
   if (
@@ -416,7 +334,6 @@ export function isMultimodalRejectionError(message: string): boolean {
   );
 }
 
-/** True when any OpenAI-format message carries an image content block. */
 export function messagesContainImageBlocks(messages: readonly unknown[]): boolean {
   return messages.some((message) => {
     if (typeof message !== "object" || message === null) return false;
@@ -425,12 +342,8 @@ export function messagesContainImageBlocks(messages: readonly unknown[]): boolea
   });
 }
 
-/**
- * Replace image content blocks in OpenAI-format messages with a single text
- * notice per message. Unlike a silent filter, the notice keeps the model aware
- * an image existed so it neither hallucinates its contents nor ignores that
- * the user attached one. Messages without image blocks are returned unchanged.
- */
+// Image blocks are replaced with a text notice instead of silently filtered, so the model knows an image existed
+// without hallucinating or ignoring it.
 export function stripImageBlocksWithNotice(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   return messages.map((message) => {
     const content = message.content;
@@ -458,10 +371,6 @@ export function stripImageBlocksWithNotice(messages: Array<Record<string, unknow
   });
 }
 
-/**
- * Build one targeted retry that strips image blocks from the current body,
- * or null when the body carries no image content worth stripping.
- */
 export function buildImageStripAttempt(currentBody: Record<string, unknown>): DegradationAttempt | null {
   const messages = currentBody.messages;
   if (!Array.isArray(messages) || !messagesContainImageBlocks(messages)) return null;
@@ -477,7 +386,6 @@ function isImageContentBlock(block: unknown): boolean {
   return type === "image_url" || type === "image";
 }
 
-/** Build one targeted retry that drops every message-named parameter at once. */
 export function buildTargetedAttempt(
   currentBody: Record<string, unknown>,
   rejectedParams: readonly string[],

@@ -6,7 +6,7 @@ import { useEnvSandbox } from "../../helpers/env";
 const BASE_URL_ENV = "SEARXNG_BASE_URL";
 const originalFetch = globalThis.fetch;
 
-/** Records every `log.error`, which is the only level the production JSONL sink keeps. */
+// Only log.error is captured because error is the only level the production JSONL sink keeps.
 const errorTypes: string[] = [];
 
 let healthy = true;
@@ -30,12 +30,8 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
 });
 
-/**
- * Driven as one ordered scenario because the transition state is module-level: asserting the
- * sequence is also what proves the de-duplication, which a per-case reset would hide.
- *
- * `force` skips the 60s health cache so each step actually re-probes.
- */
+// Steps run in one ordered test because transition state is module-level, and force=true skips the 60s health cache
+// so each step re-probes.
 describe("SearXNG availability transition logging", () => {
   it("reports each flip once and stays quiet in between", async () => {
     healthy = false;
@@ -60,7 +56,6 @@ describe("SearXNG availability transition logging", () => {
     delete process.env[BASE_URL_ENV];
 
     expect(await isSearxngAvailable(true)).toBe(false);
-    // An unset base URL means SearXNG was never enabled, which is not an outage.
     expect(errorTypes.length).toBe(before);
   });
 });

@@ -8,18 +8,8 @@ import { discordPresenceRetention, type DiscordPresenceRetention } from "@/utils
 import { initializeShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
 import { buildIdentifyThrottler } from "@/utils/cluster/identifyThrottler";
 
-/**
- * Whether a Discord connection failure is one the bot can recover from on its own.
- *
- * The gateway sits behind an edge that answers a connect attempt with a non-101 status while a
- * region is unhealthy, so the failure arrives as a transport error rather than a gateway close
- * code. Retrying is correct for those. A rejected token or an unapproved privileged intent is
- * not: no amount of retrying changes Discord's answer, and a restart loop only hides the
- * misconfiguration behind transport noise.
- *
- * @param error - Failure raised by a gateway connect attempt or by login
- * @returns True when the caller should retry rather than exit
- */
+// Non-101 edge errors are retried because unhealthy gateway edges fail at transport, whereas rejected tokens or
+// unapproved intents cannot self-heal.
 export function isTransientGatewayError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
 
@@ -48,27 +38,8 @@ export function isTransientGatewayError(error: unknown): boolean {
   );
 }
 
-/**
- * Resolves whether the privileged GuildPresences intent should be requested,
- * preferring Discord's own approval state so the bot self-heals with no manual
- * configuration.
- *
- * GuildPresences is a privileged intent: requesting it without Discord's
- * approval makes the gateway reject the entire connection (DisallowedIntents /
- * WS close 4014). To avoid that (and a failed-then-retried connection), we ask
- * Discord up front whether the intent is enabled for this application.
- *
- * Resolution order:
- *   1. Live probe of the application's gateway flags via REST `GET /applications/@me`.
- *      `GatewayPresence` (approved for 100+ guild bots) or `GatewayPresenceLimited`
- *      (enabled for <100 guild bots) means the intent is safe to request. The moment
- *      Discord grants approval, so this flips on the next restart, no code change.
- *   2. On probe failure (e.g. network/REST error), fall back to the legacy default:
- *      enabled outside production, disabled in production.
- *
- * @param environment - Resolved runtime environment (used only for the fallback)
- * @returns true if the GuildPresences intent should be included
- */
+// Application flags are probed up front because requesting GuildPresences without Discord approval rejects the whole
+// gateway connection (close 4014).
 export async function resolvePresenceIntentEnabled(environment: AppEnvironment): Promise<boolean> {
   // Legacy behavior is the safety net if we cannot reach Discord to probe.
   const legacyDefault = environment !== "production";
@@ -79,12 +50,10 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     return legacyDefault;
   }
 
-  // Ask Discord which privileged gateway intents this application is approved for.
   try {
     const rest = new REST().setToken(token);
     const application = (await rest.get(Routes.currentApplication())) as { flags?: number };
     const flags = application.flags ?? 0;
-    // Either flag indicates the Presence Intent is enabled/approved for this bot.
     const presenceApproved =
       (flags & ApplicationFlags.GatewayPresence) !== 0 || (flags & ApplicationFlags.GatewayPresenceLimited) !== 0;
     log.info(
@@ -98,19 +67,6 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
   }
 }
 
-/**
- * Creates and configures the Discord.js client with appropriate intents,
- * cache sweepers, and process-level error handlers.
- *
- * The privileged GuildPresences intent is included only when
- * {@link resolvePresenceIntentEnabled} reports it as enabled. Downstream
- * consumers (e.g. the context builder) detect its presence via
- * `client.options.intents.has(GatewayIntentBits.GuildPresences)` and degrade
- * gracefully when it is absent, so flipping it requires no other changes.
- *
- * @param includePresences - Whether to request the privileged GuildPresences intent
- * @returns Configured Discord.js Client (not yet logged in)
- */
 export function createDiscordClient(
   includePresences: boolean,
   presenceRetention: DiscordPresenceRetention = discordPresenceRetention,
@@ -128,8 +84,7 @@ export function createDiscordClient(
     GatewayIntentBits.GuildExpressions,
   ];
 
-  // GuildPresences is privileged, so request it only when Discord has approved it
-  // (or it is force-enabled). See resolvePresenceIntentEnabled.
+  // GuildPresences is privileged, so request it only when approved by Discord or force-enabled.
   if (includePresences) {
     intents.push(GatewayIntentBits.GuildPresences);
   }
@@ -140,7 +95,7 @@ export function createDiscordClient(
     intents,
     partials: [Partials.Channel, Partials.Message],
     rest: { rejectOnRateLimit: shouldRejectWebhookRateLimit },
-    // 50 keeps recent reply targets cached in busy channels (each miss is a REST call for any reply the bot sees); any value is safe because readers fall back to fetch, so tune it from `discord_messages` samples.
+    // Cache 50 messages per channel so recent reply targets avoid REST fetches; readers fall back to fetch on miss.
     makeCache: Options.cacheWithLimits({
       ...Options.DefaultMakeCacheSettings,
       MessageManager: 50,
@@ -151,12 +106,13 @@ export function createDiscordClient(
       },
     }),
     sweepers: {
+      // Intervals and lifetimes in discord.js sweepers are in seconds.
       messages: {
-        interval: 3600, // Run sweep every 1 hour (in seconds)
-        lifetime: 1800, // Keep messages for 30 minutes (in seconds)
+        interval: 3600,
+        lifetime: 1800,
       },
-      // Never sweep the client's own member: discord.js resolves permissions through it.
-      // Voice paths read members synchronously with no fetch fallback.
+      // Never sweep the client's own member (used for permission resolution) or voice-connected members (read
+      // synchronously).
       guildMembers: {
         interval: 3600,
         filter: () => (member) => member.id !== member.client.user.id && !member.voice.channelId,
@@ -173,11 +129,8 @@ export function createDiscordClient(
           return (user) => user.id !== client.user?.id && !memberIds.has(user.id);
         },
       },
-      // Presence data is gateway-only with no REST fetch, so a swept entry stays missing until
-      // that user's next presence change. Offline-with-no-activity is the only safe set to drop:
-      // getUserPresenceDetails renders a cached offline presence as "Offline" and a missing one as
-      // "Offline or status unknown", so the information lost is nil. Widening this filter to
-      // idle/dnd or to entries carrying activities would silently degrade what Tomori can see.
+      // Presences have no REST fallback, so only sweep offline entries with no activities (rendered identically when
+      // absent).
       presences: {
         interval: 3600,
         filter: () => (presence) => presence.status === "offline" && presence.activities.length === 0,
@@ -191,21 +144,15 @@ export function createDiscordClient(
     log.error("Discord client error occurred", error);
   });
 
-  // A reconnect is transport maintenance, not an application defect. Logging every failed attempt
-  // at error level fills `error_logs` with identical rows during one gateway incident, which is
-  // what buries unrelated failures in the same Grafana view, so only the first attempt reports at
-  // error level and the rest stay visible at a level that does not write a row.
+  // Rate-limit gateway errors per outage so repeated reconnect failures stay at warn level instead of flooding
+  // error_logs.
   const gatewayErrorReporter = createGatewayErrorReporter();
   client.on("shardError", (error, shardId) => {
     gatewayErrorReporter(error, shardId);
   });
 
-  // Session lifecycle is the other half of a connection failure: without these, a resumed session
-  // and a fresh identify are indistinguishable in the logs, and an event gap is invisible.
-  //
-  // The reporter is cleared only where a session is actually established. Clearing it on a
-  // disconnect would re-arm error level for the next attempt of the same outage, which is the
-  // repetition the reporter exists to absorb.
+  // Reset the error reporter only when a session connects (shardReady/shardResume), because resetting on disconnect
+  // would re-arm errors mid-outage.
   client.on("shardReady", (shardId) => {
     setHistoryWindowGatewayConnected(shardId, true);
     gatewayErrorReporter.reset(shardId);
@@ -260,13 +207,8 @@ export function createDiscordClient(
   return client;
 }
 
-/**
- * Rate-limits gateway connection failures to one error row per shard per episode.
- *
- * discord.js retries a failed handshake on its own, so a single outage produces one failure per
- * attempt with the same message. Only the first is news; the rest are the same fact repeated, and
- * at error level each one is a row the failure views have to filter out.
- */
+// Shard errors are logged once per outage because discord.js retries failed handshakes on its own and repeats the
+// same error row.
 function createGatewayErrorReporter(): ((error: unknown, shardId: number) => void) & {
   reset: (shardId: number) => void;
 } {

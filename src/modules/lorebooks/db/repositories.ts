@@ -455,12 +455,6 @@ export class LorebookRepository {
     return appended.status === "appended" ? "replaced" : appended.status;
   }
 
-  /**
-   * Adds entries to an existing scope, skipping ones it already holds.
-   *
-   * The whole batch is refused when it would cross the scope limit, so an oversized book never
-   * lands half imported.
-   */
   async appendScopeEntries(
     serverId: number,
     lineageId: number | null,

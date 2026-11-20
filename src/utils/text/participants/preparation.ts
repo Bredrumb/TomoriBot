@@ -192,10 +192,6 @@ export async function prepareParticipantContext(
   };
 }
 
-/**
- * Keeps shared discovery independent of the responder while preserving the
- * provider-visible identity rules that depend on the active persona and history.
- */
 function scopePersonaReferencePlan(params: {
   plan: ParticipantDiscoveryPlan;
   activePersonaId?: number;

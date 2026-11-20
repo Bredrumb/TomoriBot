@@ -12,15 +12,10 @@ import type { DeclarationSite, ScanResult, SourceFile } from "./types";
 
 interface YamlVisitor {
   envBlockKeys: string[];
-  /** Called for every mapping key with the keys above it and any inline value. */
   onKey?: (path: string[], key: string, inlineValue: string, line: number) => void;
   onEnvEntry: (path: string[], name: string, rawValue: string | undefined, line: number) => void;
 }
 
-/**
- * Walks indentation-structured YAML and reports entries inside env blocks. Handles the map form
- * (`KEY: value`) and the list form (`- KEY=value`), which Compose accepts interchangeably.
- */
 function walkYaml(text: string, visitor: YamlVisitor): void {
   const stack: { indent: number; key: string }[] = [];
   let envIndent: number | null = null;
@@ -67,12 +62,8 @@ interface ComposeService {
   environment: DeclarationSite[];
 }
 
-/**
- * Scans a Compose file. Compose interpolates `${NAME}` from the host environment and the adjacent
- * `.env` before parsing, so every expansion is a read. `environment:` keys on a service built from
- * the root `Dockerfile` (or running the TomoriBot image) override the bot's `.env`; keys on any
- * other service are consumed by that third-party image, not by the bot.
- */
+// Only non-bot Compose services record external-image consumers because bot-service environment keys override .env
+// rather than consuming variables.
 export function scanCompose(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const text = blankHashComments(file.text, { tripleQuotes: false, hashNeedsSpace: true });
@@ -138,10 +129,6 @@ export function scanCompose(file: SourceFile): ScanResult {
   return result;
 }
 
-/**
- * Records `env:` keys in a GitHub workflow as a CI layer, and `$NAME` reads in its steps. Both only
- * enrich variables found elsewhere; workflow-local step variables are not inventoried.
- */
 export function scanWorkflow(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const text = blankHashComments(file.text, { tripleQuotes: false, hashNeedsSpace: true });
@@ -170,7 +157,6 @@ export function scanWorkflow(file: SourceFile): ScanResult {
   return result;
 }
 
-/** Records container env entries (`name = "X"` followed by `value = …`) as a deployment layer. */
 export function scanTerraform(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const lines = file.text.split(/\r?\n/);

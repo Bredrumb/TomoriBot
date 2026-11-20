@@ -10,10 +10,6 @@ export interface PersonaTurnBlockResult {
   targetPersonaKey: string | null;
 }
 
-/**
- * Walks chronological channel history from newest to oldest and finds the last
- * contiguous message block sent by a known Tomori persona.
- */
 export function findLastPersonaTurnBlock(options: {
   messages: Message[];
   allPersonas: TomoriState[];

@@ -19,16 +19,8 @@ import {
   pageIdToRoute,
 } from "../../src/constants/docsLocales";
 
-// Starlight's autogenerate resolves pages by stripping the hardcoded
-// "src/content/docs/" prefix from each entry's filePath (relative to project
-// root). When the docs live outside the Astro project (../../docs), filePath
-// becomes "../../docs/..." and the prefix strip never matches, leaving every
-// sidebar group empty.
-//
-// Fix: create a junction/symlink at src/content/docs → ../../docs so that
-// Astro sees the files as src/content/docs/... (correct prefix). This runs
-// once at startup; on Windows it creates a directory junction (no admin
-// required); on Linux/macOS it falls back to a regular symlink.
+// Starlight strips "src/content/docs/" when autogenerating sidebars, so link ../../docs here via a directory junction
+// (avoids admin privileges on Windows).
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const junctionPath = resolve(__dirname, "src/content/docs");
 const docsTarget = resolve(__dirname, "../../docs");
@@ -39,21 +31,9 @@ if (!existsSync(junctionPath)) {
   symlinkSync(docsTarget, junctionPath, "junction");
 }
 
-/**
- * Locale trees the sidebar reads labels from. A locale whose page tree does not exist yet has no
- * files to read and no sidebar entries of its own, so it is deliberately absent here even though
- * `DOCS_LOCALES` lists it as a planned target.
- */
 const sidebarLocales = DOCS_LOCALES.filter((locale) => locale.docsTree);
-/** Locales other than the default, which are the ones needing fallback sidebar labels. */
 const translatedLocales = sidebarLocales.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID);
 
-// Sidebar source of truth:
-// - Top-level groups are discovered from the default locale's docs/*/README.md.
-// - Page links use each Markdown file's `title`.
-// - Folder groups use `sidebar.groupLabel` from that folder's README when present.
-// - Ordering uses `sidebar.order` only where filename order is not enough.
-// - Set `sidebar.hidden: true` on a top-level README to keep that folder out of main nav.
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 const maxOrder = Number.MAX_SAFE_INTEGER;
 
@@ -168,14 +148,8 @@ function buildSidebarSection(directory) {
   };
 }
 
-/**
- * Starlight's `translations` map is keyed by each locale's `lang`, so this has to emit one entry per
- * published locale rather than the single hardcoded pair it replaced.
- *
- * A directory with no counterpart README keeps the default locale's label. Starlight already serves
- * the default locale's content at that URL, so an invented label would name a translation that does
- * not exist while the English wording stays honest about what the reader is looking at.
- */
+// Untranslated directories keep the default label because Starlight serves default locale content there, so a
+// translated label would misname English text.
 function buildSidebarTranslations(dirPath, slugPrefix) {
   const translations = {};
   const configuredTranslations = slugPrefix ? groupDirectoryConfig[slugPrefix]?.translations : undefined;
@@ -199,7 +173,6 @@ function buildSidebarTranslations(dirPath, slugPrefix) {
   return Object.keys(translations).length > 0 ? { translations } : {};
 }
 
-/** Same rule as a group label, applied to a single page's sidebar entry. */
 function buildPageTranslations(filePath) {
   const translations = {};
   const relativeStem = stripMarkdownExtension(relative(defaultLocaleTarget, filePath));
@@ -394,66 +367,38 @@ function buildTopLevelSidebar() {
 
 const sidebar = buildTopLevelSidebar();
 
-// Starlight locale options and the sitemap i18n map both derive from the shared locale table, so
-// adding a locale cannot leave one of them behind. Registering our own sitemap makes Starlight skip
-// its own, which is why the i18n map has to be supplied here rather than read from Starlight.
 const docsLocales = Object.fromEntries(
   sidebarLocales.map((locale) => [locale.id, { label: locale.label, lang: locale.lang }]),
 );
 
-/**
- * Language tag for the sitemap's `xhtml:link` hreflang annotations.
- *
- * `@astrojs/sitemap` validates every value in its i18n map against `/^[a-zA-Z-]+$/`. A tag carrying
- * a UN M.49 numeric region (`es-419`) fails that schema, and the integration then skips generating a
- * sitemap for the entire site rather than for that one locale, while `robots.txt` still advertises
- * one. Dropping the numeric region yields a valid, less specific tag; the page's own head keeps the
- * exact tag, so only the sitemap annotation loses precision.
- */
+// `@astrojs/sitemap` requires `/^[a-zA-Z-]+$/` and omits the whole sitemap on `es-419`, so strip numeric regions here
+// while page heads keep exact tags.
 function sitemapLanguageTag(lang: string): string {
   return lang.replace(/-\d+$/, "");
 }
 
-/**
- * Locale roots each get a meta-refresh redirect to their own introduction page, matching the
- * Cloudflare 200-rewrites in `public/_redirects`. Unlisted roots are not routes at all: a locale
- * enters this map only once its page tree exists.
- */
 const localeRootRedirects = Object.fromEntries(
   sidebarLocales.map((locale) => [`/${locale.id}/`, `/${locale.id}/introduction/`]),
 );
 
-/**
- * Machine-readable documentation stays English-only, so every non-default locale tree is excluded
- * by pattern rather than by name. A locale added to the shared table is covered here without an
- * edit, which is what keeps a new translation out of the agent-facing text sets.
- */
 const nonDefaultLocalePatterns = (suffix: string) =>
   DOCS_LOCALES.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID).map((locale) => `${locale.id}${suffix}`);
 
-/**
- * Sitemap filter for URLs that must not be advertised: internal wiki pages and every locale route
- * that only serves the default locale's content. A `noindex` URL left in the sitemap makes Search
- * Console report "Submitted URL marked 'noindex'", so a fallback has to stay out while the real
- * translations under the same locale root stay in.
- */
+// Sitemap excludes `noindex` fallback and wiki URLs because Search Console flags submitted `noindex` pages, while
+// real translations stay in.
 const fallbackRoutePattern = buildFallbackRoutePattern();
 
 function buildFallbackRoutePattern() {
   const fallbacks: string[] = [];
 
-  // Counterpart ids are collected once per locale, compared as normalized page ids rather than raw
-  // paths. A translation authored as `index.md` where the default locale uses `README.mdx` is the
-  // same page, and a path comparison would wrongly drop it from the sitemap as a fallback.
+  // Compare normalized page ids rather than raw paths because index.md and README.mdx name the same page.
   const localePageIds = new Map(
     sidebarLocales
       .filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID)
       .map((locale) => [locale.id, collectPageIds(resolve(docsTarget, locale.id))]),
   );
 
-  // Walked from the default locale's tree because a fallback exists only in the build output: the
-  // route is generated for every default-locale page that a locale has no file for, so a locale
-  // tree by itself cannot list them.
+  // Walk the default locale's tree because fallback routes are generated at build time for missing locale files.
   for (const [pageId, route] of collectPageIds(defaultLocaleTarget)) {
     for (const [localeId, pageIds] of localePageIds) {
       if (pageIds.has(pageId)) continue;
@@ -465,7 +410,6 @@ function buildFallbackRoutePattern() {
   return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
 }
 
-/** Normalized page ids and their routes for one locale tree. */
 function collectPageIds(localeRoot: string): Map<string, string> {
   const pages = new Map<string, string>();
 
@@ -487,13 +431,8 @@ function collectPageIds(localeRoot: string): Map<string, string> {
   return pages;
 }
 
-/**
- * Pages deploy only under a locale prefix, but search results, bookmarks, and older links use the
- * bare path (`/self-hosting/`). One stub per default-locale page sends each to its `/en/` page.
- * Written before the hand-maintained redirects below, which win where both name the same path, and
- * without `wiki/`, which has no bare URL to preserve. A bare path cannot collide with a content
- * route because every content route starts with a locale id.
- */
+// Bare route stubs must precede manual redirects so explicit entries win on collision, and `wiki/` stays excluded
+// because it has no bare URL.
 const bareRouteRedirects = Object.fromEntries(
   [...collectPageIds(defaultLocaleTarget).values()]
     .filter((route) => route !== "" && !/^wiki(\/|$)/.test(route))
@@ -505,9 +444,7 @@ const isInternalOrFallbackPath = (pathname: string): boolean =>
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
-  // Astro's default 4321 sits inside the dynamic TCP ranges Windows reserves for Hyper-V, WSL, and
-  // Docker (`netsh interface ipv4 show excludedportrange protocol=tcp`). Binding there fails with
-  // EACCES, which Astro does not treat as "port busy", so it never falls back to the next port.
+  // Avoid Astro's default port 4321 because Windows Hyper-V/WSL reserves it and EACCES skips Astro's port fallback.
   server: { port: 4600 },
   markdown: {
     processor: unified({
@@ -515,15 +452,11 @@ export default defineConfig({
       rehypePlugins: [rehypeKatex],
     }),
   },
-  // Redirects for the /features/ restructure: the flat pages were bucketed into
-  // task-based sub-category folders, changing their slugs. Keep the old URLs
-  // (shared links, search-engine index) working by forwarding to the new paths.
-  // Astro emits a static meta-refresh page for each key at build time.
+  // Astro resolves redirects before content collections (shadowing live pages), so only include moved URLs.
   redirects: {
     "/": "/en/introduction/",
     ...localeRootRedirects,
     ...bareRouteRedirects,
-    // Previously published paths stay reachable in every locale after their pages move.
     ...Object.fromEntries(
       [
         ["features/knowledge/lorebooks/", "features/knowledge/memory/lorebooks/"],
@@ -605,8 +538,6 @@ export default defineConfig({
     "/contributing/adding-db-column/": "/en/contributing/extending/db-column/",
     "/contributing/adding-event-handler/": "/en/contributing/extending/event-handler/",
     "/contributing/adding-feature-flag-tool/": "/en/contributing/extending/feature-flag-tool/",
-    // Astro resolves this map before the content collection, so a key that is also a live page
-    // replaces that page with a meta-refresh. Only key URLs whose page has moved.
     "/contributing/adding-env-variable/": "/en/contributing/extending/env-variable/",
     "/contributing/panel-prose-and-layout/": "/en/contributing/policies/panel-prose-and-layout/",
     "/contributing/adding-locale/locale-codes/": "/en/contributing/localization/new-locale/",
@@ -621,7 +552,6 @@ export default defineConfig({
     "/en/contributing/adding-locale/documentation/": "/en/contributing/localization/docs-site/",
     "/en/contributing/adding-locale/readme-and-repo/": "/en/contributing/localization/docs-site/",
     "/en/contributing/adding-locale/verification/": "/en/contributing/localization/new-locale/",
-    // Contributing pages moved into extending/, localization/, testing/, and policies/.
     "/en/contributing/adding-slash-command/": "/en/contributing/extending/slash-command/",
     "/en/contributing/adding-event-handler/": "/en/contributing/extending/event-handler/",
     "/en/contributing/adding-builtin-tool/": "/en/contributing/extending/builtin-tool/",
@@ -745,26 +675,17 @@ export default defineConfig({
     "/en/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
   },
 
-  // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
-  // (see above). Vite resolves each content file to its real path under `../../docs/...`,
-  // which sits outside this app, so a bare `@astrojs/starlight/components` import in an MDX
-  // page resolves from repo-root node_modules and fails (Starlight is installed only under
-  // `apps/docs/node_modules`). Alias that one package subpath to its concrete location so
-  // MDX landing pages can use Starlight's <Card>/<LinkCard>/<LinkButton>. A global
-  // `resolve.preserveSymlinks` would fix this too but breaks Bun's `.bun/` symlink store.
+  // Vite resolves symlinked ../../docs MDX imports outside apps/docs node_modules, and resolve.preserveSymlinks breaks
+  // Bun's .bun/ store, so alias the component entrypoint explicitly.
   vite: {
     resolve: {
       alias: [
-        // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
-        // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
-        // internally and must not be touched.
+        // Exact-match regex prevents rewriting Starlight's internal "@astrojs/starlight/components/*" subpaths.
         {
           find: /^@astrojs\/starlight\/components$/,
           replacement: resolve(__dirname, "node_modules/@astrojs/starlight/components.ts"),
         },
-        // The shared docs locale table lives in the bot's source tree because the bot needs it at
-        // runtime, so it sits outside this project root and needs an explicit resolution for both
-        // `.astro` components and config modules.
+        // Explicit alias lets .astro components import the shared locale table because it lives outside this project root.
         {
           find: /^@docs-locales$/,
           replacement: resolve(__dirname, "../../src/constants/docsLocales.ts"),
@@ -773,8 +694,7 @@ export default defineConfig({
     },
   },
   integrations: [
-    // Before starlight so it detects this one and skips adding its own. A `noindex` URL left in the
-    // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the route filter.
+    // Listed before starlight so it skips its own sitemap (requiring i18n here and filtering out noindex URLs).
     sitemap({
       i18n: {
         defaultLocale: DEFAULT_DOCS_LOCALE_ID,
@@ -787,13 +707,10 @@ export default defineConfig({
       markdown: {
         processedDirs: ["../../docs"],
       },
-      // Every locale is registered here, including the default one, because Starlight derives both
-      // the route set and the hreflang locale list from this map. `routeData.ts` then removes the
-      // alternates for routes that serve another locale's content.
+      // Every locale (including the default) must stay here so Starlight builds routes; routeData.ts strips fallback
+      // alternates.
       defaultLocale: DEFAULT_DOCS_LOCALE_ID,
       locales: docsLocales,
-      // Fallback meta description for pages without one (see routeMiddleware
-      // below, which auto-derives per-page descriptions from page content).
       description:
         "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
       plugins: [
@@ -834,15 +751,10 @@ export default defineConfig({
           ],
         }),
       ],
-      // SEO head tags: auto-derives per-page meta descriptions from each
-      // page's first paragraph and noindexes internal wiki/ pages.
       routeMiddleware: "./src/routeData.ts",
-      // Served from apps/docs/public/favicon.ico at the site root as /favicon.ico.
       favicon: "/favicon.ico",
       head: [
         {
-          // 1200×630 social banner (Open Graph standard size). Served from
-          // apps/docs/public/img/social-banner.png.
           tag: "meta",
           attrs: { property: "og:image", content: "https://docs.tomoribot.app/img/social-banner.png" },
         },
@@ -862,8 +774,6 @@ export default defineConfig({
           },
         },
         {
-          // Large-image card: the og:image is a proper 1200×630 banner now,
-          // so the stretched-square concern no longer applies.
           tag: "meta",
           attrs: { name: "twitter:card", content: "summary_large_image" },
         },
@@ -888,24 +798,15 @@ export default defineConfig({
         },
       ],
       customCss: ["/src/styles/custom.css"],
-      // SiteTitle override renders /tomoricon.svg directly as a plain <img> in the nav header.
-      // The standard `logo` config can't reference public/ files because it generates a Vite
-      // import that expects an Astro image object { src, width, height }, not a URL string.
+      // SiteTitle renders /tomoricon.svg as a plain <img> because Starlight's logo config expects a Vite-imported image
+      // object.
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
-        // Prepends the "AI-generated" disclaimer note to every page.
-        // Opt out per-page with `aiGenerated: false` in frontmatter.
         MarkdownContent: "./src/components/MarkdownContent.astro",
-        // Resolves prev/next pager labels to each target page's real title, so
-        // generic "Overview" sidebar labels don't leak into footer navigation.
         Pagination: "./src/components/Pagination.astro",
-        // Appends a Ko-fi support link beside the GitHub icon in the header,
-        // since Ko-fi isn't part of Starlight's built-in social icon set.
         SocialIcons: "./src/components/SocialIcons.astro",
       },
-      // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
-      // Discord uses a built-in Starlight icon; Ko-fi is appended separately in the
-      // SocialIcons override since it isn't part of Starlight's fixed icon set.
+      // Ko-fi lives in SocialIcons.astro rather than here because Starlight's social icon enum excludes it.
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" },
         { icon: "discord", label: "Discord", href: "https://discord.gg/bjCfHm9QsB" },

@@ -58,7 +58,8 @@ export interface EmergencyCacheClearOptions {
   includeShortTermMemory?: boolean;
   clearDiscordVolatileCaches?: boolean;
   source?: string;
-  /** Collect before measuring the result. Disable only in tests that assert on entry counts. */
+  // Forced GC runs before measuring so memory deltas stay accurate; disable this only in tests that assert on entry
+  // counts.
   collectBeforeMeasuring?: boolean;
 }
 
@@ -220,9 +221,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   clearMeasured(steps, "webhook", getWebhookTotalCacheSize, clearWebhookCache);
   clearMeasured(steps, "webhookIdentity", getWebhookIdentityCacheSize, clearWebhookIdentityCache);
   clearMeasured(steps, "novelaiSubscription", getNovelaiSubscriptionCacheSize, clearNovelaiSubscriptionCache);
-  // The OpenRouter catalogs are deliberately absent: they are provider metadata rather
-  // than per-guild growth, and dropping one would gate chat on database flags until the
-  // next refresh window for a few hundred KB.
+  // OpenRouter catalogs stay excluded because they are fixed provider metadata and dropping them would gate chat on
+  // database flags until the next refresh window.
   clearMeasured(steps, "recentImages", getImageCacheSize, clearImageCache);
   clearMeasured(steps, "presetAvatar", getPresetAvatarCacheSize, clearPresetAvatarCache);
   clearMeasured(steps, "voiceTranscript", getVoiceTranscriptCacheSize, clearVoiceTranscriptCache);
@@ -239,10 +239,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     steps.push(...clearDiscordVolatileCaches(options.client));
   }
 
-  // Dropping a cache reference frees nothing observable until a collection runs, so without
-  // this pass every `*_delta_clear` field reads exactly 0 and the report cannot show whether
-  // clearing helped. The guard's own forced GC happens after this function returns, too late
-  // to be captured here.
+  // Forced GC must run before measuring because the guard's own collection runs after return, leaving `*_delta_clear`
+  // at 0.
   if (options.collectBeforeMeasuring ?? true) {
     try {
       runForcedGc();

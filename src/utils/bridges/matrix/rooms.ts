@@ -16,10 +16,8 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 // A state lookup answers with one small JSON object; this only bounds a misbehaving homeserver.
 const STATE_RESPONSE_MAX_BYTES = 64 * 1024;
 
-/**
- * Only `unencrypted` permits relaying. `unavailable` covers every answer that cannot prove the
- * room lacks encryption, so the bridge never sends plaintext into a room it could not verify.
- */
+// Only confirmed unencrypted rooms permit relaying, so unavailable states fail closed and never leak plaintext into
+// unverified rooms.
 export type MatrixRoomEncryptionState = "encrypted" | "unencrypted" | "unavailable";
 
 export async function joinMatrixRoom(roomId: string): Promise<void> {
@@ -64,12 +62,8 @@ export async function getDiscordChannelForRoom(matrixRoomId: string): Promise<st
   return channelDiscId;
 }
 
-/**
- * Reads the room's `m.room.encryption` state. The client-server API reserves 404 for "the room has
- * no state with the given type or key", and the `M_NOT_FOUND` errcode separates that from a proxy's
- * generic 404 page. Authentication failures, other statuses, malformed bodies, and timeouts are
- * `unavailable`.
- */
+// Unencrypted confirmation requires HTTP 404 with M_NOT_FOUND so generic proxy 404s, auth errors, and bad responses
+// fail closed as unavailable.
 export async function getRoomEncryptionState(roomId: string): Promise<MatrixRoomEncryptionState> {
   const homeserverUrl = process.env.MATRIX_HOMESERVER_URL;
   const asToken = process.env.MATRIX_ACCESS_TOKEN;
@@ -98,12 +92,8 @@ export async function getRoomEncryptionState(roomId: string): Promise<MatrixRoom
   }
 }
 
-/**
- * Gates every relay in either direction on a confirmed-unencrypted room. Encryption is permanent,
- * so an encrypted room loses its link; an unverifiable room only pauses until a later check.
- *
- * @param options.refresh Skips the cached confirmation, for when the room's encryption state changed.
- */
+// Encrypted rooms drop their link because Matrix encryption is permanent, while unverifiable rooms only pause
+// relaying until a check or refresh.
 export async function ensureRoomRelayable(
   roomId: string,
   discordClient: Client,

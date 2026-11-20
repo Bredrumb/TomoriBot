@@ -1,9 +1,6 @@
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { parseTransferPanelRoute, type TransferPanelRoute } from "@/utils/discord/transferCatalog";
 
-/**
- * Collect every component identifier a panel payload carries, in walk order.
- */
 function collectCustomIds(payload: unknown): string[] {
   const found: string[] = [];
   const walk = (node: unknown): void => {
@@ -22,9 +19,6 @@ function collectCustomIds(payload: unknown): string[] {
   return found;
 }
 
-/**
- * Find one routed transfer action in a panel payload, or null when the panel omits it.
- */
 export function findTransferAction(payload: unknown, action: TransferPanelRoute["action"]): TransferPanelRoute | null {
   for (const customId of collectCustomIds(payload)) {
     const parsed = parseInteractionRoute(customId);

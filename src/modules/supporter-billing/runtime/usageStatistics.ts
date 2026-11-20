@@ -8,10 +8,7 @@ import type { ProviderUsageReport } from "@/utils/provider/providerUsage";
 
 export type SupporterUsageReport = ProviderUsageReport;
 
-/**
- * Records a member-funded response's reported cost without awaiting storage, because statistics must
- * never delay or fail the inference that produced them.
- */
+// Statistics must never delay or fail the inference that produced them, so storage is not awaited.
 export function recordSupporterUsage(
   funding: SupporterFundingContext | null | undefined,
   report: SupporterUsageReport,

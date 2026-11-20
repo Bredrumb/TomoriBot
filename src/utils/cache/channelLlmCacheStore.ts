@@ -8,10 +8,6 @@ import {
 import type { LlmRow } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
-/**
- * In-memory TTL store for per-channel LLM overrides.
- * Repository writes invalidate this store after successful override changes.
- */
 const channelLlmCache = new Map<string, { llm: LlmRow | null; expiresAt: number }>();
 
 const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;

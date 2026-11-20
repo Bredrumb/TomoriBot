@@ -1,15 +1,3 @@
-/**
- * ServerScheduleRepository: manages the `reminders` and `random_triggers` tables,
- * plus the Phase 6 `server_trigger_behavior_configs` and
- * `server_auto_trigger_configs` tables.
- *
- * Split from ServerRepository in Phase 5.5e Stage C. Scheduling is cleanly
- * separable from server identity: reminders and random triggers share no tables
- * with server setup, emojis, stickers, or webhooks.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import {
   type ErrorContext,
   type RandomTriggerRow,
@@ -29,7 +17,6 @@ import {
 } from "@/utils/text/processors/reminderRepetition";
 import type { IRepository } from "./IRepository";
 
-/** Row shape for server_trigger_behavior_configs (Phase 6). */
 type ServerTriggerBehaviorConfigsRow = {
   always_reply_enabled: boolean;
   deliberate_trigger_mode: boolean;
@@ -37,24 +24,19 @@ type ServerTriggerBehaviorConfigsRow = {
   cooldown_length: number;
 };
 
-/** Row shape for server_auto_trigger_configs (Phase 6, post-013 migration). */
 type ServerAutoTriggerConfigsRow = {
   autoch_disc_ids: string[];
   autoch_threshold: number;
   autoch_threshold_max: number;
 };
 
-/** Composite export shape for ServerScheduleRepository's Phase 6 tables. */
 type ServerScheduleExportShape = {
   trigger_behavior: ServerTriggerBehaviorConfigsRow | null;
   auto_trigger: ServerAutoTriggerConfigsRow | null;
 };
 
-/**
- * Pending reminders and scheduled tasks one server may hold. A model tool call creates them from
- * ordinary chat, and every recurring self-task runs a paid generation on its schedule, so the
- * count is what bounds both storage and scheduled spend.
- */
+// Cap bounds both storage and scheduled LLM spend because model tool calls create reminders from chat and recurring
+// self-tasks run paid generations on schedule.
 export const MAX_REMINDERS_PER_SERVER = 100;
 
 export class ReminderLimitError extends Error {
@@ -82,7 +64,8 @@ type ReminderMutationActor = {
   requester_user_id?: number;
   requester_discord_id?: string;
   requester_bridge_user_id?: string;
-  /** Only honored by deletes: a server manager may remove any reminder in their server. */
+  // Intentionally honored only by deletes so a server manager can remove any reminder in their server while updates
+  // ignore it.
   requester_can_manage_server?: boolean;
 };
 
@@ -95,10 +78,8 @@ type ReminderScopedMutationResult =
       status: "not_found" | "unauthorized" | "invalid_row" | "db_error";
     };
 
-/**
- * Keeps the monthly anchor while the occurrence stays on the same server-calendar day (SET reads the
- * pre-update row), because only a new date, not a new time or wording, starts a new monthly series.
- */
+// Monthly anchor stays preserved on the same server-calendar day (SET reads pre-update columns) because only a new
+// date starts a new monthly series.
 function keepAnchorDayOnSameLocalDate(newReminderTime: Date) {
   const serverOffset = sql`(COALESCE((SELECT timezone_offset FROM server_chat_configs WHERE server_id = reminders.server_id), 0) * INTERVAL '1 hour')`;
   return sql`CASE
@@ -108,7 +89,6 @@ function keepAnchorDayOnSameLocalDate(newReminderTime: Date) {
   END`;
 }
 
-/** Data shape for creating or updating a random trigger. */
 interface RandomTriggerData {
   serverId: number;
   channelDiscId: string;
@@ -123,28 +103,18 @@ interface RandomTriggerData {
 }
 
 class ServerScheduleRepository implements IRepository<ServerScheduleExportShape> {
-  /** Returns all reminders that are due to fire now. */
   async getDueReminders(topology?: ShardTopology): Promise<ReminderRow[] | null> {
     return this.sqlGetDueReminders(topology);
   }
 
-  /** Returns the timestamp of the next scheduled reminder, or null if none. */
   async getNextReminderTime(topology?: ShardTopology): Promise<Date | null> {
     return this.sqlGetNextReminderTime(topology);
   }
 
-  /**
-   * Loads a single reminder by ID.
-   *
-   */
   async getReminderById(reminderId: number): Promise<ReminderRow | null> {
     return this.sqlGetReminderById(reminderId);
   }
 
-  /**
-   * Returns the count of active reminders for a Discord user.
-   *
-   */
   async getUserReminderCount(userDiscordId: string): Promise<number> {
     return this.sqlGetUserReminderCount(userDiscordId);
   }
@@ -153,13 +123,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlDeleteReminderById(reminderId);
   }
 
-  /**
-   * Returns pending (not yet fired) reminders for a Discord user.
-   *
-   * @param serverDiscId  - Optional Discord server snowflake (filters to that server)
-   * @param personaId     - Active persona ID (filters reminders to that persona)
-   * @param includeUnassigned - Whether legacy reminders with no persona should be included
-   */
   async getPendingRemindersForUser(
     userDiscordId: string,
     serverDiscId?: string,
@@ -169,19 +132,10 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlGetPendingRemindersForUser(userDiscordId, serverDiscId, personaId, includeUnassigned);
   }
 
-  /**
-   * Loads reminders for command selection lists with optional owner filtering.
-   *
-   * @param ownerUserId - If provided, only returns reminders created by this user
-   */
   async loadReminderSelections(serverId: number, ownerUserId?: number): Promise<ReminderSelectionRow[]> {
     return this.sqlLoadReminderSelections(serverId, ownerUserId);
   }
 
-  /**
-   * Creates a new reminder.
-   *
-   */
   async addReminder(reminderData: {
     server_id: number;
     channel_disc_id: string;
@@ -197,11 +151,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlAddReminder(reminderData);
   }
 
-  /**
-   * Moves a recurring reminder to its next occurrence.
-   *
-   * @param failedOccurrenceCount - Consecutive failed occurrences to carry forward; 0 after a delivered one
-   */
   async rescheduleReminder(
     reminderId: number,
     nextOccurrence: ReminderOccurrence,
@@ -210,7 +159,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlRescheduleReminder(reminderId, nextOccurrence, failedOccurrenceCount);
   }
 
-  /** Defers delivery without changing the reminder's canonical occurrence time. */
   async scheduleReminderRetry(
     reminderId: number,
     nextAttemptAt: Date,
@@ -219,10 +167,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlScheduleReminderRetry(reminderId, nextAttemptAt, deliveryRetryCount);
   }
 
-  /**
-   * Updates mutable fields on an existing reminder.
-   *
-   */
   async updateReminder(reminderData: {
     reminder_id: number;
     reminder_purpose: string;
@@ -237,9 +181,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlUpdateReminder(reminderData);
   }
 
-  /**
-   * Updates core reminder fields, scoped to the server and requester authority.
-   */
   async updateReminderCoreForRequester(reminderData: {
     reminder_id: number;
     server_id: number;
@@ -251,9 +192,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlUpdateReminderCoreForRequester(reminderData);
   }
 
-  /**
-   * Deletes a reminder, scoped to the server and requester authority.
-   */
   async deleteReminderForRequester(reminderData: {
     reminder_id: number;
     server_id: number;
@@ -262,36 +200,22 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlDeleteReminderForRequester(reminderData);
   }
 
-  /** Returns all random triggers that are due to fire now. */
   async getDueTriggers(topology?: ShardTopology): Promise<RandomTriggerRow[]> {
     return this.sqlGetDueRandomTriggers(topology);
   }
 
-  /** Returns the timestamp of the next scheduled random trigger, or null if none. */
   async getNextTriggerTime(topology?: ShardTopology): Promise<Date | null> {
     return this.sqlGetNextRandomTriggerTime(topology);
   }
 
-  /**
-   * Loads all random triggers for a server.
-   *
-   */
   async getServerTriggers(serverId: number): Promise<RandomTriggerRow[]> {
     return this.sqlGetServerRandomTriggers(serverId);
   }
 
-  /**
-   * Returns the count of random triggers configured for a server.
-   *
-   */
   async getServerTriggerCount(serverId: number): Promise<number> {
     return this.sqlGetServerRandomTriggerCount(serverId);
   }
 
-  /**
-   * Loads a single random trigger by persona and channel.
-   *
-   */
   async getTriggerByPersonaAndChannel(
     serverId: number,
     channelDiscId: string,
@@ -304,10 +228,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlInsertRandomTrigger(data);
   }
 
-  /**
-   * Updates an existing random trigger by ID with new configuration data.
-   *
-   */
   async upsertTrigger(triggerId: number, data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     return this.sqlUpsertRandomTrigger(triggerId, data);
   }
@@ -316,13 +236,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlDeleteRandomTrigger(triggerId);
   }
 
-  /**
-   * Reschedules a random trigger's next fire time.
-   *
-   * @param timerHours           - Base interval in hours
-   * @param randomOffsetRange    - Optional +/- jitter range
-   * @param consecutiveFailures  - Current consecutive failure count to persist
-   */
   async rescheduleTrigger(
     triggerId: number,
     timerHours: number,
@@ -482,10 +395,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     includeUnassigned = false,
   ): Promise<ReminderRow[] | null> {
     try {
-      // Query for pending reminders (reminder_time > now) for the user
       let reminderData: unknown[];
       if (serverDiscId && typeof personaId === "number") {
-        // Join with servers table to filter by server_disc_id
         reminderData = includeUnassigned
           ? await sql`
               SELECT r.* FROM reminders r
@@ -1096,7 +1007,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlGetDueRandomTriggers(topology?: ShardTopology): Promise<RandomTriggerRow[]> {
     try {
-      // Fetch all triggers scheduled at or before now
       const rows = await sql`
         SELECT t.* FROM random_triggers t
         JOIN servers s ON s.server_id = t.server_id
@@ -1179,7 +1089,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlGetServerRandomTriggerCount(serverId: number): Promise<number> {
     try {
-      // Count triggers for this server
       const [row] = await sql<Array<{ count: string | number }>>`
         SELECT COUNT(*) AS count FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1197,7 +1106,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     personaId: number,
   ): Promise<RandomTriggerRow | null> {
     try {
-      // Find matching trigger for the specific named persona in this channel
       const [row] = await sql`
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1225,7 +1133,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlInsertRandomTrigger(data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     try {
-      // Insert trigger; schedule first roll after one full timer cycle
       const [row] = await sql`
         INSERT INTO random_triggers (
           server_id,
@@ -1357,7 +1264,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           : 0;
       const nextTimerHours = Math.max(1, timerHours + randomOffset);
 
-      // Advance next_trigger_at and persist the current consecutive failure count
       const [row] = await sql`
         UPDATE random_triggers
         SET next_trigger_at      = NOW() + (${nextTimerHours} * INTERVAL '1 hour'),
@@ -1387,10 +1293,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  /**
-   * Reads trigger-behavior and auto-trigger configs for the given server.
-   *
-   */
   async toExportShape(ownerId: string | number): Promise<ServerScheduleExportShape | null> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -1405,10 +1307,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return { trigger_behavior: triggerBehavior, auto_trigger: autoTrigger };
   }
 
-  /**
-   * Restores ServerScheduleRepository-owned config table rows for a server.
-   *
-   */
   async fromExportShape(ownerId: string | number, data: ServerScheduleExportShape): Promise<boolean> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -1500,5 +1398,4 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const serverScheduleRepository = new ServerScheduleRepository();

@@ -38,7 +38,7 @@ import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-/** Stays under Discord's 4000-character text display limit with room for the title and footer. */
+// Sized below Discord's 4000-character text display limit so the title and footer still fit.
 export const MAX_TAG_CARD_CHARS = 3500;
 
 const INVALID_QUERIES_ERROR = "Pass queries as a list of 1 to 20 character names, outfit names, or tags.";
@@ -53,7 +53,7 @@ const CATEGORY_LABEL_KEYS: Readonly<Record<TagCategory, string>> = {
   meta: "tools.danbooru.category_meta",
 };
 
-/** Backticks would close the card's code spans, letting tag text escape them. */
+// Backtick replacement prevents untrusted tag text from closing the card's code spans.
 function codeSafe(text: string): string {
   return text.replaceAll("`", "'");
 }
@@ -105,10 +105,7 @@ function formatCharacterSection(
   return lines.join("\n");
 }
 
-/**
- * The card body: one line per query, then one block per described character. Blocks that would
- * pass MAX_TAG_CARD_CHARS are left out whole, so a code block is never cut open.
- */
+// Blocks exceeding MAX_TAG_CARD_CHARS are omitted whole so a markdown code block is never left cut open.
 export function buildDanbooruTagCard(locale: string, lookup: TagLookupResult): string {
   const numberFormat = new Intl.NumberFormat(locale);
   const formatCount = (n: number) => numberFormat.format(n);

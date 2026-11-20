@@ -195,8 +195,7 @@ export async function getUserPresenceDetails(
       return "Status unknown";
     }
 
-    // Log raw gateway presences cache before any member fetch, to diagnose
-    // whether the Last.fm / RPC activity is in the cache at check time
+    // Captured before fetchParticipantMember because fetching can change what gateway cache shows.
     const rawPresence = guild.presences.cache.get(userId);
     log.info(
       `Presences cache for ${userId}: status=${rawPresence?.status ?? "none"} activities=[${rawPresence?.activities.map((a) => `${a.type}:${a.name}`).join(", ") ?? "none"}]`,
@@ -232,8 +231,6 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
-        // Diagnostic log so we can see exactly what the gateway delivered
-        //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
         const largeText = activity.assets?.largeText?.trim() || null;
         const smallText = activity.assets?.smallText?.trim() || null;
         log.info(
@@ -256,7 +253,6 @@ export async function getUserPresenceDetails(
   }
 }
 
-/** One gateway activity as the text the model reads, such as "Playing Elden Ring: Limgrave for 2 hours". */
 export function formatPresenceActivity(activity: Activity): string {
   const largeText = activity.assets?.largeText?.trim() || null;
   const smallText = activity.assets?.smallText?.trim() || null;
@@ -289,7 +285,7 @@ export function formatPresenceActivity(activity: Activity): string {
     case ActivityType.Watching:
       return appendAssetText(`Watching ${activity.name}`) + timeSpent;
     case ActivityType.Custom: {
-      // Custom Status: some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
+      // Custom status must still check details and assets because some RPC clients populate them beyond state alone.
       const parts: string[] = [];
       if (activity.emoji?.name) parts.push(activity.emoji.name);
       if (activity.state) parts.push(activity.state);

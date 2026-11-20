@@ -5,11 +5,8 @@ import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { deleteCharRef, uploadCharRef, type CharRefEntityType } from "@/utils/storage/charrefStorage";
 
-/**
- * The attachment fields this path actually reads. Both a discord.js `Attachment` and a raw
- * `APIAttachment` satisfy it structurally, so neither caller needs a cast to reach the shared
- * preparation logic.
- */
+// Minimal structural interface satisfied by both discord.js Attachment and raw APIAttachment, so neither caller needs
+// a cast.
 interface CharRefAttachmentSource {
   contentType: string | null;
   size: number;

@@ -7,7 +7,7 @@ import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -33,12 +33,14 @@ import {
 } from "@/modules/supporter-billing/runtime/types";
 import { getSupporterRequestFailureCopy } from "@/modules/supporter-billing/discord/requestFailure";
 import {
+  canAdvanceAutochatCounter,
   checkTextQuotaForAdmission,
   enforceGlobalRateLimit,
   enforceServerTriggerCooldownForAdmission,
   evaluateChatAccess,
   resolveChannelScope,
   shouldApplyServerTextQuota,
+  updateAutochatCounter,
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
@@ -51,10 +53,7 @@ import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/
 import {
   determineMatchingPersonas,
   getAutochatAssignedPersonaId,
-  getAutochatRange,
   isAutochatAlwaysReplyChannelActive,
-  isAutochatConfiguredChannel,
-  isAutochatCounterChannelActive,
   isAutochatCounterHit,
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
@@ -90,7 +89,11 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   const allPersonas = admission.allPersonas?.length ? admission.allPersonas : await getCachedAllPersonas(serverDiscId);
   const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? null;
   const fallbackPersona = mainPersona ?? allPersonas[0] ?? null;
-  const tomoriState = admission.tomoriState ?? fallbackPersona;
+  const baseTomoriState = admission.tomoriState ?? fallbackPersona;
+  let tomoriState =
+    baseTomoriState && incoming.autochatCounterSnapshot
+      ? { ...baseTomoriState, ...incoming.autochatCounterSnapshot }
+      : baseTomoriState;
   if (!tomoriState) {
     const shouldSurfaceNoStateError = shouldSurfaceChatUserErrors({
       incoming,
@@ -184,8 +187,6 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
-  await updateAutochatCounter(message, tomoriState, serverDiscId);
-
   const channelIds = resolveChannelScope(message);
   const isAutochatOverride = isAutochatOverrideChannel(tomoriState.config, channelIds.effectiveChannelId);
   const accessState = await evaluateChatAccess({
@@ -206,13 +207,35 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     userId: userRow.user_id,
     allPersonas,
   });
-  // Reminder turns are system-initiated because the role whitelist guards against unauthorized
-  // users triggering Tomori, but reminders were authorized at creation time. The channel
-  // whitelist (is this channel allowed at all?) still applies via whitelistStatus.isTriggerAllowed,
-  // but role-based rejection that derives from the last message author is skipped.
+  // System-initiated turns (reminders, borrowed triggers) bypass last-author whitelist rejection because
+  // authorization happened when created or configured.
   const isSystemInitiatedTurn = isSystemInitiatedIncoming(incoming);
   if (accessState.rejectedByWhitelist && !isSystemInitiatedTurn) {
     return { lockedTurn, turns: [] };
+  }
+
+  if (
+    !incoming.autochatCounterSnapshot &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isStopResponse &&
+    !incoming.isPersonaJob &&
+    !isSystemInitiatedTurn &&
+    canAdvanceAutochatCounter({
+      message,
+      tomoriState,
+      allPersonas,
+      effectiveChannelId: channelIds.effectiveChannelId,
+      isSelfMessage,
+      personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
+      allowedPersonaIds: accessState.allowedPersonaIds,
+    })
+  ) {
+    const snapshot = await updateAutochatCounter(message, tomoriState, serverDiscId);
+    if (snapshot) {
+      incoming.autochatCounterSnapshot = snapshot;
+      tomoriState = { ...tomoriState, ...snapshot };
+      admission.tomoriState = tomoriState;
+    }
   }
 
   if (
@@ -456,11 +479,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       )
     : new Map();
 
-  // Scene turns are a scripted persona-to-persona chain: each speaker responds to the
-  // PREVIOUS speaker, so {{user}} (which resolves to triggererName) should be that prior
-  // persona rather than the command invoker: matching how a normal self-reply queue
-  // resolves the triggerer to the last persona in the chain. Turn 0 has no prior speaker
-  // and keeps the invoker as the entity being responded to.
+  // After turn 0, resolve {{user}} (`triggererName`) to the previous scene speaker so each persona responds to
+  // the prior persona rather than the invoker.
   if (incoming.sceneTurn && incoming.sceneTurn.turnIndex > 0) {
     const previousSpeakerName = incoming.sceneTurn.sequence[incoming.sceneTurn.turnIndex - 1]?.personaName.trim();
     if (previousSpeakerName) {
@@ -540,11 +560,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   return { lockedTurn, turns };
 }
 
-/**
- * The user whose name `{user}` and the triggerer name carry. A Ping User speaks to its target, not to
- * whoever posted the message it borrowed as a trigger, so only naming moves to the target: credentials,
- * quotas, and stats stay with the trigger message's author. Null when the target's row is unreadable.
- */
+// Ping User moves only {user} and triggerer naming to its target, so credentials, quotas, and stats stay with the
+// trigger message's author.
 async function resolveNamingSubject(params: {
   incoming: ChatIncoming;
   message: Message;
@@ -607,40 +624,8 @@ async function loadOrRegisterTriggerUser(
   return registered;
 }
 
-async function updateAutochatCounter(message: Message, tomoriState: TomoriState, serverDiscId: string): Promise<void> {
-  const { minThreshold, maxThreshold } = getAutochatRange(tomoriState.config);
-  const effectiveChannelId = message.channel.isThread()
-    ? (message.channel.parentId ?? message.channel.id)
-    : message.channel.id;
-  if (!isAutochatCounterChannelActive(tomoriState.config, effectiveChannelId) || !isRealUserMessage(message)) {
-    return;
-  }
-  if (!tomoriState.persona_id) {
-    log.error(`Tomori ID missing for server ${serverDiscId} during counter increment.`);
-    return;
-  }
-
-  try {
-    const updatedTomoriRow = await configRepository.incrementTomoriCounter(
-      tomoriState.persona_id,
-      minThreshold,
-      maxThreshold,
-    );
-    if (!updatedTomoriRow) {
-      log.warn(`Failed to update auto-message counter for server ${serverDiscId}.`);
-      return;
-    }
-    tomoriState.autoch_counter = updatedTomoriRow.autoch_counter;
-    tomoriState.autoch_next_target = updatedTomoriRow.autoch_next_target;
-  } catch (error) {
-    log.error(`Error updating auto-message counter for server ${serverDiscId}`, error);
-  }
-}
-
-/**
- * A borrowed-trigger turn counts as system-initiated because an admin configured it (random trigger
- * or Natural Nudges allow-list), as creation authorizes a reminder.
- */
+// Borrowed-trigger turns count as system-initiated because admin configuration (random trigger or Natural Nudges
+// allow-list) authorizes them like reminders.
 function isSystemInitiatedIncoming(incoming: ChatIncoming): boolean {
   return Boolean(
     incoming.reminderRecipientID || incoming.reminderData?.self_reminder || incoming.borrowsTriggerMessage,
@@ -668,7 +653,6 @@ export async function resolveTextCredentialPolicy(params: {
   isManuallyTriggered?: boolean;
   isUserImpersonation: boolean;
   borrowsTriggerMessage: boolean;
-  /** Who a borrowed-trigger turn bills instead of the anchor message's author, such as a reminder's creator. */
   borrowedTurnOwnerUserId?: number | null;
   userRow: UserRow;
   channel: Message["channel"];
@@ -918,9 +902,8 @@ function selectPersonasForTurn(args: {
           (typeof persona.persona_id === "number" && args.allowedPersonaIds.has(persona.persona_id))),
     );
 
-  // Reminder and Natural Nudges turns are system-initiated: bypass personal spotlight and user
-  // blocks (preferences that govern which persona responds *to that user*, not system-triggered
-  // events). Only the persona-channel whitelist is still enforced so channel admins can restrict personas.
+  // System-initiated turns bypass personal spotlight and user blocks while still enforcing the channel
+  // whitelist so channel restrictions hold.
   if (isSystemInitiatedIncoming(incoming)) {
     return selectedPersona &&
       whitelistRepository.isPersonaAllowedByWhitelistStatus(args.whitelistStatus, selectedPersona.persona_id)
@@ -987,7 +970,6 @@ function selectPersonasForTurn(args: {
         ? serverAutoTriggerPersonaId
         : null,
     isDtmActive,
-    isAutochatConfiguredChannel(config, args.effectiveChannelId) || isPersonalAutoTriggerActive,
     args.allowedPersonaIds,
   );
 
@@ -1087,8 +1069,7 @@ async function prepareTextQuota(
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
   const shouldTreatAsQuotaSharedPersonaJob = incoming.isPersonaJob && !incoming.sceneTurn;
-  // A personal route spends the user's own credentials, so it never draws on the server's quota.
-  // The server route a personal turn can still fall back to admits itself, in generationTurn.
+  // Personal routes skip server quota here because any server fallback admits itself in generationTurn.
   const shouldApply =
     textCredentialSource === "server" && shouldApplyServerTextQuota(incoming, lockedTurn.admission.isDMChannel);
 

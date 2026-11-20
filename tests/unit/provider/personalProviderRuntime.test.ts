@@ -78,7 +78,6 @@ function makePersonalRow(
   } as UserSavedProviderConfigRow;
 }
 
-/** A user-level chain that mixes a custom endpoint with a Google catalog model. */
 function makeMixedProviderChain(modelRandomizerEnabled = false): PersonalFallbackSettings {
   return {
     fallback_model_refs: [

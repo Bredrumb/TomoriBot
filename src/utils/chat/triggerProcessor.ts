@@ -10,10 +10,6 @@ import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
 const NEVER_MATCH_REGEX = /a^/i;
 
-/**
- * Creates a regex that matches a trigger word with "screaming" support.
- * Allows repeated letters, e.g. "Lilja" matches "Liiiljaaaa".
- */
 function createScreamingRegex(trigger: string): RegExp {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
@@ -80,11 +76,8 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
   return content.match(createDeliberateTriggerRegex(firstTriggerWord));
 }
 
-/**
- * Finds a persona trigger in already-sanitized text without applying deliberate
- * trigger mode. Context-reference discovery uses this so loading a public
- * profile cannot affect response routing.
- */
+// Context-reference discovery uses this sanitized-text helper with default deliberateOnly=false so loading a public
+// profile cannot affect response routing.
 export function getTriggerFirstMatchIndexInContent(content: string, trigger: string, deliberateOnly = false): number {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
@@ -204,7 +197,12 @@ export function getAutochatAssignedPersonaId(config: AssembledServerConfig, chan
 }
 
 export function isAutochatQualifyingMessage(message: Message, isSelfMessage: boolean): boolean {
-  return !isSelfMessage && isRealUserLikeMessage(message) && !(message.channel instanceof DMChannel);
+  return (
+    !isSelfMessage &&
+    !message.content.startsWith("!") &&
+    isRealUserLikeMessage(message) &&
+    !(message.channel instanceof DMChannel)
+  );
 }
 
 export function isAutochatCounterChannelActive(config: AssembledServerConfig, channelId: string): boolean {
@@ -233,19 +231,6 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
   );
 }
 
-/**
- * Checks whether a message contains an explicit trigger pointing to a persona
- * other than the currently active one. Used during follow-up admission to detect
- * cross-persona intent before the full turn planner runs.
- *
- * Covers all three explicit-trigger signal paths:
- * 1. Trigger words matching a different persona
- * 2. Bot mention or reply-to-bot message → main persona
- * 3. Reply to a webhook persona message → that persona
- *
- * @param message - The incoming Discord message
- * @param allPersonas - All known personas for this server
- */
 export function hasExplicitCrossPersonaTrigger(
   message: Message,
   allPersonas: TomoriState[],
@@ -301,7 +286,6 @@ export function determineMatchingPersonas(
   autoTriggerPersonaId?: number | null,
   alwaysReplyFallbackPersonaId?: number | null,
   deliberateTriggerMode = false,
-  isAutochatDtmExemptChannel = false,
   allowedPersonaIds?: ReadonlySet<number> | null,
 ): TomoriState[] {
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
@@ -399,10 +383,7 @@ export function determineMatchingPersonas(
     let firstMatchIndex = Number.MAX_SAFE_INTEGER;
 
     for (const trigger of triggers) {
-      const isPersonaDtmExempt =
-        isAutochatDtmExemptChannel &&
-        (autoTriggerPersonaId === null ? !persona.is_alter : autoTriggerPersonaId === persona.persona_id);
-      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode && !isPersonaDtmExempt);
+      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode);
       if (matchIndex !== Number.POSITIVE_INFINITY) {
         hasMatch = true;
         if (matchIndex < firstMatchIndex) {

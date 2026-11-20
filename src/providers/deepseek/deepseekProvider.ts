@@ -67,10 +67,6 @@ const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions
 const DEEPSEEK_BETA_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/beta/chat/completions";
 const DEEPSEEK_MODELS_URL = "https://api.deepseek.com/models";
 
-/**
- * Expressions/emojis classified per structured-output call during `/expressions initialize`.
- * One call keeps the whole batch inside a single response.
- */
 export const DEEPSEEK_EXPRESSION_BATCH_SIZE = 20;
 
 export interface DeepseekProviderConfig extends ProviderConfig {
@@ -145,10 +141,6 @@ export class DeepseekProvider
     return await callDeepseekStructuredJSON(request, responseSchema, zodSchema);
   }
 
-  /**
-   * @param batchSizeOverride - Sizes the batch differently from the provider default; callers
-   *                           that do not pass one get `DEEPSEEK_EXPRESSION_BATCH_SIZE`.
-   */
   getExpressionInitializationBatchSize(batchSizeOverride?: number): number {
     return typeof batchSizeOverride === "number" && batchSizeOverride > 0
       ? batchSizeOverride
@@ -374,7 +366,6 @@ export class DeepseekProvider
     }
   }
 
-  /** Resolve web-search tools for preset generation, or undefined if not needed. */
   private async getPresetGenerationTools(
     request: ProviderPresetGenerationRequest,
   ): Promise<Array<Record<string, unknown>> | undefined> {

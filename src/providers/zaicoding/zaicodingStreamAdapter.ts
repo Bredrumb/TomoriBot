@@ -7,10 +7,6 @@ export interface ZaicodingStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
 }
 
-/**
- * Stream adapter for the Z.ai Coding API.
- * Handles reasoning content preservation, tool_stream flag, and output prefill.
- */
 export class ZaicodingStreamAdapter extends OpenAICompatibleStreamAdapter {
   constructor() {
     super({
@@ -41,8 +37,6 @@ export class ZaicodingStreamAdapter extends OpenAICompatibleStreamAdapter {
         if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
           requestBody.tool_stream = true;
         }
-        // Assistant prefix-completion is applied by the shared seam in
-        // OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "zaicoding").
       },
     });
   }

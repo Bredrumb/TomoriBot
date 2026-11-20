@@ -9,8 +9,8 @@ import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
-// Keyed on the text rather than the locale: the description may already have fallen back to
-// English. Hangul is excluded because Korean prose ends sentences with an ASCII period.
+// Keyed on text instead of locale in case copy fell back to English, excluding Hangul because Korean ends
+// sentences with ASCII periods.
 const FULL_WIDTH_SENTENCE_SCRIPT_END = /[぀-ヿ㐀-鿿豈-﫿＀-￯]$/;
 
 const KILL_HINT_FOOTER_KEY = "tools.tool_notice.kill_hint";
@@ -50,10 +50,6 @@ function buildToolNoticeOptions(
   };
 }
 
-/**
- * Prefixes a hidden notice's body with the link back to the message that caused it, so a reader
- * of the thought log can tell which conversation the rerouted notice belongs to.
- */
 export function withThoughtLogSource(context: ToolContext, options: StandardEmbedOptions): StandardEmbedOptions {
   const sourceDescription = localizer(context.locale, "genai.thought_log.description", {
     source_line: getSourceLine(context),
@@ -218,17 +214,10 @@ export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoti
   return isNoticeEmbedVisible(config, key);
 }
 
-/**
- * Whether a notice posted in the conversation renders Minimal.
- *
- * Minimal notices post only their title in conversation while mirroring the full card to the
- * thought log. Verbose notices post the full card in conversation alone to avoid redundancy.
- */
 export function isMinimalNotice(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
   return !VERBOSITY_EXEMPT_NOTICE_KEYS.has(key) && config.tool_notice_verbosity !== "verbose";
 }
 
-/** Where a hidden notice is rerouted, with the persona that posts it. */
 export interface ThoughtLogTarget {
   channel: BaseGuildTextChannel;
   webhookContext: WebhookEmbedContext;
@@ -272,12 +261,6 @@ async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): 
   };
 }
 
-/**
- * Resolves where a hidden notice should go instead of the conversation channel.
- *
- * @returns `null` when the notice must be dropped: no thought log is set, it is unreachable, or
- *   its readers are not demonstrably allowed to read the source (see `canMirrorToThoughtLog`).
- */
 export async function resolveHiddenNoticeTarget(
   context: ToolContext,
   logLabel: string,

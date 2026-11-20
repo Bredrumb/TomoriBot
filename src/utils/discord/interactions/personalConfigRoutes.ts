@@ -312,7 +312,6 @@ export const identityConfigInteractionRoute: GlobalInteractionRoute = {
   },
 };
 
-/** Pages `/personal config page:` may open in this workspace, in panel order. */
 export function listPersonalConfigPageDestinations(
   locale: string,
   context: { guildId: string | null; identityMode: boolean },
@@ -327,7 +326,6 @@ export function listPersonalConfigPageDestinations(
   );
 }
 
-/** Opens `/personal config` on a deferred reply, on `requestedPage` when this workspace has that page. */
 export async function openPersonalConfigPanel(
   interaction: ChatInputCommandInteraction,
   locale: string,

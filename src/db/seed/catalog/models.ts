@@ -1,9 +1,3 @@
-// Typed model catalog: the human-authored source of truth for seeded models.
-// Flags default to false; list only the ones that are true.
-// Seeded into the database at startup by seedModelsFromCatalog (./modelSeed.ts), so there
-// is no generated SQL file. Edit and commit; the change seeds on the next boot.
-// Run `bun run check-seed-catalogs` to validate the per-provider invariants offline.
-
 import type {
   DecisionInput,
   EmbeddingInput,
@@ -15,21 +9,11 @@ import type {
   VideoInput,
 } from "./types";
 
-// inputPricePerMillion / outputPricePerMillion are official standard USD rates per million tokens
-// (uncached base input and output). Vertex and Vertex Express reuse the Gemini SKU prices, and a
-// deprecated Gemini preview snapshot carries its stable SKU's rate so users still on the old codename
-// keep accurate costs. A deprecated row Google never priced (gemini-3.5-pro, gemini-3-flash) stays
-// undefined and reads as "pricing unavailable".
-//
-// contextWindow / maxOutputTokens are official limits (verified 2026-10-05), sourced per section below.
-// A vendor's "1M" or "256K" is read as decimal, which rounds down so truncation errs safe; exact
-// published figures are used as given, and maxOutputTokens is omitted where no ceiling is published.
+// Decimal "1M"/"256K" limits round down so truncation errs safe, and deprecated preview snapshots reuse their stable
+// SKU rates so existing servers keep accurate costs.
 export const llmSections: ModelSection<LlmInput>[] = [
-  // Pricing: https://ai.google.dev/gemini-api/docs/pricing (verified 2026-06-10). Pro tiers use the
-  // ≤200k-context rate because TomoriBot contexts stay under 200k. Gemma has no paid tier, so it stays unpriced.
-  // Limits: https://ai.google.dev/gemini-api/docs/models/<codename>. The GA codenames gemini-3-pro and
-  // gemini-3.1-pro have no page, so they carry their -preview limits. Gemma 4 (256K, no output ceiling):
-  // https://ai.google.dev/gemma/docs/core/model_card_4. Deprecated rows keep their family's limits.
+  // Pricing (<=200k; Gemma unpriced): https://ai.google.dev/gemini-api/docs/pricing | Limits (3/3.1-pro use -preview):
+  // https://ai.google.dev/gemini-api/docs/models/<codename> and https://ai.google.dev/gemma/docs/core/model_card_4
   {
     comment: "Google Models (all Gemini models support vision, videos, YouTube, and structured output)",
     rows: [
@@ -328,9 +312,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "zh-CN": "快速高效、适合通用场景的 Gemini 3.6 Flash 模型",
         },
       },
-      // Introductory rate: 0.75/3.75 through December 31, 2026, then 1.50/7.50 (the gemini-3.6-flash rate).
-      // Update this row and its Vertex and Vertex Express twins before then, or every cost read on the
-      // model under-reports by half.
+      // Introductory 0.75/3.75 rate expires 2026-12-31 (then 1.50/7.50), so update this row and its Vertex/Vertex
+      // Express twins before then to avoid under-reporting costs by half.
       {
         provider: "google",
         codename: "gemini-3.7-flash",
@@ -1432,8 +1415,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
-  // OpenRouter rows are priced live from the OpenRouter API cache. The prices here are a cache-miss
-  // fallback only (researched 2026-06-11); free, image, `:free`, and `other-model` rows stay unpriced.
+  // Catalog OpenRouter prices are cache-miss fallbacks only because live API pricing overrides them (free, image, and
+  // other-model rows stay unpriced).
   {
     comment: "OpenRouter Models (structured output support varies by model, user configures manually)",
     rows: [
@@ -2530,10 +2513,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
-  // Pricing: https://api-docs.deepseek.com/quick_start/pricing (verified 2026-09-25). Rows carry the
-  // off-peak rate; peak hours (weekday 01:00-04:00 and 06:00-10:00 UTC) bill double. Every legacy Flash
-  // name (deepseek-chat/-reasoner, deepseek-v4-flash*) is served and billed as deepseek-flash.
-  // Limits: same page (1M context, 384K maximum output).
+  // Pricing and limits: https://api-docs.deepseek.com/quick_start/pricing (off-peak rates; weekday 01:00-04:00 and
+  // 06:00-10:00 UTC bill double, and legacy Flash aliases bill as deepseek-flash).
   {
     comment: "DeepSeek Models",
     rows: [
@@ -2684,8 +2665,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
-  // Limits: https://build.nvidia.com/<org>/<model>/modelcard. Cards rarely state an output ceiling;
-  // gpt-oss-20b's 4096 is the hosted API's max_tokens bound from its card.
+  // Limits: https://build.nvidia.com/<org>/<model>/modelcard (cards rarely state output ceilings; gpt-oss-20b's 4096 is
+  // its card's max_tokens bound).
   {
     comment: "NVIDIA NIM Models (curated hosted NVIDIA catalog)",
     rows: [
@@ -2896,10 +2877,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         contextWindow: 1_000_000,
         isReasoning: true,
         hasTools: true,
-        // NVIDIA's hosted endpoint serves this model via vLLM without
-        // --enable-multimodal, so image parts are rejected with a 500 even
-        // though degradation now recovers by stripping them. Keep sees_images
-        // off so images route through the vision_llm/notice path instead.
+        // Keep seesImages off so images route via vision_llm/notice because NVIDIA's hosted vLLM endpoint omits
+        // --enable-multimodal and rejects image parts with 500.
         supportsStructoutput: true,
         isFree: true,
         desc: "Nemotron 3 Ultra 550B — open hybrid Mamba-Transformer MoE with 1M context for agentic reasoning, coding, and planning",
@@ -3064,9 +3043,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
-  // Pricing for both Z.ai sections: https://docs.z.ai/guides/overview/pricing (direct-API rates;
-  // *-flash variants are free). Limits: https://docs.z.ai/guides/llm/<model> and /guides/vlm/<model>;
-  // GLM-4.6V lists no output ceiling.
+  // Pricing (*-flash free): https://docs.z.ai/guides/overview/pricing | Limits (GLM-4.6V has no output ceiling):
+  // https://docs.z.ai/guides/llm/<model> and /guides/vlm/<model>
   {
     comment: "Z.ai (Coding) Models (plain codenames preserved for backward compatibility)",
     rows: [
@@ -3523,8 +3501,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
-  // Pricing: https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-07-21).
-  // Limits: https://platform.claude.com/docs/en/about-claude/models/overview
+  // Pricing: https://platform.claude.com/docs/en/about-claude/pricing | Limits:
+  // https://platform.claude.com/docs/en/about-claude/models/overview
   {
     comment: "Anthropic Models (vision + tools + native structured output; no video/YouTube)",
     rows: [
@@ -4619,7 +4597,6 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
   },
 ];
 
-// Active rows cover the default, low-cost bulk checks, Korean/long documents, largest inputs, and free trials.
 export const decisionSections: ModelSection<DecisionInput>[] = [
   {
     comment: "Google Decisions",

@@ -118,31 +118,19 @@ export interface SetupWizardPayloadInput {
   nonce: string;
   notice?: string;
   receipt?: PanelReceipt;
-  /**
-   * The live persona and system-prompt catalogs, read once per repaint so the dashboard reflects a
-   * catalog row that has been removed rather than the draft's no-longer-resolvable copy.
-   *
-   * The three states are distinct and all meaningful. `undefined` means there is nothing stored to
-   * resolve. `null` means the read itself failed, which re-pends the step rather than vouching for a
-   * selection nothing could confirm. An object is the resolved catalog set.
-   */
+  // Three states matter: undefined skips resolution when nothing is stored, null marks a failed read that re-pends
+  // the step, and an object holds live catalogs.
   settingsCatalogs?: SetupSettingsCatalogs | null;
   providerOptions?: readonly SetupProviderOptionSummary[];
   optionComponents?: readonly ComponentInContainerData[];
   optionReady?: boolean;
 }
 
-/** Values a Starting Settings editor can offer, derived from the live catalogs on every open. */
 export interface SetupSettingsCatalogs {
   personas: Array<{ id: number; name: string; description: string }>;
   prompts: Array<{ name: string; displayName: string; description: string }>;
-  /**
-   * Preset name to current prompt text, for the final commit only.
-   *
-   * The editor offers the names and the draft stores an identity, so the text written at commit has
-   * to come from the same read that proved the identity still resolves. A preset edited since the
-   * save is therefore written in its current form rather than in a copy the draft carried.
-   */
+  // Used only at final commit because prompt text must come from the same live read that verified the preset
+  // identity, not a stale draft copy.
   promptTexts: Map<string, string>;
 }
 
@@ -150,14 +138,8 @@ const SETUP_MODAL_SELECT_OPTION_LIMIT = 25;
 
 const SETUP_OPTION_VALUE_LIMIT = 100;
 
-/**
- * Whether both catalogs fit the one select each is rendered into.
- *
- * Discord caps a modal's string select at 25 options and these are single-menu rows rather than the
- * paginated selector, so a catalog past the cap has no renderable form. It fails closed for the
- * whole step rather than truncating: a trimmed list would silently drop the actor's stored choice,
- * and the step is edited in one modal, so one over-cap catalog makes the editor unusable either way.
- */
+// Fails closed for the whole step when either catalog exceeds Discord's 25-option modal select cap because truncating
+// could silently drop a stored choice.
 export function areSetupSettingsCatalogsRenderable(
   catalogs: SetupSettingsCatalogs | null,
 ): catalogs is SetupSettingsCatalogs {
@@ -227,12 +209,6 @@ const HUMANIZER_KEYS: Record<0 | 1 | 2 | 3, { label: string; description: string
   },
 };
 
-/**
- * The rows a Starting Settings editor can offer, or null when either catalog could not be read.
- *
- * Both come from the database, so a failed read and an empty catalog are indistinguishable here and
- * both fail closed: the editor refuses rather than silently offering a subset of the presets.
- */
 export function toSetupSettingsCatalogs(
   personaPresets: readonly TomoriPresetRow[] | null,
   promptPresets: readonly SystemPromptPresetRow[] | null,
@@ -259,12 +235,6 @@ export function toSetupSettingsCatalogs(
   };
 }
 
-/**
- * Whether the draft's stored persona and prompt identities still exist in the live catalogs.
- *
- * Both are checked together because the step is one unit: a removed row re-pends the whole step
- * while the actor's other stored values stay in the draft for the next save.
- */
 export function isSetupStartingSettingsResolvable(
   settings: SetupDraftStartingSettings,
   catalogs: SetupSettingsCatalogs,
@@ -379,19 +349,14 @@ export function buildSetupWizardPayload(
   const providerComplete =
     isSetupDraftProviderAccessComplete(draft.providerAccess) &&
     (draft.providerAccess?.mode !== "option" || input.optionReady === true);
-  // The stored identities are resolved against the live catalogs, so a persona or prompt row removed
-  // since the save re-pends the step here rather than only at the final commit. A catalog read that
-  // failed re-pends it too: the alternative is claiming a selection is complete when nothing could
-  // confirm it, and the two loaders return the same null for "no rows" and "query blew up".
+  // Revalidate saved IDs against live catalogs because missing rows or failed catalog loads must re-pend the step.
   const settingsComplete =
     draft.startingSettings !== null &&
     input.settingsCatalogs != null &&
     isSetupStartingSettingsResolvable(draft.startingSettings, input.settingsCatalogs);
   const policiesComplete = draft.policiesAccepted;
 
-  // The catalog-aware verdict governs the whole ready state, not only the step rows. Gating the
-  // finish action on the catalog-blind draft predicate instead would leave it enabled and Primary
-  // beside a step the same panel had just re-pended.
+  // Gate completion on catalog checks as well as draft fields so Primary Finish never enables beside a pending step.
   const isComplete = isSetupDraftComplete(draft) && settingsComplete && providerComplete;
 
   const total = isHosted ? 3 : 2;
@@ -621,13 +586,6 @@ export function buildSetupCancelledPayload(locale: string): ComponentsV2MessageP
   );
 }
 
-/**
- * Receipt describing a terminal wizard notice, for the delivery layer's failure reporting.
- *
- * Kept beside the notice payloads rather than derived from their components: the payload builders
- * stay payload-only so callers and tests keep consuming a bare Components V2 message, while a call
- * site that already knows which notice it is repainting can hand logging the matching receipt.
- */
 export function setupNoticeReceipt(locale: string, notice: "commit-failed" | "expired" | "in-flight"): PanelReceipt {
   switch (notice) {
     case "commit-failed":
@@ -654,13 +612,6 @@ export function setupNoticeReceipt(locale: string, notice: "commit-failed" | "ex
   }
 }
 
-/**
- * Terminal replacement for a workspace whose commit transaction failed.
- *
- * It reads as a refusal rather than a receipt: the draft is consumed at this point, so the actor
- * has to run `/setup` again and the copy has to say that instead of implying a setup that never
- * reached the database.
- */
 export function buildSetupCommitFailedPayload(
   locale: string,
 ): ComponentsV2MessagePayload & { attachments: readonly [] } {
@@ -679,12 +630,6 @@ export function buildSetupCommitFailedPayload(
   );
 }
 
-/**
- * Answer for a control pressed while this draft is being committed.
- *
- * It is not the session-ended state: the draft still exists and the commit in progress is about to replace
- * this message, so the copy tells the actor to wait rather than to start over.
- */
 export function buildSetupInFlightPayload(locale: string): ComponentsV2MessagePayload & { attachments: readonly [] } {
   return validateAndFallbackPanelPayload(
     {
@@ -701,7 +646,6 @@ export function buildSetupInFlightPayload(locale: string): ComponentsV2MessagePa
   );
 }
 
-/** One conditional `A Few Things to Note` entry: a bold label line over an indented detail line. */
 interface SetupReceiptNote {
   label: string;
   detail: string;
@@ -709,16 +653,12 @@ interface SetupReceiptNote {
 
 interface SetupReceiptInput {
   locale: string;
-  /** Guild or DM workspace, which selects the DM-specific copy variants. */
   context: SetupDraftContext;
   providerAccess: SetupDraftProviderAccess;
-  /** The resolved default model codename for a catalog provider, or the custom model code. */
   modelName: string | null;
-  /** Provider display name for a catalog provider, endpoint label for a custom endpoint. */
   providerLabel: string;
   personaName: string;
   notes: readonly SetupReceiptNote[];
-  /** Pre-composed body for the Learn More field, built by the caller from its live command mentions. */
   learnMore: string;
   footerKeys?: readonly string[];
   optionReceiptDescriptionKey?: string;
@@ -745,14 +685,8 @@ function resolveReceiptDescriptionKey(input: SetupReceiptInput): string {
   return isDm ? "commands.setup.wizard.receipt_desc_dm_with_model" : "commands.setup.wizard.receipt_desc_with_model";
 }
 
-/**
- * The terminal success receipt, rendered as Components V2 text displays onto the wizard's own
- * message.
- *
- * The wizard anchor is a V2 message and Discord never lets one carry legacy embeds afterwards, so
- * the receipt is the same flattening the shared legacy sinks already apply to a marked interaction
- * rather than a freshly posted embed.
- */
+// Discord forbids adding legacy embeds to an existing Components V2 message, so the terminal receipt flattens into V2
+// TextDisplay components.
 export function buildSetupSuccessPayload(
   input: SetupReceiptInput,
 ): ComponentsV2MessagePayload & { attachments: readonly [] } {
@@ -1125,9 +1059,7 @@ export function buildSetupByokModal(
         ),
       },
       {
-        // 18 is Label, and it is the only path by which a routed modal value is recorded: the
-        // type-18 walk in interactionCore is what reads a submission back, so the same group at
-        // the modal root would render, submit, and read back as no selection at all.
+        // Wrap inside Label (18) because interactionCore only captures modal selections nested under type 18.
         type: 18,
         label: safeSelectOptionText(localizer(locale, "commands.setup.wizard.byok_confirm_label"), 45),
         component: {
@@ -1159,14 +1091,8 @@ export function buildSetupSettingsModalFieldId(field: SetupSettingsModalField, n
   return `${field}_${nonce}`;
 }
 
-/**
- * The sentinel a stored system prompt carries when the actor chose the built-in default.
- *
- * It is a draft identity, never catalog text: the final commit re-resolves it so a preset edited
- * after the save is written in its current form, and the built-in default writes NULL. A catalog row
- * named exactly this string would be offered twice and always read back as the built-in default,
- * which is a catalog-naming accident rather than a state two edits can reach.
- */
+// Reserved sentinel identity that writes NULL at commit rather than catalog text, so no catalog preset may share this
+// exact name without colliding.
 export const SETUP_SYSTEM_PROMPT_BUILT_IN = "built-in-default";
 
 export function parseSetupSystemPromptChoice(value: string | undefined): SetupDraftSystemPrompt | null {
@@ -1175,12 +1101,8 @@ export function parseSetupSystemPromptChoice(value: string | undefined): SetupDr
   return { kind: "preset", presetName: value };
 }
 
-/**
- * The chosen humanizer degree, or null when the submission carried no usable option.
- *
- * The value round-trips as a string, so parsing is strict: an off-enum number would otherwise reach
- * the repository as a degree the reply pipeline does not implement.
- */
+// Bounds check stays strict because an off-enum number would reach the repository as a degree the reply pipeline does
+// not implement.
 export function parseSetupHumanizerChoice(value: string | undefined): number | null {
   if (value === undefined) return null;
   const parsed = Number.parseInt(value, 10);
@@ -1188,7 +1110,6 @@ export function parseSetupHumanizerChoice(value: string | undefined): number | n
   return parsed;
 }
 
-/** The submitted timezone, blank meaning UTC, or null when it is not a usable offset. */
 export function parseSetupTimezoneOffset(value: string | undefined): number | null {
   const trimmed = value?.trim() ?? "";
   if (!trimmed) return 0;
@@ -1209,9 +1130,7 @@ export function buildSetupSettingsModal(
     default: existing?.humanizer === index,
   }));
 
-  // The plan's contract for this modal is that its selects reopen on their placeholders, so the
-  // `default` flags below are a best-effort hint the client is free to ignore rather than a
-  // pre-fill. Only the text input is expected to come back carrying its stored value.
+  // Selects reopen on placeholders by contract, so `default` flags remain hints while only text inputs pre-fill.
   const timezoneValue = existing ? formatUtcOffsetInput(existing.timezoneOffset) : undefined;
   const storedPrompt = existing?.systemPrompt;
 
@@ -1361,9 +1280,7 @@ export function buildSetupPoliciesModal(
         content: `${localizer(locale, "commands.setup.wizard.policies_modal_context")}\n\n${acceptance}`,
       },
       {
-        // 18 is Label. The group sits inside it rather than at the modal root because the type-18
-        // walk in interactionCore is what records a checkbox submission, so a root-level group
-        // would render and then read back as no selection at all.
+        // Keep CheckboxGroup inside a type-18 Label so the raw packet walk records selections instead of empty.
         type: 18,
         label: safeSelectOptionText(localizer(locale, "commands.setup.wizard.policies_modal_choice_label"), 45),
         component: {

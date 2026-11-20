@@ -25,8 +25,7 @@ export const EXPLICIT_MEMORY_PACK_KEY = "tools.intent_packs.explicit_memory";
 
 const ALL_INTENT_PACK_KEYS: readonly string[] = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
 
-// A trailing "*" is the only pack syntax. Everything else a regex would interpret is rejected so a
-// translator cannot author an entry (such as the "^" custom-trigger wildcard) that matches everything.
+// Allow only a trailing "*" so translators cannot author regex wildcards like "^" that match every message.
 const REGEX_SYNTAX_PATTERN = /[\\^$.|?+()[\]{}]|\*(?!$)/;
 
 export type IntentPackEntryProblem = "empty" | "regex_syntax" | "too_short";
@@ -66,10 +65,8 @@ export function findIntentPackViolations(
 
 const unionCache = new Map<string, string[]>();
 
-/**
- * Validates every authored pack and precomputes the unions. It runs inside localizer initialization,
- * so a malformed translator entry fails startup instead of silently changing matching under traffic.
- */
+// Pack validation and union precomputation run during localizer initialization, so malformed translator entries fail
+// startup rather than live matching.
 export function initializeIntentPacks(): void {
   const violations = findIntentPackViolations();
   if (violations.length > 0) {
@@ -85,11 +82,8 @@ export function initializeIntentPacks(): void {
   }
 }
 
-/**
- * Every authored locale's entries for one pack, deduplicated. The union ignores the user's language
- * preference: members of a bilingual server type in either language, and a user with no stored
- * preference resolves to en-US.
- */
+// Union ignores user language preference because bilingual server members type in either language and unset
+// preferences default to en-US.
 export function getIntentPackUnion(key: string): string[] {
   const cached = unionCache.get(key);
   if (cached) return cached;

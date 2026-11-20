@@ -1,22 +1,3 @@
-/**
- * Runs a devtool script with environment variables injected from a JSON secrets file.
- *
- * Lets cutover tasks target a specific database (GCP Cloud SQL, Azure Flexible
- * Server, local dev) without editing `.env`. Point it at a flat JSON blob of
- * env-style keys (the same shape as the `TOMORI_SECRETS_JSON` deploy secret),
- * and every string/number/boolean value is exported into the child process
- * before the wrapped script starts. JSON values win over `.env` because dotenv
- * never overrides variables that are already set.
- *
- * Usage:
- *   bun run scripts/devtools/runWithSecrets.ts <secrets-file> <script> [scriptArgs...]
- *
- * Examples:
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/gcp-db.json scripts/devtools/backupData.ts --backup
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/azure-db.json scripts/devtools/backupData.ts --restore --latest
- *   bun run scripts/devtools/runWithSecrets.ts rehearsal/azure-db.json scripts/devtools/migrateAssetUrls.ts --from <old> --to <new> --dry-run
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { log } from "@/utils/misc/logger";
@@ -26,12 +7,6 @@ function printUsage(): void {
   log.info("  bun run scripts/devtools/runWithSecrets.ts <secrets-file> <script> [scriptArgs...]");
 }
 
-/**
- * Reads a flat JSON secrets file and converts scalar values to env-var strings.
- *
- * @param filePath - Absolute path to the JSON secrets file.
- * @returns Map of env var names to string values, ready to merge into a child environment.
- */
 function loadSecretsAsEnv(filePath: string): Record<string, string> {
   const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
 
@@ -42,8 +17,7 @@ function loadSecretsAsEnv(filePath: string): Record<string, string> {
   const envVars: Record<string, string> = {};
   const skippedKeys: string[] = [];
 
-  // Keep scalar values (strings/numbers/booleans) and stringify them for the env;
-  //    skip nested objects/arrays/null so a malformed blob fails loudly instead of silently.
+  // Stringify only scalars so nested objects/null fail loudly via skippedKeys instead of silent coercion.
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       envVars[key] = String(value);
@@ -67,7 +41,6 @@ async function runWithSecrets(): Promise<void> {
     process.exit(1);
   }
 
-  // Resolve and validate both file arguments before spawning anything.
   const secretsPath = resolve(process.cwd(), secretsArg);
   const scriptPath = resolve(process.cwd(), scriptArg);
 
@@ -92,8 +65,7 @@ async function runWithSecrets(): Promise<void> {
   // Log key NAMES only (never values) so the target is auditable without leaking secrets.
   log.info(`Injecting ${injectedKeys.length} env var(s): ${injectedKeys.join(", ")}`);
 
-  // Spawn the wrapped script with inherited stdio; injected values are placed
-  //    after process.env so the JSON wins over anything from the parent shell/.env.
+  // Place injected secrets after process.env so JSON values override parent shell/.env settings.
   const subprocess = Bun.spawn(["bun", "run", scriptPath, ...scriptArgs], {
     env: { ...process.env, ...injectedEnv },
     stdin: "inherit",
@@ -101,7 +73,6 @@ async function runWithSecrets(): Promise<void> {
     stderr: "inherit",
   });
 
-  // Mirror the child's exit code so CI/shell callers see failures.
   process.exit(await subprocess.exited);
 }
 

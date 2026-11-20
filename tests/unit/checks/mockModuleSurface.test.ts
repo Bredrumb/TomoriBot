@@ -79,8 +79,6 @@ describe("module mock surface scanner", () => {
   });
 
   it("guards a low-fanout project module as strictly as a shared one", () => {
-    // A partial WhitelistRepository mock once broke autocomplete and blacklist suites that ran later
-    // in the same bare `bun test` process, though few files import it.
     const source = `
       import { mock } from "bun:test";
       mock.module("@/utils/db/repositories/WhitelistRepository", () => ({

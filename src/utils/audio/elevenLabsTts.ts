@@ -18,7 +18,6 @@ export interface ElevenLabsTtsRequest {
   script: string;
   modelId?: string;
   voiceSettings?: Record<string, unknown>;
-  /** Turn-level cancellation from /kill, merged with the request timeout. */
   abortSignal?: AbortSignal;
 }
 
@@ -33,7 +32,8 @@ export interface ElevenLabsTtsResult {
   errorKind?: ElevenLabsTtsErrorKind;
   statusCode?: number;
   details?: string;
-  /** ElevenLabs' status and response body, for the operator log and the gated error modal. */
+  // Raw status and scrubbed body belong only in operator logs and the gated error modal so provider text stays out of
+  // public replies.
   providerDetail?: string;
 }
 

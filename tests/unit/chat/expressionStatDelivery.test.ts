@@ -18,10 +18,8 @@ const recorded: RecordStatInput[] = [];
 const metricSpy = spyOn(log, "metric").mockImplementation(() => {});
 const sampleSpy = spyOn(metricSampleRepository, "recordSample").mockResolvedValue(undefined);
 
-// A `mock.module` over the repositories barrel would be process-global for the whole run and is not
-// undone by `mock.restore()`, which left `spyOn` against `statRepository` silently installing
-// nothing in every file loaded afterwards. `recordStat` is resolved off the live singleton at call
-// time, so spying the method captures the same calls without replacing the module for anyone else.
+// Spy on the live singleton rather than mocking the repositories barrel because Bun's mock.module is
+// process-global and breaks spies in later files.
 const recordStatSpy = spyOn(statRepository, "recordStat").mockImplementation((input: RecordStatInput) => {
   recorded.push(input);
 });
@@ -276,8 +274,7 @@ describe("emoji stats count only what Discord accepted", () => {
         streamResults: [{ status: "completed", accumulatedText: "hey <:Smile:111>" }],
         personaResponses: [
           {
-            // The short-term-memory payload: delivered text plus the `<details>` drain,
-            // which never reached Discord.
+            // Short-term-memory payload: delivered text plus the `<details>` drain, which never reached Discord.
             text: "hey <:Smile:111>\n\n[Scene Metadata]\nshe grins <:Sneaky:222>",
             personaName: "Tomori",
             personaId: 3,

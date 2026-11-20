@@ -1,21 +1,3 @@
-/**
- * Replays a host observer log through the pressure detector to tune its thresholds offline.
- *
- * The detector deliberately has no action path, so the only way to learn whether a threshold set is
- * sane is to ask what it would have done against history. `/var/log/oom-observer.log` samples every
- * 15 s and never rotates, so it holds the incidents themselves rather than a quiet window after
- * them. That is a far better tuning corpus than waiting for the live series to accumulate, and it
- * is available now.
- *
- * Usage:
- *   bun run scripts/devtools/replayPressureDetector.ts <observer.log> [--elevated 10] [--critical 20]
- *     [--recovery 5] [--min-swap-in 1] [--elevated-dwell-min 10] [--critical-dwell-min 5]
- *     [--grace-min 15] [--action-interval-h 6] [--verbose]
- *
- * The log is fetched with the read-only recipe in
- * `docs/en/wiki/azure-production-inspection.md`; this script never touches production itself.
- */
-
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_PRESSURE_THRESHOLDS,
@@ -69,7 +51,6 @@ function parseArgs(argv: string[]): { path: string; thresholds: PressureThreshol
   };
 }
 
-/** Each observer line is flat `key=value`; PSI values are `avg10/avg60/avg300`. */
 function parseRow(line: string): ObserverRow | null {
   const fields: Record<string, string> = {};
   for (const pair of line.trim().split(/\s+/)) {
@@ -117,9 +98,8 @@ async function main(): Promise<void> {
   const suppressed: Record<string, number> = {};
   const perDay: Record<string, { samples: number; elevated: number; critical: number; actions: number }> = {};
 
-  // The observer has no pswpin/pswpout split, so the major-fault rate stands in for active
-  // swap-in. It is the proxy the design already nominates, but it is a proxy: the live detector
-  // reads /proc/vmstat directly, so replayed and live verdicts are not guaranteed identical.
+  // Approximate active swap-in with major-fault rate because the observer lacks pswpin/pswpout, so verdicts may differ
+  // from /proc/vmstat.
   const processStartMs = rows[0].atMs;
 
   for (const row of rows) {

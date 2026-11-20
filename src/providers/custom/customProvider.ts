@@ -1,21 +1,6 @@
 import { pickHumanizerSettings } from "@/constants/humanizer";
 import { callCustomDecisions } from "@/providers/custom/customDecisions";
 import type { ProviderDecisionRequest, DecisionResult, SupportsDecisions } from "@/types/provider/featureInterfaces";
-/**
- * Custom provider implementation for self-hosted OpenAI-compatible endpoints
- *
- * This provider allows self-hosted TomoriBot users to connect to any OpenAI-compatible
- * endpoint such as Ollama, KoboldCPP, vLLM, LocalAI, or OpenRouter proxies.
- *
- * Available in all environments. In production, endpoint URLs are validated via
- * validateRemoteUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
- *
- * Key differences from OpenRouter:
- * - Uses the server model config custom endpoint URL
- * - Model capabilities are user-declared (stored in llms table row)
- * - API key field may contain endpoint URL or actual auth token
- * - validateApiKey() performs health check rather than strict key validation
- */
 
 import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import type {
@@ -90,37 +75,22 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
-/**
- * Default model name placeholder for custom provider
- * Fallback codename when server-specific model isn't configured
- */
 const DEFAULT_CUSTOM_MODEL = "custom/default";
 
-/**
- * Custom provider configuration extending the base ProviderConfig
- */
 export interface CustomProviderConfig extends ProviderConfig {
-  /** Custom endpoint URL (e.g., http://localhost:11434/v1) */
   endpointUrl: string;
-  /** The backend server's connection, which keys its ComfyUI VRAM handoff. */
+  // Backend server connection ID is included here because it keys the server's ComfyUI VRAM handoff.
   customConnectionId?: number | null;
-  /** Whether the model supports image inputs (user-declared) */
   seesImages?: boolean;
-  /** Whether the model supports video inputs (user-declared) */
   seesVideos?: boolean;
-  /** Sampling parameters */
   topP?: number;
   topK?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
   repetitionPenalty?: number;
-  /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
 
-/**
- * Custom provider implementation for self-hosted OpenAI-compatible endpoints
- */
 export class CustomProvider
   extends BaseLLMProvider
   implements
@@ -141,19 +111,7 @@ export class CustomProvider
     return customProviderInfo;
   }
 
-  /**
-   * Validate the custom endpoint by performing a health check
-   *
-   * Unlike other providers, we don't strictly validate an API key.
-   * Instead, we attempt a basic health check on the endpoint.
-   * We warn on failure but allow usage since some endpoints may not
-   * have a standard health check endpoint.
-   *
-   * @param apiKey - May contain endpoint URL or actual auth token
-   */
   async validateApiKey(_apiKey: string): Promise<ApiKeyValidationResult> {
-    // For custom provider, we're lenient - always return valid
-    // The actual validation happens when we try to use the endpoint
     log.info("Custom provider: Skipping strict API key validation (endpoint health checked on first use)");
     return { valid: true };
   }
@@ -212,17 +170,10 @@ export class CustomProvider
     throw new Error("Custom native video generation is routed through the custom endpoint dispatcher.");
   }
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * Uses the tool adapter that handles both built-in and MCP tools
-   *
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
-    // Only return tools if the model supports them (user-declared capability)
     if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       log.info(
         `Custom provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
@@ -318,11 +269,6 @@ export class CustomProvider
     }
   }
 
-  /**
-   * Returns the placeholder since custom models are user-defined
-   *
-   * @returns Promise<string> - The default model placeholder
-   */
   async getDefaultModel(): Promise<string> {
     return DEFAULT_CUSTOM_MODEL;
   }
@@ -433,11 +379,6 @@ export class CustomProvider
     });
   }
 
-  /**
-   * Convert provider-specific configuration from TomoriState
-   *
-   * @param apiKey - The decrypted API key (may be endpoint URL or auth token)
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<CustomProviderConfig> {
     const {
       endpointUrl,
@@ -464,8 +405,8 @@ export class CustomProvider
 
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: CustomProviderConfig = {
-      model: modelName, // Use custom_model_name if set, otherwise llm_codename
-      apiKey: apiKey, // May be used for Bearer auth if endpoint requires it
+      model: modelName,
+      apiKey: apiKey,
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: resolveChatMaxOutputTokens({
@@ -490,10 +431,6 @@ export class CustomProvider
     return config;
   }
 
-  /**
-   * Stream LLM response directly to a Discord channel
-   * Uses the modular streaming architecture with StreamOrchestrator and CustomStreamAdapter
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

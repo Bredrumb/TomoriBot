@@ -10,7 +10,6 @@ import { localizer } from "@/utils/text/localizer";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 
-/** One week, the ceiling a persona may block a user for in a single tool call. */
 const BLOCK_TYPE_KEYS: Record<PersonaUserBlockType, string> = {
   mute: "tools.user_block.type_mute",
   block: "tools.user_block.type_block",
@@ -198,22 +197,12 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
   };
 }
 
-/**
- * Builds the dialogue-history placeholder shown in place of a 'block'-type user's
- * live messages. Instead of silently dropping their messages from context, the
- * persona sees a single English `[System: ...]` notice (mirroring reminder/join
- * system injections, which are intentionally LLM-facing and not localized).
- *
- * @param displayName - Name the persona knows the blocked user by.
- * @param expiresAt - When the active block lapses; used to derive hours remaining.
- * @param now - Reference time, injectable for deterministic tests (defaults to now).
- * @returns A `[System: ...]` notice string for the simplified history.
- */
+// Notice stays in unlocalized English because [System: ...] dialogue-history placeholders are LLM-facing like
+// reminder and join injections.
 export function formatBlockedUserNoticeContent(displayName: string, expiresAt: Date, now: Date = new Date()): string {
-  // Round remaining time up to whole hours, flooring at 1 so a block that is
-  //    minutes from expiry still reads as "1 more hour" rather than "0".
+  // Round remaining time up to whole hours, flooring at 1 so a block minutes from expiry still reads as "1 more hour"
+  // rather than "0".
   const hoursRemaining = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 3_600_000));
-  // Pluralize the unit so the notice reads naturally for the persona.
   const hourLabel = hoursRemaining === 1 ? "hour" : "hours";
   return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}.]`;
 }

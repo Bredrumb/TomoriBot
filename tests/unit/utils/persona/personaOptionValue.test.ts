@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { parsePersonaOptionId, resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 
-/** The helpers read only an id and a nickname, so the stub carries nothing else. */
 function createPersona(personaId: number, nickname: string) {
   return { persona_id: personaId, persona_nickname: nickname };
 }

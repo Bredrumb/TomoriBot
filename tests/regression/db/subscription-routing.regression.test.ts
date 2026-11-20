@@ -60,7 +60,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
     await testSql`DELETE FROM llms WHERE llm_id = ${llmId}`;
   });
 
-  /** Plans one trigger against a channel that records every notice the planner posts. */
   async function planTurnsFor(
     personas: TomoriState[],
     messageId: string,

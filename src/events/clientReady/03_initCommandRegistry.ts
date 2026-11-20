@@ -2,10 +2,8 @@ import type { Client } from "discord.js";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Event handler for initializing the command registry after commands are registered.
- * This must run after 01_registercommands.ts to ensure all commands are available.
- */
+// Must run after 01_registercommands.ts so all application commands are registered before the command registry
+// initializes.
 export default async (client: Client): Promise<void> => {
   try {
     log.section("Initializing Command Registry...");
@@ -18,6 +16,5 @@ export default async (client: Client): Promise<void> => {
     }
   } catch (error) {
     log.error("Failed to initialize command registry (non-critical)", error as Error);
-    // Non-critical - bot can still function, but command mentions won't work
   }
 };

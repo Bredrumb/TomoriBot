@@ -34,10 +34,8 @@ interface HelpSectionDefinition {
 }
 
 interface HelpContentDefinition {
-  /**
-   * The node's name. A variant renders it as its `###` heading; a page renders it nowhere, because
-   * the section select's closed value already shows the active section's name.
-   */
+  // Pages omit rendering titleKey because the section select's closed value already displays the active section name,
+  // while variants render it as a heading.
   titleKey: string;
   descriptionKey: string;
   docsPath: DocsPath;
@@ -89,11 +87,8 @@ function renderBreadcrumbRoot(root: BreadcrumbRoot, locale: string, breadcrumbKe
   return `${rootMention} > ${localizer(locale, breadcrumbKey)}`;
 }
 
-/**
- * Every dissolved leaf now reaches its destination through the same bare `/config` mention, so a
- * sentence naming several of them would repeat an identical token with nothing to tell the pages
- * apart. The breadcrumb carries the distinction the subcommand name used to.
- */
+// Pages under /config share one command mention, so the breadcrumb must distinguish them rather than repeating
+// identical tokens.
 function configPage(locale: string, breadcrumbKey: string): string {
   return renderBreadcrumbRoot("config", locale, breadcrumbKey);
 }
@@ -741,7 +736,7 @@ export const HELP_CATEGORIES: readonly HelpCategoryDefinition[] = [
   { id: "plugins", labelKey: "commands.help.dashboard.categories.plugins", pages: pluginPages },
 ] as const;
 
-/** Pages `/help page:` may open, in dashboard order; help is public, so no page is filtered out. */
+// Help is public, so listHelpPageDestinations intentionally omits permission filtering and keeps dashboard order.
 export function listHelpPageDestinations(locale: string): PanelPageDestination<HelpCategoryId, HelpPageId>[] {
   return HELP_CATEGORIES.flatMap((category) =>
     category.pages.map((page) => ({

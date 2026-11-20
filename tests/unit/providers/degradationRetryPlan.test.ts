@@ -65,11 +65,6 @@ describe("shared degradation retry planning", () => {
     expect(plan?.trigger).toBe("a multimodal/image-input rejection");
   });
 
-  /**
-   * The queue callbacks append to the ladder before the remaining-attempt check reads its length,
-   * which is what lets a failure on the final rung still schedule one more try. Reading the length
-   * first would silently drop that retry, so the order is the contract this test holds.
-   */
   it("lets the final rung's failure extend the ladder", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({

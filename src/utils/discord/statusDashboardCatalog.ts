@@ -14,7 +14,8 @@ export const STATUS_ROUTE_NAMESPACE = "status";
 export const STATUS_ROUTE_VERSION = "v1";
 export const STATUS_PERSONA_SELECT_PAGE_SIZE = 25;
 
-/** In dashboard button order; both the dashboard and its `page` option read the categories from here. */
+// Ordered to match dashboard button layout because both the dashboard buttons and the page command option read
+// category order from this tuple.
 export const STATUS_CATEGORIES = ["persona", "behavior", "access", "personal", "models"] as const;
 export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
 
@@ -83,7 +84,8 @@ const personaRangeField: RouteFieldCodec<"start", number> = {
   decode: (value) => parseNonNegativeInt(value),
 };
 
-/** Optional because selectors rendered before it existed are still open in clients and mean the first page. */
+// Kept optional because selectors rendered in Discord clients before page existed omit it and must still decode as
+// the first page.
 const optionalPersonaPageIndexField: RouteFieldCodec<"page", number> = {
   key: "page",
   optional: true,

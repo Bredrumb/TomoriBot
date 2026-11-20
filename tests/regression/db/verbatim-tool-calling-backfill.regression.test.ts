@@ -1,12 +1,5 @@
-/**
- * Regression coverage for migration 083's backfill.
- *
- * `custom_endpoints.model_ref_id` is chosen by the connection's capability, so it holds an `llm_id`
- * only for text connections and an id from a different table for every other capability. The
- * backfill reads it as an `llm_id`, so without a capability filter a non-text endpoint's id can
- * match an unrelated `llms` row, including another server's model. These ids are small serial
- * integers, so the collision is ordinary rather than exotic.
- */
+// custom_endpoints.model_ref_id holds an llm_id only for text capability, so without a capability filter non-text
+// serial IDs collide with unrelated llms rows.
 
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
@@ -26,10 +19,7 @@ const migrationPath = path.join(
 describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfill", () => {
   let flaggedServerId: number;
 
-  // The image connection points at a row in `image_diffusion_models`; its id is the value that must
-  // never be read as an `llm_id`.
   let imageModelRefId: number;
-  // A text model owned by a different server. It must stay untouched.
   let otherServerLlmId: number;
 
   beforeAll(async () => {
@@ -40,12 +30,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfi
       INSERT INTO servers (server_disc_id) VALUES (${FLAGGED_SERVER}) RETURNING server_id`;
     flaggedServerId = flagged.server_id;
 
-    // A second server owns the model the collision points at, so the assertion is about a row the
-    // flagged server has no claim to.
     await testSql`
       INSERT INTO servers (server_disc_id) VALUES (${OTHER_SERVER}) RETURNING server_id`;
 
-    // Pre-migration state: the flag is server-wide and still present.
     await testSql`
       ALTER TABLE server_capabilities_configs
         ADD COLUMN IF NOT EXISTS verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false`;
@@ -63,7 +50,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfi
         RETURNING llm_id`
     )[0].llm_id;
 
-    // The flagged server's own text endpoint, which the backfill is supposed to switch on.
     const [textConnection] = await testSql`
       INSERT INTO custom_endpoint_connections (server_id, user_id, label, capability, api_style, endpoint_url)
       VALUES (${flaggedServerId}, NULL, '_verbatim_backfill_text', 'text', 'openai-compatible', 'http://localhost:1/v1')
@@ -72,7 +58,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfi
       INSERT INTO custom_endpoints (connection_id, model_name, model_ref_id)
       VALUES (${textConnection.connection_id}, '_verbatim_backfill_text_model', ${textLlm.llm_id})`;
 
-    // The collision: an image connection's model_ref_id happens to equal the other server's llm_id.
     const [imageConnection] = await testSql`
       INSERT INTO custom_endpoint_connections (server_id, user_id, label, capability, api_style, endpoint_url)
       VALUES (${flaggedServerId}, NULL, '_verbatim_backfill_image', 'image', 'comfyui', 'http://localhost:2')
@@ -82,7 +67,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfi
       VALUES ('custom:0', '_verbatim_backfill_image_model') RETURNING diffusion_model_id`;
     imageModelRefId = imageModel.diffusion_model_id;
 
-    // Force the collision onto the exact value the test asserts against.
+    // Rewrite the serial PK so the image endpoint's model_ref_id collides with otherServerLlmId.
     await testSql`
       UPDATE image_diffusion_models SET diffusion_model_id = ${otherServerLlmId}
       WHERE diffusion_model_id = ${imageModelRefId}`;
@@ -91,7 +76,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Migration 083 verbatim tool-calling backfi
       INSERT INTO custom_endpoints (connection_id, model_name, model_ref_id)
       VALUES (${imageConnection.connection_id}, '_verbatim_backfill_image_model', ${imageModelRefId})`;
 
-    // Replay the migration from its pre-state.
     await testSql`ALTER TABLE custom_endpoints DROP COLUMN IF EXISTS verbatim_tool_calling`;
     await testSql`ALTER TABLE llms DROP COLUMN IF EXISTS verbatim_tool_calling`;
     await executeTestSqlFile(migrationPath);

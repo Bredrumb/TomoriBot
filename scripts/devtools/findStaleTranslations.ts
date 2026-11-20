@@ -30,9 +30,6 @@ import {
   formatDriftReport,
 } from "./localeDrift";
 
-/**
- * Lightweight logger (no DB dependency)
- */
 const log = {
   info: (msg: string) => console.log(`ℹ️  ${msg}`),
   warn: (msg: string) => console.warn(`⚠️  ${msg}`),
@@ -41,11 +38,6 @@ const log = {
 
 export type ExpectedScript = "latin" | "cjk" | "cyrillic" | "hangul" | "greek" | "devanagari" | "thai";
 
-/**
- * Script a locale's strings are expected to be written in. Locales on Latin script cannot use
- * the "contains no non-Latin characters" staleness signal at all, so they fall back to
- * exact-match-with-English only.
- */
 export const EXPECTED_SCRIPT: Record<LocaleCode, ExpectedScript> = {
   id: "latin",
   da: "latin",
@@ -81,10 +73,8 @@ export const EXPECTED_SCRIPT: Record<LocaleCode, ExpectedScript> = {
   ko: "hangul",
 };
 
-/**
- * Recursively flattens a nested locale object into dot-notation key → value pairs.
- * Skips array values (e.g. base_trigger_words) as they are locale-specific by design.
- */
+// Array values (such as base_trigger_words) are skipped intentionally because they are locale-specific by design
+// rather than translations.
 export function flatten(obj: unknown, prefix = ""): Record<string, string> {
   const result: Record<string, string> = {};
 
@@ -103,14 +93,11 @@ export function flatten(obj: unknown, prefix = ""): Record<string, string> {
   return result;
 }
 
-/**
- * Counts target-script and Latin letters in a string after stripping placeholders, URLs, and emoji.
- */
 export function countScriptLetters(value: string, script: ExpectedScript): { latinCount: number; targetCount: number } {
   const stripped = value
-    .replace(/\{[^}]+\}/g, "") // remove {placeholders}
-    .replace(/https?:\/\/\S+/g, "") // remove URLs
-    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "") // remove emoji
+    .replace(/\{[^}]+\}/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "")
     .trim();
 
   const latinCount = (stripped.match(/\p{Script=Latin}/gu) ?? []).length;
@@ -143,11 +130,6 @@ export function countScriptLetters(value: string, script: ExpectedScript): { lat
   return { latinCount, targetCount };
 }
 
-/**
- * Checks if a string in a non-Latin locale contains Latin characters but zero characters of the
- * expected script, indicating the value was never translated from English. Latin-script locales
- * (including Vietnamese) cannot use this signal because their translated strings are naturally Latin.
- */
 export function looksLikeEnglish(value: string, expectedScript: ExpectedScript): boolean {
   if (expectedScript === "latin") return false;
 
@@ -155,20 +137,12 @@ export function looksLikeEnglish(value: string, expectedScript: ExpectedScript):
   return latinCount > 0 && targetCount === 0;
 }
 
-/**
- * Identifies values that are intentionally shared across languages:
- * brand names, emojis/placeholders-only templates, technical option IDs, and
- * sample placeholders such as URLs, model IDs, or prompt tag examples.
- *
- * Strips only non-letter characters (`[^\p{L}]`) so that non-Latin scripts (Cyrillic, Hangul,
- * CJK, Greek, etc.) retain their letters and are not falsely classified as empty/shared.
- */
 export function isIntentionallySharedTranslation(key: string, value: string): boolean {
   const stripped = value
-    .replace(/\{[^}]+\}/g, "") // remove {placeholders}
-    .replace(/https?:\/\/\S+/g, "") // remove URLs
-    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "") // remove emoji
-    .replace(/[^\p{L}]/gu, "") // keep only letters across any Unicode script
+    .replace(/\{[^}]+\}/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1F000}-\u{1FFFF}]/gu, "")
+    .replace(/[^\p{L}]/gu, "")
     .trim();
 
   if (stripped.length === 0) {
@@ -218,17 +192,10 @@ export interface StaleEntry {
   reason: "identical" | "likely_english";
 }
 
-/**
- * A drifted finding with the discriminant the export needs.
- *
- * The analysis in {@link ./localeDrift} already reports the shape a batch translator needs, so this
- * only adds the reason tag rather than restating every field.
- */
 export interface DriftedStaleEntry extends DriftedEntry {
   reason: "drifted";
 }
 
-/** A translation this branch did not touch after changing its English source. */
 export interface UnfollowedStaleEntry {
   key: string;
   en: string;
@@ -241,11 +208,8 @@ export interface UnfollowedStaleEntry {
 
 export type AnyStaleEntry = StaleEntry | DriftedStaleEntry | UnfollowedStaleEntry | DocsStaleEntry;
 
-/**
- * Reasons the CLI accepts, in report order. `drifted` and `unfollowed` cover both locale keys and
- * docs pages; `missing` and `orphaned` exist only for docs pages, since `check-locales` already
- * owns missing keys.
- */
+// Reasons are listed in report order, and missing and orphaned apply only to docs pages since check-locales owns
+// missing locale keys.
 export const STALE_REASONS = ["identical", "likely_english", "drifted", "unfollowed", "missing", "orphaned"] as const;
 export type StaleReason = (typeof STALE_REASONS)[number];
 const DEFAULT_STALE_REASONS: readonly StaleReason[] = ["identical", "likely_english", "drifted", "missing", "orphaned"];
@@ -253,10 +217,8 @@ const DEFAULT_STALE_REASONS: readonly StaleReason[] = ["identical", "likely_engl
 export const STALE_SCOPES = ["all", "keys", "docs"] as const;
 export type StaleScope = (typeof STALE_SCOPES)[number];
 
-/**
- * Page-level findings for the docs site and translated READMEs. Branch follow-up takes the merge
- * base the key scan resolved, so both halves of one report compare the same range.
- */
+// Callers pass the key scan's resolved merge base so branch follow-up for docs and keys compares the exact same
+// commit range.
 export function findDocsStaleness(options: {
   reasons: readonly StaleReason[];
   locale?: string;
@@ -284,7 +246,6 @@ export function findDocsStaleness(options: {
   return entries;
 }
 
-/** Resolves the merge base for docs follow-up the same way the key follow-up resolves its base. */
 async function resolveMergeBase(base: string | undefined, repoRoot = process.cwd()): Promise<string> {
   const ref = base ?? (await resolveBaseRef(defaultGitRunner, repoRoot));
   return (await defaultGitRunner(["merge-base", ref, "HEAD"], repoRoot)).trim();
@@ -294,9 +255,6 @@ export function isStaleReason(value: string): value is StaleReason {
   return (STALE_REASONS as readonly string[]).includes(value);
 }
 
-/**
- * Loads and merges all category slice files for a locale into a single flat object.
- */
 export async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
   const localeDir = join(process.cwd(), "src", "locales", localeName);
   const merged: Record<string, unknown> = {};
@@ -308,12 +266,6 @@ export async function loadMergedLocale(localeName: string): Promise<Record<strin
   return merged;
 }
 
-/**
- * Validates a caller-supplied locale and returns the locales to scan.
- *
- * Shared by both scan kinds so `--locale` rejects `en-US` and unknown trees identically whether the
- * caller asked for a value comparison, a drift comparison, or both.
- */
 async function resolveTargetLocales(targetLocale?: string, repoRoot = process.cwd()): Promise<LocaleCode[]> {
   if (!targetLocale) {
     const localesToCheck: LocaleCode[] = [];
@@ -341,13 +293,6 @@ async function resolveTargetLocales(targetLocale?: string, repoRoot = process.cw
   return [targetLocale];
 }
 
-/**
- * Collects translations whose English source moved after the key was translated.
- *
- * Reads history through {@link createGitDriftSource}, so this needs a checkout with the commits the
- * blame reaches. `DriftHistoryError` carries the git failure the caller should report verbatim,
- * which is what a shallow clone produces.
- */
 export async function findDriftedTranslations(targetLocale?: string, repoRoot = process.cwd()): Promise<DriftReport> {
   const source = createGitDriftSource(repoRoot);
   const authoredLocales = source.listTranslationLocales();
@@ -368,9 +313,7 @@ export async function findDriftedTranslations(targetLocale?: string, repoRoot = 
     locales = authoredLocales.filter((locale): locale is LocaleCode => isDiscordLocaleCode(locale));
   }
 
-  // A shallow checkout cannot answer this question, and it fails in the worst possible direction.
-  // `git blame` attributes every line to the grafted root, whose English file is the newest one the
-  // clone holds, so the comparison finds nothing and the report reads as clean. Refuse instead.
+  // Refuse shallow clones because git blame pins every line to the grafted root, making drifted keys appear clean.
   if (source.isShallow()) {
     throw new DriftHistoryError("this checkout is shallow, so translation baselines are missing");
   }
@@ -394,18 +337,12 @@ export async function findDriftedTranslations(targetLocale?: string, repoRoot = 
   return { entries, files, scannedLocales: locales };
 }
 
-/**
- * Finds branch-local translation follow-up without granting it a separate command surface.
- *
- * Unlike the historical `drifted` reason, this only asks whether a translation moved in the same
- * branch as its English source. It remains opt-in because a no-argument stale scan must not need a
- * merge base.
- */
+// This check stays opt-in rather than part of the default stale scan because a no-argument run must not require a git
+// merge base.
 export async function findUnfollowedTranslations(base?: string, repoRoot = process.cwd()): Promise<StalenessReport> {
   return checkLocaleStaleness({ repoRoot, base });
 }
 
-/** Turns branch follow-up into the batch-export shape used by the other stale reasons. */
 export function unfollowedEntries(report: StalenessReport, locale?: string): UnfollowedStaleEntry[] {
   const entries: UnfollowedStaleEntry[] = [];
   const addEntries = (change: "added" | "changed", reports: typeof report.added): void => {
@@ -430,7 +367,6 @@ export function unfollowedEntries(report: StalenessReport, locale?: string): Unf
   return entries.sort((left, right) => left.locale.localeCompare(right.locale) || left.key.localeCompare(right.key));
 }
 
-/** Keeps the human branch report aligned with the locale filter used by its export. */
 export function filterUnfollowedReport(report: StalenessReport, locale?: string): StalenessReport {
   if (!locale) return report;
 
@@ -455,10 +391,6 @@ export function filterUnfollowedReport(report: StalenessReport, locale?: string)
   };
 }
 
-/**
- * Finds keys where a translation is either identical to the English value (never translated)
- * or contains Latin letters with zero characters of the expected script (for non-Latin locales).
- */
 export async function findStaleTranslations(targetLocale?: string): Promise<StaleEntry[]> {
   const enLocale = await loadMergedLocale("en-US");
   const enFlat = flatten(enLocale);
@@ -482,9 +414,9 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
 
     for (const [key, enValue] of Object.entries(enFlat)) {
       const targetValue = targetFlat[key];
-      if (!targetValue) continue; // missing keys are a parity issue, not a staleness issue
+      // Skip missing keys because they are a parity issue rather than staleness.
+      if (!targetValue) continue;
 
-      // Intentionally shared strings bypass both identical and likely-English checks
       if (isIntentionallySharedTranslation(key, targetValue)) {
         continue;
       }
@@ -500,19 +432,8 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
   return stale.sort((a, b) => a.locale.localeCompare(b.locale) || a.key.localeCompare(b.key));
 }
 
-/**
- * Main entry:
- *   (default)            Print a compact human-readable review list to the console
- *   --export             Write a JSON file for batch translation
- *   --locale=<code>      Filter scan to a specific locale
- *   --reason=<reason>    Limit the scan to one reason, repeatable
- *   --base=<ref>         Compare against a branch base for --reason=unfollowed
- *   --scope=<scope>      all (default), keys, or docs (docs pages and translated READMEs)
- *
- * Exit codes: 0 with findings, 1 for a script error, 2 when the drift scan cannot reach the history
- * it needs. A git failure is reported rather than swallowed, because a shallow clone otherwise
- * reports every tree as clean.
- */
+// Exit code 0 even with findings, and exit 2 on missing git history, because swallowing shallow clone failures would
+// report every tree as clean.
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const doExport = args.includes("--export");
@@ -631,9 +552,7 @@ async function main(): Promise<void> {
     console.log(`\n${"=".repeat(80)}`);
     console.log("Run with --export to write stale-translations.json for batch translation.");
   } else {
-    // Drifted entries keep their own shape rather than being flattened into the value-comparison
-    // one. A batch translator needs the superseded English to judge whether a re-read is warranted,
-    // and dropping that field would leave a bare list of keys that look translated already.
+    // Keep drifted entries unflattened so batch translators still receive the superseded English baseline.
     const drifted: DriftedStaleEntry[] = (drift?.entries ?? []).map((entry) => ({ ...entry, reason: "drifted" }));
     const exported: AnyStaleEntry[] = [...identical, ...likelyEnglish, ...drifted, ...unfollowedExport, ...docs];
     const outputPath = join(process.cwd(), "scripts", "maintenance", "stale-translations.json");

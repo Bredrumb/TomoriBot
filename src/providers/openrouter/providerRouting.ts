@@ -2,10 +2,8 @@ export interface OpenrouterProviderRouting {
   require_parameters: boolean;
 }
 
-/**
- * OpenRouter otherwise routes to any endpoint for the model, including ones that silently drop tools
- * or `response_format`, so a request that depends on them fails fast instead of returning prose.
- */
+// OpenRouter otherwise routes to endpoints that silently drop tools or response_format, so requiring parameter
+// support makes dependent requests fail fast.
 export function buildOpenrouterProviderRouting(options: {
   requiresParameterSupport: boolean;
 }): OpenrouterProviderRouting | undefined {

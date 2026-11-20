@@ -1,13 +1,3 @@
-/**
- * Shared typed fixture factories for database rows.
- *
- * Every factory takes `Partial<T>` overrides and returns a complete row typed against the real schema
- * type, so a schema change breaks compilation here instead of leaving the fixture on an older shape.
- * `fixtures.test.ts` guards what a type cannot state: the default values and the override merge.
- * Identity values (ids, snowflakes, model codenames) are placeholders; a test that needs a second row
- * overrides them, as in `createPersona({ persona_id: 2, persona_lineage_id: 101 })`.
- */
-
 import { DEFAULT_HUMANIZER_SETTINGS } from "@/constants/humanizer";
 import type { AssembledServerConfig, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
 import { naiPresetSections } from "@/db/seed/catalog/naiPresets";
@@ -18,13 +8,8 @@ import { customIdleNudgeRowSchema, type CustomIdleNudgeRow } from "@/modules/nat
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 
-/**
- * Default `config` values, mirroring the column defaults the server config tables declare.
- *
- * A persona load assembles its config from several tables, so a fixture that starts from the
- * declared defaults matches what production reads after setup with nothing changed.
- * `fixtures.test.ts` fails when a schema default moves away from the value recorded here.
- */
+// Mirrors the SQL table column defaults rather than arbitrary placeholders so fixtures match fresh production setup
+// (enforced by fixtures.test.ts).
 const BASE_CONFIG: AssembledServerConfig = {
   subscription_capabilities: [],
   response_reviewer_llm_id: null,
@@ -118,10 +103,6 @@ const BASE_CONFIG: AssembledServerConfig = {
   channel_memory_enabled: false,
 };
 
-/**
- * A persona-scoped config with the declared defaults. Cloned per call so a test that mutates a
- * nested array (stop strings, fallback refs) cannot leak into the next fixture.
- */
 export function createServerConfig(overrides: Partial<AssembledServerConfig> = {}): AssembledServerConfig {
   return { ...structuredClone(BASE_CONFIG), ...overrides };
 }
@@ -144,11 +125,6 @@ export function createNaiPreset(overrides: Partial<NaiPresetRow> = {}): NaiPrese
   };
 }
 
-/**
- * Default chat model row: a tools-and-vision capable text model with every capability flag the
- * schema defaults resolved, so a fixture that swaps this row in cannot leave a flag reading
- * `undefined` where production reads `false`.
- */
 export function createLlmRow(overrides: Partial<LlmRow> = {}): LlmRow {
   return {
     llm_id: 1,
@@ -174,20 +150,10 @@ export function createLlmRow(overrides: Partial<LlmRow> = {}): LlmRow {
   };
 }
 
-/** Overrides accepted by {@link createPersona}; `config` merges onto the default config. */
 export type PersonaFixtureOverrides = Omit<Partial<TomoriState>, "config"> & {
   config?: Partial<AssembledServerConfig>;
 };
 
-/**
- * A complete `TomoriState`. Identity fields default to one main persona on one server so a test that
- * needs a second row reads `createPersona({ persona_id: 2, persona_lineage_id: 101 })` rather than
- * hand-rolling another partial cast.
- *
- * `overrides.config` merges onto the default config, so `{ config: { llm_id: 7 } }` keeps every other
- * config field. Every other top-level key replaces the default outright, including `llm`, which a
- * suite that needs a different provider builds with {@link createLlmRow}.
- */
 export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
   const { config, ...rest } = overrides;
   return {
@@ -222,13 +188,8 @@ export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriSt
   };
 }
 
-/** Overrides accepted by {@link createUserRow}. */
 export type UserFixtureOverrides = Partial<UserRow>;
 
-/**
- * A complete `UserRow` for the actor a route or tool reads. `registration_locale` matches
- * `language_pref` because production captures both when a user first registers.
- */
 export function createUserRow(overrides: UserFixtureOverrides = {}): UserRow {
   return {
     user_id: 1,

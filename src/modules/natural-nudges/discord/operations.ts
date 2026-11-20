@@ -70,16 +70,13 @@ export type NudgeWriteResult =
   | "no-model"
   | "generate-failed";
 
-/** What the timer would use right now, which the page shows next to the saved settings. */
 interface NaturalNudgesStatus {
   effectiveChannelIds: string[];
   plannerModel: PlannerModelStatus;
   chatModel: { codename: string; provider: string } | null;
-  /** The model that would check Active Nudges right now; `model` is null when none can. */
   checker: { source: ResolvedChecker["source"]; model: string | null };
 }
 
-/** Decision models one provider offers the server that can answer the checker's `choice` question. */
 interface CheckerDecisionModelGroup {
   provider: string;
   models: ConfigModelChoice[];
@@ -88,20 +85,18 @@ interface CheckerDecisionModelGroup {
 export interface NaturalNudgesSettingsView {
   config: ServerNaturalNudgeConfig;
   runtime: NaturalNudgeRuntimeState;
-  /** Structured-output text models, which serve both the planner and a text-model checker. */
   plannerModels: StructuredOutputModelGroup[];
   checkerDecisionModels: CheckerDecisionModelGroup[];
   trackingEnabled: boolean;
   baseHeat: number;
   heat: number;
   perDay: number;
-  /** Human messages between Active Nudge checks at the current heat and level; null below the heat floor. */
+  // Measured in human messages between Active Nudge checks: null means heat is below the floor rather than disabled.
   activeNudgeRange: { min: number; max: number } | null;
-  /** Null on modal paths, which must acknowledge within 3 seconds and never render it. */
+  // Null on modal paths because they never render status and must acknowledge within Discord's 3-second deadline.
   status: NaturalNudgesStatus | null;
 }
 
-/** Binds an interest edit to the interest at that position when the modal opened. */
 export function computeInterestFingerprint(personaId: number, index: number, interest: NaturalNudgeInterest): string {
   return createHash("sha256")
     .update(`nudge-interest:${personaId}:${index}:${interest.label}\u0000${interest.description}`)
@@ -109,11 +104,8 @@ export function computeInterestFingerprint(personaId: number, index: number, int
     .slice(0, 8);
 }
 
-/**
- * Binds an interest removal to the exact list its modal presented. Unchecked-means-remove derives the
- * removal set from positions, so a concurrent add or edit must invalidate the submit rather than
- * delete a different interest.
- */
+// The full list is hashed because unchecked-means-remove indexes by position, so a concurrent edit must invalidate
+// the submit.
 export function computeInterestListFingerprint(personaId: number, interests: readonly NaturalNudgeInterest[]): string {
   return createHash("sha256")
     .update(`nudge-interests:${personaId}:${JSON.stringify(interests)}`)
@@ -214,10 +206,7 @@ async function patchConfig(
   return "success";
 }
 
-/**
- * Gives a pinned slot to the provider its model was picked under, or releases it when unpinned, so the
- * same catalog model bills whichever provider the admin chose.
- */
+// Slot ownership is claimed or cleared per provider because one catalog model ID can bill through multiple providers.
 async function settleSlotOwner(
   state: TomoriState,
   slot: Extract<NudgeModelSlot, "nudge-planner" | "nudge-checker">,
@@ -231,7 +220,7 @@ async function settleSlotOwner(
   return settled ? "success" : "write-failed";
 }
 
-/** Discord's channel select returns at most 25 IDs, so a longer list cannot come from the panel. */
+// Capped at 25 because Discord's channel select menu returns at most 25 IDs.
 const MAX_ALLOWED_CHANNELS = 25;
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 
@@ -278,7 +267,6 @@ const naturalNudgeOperations = {
     return settleSlotOwner(state, "nudge-planner", llmId === null ? null : provider);
   },
 
-  /** Pins a text or Decision model as the Active Nudge Checker; null returns to the recommended checker. */
   async setCheckerModel(
     state: TomoriState,
     choice: { kind: "llm" | "decision"; provider: string; id: number } | null,
@@ -320,7 +308,6 @@ const naturalNudgeOperations = {
     return patchConfig(serverId, { active_nudge_frequency: level });
   },
 
-  /** Resync of a preset pointer: dropping the row makes it read the preset's defaults live again. */
   async clearPersonaOverride(personaId: number): Promise<NudgeWriteResult> {
     const current = await loadPersonaNudgeConfig(personaId);
     if (!current?.has_override) return "stale";
@@ -350,7 +337,6 @@ const naturalNudgeOperations = {
       : "write-failed";
   },
 
-  /** Adds up to a batch of generated interests that are new to the persona, using the Idle Nudge Planner model. */
   async generateInterests(persona: TomoriState): Promise<NudgeWriteResult> {
     const personaId = persona.persona_id as number;
     const current = await loadPersonaNudgeConfig(personaId);
@@ -406,7 +392,6 @@ const naturalNudgeOperations = {
       : "write-failed";
   },
 
-  /** Adds one owned definition; the repository snapshots an inherited preset list on this first content edit. */
   async addPersonaNudge(
     personaId: number,
     category: NaturalNudgeCategory,
@@ -420,7 +405,6 @@ const naturalNudgeOperations = {
     return naturalNudgeRepository.addPersonaIdleNudge(personaId, draft);
   },
 
-  /** Edits the definition a fingerprint still matches, preserving its stable local ID and availability. */
   async editPersonaNudge(
     personaId: number,
     idleNudgeId: string,
@@ -450,7 +434,6 @@ const naturalNudgeOperations = {
     return naturalNudgeRepository.setPersonaIdleNudgeAvailability(personaId, idleNudgeId, enabled);
   },
 
-  /** Removes only unchecked entries that still belong to the frozen list the modal presented. */
   async removePersonaNudges(
     personaId: number,
     fp: string,
@@ -485,7 +468,6 @@ const naturalNudgeOperations = {
 
 type NaturalNudgeOperations = typeof naturalNudgeOperations;
 
-/** What a repaint carries between Natural Nudges routes; views missing here are loaded fresh. */
 export interface NaturalNudgesPanelState {
   personaConfig?: PersonaNaturalNudgeConfig | null;
   personaNudges?: PersonaNudgeBlockerView;

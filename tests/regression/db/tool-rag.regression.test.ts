@@ -1,11 +1,3 @@
-/**
- * Regression harness: ToolRepository + RagRepository domains.
- *
- * ToolRepository: MCP server config, guild MCP reads.
- * RagRepository: RAG availability detection (schema-level, no pgvector assumed).
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
   clearGuildMcpConfigCache,
@@ -29,8 +21,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // getBraveApiKeyStatus is representative of the ToolRepository read path.
-
   it("getBraveApiKeyStatus reflects brave-search key rows", async () => {
     const hasKey = await toolRepository.getBraveApiKeyStatus(refs.serverId);
     expect(hasKey).toBe(false);
@@ -45,8 +35,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
     const hasInsertedKey = await toolRepository.getBraveApiKeyStatus(refs.serverId);
     expect(hasInsertedKey).toBe(true);
   });
-
-  // guildMcpDb.ts reads from mcp_server_configs; no config means empty result.
 
   it("guild MCP config read returns inserted config rows", async () => {
     const beforeInsert = await mcpRepository.loadGuildMcpConfigs(refs.serverId);

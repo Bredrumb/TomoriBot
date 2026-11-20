@@ -3,7 +3,6 @@ const JPEG_EXTENDED_XMP_HEADER = Buffer.from("http://ns.adobe.com/xmp/extension/
 const MAX_JPEG_SEGMENT_DATA = 0xffff - 2;
 const WEBP_XMP_FLAG = 0x04;
 
-/** Insert XMP without decoding the provider's compressed image data. */
 export function embedXmpInJpeg(image: Buffer, xmp: string): Buffer | null {
   if (image.length < 4 || image.readUInt16BE(0) !== 0xffd8) return null;
   const payload = Buffer.concat([JPEG_XMP_HEADER, Buffer.from(xmp, "utf8")]);
@@ -48,7 +47,6 @@ export function embedXmpInJpeg(image: Buffer, xmp: string): Buffer | null {
   return Buffer.concat([image.subarray(0, insertionOffset), segment, image.subarray(insertionOffset)]);
 }
 
-/** Add the WebP XMP chunk and its VP8X feature flag without changing VP8/VP8L bytes. */
 export function embedXmpInWebp(
   image: Buffer,
   xmp: string,

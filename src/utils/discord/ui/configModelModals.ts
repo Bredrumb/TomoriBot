@@ -101,13 +101,8 @@ function parameterField(
   };
 }
 
-/**
- * Sampling group of the server provider-parameter editor.
- *
- * The four sampler fields and the four generation fields are split across two modals because
- * Discord caps a modal at five components, and the split is semantic rather than positional so the
- * label never has to name a field number.
- */
+// Sampler and generation fields are split semantically across two modals because Discord caps each modal at five
+// components.
 export function buildConfigSamplingModal(
   locale: string,
   provider: string,
@@ -234,12 +229,8 @@ export function buildConfigStopStringAddModal(locale: string, nonce: string): Ra
   };
 }
 
-/**
- * Stop-string management: one speaker-pattern checkbox plus unchecked-means-remove groups.
- *
- * The speaker-pattern toggle is a one-option CheckboxGroup rather than a bare component so both
- * halves of the modal read back through the same accessor.
- */
+// The speaker-pattern toggle uses a one-option CheckboxGroup rather than a bare checkbox so both modal halves use the
+// same accessor.
 export function buildConfigStopStringManageModal(
   locale: string,
   nonce: string,
@@ -253,8 +244,7 @@ export function buildConfigStopStringManageModal(
       label: modalLabel(locale, "commands.config.panel.stop_speaker_label"),
       description: modalDescription(locale, "commands.config.panel.stop_speaker_description"),
       component: {
-        // 22 is CheckboxGroup. A FileUpload (19) also renders and submits, but carries no option
-        // values, which would read back as the pattern being switched off.
+        // 22 is CheckboxGroup; FileUpload (19) also submits without option values, which would disable the flag.
         type: 22,
         custom_id: buildConfigModalFieldId(CONFIG_STOP_SPEAKER_PATTERN_FIELD, nonce),
         min_values: 0,
@@ -413,19 +403,7 @@ export interface ConfigFallbackOption {
   description?: string;
 }
 
-/**
- * Five slot selects over one shared option list.
- *
- * A blank slot keeps whatever it held, so the modal is an edit of one position rather than a
- * replacement of the chain. That is also why the options are sliced before the modal opens: the
- * five selects share one list, so the modal's own overflow bridge would page only the first.
- */
-/**
- * Model picker for one Switch Models slot.
- *
- * The panel select already resolved which provider and which page of its catalog, so this modal
- * receives at most one select page and never needs to page inside itself.
- */
+// Callers pre-slice models to one provider catalog page on the panel, so this modal never paginates its select.
 export function buildConfigModelSelectModal(
   locale: string,
   capability: ConfigModelCapability,

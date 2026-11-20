@@ -34,11 +34,8 @@ export type ProxyIdentityUpsertInput = {
   displayName: string | null;
   avatarUrl?: string | null;
   bio: string | null;
-  /**
-   * Service-published pronouns for this identity, when the service reports them publicly.
-   * They seed the synthetic user's own `pronouns` setting at first registration only,
-   * so every later edit belongs to that profile and is never taken back from the service.
-   */
+  // Seeds the synthetic user's pronouns at first registration only, so later user edits are never overwritten by the
+  // proxy service.
   pronouns?: string | null;
   namespace: ProxyIdentityNamespaceInput;
 };
@@ -106,9 +103,10 @@ type ProxyDescriptorBase<TServiceId extends string> = {
   externalIdentityKind: string;
   validateExternalKey(externalKey: string): boolean;
   presentation: ProxyServicePresentation;
-  /** False skips the lookup for good, so it must never reject a message the service could have sent. */
+  // Returning false skips the lookup permanently, so implementations must never reject a message the service could
+  // have sent.
   canAttestMessage?(message: Message, instance: MessageProxyInstanceContext): boolean;
-  /** Called for a validated claim, before the router looks for a matching expectation. */
+  // Hook ordering: invoked only after a claim validates and before the router searches for a matching expectation.
   recordAttestedMessage?(message: Message, instance: MessageProxyInstanceContext): void;
   extractReplyTargetFromEmbed?(embed: Pick<Embed, "author" | "description">): ProxyReplyTarget | null;
 };

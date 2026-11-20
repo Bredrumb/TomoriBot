@@ -125,14 +125,8 @@ function buildRetryButtonRow(
   };
 }
 
-/**
- * Per-row preview budget for persona names displayed in moderation panels.
- *
- * In the persona-channels whitelist view, up to MODERATION_PANEL_RANGE_SIZE (10) rows are joined
- * into a single TextDisplay component. Each line also includes markdown prefix, channel mentions,
- * and a truncation notice when truncated (~80 codepoints). A budget of 200 ensures 10 lines
- * (10 * (200 + 80) = 2800) easily fit within Discord's 4000-codepoint TextDisplay limit.
- */
+// Capped at 200 so 10 range rows (each adding ~80 codepoints of markup) total ~2800 and stay under Discord's
+// 4000-codepoint TextDisplay limit.
 const MODERATION_NAME_PREVIEW_BUDGET = 200;
 
 function renderModerationName(locale: string, value: string): string {
@@ -156,7 +150,6 @@ export const MODERATION_CATEGORY_LOCALE_KEYS: Record<ModerationCategory, string>
   quotas: "commands.moderation.category_quotas",
 };
 
-/** Every current entry of a removal list, encoded as the checkbox values its modal presents. */
 export function listModerationRemovalValues(data: ModerationScopeData, list: ModerationRemovalList): string[] {
   switch (list) {
     case "user-blacklist":
@@ -178,11 +171,8 @@ interface PersonaChannelGroup {
   channelIds: string[];
 }
 
-/**
- * Pages the persona-channel whitelist by persona, closing a page at ten personas or at one removal
- * modal of channel rows, so Remove can always present the page it sits on. A persona with more
- * channels than one modal holds is the only one split, across consecutive pages.
- */
+// Pages close at 10 personas or one removal modal of channel rows so Remove always fits the current page, splitting a
+// persona only when it exceeds one modal.
 export function pagePersonaChannels(
   rows: ModerationScopeData["whitelist"]["personaChannels"],
 ): PersonaChannelGroup[][] {
@@ -212,10 +202,8 @@ export function pagePersonaChannels(
   return pages;
 }
 
-/**
- * The removal values on one panel page, clamped the way the panel clamps its page. Remove presents
- * exactly these, so the modal always matches what the page shows.
- */
+// Page clamping must match the panel renderer so the Remove modal always presents the exact entries shown on the
+// current page.
 export function listModerationRemovalPage(
   data: ModerationScopeData,
   list: ModerationRemovalList,

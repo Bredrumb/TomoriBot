@@ -6,9 +6,7 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
   hasExplicitCrossPersonaTrigger,
-  isAutochatCounterChannelActive,
   isAutochatOverrideChannel,
-  isAutochatQualifyingMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import {
@@ -19,9 +17,11 @@ import {
   requestNaturalStopForLockedTurn,
 } from "@/utils/chat/channelQueue";
 import {
+  canAdvanceAutochatCounter,
   enforceGlobalRateLimit,
   evaluateChatAccess,
   rejectOnMessageTriggerCooldown,
+  updateAutochatCounter,
   type ChatAccessState,
 } from "@/utils/chat/admissionGuards";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
@@ -35,7 +35,7 @@ type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 const LOG_CHANNEL_NOTICE_COOLDOWN_MS = 10 * 60_000;
-/** One entry per channel ever configured as a log channel, so it stays small without a sweeper. */
+// One entry per channel ever configured as a log channel, so it stays bounded without a sweeper.
 const logChannelNoticeSentAt = new Map<string, number>();
 
 type AdmissionQueueAndTriggerArgs = {
@@ -51,7 +51,6 @@ type AdmissionQueueAndTriggerArgs = {
   cooldownUserDiscId: string;
   isActiveNaturalStopMessage: boolean;
   isNaturalStopMessage: boolean;
-  /** Confirmed repost record; its original, when attested, carries the trigger verdict. */
   messageProxyRecord?: MessageProxyMessageRecord | null;
   referencedMessage: Message | null;
 };
@@ -60,8 +59,8 @@ export async function evaluateAdmissionQueueAndTriggerGate(
   args: AdmissionQueueAndTriggerArgs,
 ): Promise<NonRunnableChatAdmission | null> {
   const { incoming, messageProxyRecord } = args;
-  // PluralBuddy can verify a repost after the original's wait has ended. The original may
-  // already have started a reply, so admitting the repost would answer the same message twice.
+  // PluralBuddy can verify a repost after the original's wait ended, so admitting it would answer the same message
+  // twice.
   if (
     messageProxyRecord &&
     !messageProxyRecord.originalSuppressed &&
@@ -147,8 +146,7 @@ async function evaluateLockedChannelAdmission(
       : {}),
     disableRecentMessageReplyTool: true,
   };
-  // Skip follow-up path if the message explicitly targets a different persona.
-  // activePersonaId must be set (i.e. turn state is established) for this to apply.
+  // Skip follow-up queuing when targeting another persona, requiring activePersonaId so turn state is established.
   const hasCrossPersonaTrigger =
     lockEntry.activePersonaId !== undefined &&
     hasExplicitCrossPersonaTrigger(triggerMessage, earlyAllPersonas, lockEntry.activePersonaId, args.referencedMessage);
@@ -295,6 +293,7 @@ async function evaluateLockedChannelAdmission(
       manualTriggerInvoker: incoming.manualTriggerInvoker,
       systemTriggerIdentity: incoming.systemTriggerIdentity,
       borrowsTriggerMessage: incoming.borrowsTriggerMessage,
+      suppressSelfReply: incoming.suppressSelfReply,
       conditioningInteraction: incoming.conditioningInteraction,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
@@ -375,14 +374,24 @@ async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Pro
     };
   }
 
-  const stateForReplyCheck =
-    isAutochatCounterChannelActive(earlyTomoriState.config, channelIds.effectiveChannelId) &&
-    isAutochatQualifyingMessage(triggerMessage, isSelfMessage)
-      ? {
-          ...earlyTomoriState,
-          autoch_counter: earlyTomoriState.autoch_counter + 1,
-        }
-      : earlyTomoriState;
+  let stateForReplyCheck = earlyTomoriState;
+  if (
+    canAdvanceAutochatCounter({
+      message: triggerMessage,
+      tomoriState: earlyTomoriState,
+      allPersonas: earlyAllPersonas,
+      effectiveChannelId: channelIds.effectiveChannelId,
+      isSelfMessage,
+      personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
+      allowedPersonaIds: accessState.allowedPersonaIds,
+    })
+  ) {
+    const snapshot = await updateAutochatCounter(triggerMessage, earlyTomoriState, channelScope.serverDiscId);
+    if (snapshot) {
+      incoming.autochatCounterSnapshot = snapshot;
+      stateForReplyCheck = { ...earlyTomoriState, ...snapshot };
+    }
+  }
 
   if (
     shouldBotReply(triggerMessage, stateForReplyCheck, earlyAllPersonas, {
@@ -404,12 +413,8 @@ async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Pro
   };
 }
 
-/**
- * Explains a direct mention that the log-channel gate is about to drop.
- *
- * Without this the skip is invisible: chat goes silent in that one channel while slash commands
- * still work there, which admins misread as a Discord permission problem.
- */
+// Sending this notice prevents a silent channel drop that admins misread as a Discord permission failure when slash
+// commands still work.
 async function noticeMentionInLogChannel(
   incoming: ChatIncoming,
   guild: Guild | null,

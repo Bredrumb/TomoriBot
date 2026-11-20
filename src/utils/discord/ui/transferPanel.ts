@@ -23,11 +23,8 @@ export type ConfigTransferKind = "workspace_config" | "personal_config";
 export type MemoryTransferKind = "workspace_memories" | "personal_memories";
 export type MemoryTransferMapping = Readonly<Record<string, number | "skip">>;
 
-/**
- * One destination a source bucket may be bound to. A workspace destination addresses a persona, which the importer
- * resolves back to its current lineage; a personal destination addresses the lineage itself, because personal
- * memories have no persona row in the workspace that happens to be open at import time.
- */
+// Workspace destinations include personaId for current-lineage resolution, whereas personal ones use lineageId
+// because personal memories have no persona row.
 export type MemoryTransferDestination =
   | { ownership: "workspace"; lineageId: number; personaId: number; label: string }
   | { ownership: "personal"; lineageId: number; label: string };
@@ -127,11 +124,6 @@ function sectionDescription(locale: string, section: ConfigSectionName): string 
 
 const SECTION_LOCALE_KEYS_BY_NAME = new Map(Object.entries(SECTION_LOCALE_KEYS));
 
-/**
- * The localized names of config sections, for an import receipt. Bounded by construction: every label is truncated
- * to a select option's 100 characters and the permitted vocabulary is eleven sections. An unrecognized name falls
- * back to its raw text, which keeps a receipt honest rather than empty if the vocabulary ever widens.
- */
 export function formatConfigSectionLabels(locale: string, sections: readonly string[]): string {
   return sections
     .map((section) => {
@@ -181,8 +173,7 @@ export function buildConfigTransferPreviewPayload(input: {
     }),
     500,
   );
-  // One line per block, with quote rows for the values each heading introduces. Blank lines between a heading and
-  // its own rows read as unrelated panels, and the blockquote marker applies per line, so every row carries one.
+  // Prefix every row with `>` without blank lines so Discord renders headings and values as one visual block.
   const content = safeUserText(
     [
       `### ${safeUserText(localizer(input.locale, "commands.transfer.config_preview_title"), 100)}`,
@@ -230,11 +221,8 @@ export function buildConfigSectionCheckboxGroupId(nonce: string): string {
   return `${CONFIG_SECTION_CHECKBOX_GROUP_PREFIX}_${nonce}`;
 }
 
-/**
- * A terminal transfer state, rendered as a Components V2 notice so the routed action can replace the panel it was
- * clicked on instead of replying with a second ephemeral message. The panel is a V2 message, and Discord rejects
- * legacy `embeds` on one, so a receipt built for `replyInfoEmbed` cannot be edited onto it.
- */
+// Components V2 is required here instead of replyInfoEmbed because Discord rejects editing legacy embeds onto an
+// existing V2 panel.
 export function buildTransferNoticePayload(input: {
   locale: string;
   titleKey: string;
@@ -380,7 +368,6 @@ export function buildMemoryTransferPreviewPayload(input: {
   buckets: readonly MemoryBucket[];
   serverwideLoreCount?: number;
   nonce: string;
-  /** Set when the file's own ownership differs from the destination's, which the reader must be told about. */
   crossOwnership?: boolean;
 }): ComponentsV2MessagePayload & { attachments: readonly [] } {
   if (input.buckets.length === 0) {
@@ -431,8 +418,7 @@ export function buildMemoryTransferPreviewPayload(input: {
         }),
       ].join("\n")
     : null;
-  // One block of single-spaced lines in the config preview's shape: a heading line immediately above its own quoted
-  // rows, and a bold lead line. Blank lines between a heading and its rows read as unrelated panels.
+  // Omit blank lines between headings and quoted lines because Discord styles separated blocks as unrelated cards.
   const content = safeUserText(
     [
       `### ${safeUserText(localizer(input.locale, "commands.transfer.memory_preview_title"), 100)}`,

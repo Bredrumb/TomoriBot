@@ -5,17 +5,8 @@ import {
   replyGenerationModelUnavailable,
 } from "@/utils/discord/autocomplete/generationModelAutocomplete";
 import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
-/**
- * `/generate voice-message`
- *
- * Manual driver for the server's configured speech endpoint, so testing a voice clone or a voice
- * design prompt does not cost a full chat turn and a coin flip on whether the model decides to
- * call `generate_voice_message`.
- *
- * Two per-invocation overrides are accepted and deliberately never persisted: an uploaded voice
- * sample and a typed voice design prompt. The uploaded buffer lives only in this invocation, and
- * neither value reaches `persona_voice_configs` or `voice_samples`.
- */
+// Ad-hoc sample and design overrides stay ephemeral and never write to persona_voice_configs or voice_samples, so
+// test runs do not alter saved voices.
 
 import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
 import {
@@ -143,10 +134,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     "commands.generate.voice-message.model_description",
   );
 
-/**
- * Autocomplete is the same persona list `/impersonate persona` uses: already filtered through
- * `filterPersonasForTrigger`, so a suggestion never reveals a persona the actor cannot use here.
- */
+// Persona suggestions reuse handlePersonaAutocomplete because it filters via filterPersonasForTrigger, preventing
+// leaks of personas the actor cannot use.
 const modelAutocomplete = createGenerationModelAutocomplete("speech");
 export const autocomplete: typeof handlePersonaAutocomplete = (client, interaction) =>
   interaction.options.getFocused(true).name === "model"
@@ -213,14 +202,8 @@ function describeBackend(locale: string, backendKey: VoiceBackendKey): string {
   return localizer(locale, BACKEND_LABEL_KEYS[backendKey]);
 }
 
-/** True when the persona holds an ElevenLabs voice id the fallback path could use. */
-
-/**
- * Picks the delivery-knob radio for the resolved endpoint, or null when that endpoint has no knob.
- *
- * A control that renders where it does nothing teaches the user it is broken, so the Chatterbox
- * variant is gated on the label sniff rather than shown everywhere and disclaimed.
- */
+// Chatterbox delivery control is gated on the endpoint label sniff rather than shown everywhere because rendering a
+// no-op control looks broken.
 function resolveExpressivenessBackend(input: {
   endpoint: CustomEndpointRow | null;
   usesElevenLabs: boolean;
@@ -231,7 +214,6 @@ function resolveExpressivenessBackend(input: {
   return null;
 }
 
-/** Display name of the persona's assigned reference sample, for the radio option text. */
 async function resolvePersonaSampleName(persona: TomoriState): Promise<string | null> {
   const sampleId = persona.speech_voice_sample_id ?? null;
   if (!sampleId) return null;
@@ -262,7 +244,6 @@ function resolveSourceDisplayText(input: {
   return localizer(locale, "commands.generate.voice-message.source_elevenlabs");
 }
 
-/** Downloads and normalizes the ad-hoc upload. The buffer is never written to `voice_samples`. */
 async function loadUploadedReferenceAudio(
   attachment: Attachment,
 ): Promise<{ ok: true; refAudio: Buffer } | { ok: false; failure: PreModalFailure }> {
@@ -563,9 +544,8 @@ export async function execute(
   let effectiveEndpoint = defaultEndpoint ?? null;
   let speechEndpoint = defaultSource?.shape === "design" ? targets.design : targets.clone;
 
-  // Keyed off the resolved candidate, not off the endpoint: a persona whose only voice is an
-  // ElevenLabs id on a server with no speech endpoint is indistinguishable from a `tts-clone`
-  // server by endpoint alone, and its voice id is precisely what the source table falls back to.
+  // Keyed off the resolved candidate rather than the endpoint because a legacy ElevenLabs persona can lack a speech
+  // endpoint while still falling back to its ElevenLabs voice ID.
   if (defaultSource?.id === "elevenlabs" && !elevenLabsApiKey) {
     log.warn(`[/generate voice-message] ElevenLabs API key missing for voice message generation`, undefined, {
       userId: userData.user_id,
@@ -604,9 +584,8 @@ export async function execute(
       locale,
       candidates,
       scriptMarkup: effectiveEndpoint?.extra_config.script_markup as string | undefined,
-      // A design-shaped source, not merely a design-capable endpoint: on an `auto` endpoint whose
-      // only candidates are clone-shaped, a Delivery Direction field would render and then be
-      // dropped by the dispatcher.
+      // Requires a design-shaped candidate rather than a design-capable endpoint, because an auto endpoint with only
+      // clone candidates would render Delivery Direction only for the dispatcher to drop it.
       designShapeAvailable: anyDesignShape,
       cloneInstructionsAvailable,
       uploadShapeSelected: defaultSource?.id === "upload",
@@ -617,9 +596,8 @@ export async function execute(
       },
     });
   } catch (error) {
-    // The builder's component-cap assertion is a programming guard, but it runs before anything
-    // has been acknowledged, so an escaped throw would surface as "The application did not
-    // respond" rather than anything a user or a log reader could act on.
+    // Caught because the builder runs before interaction acknowledgement, where an uncaught throw triggers Discord's
+    // generic timeout instead of an error reply.
     log.error("[/generate voice-message] Failed to build the modal components", error as Error);
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

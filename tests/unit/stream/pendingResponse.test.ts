@@ -60,7 +60,6 @@ function fixture(chunks: ProcessedChunk[], holdResponseText = true) {
 
 afterEach(() => StreamOrchestrator.clearStopRequest("pending_fixture"));
 
-/** Records how far the provider stream was consumed and whether early teardown closed it. */
 function trackConsumption(provider: StreamProvider) {
   const progress = { yielded: 0, closed: false };
   const startStream = provider.startStream.bind(provider);
@@ -77,7 +76,7 @@ function trackConsumption(provider: StreamProvider) {
   return progress;
 }
 
-/** Numbered so the stream's overlap de-duplication keeps every chunk. */
+// Chunks are numbered so the stream's overlap de-duplication keeps every chunk.
 function textChunks(count: number, content: string): ProcessedChunk[] {
   return [
     ...Array.from({ length: count }, (_, index) => ({

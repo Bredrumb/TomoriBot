@@ -1,13 +1,3 @@
-/**
- * ConditioningMemoryRepository: manages the `conditioning_history` table.
- *
- * Conditioning memories record reward/punishment events that shape Tomori's
- * persona behavior over time. Reads are aggregated into ConditioningGroup
- * summaries; writes record individual events or toggle enablement flags.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import {
   conditioningHistorySchema,
   conditioningTypeSchema,
@@ -24,7 +14,6 @@ import {
 } from "@/utils/conditioning/conditioning";
 import type { IRepository } from "./IRepository";
 
-/** Portable conditioning export shape (expanded in Phase 6 #16.7). */
 type ConditioningExportShape = {
   persona_lineage_id: number;
   groups: ConditioningGroup[];
@@ -67,15 +56,6 @@ type ConditioningEventParams = {
 } & ({ userId: number; actorPersonaId?: never } | { actorPersonaId: number; userId?: never });
 
 class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
-  /**
-   * Loads aggregated conditioning groups for a persona lineage.
-   * Groups cluster related events so the prompt assembly can summarize them.
-   *
-   * @param serverId         - Internal server DB ID
-   * @param personaLineageId - Persona lineage to load for
-   * @param conditioningType - Optional filter by conditioning type
-   * @returns Array of ConditioningGroup aggregates
-   */
   async loadGroupsForPersona(
     serverId: number,
     personaLineageId: number,
@@ -84,21 +64,10 @@ class ConditioningMemoryRepository implements IRepository<ConditioningExportShap
     return this.sqlLoadConditioningGroupsForPersona(serverId, personaLineageId, conditioningType);
   }
 
-  /**
-   * Records a single conditioning event (reward or punishment).
-   *
-   * @returns Inserted or updated ConditioningHistoryRow, or null on failure
-   */
   async recordEvent(params: ConditioningEventParams): Promise<ConditioningHistoryRow | null> {
     return this.sqlRecordConditioningEvent(params);
   }
 
-  /**
-   * Enables or disables reward/punishment conditioning for a specific persona.
-   *
-   * @param personaId        - Internal tomori DB ID
-   * @param conditioningType - Type to toggle (reward | punish)
-   */
   async setPersonaConditioningEnabled(
     personaId: number,
     conditioningType: ConditioningType,
@@ -107,13 +76,6 @@ class ConditioningMemoryRepository implements IRepository<ConditioningExportShap
     return this.sqlSetPersonaConditioningEnabled(personaId, conditioningType, enabled);
   }
 
-  /**
-   * Enables or disables conditioning for all personas in a server.
-   *
-   * @param serverId        - Internal server DB ID
-   * @param conditioningType - Type to toggle (reward | punish)
-   * @returns Number of personas updated
-   */
   async setServerConditioningEnabled(
     serverId: number,
     conditioningType: ConditioningType,
@@ -122,14 +84,6 @@ class ConditioningMemoryRepository implements IRepository<ConditioningExportShap
     return this.sqlSetServerConditioningEnabled(serverId, conditioningType, enabled);
   }
 
-  /**
-   * Deletes specific conditioning groups for a persona lineage.
-   * Returns the count of deleted rows.
-   *
-   * @param serverId         - Internal server DB ID
-   * @param personaLineageId - Persona lineage to purge
-   * @param groups           - Groups to delete (conditioningType + actionKey + reasonNormalized)
-   */
   async deleteGroupsForPersona(
     serverId: number,
     personaLineageId: number,
@@ -427,29 +381,18 @@ class ConditioningMemoryRepository implements IRepository<ConditioningExportShap
     }
   }
 
-  /**
-   * Exports conditioning groups for a persona lineage.
-   * The ownerId is interpreted as personaLineageId; serverId defaults to 0
-   * (caller should pass a composite key in Phase 6 #16.7).
-   *
-   * @param ownerId - Persona lineage ID
-   */
   async toExportShape(ownerId: string | number): Promise<ConditioningExportShape | null> {
     const personaLineageId = Number(ownerId);
-    // serverId=0 is a placeholder; Phase 6 #16.7 will refine the owner key shape.
+    // Sentinel serverId 0 avoids matching real servers because IRepository passes only a single ownerId.
     const groups = await this.sqlLoadConditioningGroupsForPersona(0, personaLineageId);
     if (!groups.length) return null;
     return { persona_lineage_id: personaLineageId, groups };
   }
 
-  /**
-   * Conditioning import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
-   */
+  // This returns false intentionally to satisfy IRepository because ImportExportRepository owns conditioning imports.
   async fromExportShape(_ownerId: string | number, _data: ConditioningExportShape): Promise<boolean> {
     return false;
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const conditioningMemoryRepository = new ConditioningMemoryRepository();

@@ -1,14 +1,3 @@
-/**
- * Mechanically renames all snake_case `tomori_*` field/column references to
- * their `persona_*` equivalents across the `src/` tree, following migration 016.
- *
- * Excluded files (intentional preservations):
- *   - src/types/preset/presetExport.ts: `tomori_nickname` is an external PNG metadata key
- *   - src/types/db/schema.ts: already updated; `tomori_config_id` is vestigial (callers need removal, not rename)
- *
- * Run: bun run scripts/rename_tomori_fields.ts [--dry-run]
- */
-
 import { readdir } from "node:fs/promises";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,7 +13,6 @@ const REPLACEMENTS: [RegExp, string][] = [
   [/tomori_id/g, "persona_id"],
 ];
 
-// Normalized posix paths relative to project root
 const EXCLUDED = new Set(["src/types/preset/presetExport.ts", "src/types/db/schema.ts"]);
 
 function normalizePath(p: string): string {

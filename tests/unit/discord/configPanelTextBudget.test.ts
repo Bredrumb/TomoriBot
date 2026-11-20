@@ -1,18 +1,3 @@
-/**
- * Text budgeting coverage for Config pages:
- * asserts message-wide Text Display budgets at stored maxima, boundary Unicode handling,
- * and fence breakout immunity.
- *
- * The NovelAI preset and Switch Models matrices run on {@link BUDGET_LOCALE} rather than every
- * locale, because they are the expensive sweeps and rendered length decides where the message-wide
- * budget binds. With practical preset strings `es-419` renders the longest total of any locale and
- * every locale stays far below the budget. With oversized strings, truncation fills a fixed budget,
- * so every locale renders the identical total; the equality case in the NovelAI block pins that, and
- * fails if a translation ever breaks it instead of silently narrowing the sweep.
- *
- * The stored-maxima sweep keeps every locale: its truncation-tightness check detects truncation by
- * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
- */
 import { DEFAULT_HUMANIZER_SETTINGS, humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ChannelType, ComponentType, type ActionRowData, type ButtonComponentData } from "discord.js";
@@ -72,19 +57,16 @@ import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy, localizedProse } f
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
-/** The locale whose rendered text is longest; see the file header for why one locale suffices. */
+// es-419 renders the longest text of any locale, so sweeping it alone still binds the tightest budget without running
+// expensive matrices in every locale.
 const BUDGET_LOCALE = "es-419";
 
-/** As many tags as the tag modal accepts: MAX_TAGS entries whose comma-joined form fills TAGS_MODAL_MAX_LENGTH. */
 const MAX_MODAL_IMAGE_TAGS = Array.from({ length: MAX_TAGS }, (_, index) =>
   String(index).padStart(Math.floor((TAGS_MODAL_MAX_LENGTH + 2) / MAX_TAGS) - 2, "t"),
 );
 
-/**
- * Read statuses that render differently. `stale` sets the same `writesDisabled` flag as
- * `unavailable` for every panel here, and only `unavailable` adds the notice that changes the
- * rendered text, so sweeping it would rebuild identical payloads.
- */
+// "stale" is omitted because it shares writesDisabled with "unavailable" without adding notice text, so sweeping it
+// only rebuilds identical payloads.
 const RENDERING_READ_STATUSES: readonly PanelReadStatus[] = ["fresh", "unavailable"];
 
 beforeAll(async () => initializeLocalizer());
@@ -145,7 +127,6 @@ const MAX_NUDGE_SETTINGS: NaturalNudgesSettingsView = {
   },
 };
 
-/** Server 9 and the id-derived nickname are this suite's defaults, so both stay off the factory. */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
   return createPersona({
     server_id: 9,
@@ -154,10 +135,6 @@ function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): 
   });
 }
 
-/**
- * Trigger slice for behavior pages that never read it, carrying the loader's defaults so the view
- * matches what a server with no stored trigger config produces.
- */
 const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
   randomTriggers: [],
   cascadeLimit: 3,
@@ -168,10 +145,6 @@ const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
   cooldownLength: 5,
 };
 
-/**
- * A channels view whose every required slice is present and empty. A fixture spreads it and
- * overrides the slice its own page renders, so the page still receives the slices it never reads.
- */
 const EMPTY_CHANNELS_VIEW: ConfigChannelsView = {
   destinations: { thoughtLogChannelId: null, welcomeChannelId: null, welcomePersonaId: null, welcomePrompt: null },
   autoTrigger: { enabledChannels: [], personaOverrides: [], threshold: 0, maxThreshold: 0 },
@@ -426,7 +399,6 @@ function makeExplicitSlotView(
   };
 }
 
-/** Switched-off capabilities note in yellow; enabled ones with nothing usable behind them note in red. */
 function capabilityNoteLine(locale: string, key: string): string {
   const circle = key.endsWith("_disabled_direction") ? "🟡" : "🔴";
   return formatPanelProse(withLinePrefix("> ", `- ${circle} ${localizer(locale, key)}`));
@@ -494,14 +466,10 @@ function makeVoicesView(samples: readonly VoiceSampleRow[], totalSampleCount: nu
   };
 }
 
-// Tightness tolerances at stored maxima:
-// When dynamic content is truncated, rendered message Text Display total should be tight to the limit.
-// For character-cut bounded text previews (markdown fenced blocks, text prompts), cutting stops within 3 characters
-// of available budget.
+// Character-cut previews stop within 3 characters of the available budget when truncated.
 const PREVIEW_TIGHTNESS_TOLERANCE = 3;
-// For collection-row lists (e.g. channel lists), trimming is whole-row discrete units (channel mentions + newlines +
-// hidden notices), where a single channel row is ~25 characters. Multi-section pages (e.g. Channels Rules with 3
-// sections) compound this waste across independent truncations plus a floor division remainder of up to 2 characters.
+// Multi-section channel pages trim whole ~25-char rows independently across three sections
+// plus up to 2 remainder characters from floor division.
 const COLLECTION_ROW_TIGHTNESS_TOLERANCE = 80;
 // An Auto-Trigger row also carries the escaped persona nickname, which costs 112 characters in this fixture.
 const AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE = 112;
@@ -1162,10 +1130,8 @@ describe("NovelAI preset Parameters budgeting", () => {
   }
 
   it("renders the oversized profile to the same total in every locale", () => {
-    // An oversized preset name is truncated into a fixed codepoint budget, and this panel's
-    // translations preserve key length, so every locale fills that budget exactly. Asserting the
-    // equality is what lets the profile sweep above run on one locale: if a translation ever
-    // changes that, this fails instead of silently narrowing the sweep.
+    // Every locale fills the fixed oversized-name budget equally, so asserting equality catches
+    // translation changes that would silently invalidate the single-locale sweep above.
     const presets = makeNaiPresetCatalog(24, 3, true);
     const totals = RUNTIME_LOCALES.map((locale) =>
       getPayloadTextTotal(buildNaiParametersPayload(locale, "fresh", true, ["novelai", "google"], presets, 0)),
@@ -2333,8 +2299,8 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
     expect(attgDisplay?.match(/```/g)).toHaveLength(8);
   });
 
-  // Three backticks are the one run length a literal triple-backtick replacement handles. Five and
-  // eight survive it, and survive applying it twice, so the run length is the discriminator here.
+  // Run lengths of five and eight survive literal triple-backtick replacement even when applied
+  // twice, so sweeping lengths 2-12 prevents a naive replacement from passing.
   it.each([2, 3, 4, 5, 6, 7, 8, 9, 12])("contains a backtick run of %i inside the fence", (runLength) => {
     const run = "`".repeat(runLength);
     const payload = buildConfigPanelPayload({
@@ -2765,10 +2731,6 @@ describe("config pages for a workspace with nothing configured", () => {
     { workspaceKind: "dm", isManager: true },
   ];
 
-  /**
-   * Every page view as its loader returns it for a workspace with no catalogs, collections, or
-   * selections, which is the state a page-specific fixture tends to skip by supplying one entry.
-   */
   function buildEmptyViews(actor: ConfigActor) {
     const behaviorView: ConfigBehaviorView = {
       general: {

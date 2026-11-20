@@ -17,10 +17,6 @@ const defaultLocale = "en";
 
 const PAGE_EXTENSIONS = [".md", ".mdx"];
 
-/**
- * Resolves a docs route to its source file. A route that ends at a directory index has four
- * possible sources; anything else is a page file.
- */
 function resolveRoute(route: string): string | undefined {
   const withoutFragment = route.split("#")[0];
   const relativePath = withoutFragment.replace(/^\//, "").replace(/\/$/, "");

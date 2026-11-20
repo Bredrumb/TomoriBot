@@ -9,13 +9,6 @@ import { log } from "@/utils/misc/logger";
 import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import type { AppEnvironment } from "@/types/config";
 
-/**
- * Initializes the database, cleans up expired cooldowns, and sets up the pg_cron
- * job for recurring cooldown cleanup (production environments only).
- *
- * Exits the process on critical DB initialization failure.
- *
- */
 export async function initDatabase(environment: AppEnvironment): Promise<void> {
   log.section("Initializing Database...");
 
@@ -50,7 +43,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     }
   } catch (error) {
     log.warn("Error during startup cooldowns cleanup:", error);
-    // Non-critical, so continue startup
   }
 
   if (!managesSchema) {
@@ -127,7 +119,7 @@ function recordPresetArtPhase(phase: PresetArtPhase, status: PresetArtPhaseStatu
   });
 }
 
-/** Production hides success logs, so phase markers remain in JSONL if memory pressure ends a run. */
+// Production hides success logs, so phase markers remain in JSONL if memory pressure ends a run.
 export async function measurePresetArtPhase<T>(phase: PresetArtPhase, action: () => Promise<T>): Promise<T> {
   const startedAt = performance.now();
   recordPresetArtPhase(phase, "started");
@@ -142,7 +134,6 @@ export async function measurePresetArtPhase<T>(phase: PresetArtPhase, action: ()
   }
 }
 
-/** Seeds catalog art after gateway readiness, when the bot has storage credentials. */
 export async function seedStorageBackedCatalogs(): Promise<void> {
   try {
     const { spriteSeed, avatarSeed, characterReferenceSeed } = await measurePresetArtPhase("total", () =>

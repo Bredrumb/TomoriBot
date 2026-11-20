@@ -33,7 +33,6 @@ interface KoboldBehavior {
   unload?: "accept" | "reject" | "throw";
 }
 
-/** A fake backend that records control calls and tracks whether its model is loaded. */
 function stubBackend(kobold: KoboldBehavior = {}) {
   const calls: string[] = [];
   let loaded = true;

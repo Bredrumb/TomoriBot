@@ -2,13 +2,12 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { VERBATIM_TOOL_CALLING_CONTEXT_DEPTH } from "@/utils/tools/verbatimToolCalling";
 import { TIME_AWARENESS_NOTE_DEPTH } from "@/utils/text/context/timeAwareness";
 
-/** Zones identify system-message content, user reference blocks before history, conversation history, and positional tail guidance. */
 type PromptZone = "system" | "reference" | "history" | "tail";
 
-/** Volatility identifies config-only edits (static), memory or asset writes (slow), per-turn selection (turn), and wall-time or presence changes (clock). */
 type PromptVolatility = "static" | "slow" | "turn" | "clock";
 
-/** Simplified-message anchors run after that message's date spacer, while dialogue-depth anchors count emitted history items from the end. */
+// Anchor modes differ: simplified-message inserts after that message's date spacer, whereas dialogue-depth counts
+// emitted history items from the end.
 type PromptAnchor =
   | { kind: "block" | "history" | "before-latest-pair" | "append" }
   | { kind: "simplified-message"; depth: number | "configured" }
@@ -396,7 +395,8 @@ function resolveTailSlotIndex(items: StructuredContextItem[]): number {
   return index;
 }
 
-/** Returns the last item above the tail slot, marked even when the slot is empty, or undefined when no item precedes it, without recounting speaker turns. */
+// The CACHEABLE_PREFIX_END marker is placed on the last item above the tail slot (even when empty), so the boundary
+// resolves without recounting speaker turns.
 export function getCacheablePrefixBoundary(items: StructuredContextItem[]): StructuredContextItem | undefined {
   return items.find((item) => (item as PromptLayoutItem)[CACHEABLE_PREFIX_END]);
 }

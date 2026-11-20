@@ -40,7 +40,6 @@ function serverMetadata(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Serves JSON documents by exact URL and answers 404 elsewhere, recording each requested URL. */
 function documents(routes: Record<string, unknown>): { fetchFn: FetchLike; requested: string[] } {
   const requested: string[] = [];
   const fetchFn: FetchLike = async (input) => {

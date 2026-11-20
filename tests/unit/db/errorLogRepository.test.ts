@@ -4,12 +4,8 @@ import type { sql } from "@/utils/db/client";
 const queries: string[] = [];
 let insertRejection: Error | null = null;
 
-/**
- * Injected in place of the real `sql`, recording the normalized statement text so a test can
- * assert which statements ran. Injection rather than `mock.module`: Bun registers module mocks
- * process-wide for the whole run and never undoes them, so a mocked `sql` would answer queries
- * in every later test file too.
- */
+// Dependency injection avoids mock.module because Bun registers module mocks process-wide permanently and would
+// answer sql queries in later test files.
 function fakeSql(strings: TemplateStringsArray, ..._values: unknown[]): Promise<unknown[]> {
   const text = strings.join(" ? ").replace(/\s+/g, " ").trim();
   queries.push(text);

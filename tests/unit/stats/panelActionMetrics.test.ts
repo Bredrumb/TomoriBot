@@ -137,8 +137,8 @@ describe("panel_action failure reporting", () => {
     try {
       await recordPanelActionStat({ action, serverId: 1, userDiscId: "user-1" }, failingDeps);
 
-      // Not log.warn, which the production default level drops before either sink. A silently
-      // dead success counter previously left no trace anywhere.
+      // Must use log.error instead of log.warn because production's default error level drops warnings before
+      // either sink.
       expect(errors).toHaveLength(1);
       expect(errors[0]?.context?.errorType).toBe("panel_action_stat_write_failed");
       // An error_logs insert would queue on the pool whose failure is being reported.
@@ -166,7 +166,6 @@ describe("panel_action failure reporting", () => {
       await recordPanelActionStat({ action, serverId: 1, userDiscId: "user-1" }, failingDeps);
       expect(errors).toHaveLength(1);
 
-      // A second outage after a recovery is a new incident and must be reported again.
       await recordPanelActionStat(
         { action, serverId: 1, userDiscId: "user-1" },
         { loadUserRow: async () => ({ user_id: 9 }), record: () => {} },

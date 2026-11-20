@@ -4,16 +4,11 @@ import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { ErrorContext } from "@/types/db/schema";
 import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
-/**
- * Event handler for registering commands when the bot is ready
- */
 export default async (client: Client): Promise<void> => {
   if (!isPrimaryProcess()) return;
   try {
     log.section("Registering application commands");
 
-    // DYNAMIC FIX: Get the ID directly from the logged-in client
-    // We still use process.env.DISCORD_TOKEN since we know it exists (bot wouldn't be running without it)
     const discordToken = process.env.DISCORD_TOKEN;
     const applicationId = client.user?.id || client.application?.id;
 
@@ -41,8 +36,7 @@ export default async (client: Client): Promise<void> => {
 
     const rest = new REST().setToken(discordToken);
 
-    // Register globally for both production and development
-    // Guild-only restrictions are handled via InteractionContextType in command definitions
+    // Guild-only commands enforce scope via InteractionContextType rather than guild-scoped registration.
     log.info("Registering commands globally");
 
     try {

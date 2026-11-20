@@ -71,9 +71,7 @@ describe("/reset command registration", () => {
   it("proves /server config remove is completely dissolved and absent from registration and locales", async () => {
     const { executionMap } = await loadCommandData();
 
-    // /server is listed in configRegistration.test.ts's DISSOLVED_ROOTS, so `executionMap.get("server")`
-    // is legitimately undefined; `?? false` keeps this assertion meaningful either way, rather than
-    // requiring the root to still exist.
+    // `executionMap.get("server")` is undefined because /server is dissolved, so `?? false` keeps the assertion valid.
     const serverExecutions = executionMap.get("server");
     expect(serverExecutions?.has("config.remove") ?? false).toBe(false);
 

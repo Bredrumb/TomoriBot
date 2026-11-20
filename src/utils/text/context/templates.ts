@@ -33,10 +33,6 @@ export type MentionConverter = (
   identityValues?: { userFormatted?: string; userTerm?: string },
 ) => Promise<string>;
 
-/**
- * Resolves ST-style random choice macros that can appear in imported presets
- * or prompt fields. Each macro occurrence is rolled independently.
- */
 function resolveRandomChoiceMacros(text: string): string {
   return text.replace(
     RANDOM_CHOICE_MACRO_REGEX,
@@ -138,14 +134,11 @@ export async function buildPromptContextItems(params: {
   if (!params.isUserImpersonation) {
     const channelOverride = params.channelPromptOverride;
 
-    // Resolve the server-level system prompt (or default fallback).
     const baseSystemPrompt = params.presetOwnsSystemPrompt
       ? null
       : params.tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
 
-    // Replace mode: the channel prompt fully takes over the system-prompt slot's
-    //    content (persona prompt + attributes below are untouched). Otherwise keep
-    //    the server/default system prompt in that slot.
+    // Replace mode swaps only the server system prompt slot so persona prompt and attributes stay intact.
     const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
 
     if (systemPrompt) {
@@ -168,8 +161,6 @@ export async function buildPromptContextItems(params: {
       }
     }
 
-    // Append mode: emit the channel prompt as its own distinct block placed
-    //    immediately after the system prompt (and before the persona prompt).
     if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
       const expandedChannelPrompt = await params.toolPromptMacroResolver.expand(channelOverride.prompt);
       if (expandedChannelPrompt.trim()) {

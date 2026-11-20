@@ -126,10 +126,8 @@ export async function execute(
         extension: "json",
       });
 
-      // Canonical PresetExport payload (identical to the PNG tEXt chunk) so the
-      // file round-trips through /persona import's validatePresetFile() path.
-      // The `note` and `readable` extras are for humans only: the import Zod
-      // schemas use non-strict z.object(), which strips unknown keys on parse.
+      // Extends the canonical PresetExport payload with human-only extras, which /persona import's non-strict Zod schemas
+      // strip on parse so the file still round-trips.
       const importableJsonExport = {
         ...presetData,
         note: localizer(locale, "commands.persona.export.json_importable_note"),
@@ -170,7 +168,6 @@ export async function execute(
       return;
     }
 
-    // Resolve avatar image (alter persona avatar when available, otherwise server avatar)
     let avatarBuffer: Buffer;
     try {
       let selectedAvatarBuffer: Buffer | null = null;
@@ -194,10 +191,7 @@ export async function execute(
         }
       }
 
-      avatarBuffer =
-        selectedAvatarBuffer ??
-        // In DMs, getServerAvatar will return bot's default avatar when guild is null
-        (await getServerAvatar(interaction.guild, client));
+      avatarBuffer = selectedAvatarBuffer ?? (await getServerAvatar(interaction.guild, client));
     } catch (error) {
       log.error(`Failed to get avatar for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}:`, error as Error);
       await replyInfoEmbed(interaction, locale, {
@@ -294,7 +288,6 @@ export async function execute(
       name: filename,
     });
 
-    // Send to channel with embedded image (visible to everyone for transparency)
     await deliverExport({
       embeds: [
         new EmbedBuilder()

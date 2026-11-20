@@ -6,29 +6,17 @@ import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 import { getShardTopology } from "@/utils/discord/shardOwnership";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
-// Cycle delay in milliseconds (1 minute)
 const CYCLE_DELAY = 60000;
 
-// Tomori's birthday (May 11)
-const BIRTHDAY_MONTH = 4; // 0-indexed (April = 3, May = 4)
+// Tomori's character birthday is May 11 (Date.getMonth is 0-indexed).
+const BIRTHDAY_MONTH = 4;
 const BIRTHDAY_DAY = 11;
 
-/**
- * Checks if today is Tomori's birthday (May 11).
- * @returns {boolean} True if today is May 11, false otherwise.
- */
 function isTomoriBirthday(): boolean {
   const now = new Date();
   return now.getMonth() === BIRTHDAY_MONTH && now.getDate() === BIRTHDAY_DAY;
 }
 
-/**
- * Posts the current Discord guild count to Top.gg once during startup.
- * Only runs in production and only when TOPGG_TOKEN is configured.
- * Non-critical, so failures are logged as warnings and do not affect startup.
- *
- * @param client - The Discord client instance (must be ready, provides bot ID and guild cache).
- */
 async function postTopggStats(client: Client, serverCount: number): Promise<boolean> {
   const isProduction = process.env.NODE_ENV === "production";
   const topggToken = process.env.TOPGG_TOKEN;
@@ -64,9 +52,6 @@ async function postTopggStats(client: Client, serverCount: number): Promise<bool
   return true;
 }
 
-/**
- * Sets the bot's status and logs startup information.
- */
 const handler = async (client: Client): Promise<void> => {
   log.section(`Launching ${client.user?.tag} on Discord...`);
 
@@ -78,7 +63,8 @@ const handler = async (client: Client): Promise<void> => {
   const birthdayStatus: ActivityOptions = {
     name: "Celebrating my birthday!",
     type: ActivityType.Streaming,
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", // Required for Streaming type
+    // Discord requires a YouTube or Twitch URL for ActivityType.Streaming.
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   };
 
   let topggPosted = false;
@@ -126,7 +112,7 @@ const handler = async (client: Client): Promise<void> => {
   await updateStatus();
 
   setInterval(() => {
-    void updateStatus(); // Use void to indicate intentional fire-and-forget
+    void updateStatus();
   }, CYCLE_DELAY);
 };
 

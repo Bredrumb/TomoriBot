@@ -1,8 +1,3 @@
-/**
- * Tool Initialization System
- * Automatically discovers and registers all available tools with the central registry
- */
-
 import path from "node:path";
 import { log } from "../utils/misc/logger";
 import { ToolRegistry } from "./toolRegistry";
@@ -10,21 +5,6 @@ import getAllFiles from "../utils/misc/ioHelper";
 import { BaseTool } from "../types/tool/interfaces";
 import type { ErrorContext } from "../types/db/schema";
 
-/**
- * Initialize all tools by auto-discovering and registering them with the central registry
- * This should be called once during application startup
- *
- * Auto-discovers tools from:
- * - src/tools/functionCalls/ - Built-in function call tools
- * - src/tools/webSearch/      - Unified web_search tool (Brave, SearXNG, DuckDuckGo chain)
- * - src/tools/fetchUrl/       - Unified fetch_url tool (hidden engine chain)
- *
- * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
- * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.
- * They are intentionally excluded from auto-discovery.
- *
- * MCP tools are still handled by Google's official mcpToTool() - no manual registration needed
- */
 export async function initializeTools(): Promise<void> {
   try {
     log.info("Initializing tool registry with auto-discovery...");
@@ -43,11 +23,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // Auto-discover unified webSearch tool(s).
-    //    The webSearch/ folder contains a single LLM-visible class (WebSearchTool)
-    //    plus engine-internal modules. We scan only `webSearchTool.ts` to keep
-    //    the engine modules (which export instances, not BaseTool subclasses)
-    //    out of registration.
+    // Scan only webSearchTool.ts so internal engine modules are not registered as LLM-visible tools.
     const webSearchPath = path.join(process.cwd(), "src", "tools", "webSearch");
     const webSearchFiles = (await getAllFiles(webSearchPath)).filter((file) => file.endsWith("webSearchTool.ts"));
 
@@ -58,8 +34,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
-    //    the public BaseTool file and keep engine modules internal.
+    // Scan only fetchUrlTool.ts so internal fetch engine modules stay excluded from tool registration.
     const fetchUrlPath = path.join(process.cwd(), "src", "tools", "fetchUrl");
     const fetchUrlFiles = (await getAllFiles(fetchUrlPath)).filter((file) => file.endsWith("fetchUrlTool.ts"));
 
@@ -85,11 +60,6 @@ export async function initializeTools(): Promise<void> {
   }
 }
 
-/**
- * Discover and register tools from a specific file
- * @param filePath - Absolute path to the tool file
- * @param source - Source identifier for logging (e.g., "functionCalls", "brave")
- */
 async function discoverAndRegisterTools(filePath: string, source: string): Promise<number> {
   let discoveredCount = 0;
 

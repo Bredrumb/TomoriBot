@@ -25,11 +25,6 @@ describe("channel delivery continuity — last delivered identity", () => {
     expect(lastWebhookIdentity(CHANNEL)).toBeNull();
   });
 
-  /**
-   * The whole point of storing the identity rather than re-resolving the sprite: the username
-   * actually sent may be the DECORATED group-break form. Post-turn artifacts must reuse that
-   * exact string, or Discord sees a different author and splits the group.
-   */
   it("returns the decorated username verbatim so later sends group with it", () => {
     const decorated: ResolvedWebhookIdentity = {
       username: "Ellen (shy)",
@@ -69,11 +64,6 @@ describe("channel delivery continuity — last delivered identity", () => {
     expect(lastWebhookIdentity(CHANNEL)?.username).toBe("Ellen (mad)");
   });
 
-  /**
-   * Reverting to an ordinary bot message must clear the identity. Otherwise a sticker sent
-   * afterwards would be posted under a persona name that nothing adjacent is using, so grouping
-   * with nothing and looking like a stray impostor message.
-   */
   it("clears the identity once an ordinary bot message is delivered", () => {
     recordChannelDeliveredWebhookIdentity(
       CHANNEL,
@@ -115,16 +105,10 @@ describe("channel delivery continuity — last delivered identity", () => {
     expect(lastWebhookIdentity(CHANNEL)).toBeNull();
 
     recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen" }, messageId, null, "1400000000000000002");
-    // ...and recording an identity must not disturb the alternation: a sprite CHANGE still
-    // flips to the decorated name.
+    // Recording an identity must not disturb the alternation: a sprite change still flips to the decorated name.
     expect(advanceChannelSpriteGroupParity(CHANNEL, "shy", messageId)).toBe(true);
   });
 
-  /**
-   * The identity is reused by post-turn artifacts, which want the name the final message went
-   * out under regardless of who spoke since, so it must not inherit the sprite alternation's
-   * adjacency reset.
-   */
   it("keeps returning the delivered identity after another author posts", () => {
     recordChannelDeliveredWebhookIdentity(
       CHANNEL,

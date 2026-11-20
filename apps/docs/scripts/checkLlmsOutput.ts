@@ -34,19 +34,8 @@ function collectTextFiles(directory: string): string[] {
   return files;
 }
 
-/**
- * Locale roots whose page tree exists, which is the set of routes the build emits.
- *
- * Discovery reads the directory, but the order comes from `PUBLISHED_DOCS_LOCALES` because that is
- * the order `localesWithEntry` emits hreflang alternates in, and the pair check below compares the
- * two sequences element by element. Sorting here instead would agree with the emitter only while
- * `DOCS_LOCALES` happens to be declared alphabetically after the default locale: `es-419` is
- * declared after `pt-BR` but sorts before `ja`, which made every translated page fail the pair check.
- *
- * The default locale is resolved by name rather than by taking the first entry because
- * `readdirSync` order is filesystem-dependent: an indexed ext4 directory returns hash order, so a
- * translated locale could otherwise be mistaken for the default one.
- */
+// Order must follow `PUBLISHED_DOCS_LOCALES` rather than filesystem or alphabetical order because `localesWithEntry`
+// emits hreflang alternates in that sequence.
 function publishedLocaleIds(): string[] {
   const present = new Set(
     readdirSync(contentRoot, { withFileTypes: true })
@@ -64,10 +53,6 @@ function publishedLocaleIds(): string[] {
   return ids;
 }
 
-/**
- * Page ids present in one locale's source tree, relative to that locale. A page is one `<id>` entry
- * where a directory index collapses to `<dir>/index`.
- */
 function localeRouteIds(locale: string): string[] {
   const localeRoot = join(contentRoot, locale);
   const ids: string[] = [];
@@ -88,12 +73,8 @@ function localeRouteIds(locale: string): string[] {
   return ids;
 }
 
-/**
- * Every page id the site builds at all, which is the union of the locale trees.
- *
- * A fallback route exists only in the build output, never in its own locale's tree, so a per-locale
- * listing cannot find it. Walking the union is what makes the fallback assertion meaningful.
- */
+// Union across all locale trees is required because fallback routes only exist in build output and never appear in
+// the target locale's own source directory.
 function allRouteIds(): string[] {
   const ids = new Set<string>();
   for (const locale of [defaultLocale, ...translatedLocales]) {
@@ -130,10 +111,8 @@ for (const file of collectTextFiles(distRoot)) {
   }
 }
 
-// Agent-facing text sets stay English-only. `starlight-llms-txt` selects the default locale's
-// entries, so a translated page appearing here means that assumption broke and every locale would
-// now be duplicated into the files an agent reads. Matching the site URL rather than a bare `/ja/`
-// keeps a documented repository path such as `src/locales/ja/` from tripping the check.
+// Match the full site URL instead of a bare `/${locale}/` so documented repo paths like `src/locales/ja/` do not trip
+// this English-only check.
 for (const file of collectTextFiles(distRoot)) {
   const content = readFileSync(file, "utf8");
   const leakedLocale = translatedLocales.find((locale) =>
@@ -144,15 +123,10 @@ for (const file of collectTextFiles(distRoot)) {
   }
 }
 
-/** Whether a locale has a real source file for a page id, mirroring the docs routing rule. */
 function localeHasPage(locale: string, pageId: string): boolean {
   return entryFileCandidates(pageId).some((candidate) => existsSync(join(contentRoot, locale, candidate)));
 }
 
-/**
- * Source filenames that produce a page id, matching the docs routing rule: a directory index has
- * four possible sources, and `.md` and `.mdx` are interchangeable for any page.
- */
 function entryFileCandidates(pageId: string): string[] {
   if (pageId === "index") return ["README.md", "README.mdx", "index.md", "index.mdx"];
   if (pageId.endsWith("/index")) {
@@ -162,17 +136,12 @@ function entryFileCandidates(pageId: string): string[] {
   return [`${pageId}.md`, `${pageId}.mdx`];
 }
 
-/** Whether a page id falls under an internal-only section, which is never advertised. */
 function isInternalPage(pageId: string): boolean {
   return pageId === "wiki" || pageId.startsWith("wiki/");
 }
 
-/**
- * hreflang must describe real translations. Starlight emits an alternate for every configured
- * locale regardless of whether a page exists, so this checks the built HTML rather than trusting
- * the route middleware: a fallback route serving another locale's content must carry none, and a
- * page present in every locale must carry the full set.
- */
+// Built HTML is checked directly instead of route middleware because Starlight emits hreflang alternates for every
+// configured locale even when no page exists.
 const alternatePattern = /<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g;
 let checkedPairs = 0;
 let checkedFallbacks = 0;
@@ -204,8 +173,7 @@ for (const locale of translatedLocales) {
     if (!isTranslation) continue;
 
     checkedPairs += 1;
-    // One alternate per locale that really has the page, in the published locale order, plus
-    // x-default. A third tree changes both lists, so neither can be hardcoded to the current pair.
+    // Computed dynamically from published locales rather than hardcoded pairs so adding a third locale tree works.
     const expected = [
       ...publishedLocales.filter((candidate) => localeHasPage(candidate, pageId)),
       "x-default",
@@ -230,8 +198,7 @@ if (!/<meta[^>]+name="robots"[^>]+content="noindex"/i.test(wikiHtml)) {
   throw new Error("English wiki pages must include a noindex robots directive");
 }
 
-// The product site owns language discovery, so the docs root must send readers to the default locale.
-// Cloudflare uses `_redirects`; Astro's generated page preserves the behavior on other static hosts.
+// Check both `_redirects` (Cloudflare) and `index.html` (other static hosts) because the product site owns discovery.
 const rootHtml = readRequired("index.html");
 if (!/<meta[^>]+http-equiv="refresh"[^>]+url=\/en\/introduction\//i.test(rootHtml)) {
   throw new Error("The documentation root must redirect to the default-locale introduction");
@@ -241,9 +208,8 @@ if (!/^\/ \/en\/introduction\/ 301$/m.test(redirectRules)) {
   throw new Error("The Cloudflare redirect file must permanently redirect the docs root to English");
 }
 
-// `robots.txt` advertises the sitemap unconditionally, so a build that omits one publishes a dead
-// reference to every crawler. @astrojs/sitemap reports a rejected option as a warning and then skips
-// generation for the whole site, which leaves an exit code of 0 and no sitemap.
+// Verify sitemap files exist because @astrojs/sitemap only warns on a rejected option and exits 0 without generating
+// them, leaving robots.txt broken.
 readRequired("sitemap-index.xml");
 const sitemapUrlset = readRequired("sitemap-0.xml");
 const annotatedLocales = new Set(Array.from(sitemapUrlset.matchAll(/hreflang="([^"]+)"/g), (match) => match[1]));

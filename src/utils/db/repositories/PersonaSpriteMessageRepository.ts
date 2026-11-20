@@ -9,20 +9,9 @@ export type PersonaSpriteMessageRecordInput = {
   channelDiscId: string;
 };
 
-/**
- * Persists the message → sprite-label mapping for webhook-delivered sprite messages.
- *
- * Rows are immutable (a sent message's sprite never changes), so writes never
- * require cache invalidation, so callers seed the read cache directly instead.
- * Missing rows degrade gracefully: context rebuilding falls back to the plain
- * persona name, never an error.
- */
+// Rows are immutable, so writes skip cache invalidation and seed the cache directly; missing rows degrade context
+// rebuilding to the plain persona name.
 class PersonaSpriteMessageRepository {
-  /**
-   * Records that a webhook message was delivered with a sprite label.
-   *
-   * @returns true when the row was written (or already existed), false on error
-   */
   async record(input: PersonaSpriteMessageRecordInput): Promise<boolean> {
     try {
       await sql`
@@ -44,14 +33,8 @@ class PersonaSpriteMessageRepository {
     }
   }
 
-  /**
-   * Batch-loads sprite mappings for a set of Discord message IDs.
-   * Single round trip via `message_disc_id = ANY(...)` so context builds can
-   * resolve an entire history window in one query.
-   *
-   * @returns null on query failure, so callers must NOT cache misses in that case,
-   *   or a transient DB error would negative-cache real sprite messages
-   */
+  // Query failures return null instead of an empty map so callers do not negative-cache real sprite messages during
+  // transient DB errors.
   async getByMessageIds(messageDiscIds: string[]): Promise<Map<string, PersonaSpriteMessageRow> | null> {
     const result = new Map<string, PersonaSpriteMessageRow>();
     if (messageDiscIds.length === 0) {
@@ -83,12 +66,6 @@ class PersonaSpriteMessageRepository {
     }
   }
 
-  /**
-   * Deletes mappings older than the retention window. Old rows only matter while
-   * their messages can still appear in a fetched history window.
-   *
-   * @returns number of rows deleted, or 0 on error
-   */
   async pruneOlderThanDays(retentionDays: number): Promise<number> {
     try {
       const rows = await sql<Array<{ message_disc_id: string }>>`

@@ -8,28 +8,20 @@ import { sendFetchProgressNotice } from "./fetchProgressNotice";
 import type { FetchOpts } from "./types";
 import { getFetchUrlRemotePolicy, validateFetchUrlTarget } from "./urlSafety";
 
-/**
- * Validates fetch URL size before downloading
- * Performs HEAD request to check Content-Length header
- */
 async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
   try {
     const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;
 
-    // Perform HEAD request to get Content-Length without downloading body
-    // Use the same DNS validation, pinning, and per-hop redirect checks as the
-    // body fetch. A plain fetch() here could be redirected to IMDS or another
-    // private address before the guarded engine runs.
+    // Use fetchUserRemoteUrl here too because a plain fetch() HEAD could redirect to IMDS before the engine runs.
     const headResponse = await fetchUserRemoteUrl(
       url,
       {
         method: "HEAD",
-        signal: AbortSignal.timeout(5000), // 5 second timeout
+        signal: AbortSignal.timeout(5000),
       },
       getFetchUrlRemotePolicy(),
     );
 
-    // Get Content-Length header (may not always be present)
     const contentLengthHeader = headResponse.headers.get("content-length");
 
     if (!contentLengthHeader) {

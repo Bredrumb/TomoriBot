@@ -1,7 +1,8 @@
 import type { Message } from "discord.js";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 
-/** Filtering on a stale ID would end attribution for good if the bot's application changed: a skipped message can never teach the new one. */
+// Learned application IDs expire after 1 hour because a stale filter skips messages and could never re-learn a
+// changed bot application.
 const APPLICATION_ID_TTL_MS = 60 * 60 * 1000;
 
 export interface ApplicationIdFilter {
@@ -9,7 +10,7 @@ export interface ApplicationIdFilter {
   record(message: Message, instance: MessageProxyInstanceContext): void;
 }
 
-// Learned, not configured: each custom instance runs its own bot. Only a service-confirmed message may teach the ID.
+// Learned only from service-confirmed messages rather than configured because each custom instance runs its own bot.
 export function createApplicationIdFilter(): ApplicationIdFilter {
   const learned = new Map<string, { applicationId: string; verifiedAt: number }>();
   const keyOf = (instance: MessageProxyInstanceContext) => `${instance.instanceId}\0${instance.origin}`;

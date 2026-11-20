@@ -6,10 +6,8 @@ export interface PresetNaturalNudgeDefaults {
   idleNudges: PersonaAuthoredIdleNudge[];
 }
 
-/**
- * Keyed by lineage so every language row shares one set; Active Nudge Decision accuracy was measured
- * against this interest wording.
- */
+// Keyed by lineage so every locale shares one set; Active Nudge Decision accuracy was measured against this exact
+// interest wording.
 export const PRESET_NATURAL_NUDGE_DEFAULTS: Readonly<Record<number, PresetNaturalNudgeDefaults>> = {
   4: {
     talkativeness: 2,

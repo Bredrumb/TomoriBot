@@ -6,7 +6,6 @@ import { config } from "dotenv";
 import { AUDIT_IGNORED_ADVISORIES } from "./lib/auditIgnores";
 import { isVerboseOutput } from "./lib/gateOutput";
 
-/** Shape of every item pushed into the results array */
 type ResultItem = {
   name: string;
   exitCode: number | null;
@@ -15,44 +14,23 @@ type ResultItem = {
   isWarning?: boolean;
   subItems?: string[];
   summary?: string;
-  /** Inline hint shown on failure: takes precedence over the global HINTS lookup */
   hint?: string;
-  /** Used by CATEGORIES to identify test-file buckets without string matching */
   _category?: "unit-test" | "regression-test";
 };
 
-/**
- * Detail level for this run, resolved once in main().
- *
- * Quiet and full differ in exactly one place: whether a check that PASSED prints its
- * output. A failing check prints its full detail under both, because that detail is
- * the reason anyone runs the gate at all. Quiet mode must never be able to hide a
- * finding, only the passing noise around it.
- */
+// Quiet mode hides only passing output because failing checks must always print full detail under both modes.
 let verboseOutput = false;
 
-/** First-party checks in scripts/checks/ that understand `--verbose` / `--no-verbose`. */
 type Command = { argv: string[]; acceptsDetailFlag: boolean };
 
-/**
- * The flag to forward to a first-party check so it picks its own detail level.
- *
- * Always explicit rather than only sent when true, because `--no-verbose` is what lets
- * this process override a `--verbose` it forwards for a sibling. Only our own scripts in
- * scripts/checks/ may receive it: `bun run lint`, `knip`, `bunx tsc` and `bun audit`
- * are third-party CLIs whose argument parsers would reject an unknown flag.
- */
+// Explicitly returns --no-verbose so it overrides inherited verbosity, and applies only to first-party checks because
+// third-party CLIs reject unknown flags.
 function detailFlag(): string {
   return verboseOutput ? "--verbose" : "--no-verbose";
 }
 
-/**
- * Builds the argv to spawn, forwarding the detail flag only to checks that read it.
- *
- * The `--` separator is what delivers the flag to the script itself rather than to
- * bun's own argument parser, which normalizes the two forms inconsistently across
- * platforms.
- */
+// Using the double-dash separator delivers the detail flag because Bun parses bare flags inconsistently across
+// platforms.
 function resolveArgv({ argv, acceptsDetailFlag }: Command): string[] {
   return acceptsDetailFlag ? [...argv, "--", detailFlag()] : argv;
 }
@@ -73,26 +51,13 @@ async function runCheck(
   return { name, exitCode, fatal };
 }
 
-/** How one advisory-graded check reports itself, and what its non-zero exit means. */
 interface WarningCheckOptions {
-  /** True when the child's output contains advisory findings that cannot change the exit code. */
   outputHasWarnings?: (output: string) => boolean;
-  /** Counts advisory findings, so a passing run can collapse them to a number. */
   summarizeWarnings?: (output: string) => string;
-  /** One extra line shown under a non-zero row, for a check that fails as a whole. */
   summarizeFailure?: (output: string) => string | undefined;
-  /** Forwards the detail flag, for a child under scripts/checks/ that reads it. */
   acceptsDetailFlag?: boolean;
-  /**
-   * Whether a non-zero exit is a real failure rather than a finding.
-   *
-   * This is the one thing `runWarningCheck` cannot infer, and getting it wrong is how a
-   * gate goes silent: `knip` reports "found unused things" with exit 1 and `vl` grades it
-   * a warning, so a count is the whole report. `audit-comments` reports unactionable
-   * counts the same way but exits 1 only for errors that are entirely file and line
-   * specific, so its listing is the report. Defaults to true, because silence is the
-   * failure mode that hides bugs.
-   */
+  // Defaults to true so unfamiliar non-zero exits never hide failure output; only set false when exit 1 means a
+  // count-only warning like knip.
   failureNeedsDetail?: boolean;
   blocksOnFailure?: boolean;
 }
@@ -118,9 +83,8 @@ async function runWarningCheck(
   const summary = isWarning ? summarizeWarnings?.(output) || undefined : undefined;
   const subItems = exitCode !== 0 ? summarizeFailure?.(output) : undefined;
 
-  // A failure prints its detail. The exception is a check whose non-zero exit is a
-  // finding the caller has already counted, which is a state the caller has to declare
-  // rather than one inferred from the output having matched a summary.
+  // Failures print full detail unless the caller sets failureNeedsDetail: false for pre-counted non-zero findings like
+  // knip.
   const detailIsReported = (failureNeedsDetail && exitCode !== 0) || (isWarning && !summary && !subItems);
   if (detailIsReported || verboseOutput) {
     console.log(output);
@@ -143,9 +107,7 @@ async function runLocalesCheck(name: string, command: string[]): Promise<ResultI
   const exitCode = await proc.exited;
   const output = stdout + stderr;
 
-  // Exit code 2 means only locale parity issues were found (advisory), and exit code 0
-  // means all keys matched (clean pass). Both stay quiet unless verbose mode is requested;
-  // only fatal errors print their full detail in quiet mode.
+  // Exit code 2 denotes advisory parity gaps and 0 denotes a clean pass, so both stay quiet unless --verbose is set.
   const isFatal = exitCode !== 0 && exitCode !== 2;
   if (isFatal || verboseOutput) {
     console.log(output);
@@ -260,7 +222,6 @@ function displayNameFromTestFile(file: string, topLevelDescribeNames: string[] =
   return humanizeDisplayName(stripTestSuffix(fileNameFromPath(file)));
 }
 
-/** One decoded file-level `<testsuite>` element from bun's JUnit reporter output. */
 type JUnitSuite = {
   name: string;
   file: string;
@@ -290,14 +251,6 @@ function sortTestItems(items: ResultItem[]): ResultItem[] {
   });
 }
 
-/**
- * Parses bun's JUnit XML into one ResultItem per test FILE.
- *
- * Bun emits a file-level `<testsuite>` (where `name` equals the `file` path)
- * plus nested suites for `describe` blocks. We keep the file-level suites for
- * counts and collect direct child describe names as optional display-name hints.
- * Returns `null` when the XML has no usable suites so the caller can fall back.
- */
 export function parseJUnitSuites(xml: string): ResultItem[] | null {
   const fileSuites = new Map<string, Omit<JUnitSuite, "topLevelDescribeNames">>();
   const topLevelDescribeNames = new Map<string, string[]>();
@@ -316,10 +269,8 @@ export function parseJUnitSuites(xml: string): ResultItem[] | null {
     const file = normalizeTestPath(attr(tag, "file"));
     const parent = stack.at(-1);
 
-    // Bun emits `name` and `file` using the host platform's separator, so a file-level
-    // suite is only recognisable once BOTH sides are normalized (on Windows the raw
-    // values are backslash-delimited). `name` itself is stored verbatim because it
-    // doubles as a describe-block label, which is arbitrary user text.
+    // Normalize both `name` and `file` for file-suite matching because Bun uses Windows backslashes, while storing raw
+    // `name` for describe prose.
     const isFileSuite = Boolean(file) && normalizeTestPath(name) === file;
 
     if (isFileSuite) {
@@ -353,12 +304,8 @@ export function parseJUnitSuites(xml: string): ResultItem[] | null {
   );
 }
 
-/**
- * Legacy fallback: parse `bun test`'s piped console output into per-file items.
- * Used only when the JUnit XML is unavailable (older bun, reporter failure).
- * Note: bun omits per-file headers for files that log nothing, so this path can
- * under-report, so the JUnit path above is preferred.
- */
+// Console parsing is a fallback for missing JUnit XML because Bun omits headers for quiet test files, so this path
+// can under-report.
 function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   const testBlocks = output.split(/([a-zA-Z0-9_\\/\-.]+\.test\.ts):/);
   const items: ResultItem[] = [];
@@ -400,17 +347,8 @@ function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   return sortTestItems(items);
 }
 
-/**
- * Runs all tests and returns one ResultItem per test file. Prefers bun's JUnit
- * reporter (reliable per-file enumeration) and falls back to console parsing.
- *
- * On failure the runner's own output is reprinted rather than a per-file subset of it.
- * The runner prints each lane as one buffered block, so extracting only the failing
- * files would mean re-running them, and a targeted re-run in this environment surfaces
- * the application logger's DB and cache chatter instead of a clean assertion diff. The
- * red per-file rows below already name each failing file and the command to reproduce
- * it, so the full output is kept as the backstop it has always been.
- */
+// Failure output reprints the full runner buffer because lanes print whole blocks and targeted re-runs surface noisy
+// DB and cache logger chatter.
 async function runTests(): Promise<ResultItem[]> {
   console.log(`> Running Tests (bun run test)...`);
 
@@ -419,8 +357,7 @@ async function runTests(): Promise<ResultItem[]> {
   const proc = spawn(["bun", "run", "test"], {
     stdout: "pipe",
     stderr: "pipe",
-    // TOMORI_TEST_QUIET suppresses the runner's lane replay, which the per-file rows
-    // below replace. Under --verbose the replay is wanted, so the flag is not set.
+    // Suppress the runner's lane replay via TOMORI_TEST_QUIET in quiet mode because per-file rows replace it below.
     env: {
       ...process.env,
       BUN_TEST_JUNIT_OUTFILE: junitOutfile,
@@ -444,9 +381,7 @@ async function runTests(): Promise<ResultItem[]> {
 
   const resolved = items ?? parseConsoleOutput(output, exitCode);
 
-  // The runner can exit non-zero without any individual file reporting a failure
-  //    (segfault, OOM, harness error, a batch dying before it emits results). Those
-  //    runs must never read as green just because the parsed items all look clean.
+  // Treat a non-zero runner exit with zero failed items (e.g. crash or OOM) as fatal so it never reads as green.
   const unaccountedFailure = exitCode !== 0 && resolved.every((item) => item.exitCode === 0);
   if (unaccountedFailure) {
     resolved.push({
@@ -459,9 +394,7 @@ async function runTests(): Promise<ResultItem[]> {
     });
   }
 
-  // A failing suite prints the runner's output, which is what today's run shows and the
-  // only evidence available when a batch died before any file could report. The quiet
-  // gain is in the green case, where this and the ~360 per-file rows both stay silent.
+  // Print full runner output on any failure or crash because batch deaths may yield no per-file items.
   if (verboseOutput || unaccountedFailure || exitCode !== 0) {
     console.log(output);
   }
@@ -487,7 +420,8 @@ async function runLint(): Promise<ResultItem> {
   let summary = "";
 
   if (exitCode === 0 && (warningsMatch || fixedMatch)) {
-    isWarning = Boolean(warningsMatch); // auto-fixes alone stay green; only actual warnings turn yellow
+    // Auto-fixes alone stay green; only actual warnings turn yellow.
+    isWarning = Boolean(warningsMatch);
     const parts = [];
     if (fixedMatch) parts.push(`fixed ${fixedMatch[1]}`);
     if (warningsMatch) parts.push(`${warningsMatch[1]} warning`);
@@ -503,15 +437,8 @@ async function runLint(): Promise<ResultItem> {
   };
 }
 
-/**
- * Keeps only the `bun audit` package blocks holding a high or critical advisory.
- *
- * `bun audit` groups its output into blocks: an unindented package line, then an
- * indented dependency path per line, then an indented severity line per advisory. A
- * block is kept whole rather than filtered line by line, because a severity line only
- * means something next to the dependency path that reaches it. The trailing counts
- * line and anything after it are unindented and pass through untouched.
- */
+// Whole bun audit package blocks are kept rather than matching severity lines because a severity needs its indented
+// dependency path for context.
 function selectBlockingAuditBlocks(output: string): string {
   const blocks: string[][] = [];
   let current: string[] = [];
@@ -538,27 +465,22 @@ function selectBlockingAuditBlocks(output: string): string {
 async function runAudit(): Promise<ResultItem> {
   console.log(`> Running Dependency Audit (bun audit)...`);
 
-  // bun audit has no working workspace filter: it always audits the whole
-  // lockfile, including apps/docs devDeps. Advisories reaching the gate via
-  // workspace:tomoribot-docs are build-time-only, but still block audit:clean.
-  // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case.
+  // Wrap `bun audit` in cmd.exe on Windows to avoid pipe hangs (workspace filters are unsupported, so docs devDeps
+  // also audit).
   const ignoreFlags = AUDIT_IGNORED_ADVISORIES.map((id) => `--ignore=${id}`);
   let command = ["bun", "audit", ...ignoreFlags];
   if (process.platform === "win32") {
     command = ["cmd.exe", "/d", "/s", "/c", ["bun", "audit", ...ignoreFlags].join(" ")];
   }
 
-  // This is the only check that depends on a remote server, so it is the only one
-  // that can stall indefinitely. Without a bound, an unreachable or slow registry
-  // turns the whole ~15s gate into an open-ended wait.
+  // Bound bun audit with a timeout because it is the only check hitting a remote registry that can stall forever.
   const timeoutMs = Number.parseInt(process.env.TOMORI_VL_AUDIT_TIMEOUT_MS || "60000", 10);
 
   const proc = spawn(command, { stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    // On Windows this kills the cmd.exe wrapper; a lingering child exits on its
-    // own. Either way vl stops waiting, which is the point.
+    // Killing the cmd.exe wrapper on Windows lets vl unblock immediately even if the child exits asynchronously.
     proc.kill();
   }, timeoutMs);
 
@@ -587,17 +509,11 @@ async function runAudit(): Promise<ResultItem> {
   if (/(\d+)\s+critical/i.test(output) && !output.match(/0\s+critical/i)) hasHighOrCritical = true;
   if (/(\d+)\s+high/i.test(output) && !output.match(/0\s+high/i)) hasHighOrCritical = true;
 
-  // The tally line is the only proof that the audit ran to completion. Without it a
-  // non-zero exit could be a transport error or a changed output format, in which case
-  // claiming "no high or critical advisories" would assert something never established.
+  // Require the vulnerability tally line before trusting completion because transport or format failures lack it.
   const parsedTally = /\d+\s+vulnerabilit/i.test(output);
 
-  // bun audit prints every advisory in the lockfile, transitive ones included, which
-  // runs to five figures of lines on this repo while the verdict is one word. Print
-  // only the blocks that carry an advisory at or above the blocking threshold, so the
-  // listing stays proportional to what actually moved the verdict. Low and moderate
-  // advisories still grade yellow below, so suppressing their text cannot hide them.
-  // An unparsed run prints in full, because its output is the only clue to what failed.
+  // Print only high/critical blocks in quiet mode so transitive advisories do not flood output, while keeping full
+  // output when unparsed.
   if (verboseOutput || !parsedTally) {
     console.log(output);
   } else if (hasHighOrCritical) {
@@ -610,40 +526,24 @@ async function runAudit(): Promise<ResultItem> {
     // Audit issues are never contributor-caused; warn locally, block only in the deploy pipeline
     fatal: false,
     isWarning: hasHighOrCritical || exitCode !== 0,
-    // Only a completed run may claim absence, and only a completed clean one has nothing
-    // else to say. Any other state already printed its output above.
+    // Emit the clean summary only on completed exit-0 runs because other outcomes printed above or lack a tally.
     summary: parsedTally && exitCode === 0 ? "(no high or critical advisories)" : undefined,
   };
 }
 
-/**
- * Whether a local database is reachable, so the DB-dependent checks can run.
- * Read lazily inside main() rather than at module scope: `parseJUnitSuites` is
- * imported by its unit test, and loading `.env` as an import side effect would
- * leak real credentials into every other test sharing that process.
- */
+// Checked lazily inside main() rather than at module scope because tests import parseJUnitSuites and module-level
+// .env loading would leak real credentials.
 function isDbConfigured(): boolean {
   return !!(process.env.POSTGRES_PASSWORD || process.env.DATABASE_URL || process.env.POSTGRES_URL);
 }
 
-/**
- * True for the fixed set of named checks, false for per-test-file items.
- *
- * Sections are rendered by independent filters, so an item matching two
- * predicates would print (and be counted) twice. Test files are named after their
- * top-level `describe`, which is arbitrary prose that can easily contain a word a
- * named-check predicate looks for: "Database Only Lifecycle Secrets" matches
- * `includes("Lifecycle")`, for example. Test items are therefore routed solely by
- * `_category`, and every named-check predicate is gated on this guard.
- */
+// Named-check filters must gate on this guard because test names use arbitrary describe prose that can match check
+// substrings and double-count.
 const isNamedCheck = (r: ResultItem): boolean => r._category === undefined;
 
 const CATEGORIES = {
-  // Architectural guards (persona-workflow boundary, text-preview conventions)
-  // are deliberately absent: their scanners are asserted against the real source
-  // tree by tests/unit/checks/, which the test lanes below already run. A named
-  // check here would scan the repo a second time for the same answer. For a
-  // targeted local report, run those test files directly.
+  // Architectural guards (persona-workflow, text-preview) are omitted here because tests/unit/checks/ runs them in the
+  // test lane without rescanning the repo.
   CODE: (r: ResultItem) =>
     isNamedCheck(r) &&
     (r.name.includes("Type Check") ||
@@ -651,8 +551,6 @@ const CATEGORIES = {
       r.name.includes("Runtime Imports") ||
       r.name.includes("SQL Audit") ||
       r.name.includes("Knip")),
-  // Assets and seed data rather than source code: these fail on *content*
-  // (an oversized PNG, a malformed catalog entry), not on how code is written.
   CONTENT: (r: ResultItem) => isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
   SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
@@ -682,7 +580,6 @@ async function main() {
       : "Running Validation Checks... (quiet is the default; pass --verbose for full detail, --no-verbose to force quiet)\n",
   );
 
-  // Run the checks that do not load the complete command graph concurrently.
   const [
     typeCheckResult,
     lintResult,
@@ -705,9 +602,7 @@ async function main() {
     runLint(),
     runCheck("Runtime Imports (bun run check-runtime-imports)", ["bun", "run", "check-runtime-imports"], true, true),
     runWarningCheck("Knip (bun run knip)", ["bun", "run", "knip"], {
-      // knip signals "unused things found" with exit 1 while `vl` grades it a warning, so
-      // its three-figure listing is a finding rather than a failure. Count what it found
-      // so the yellow row stays explained without the listing.
+      // Knip exits 1 on unused exports, so vl grades it as a warning and summarizes its counts instead of failing.
       outputHasWarnings: (output) => /\(\d+\)$/.test(output),
       summarizeWarnings: (output) => {
         const counts = [...output.matchAll(/^(\S[^\n]*?) \((\d+)\)$/gm)].map(([, label, count]) => {
@@ -720,9 +615,7 @@ async function main() {
 
     runWarningCheck("Comment Audit (bun run audit-comments)", ["bun", "run", "audit-comments"], {
       outputHasWarnings: (output) => /^WARN /m.test(output),
-      // Only meaningful on a clean run. A failing audit prints its own listing plus the
-      // severity line below, and "0 warnings" next to a failure caused by an error
-      // reports the wrong thing.
+      // Summarized only on exit 0 because failing audits print errors via summarizeFailure instead.
       summarizeWarnings: (output) => {
         const warningCount = output.match(/^WARN /gm)?.length ?? 0;
         return warningCount > 0 ? `(${warningCount} warning${warningCount === 1 ? "" : "s"})` : "";
@@ -733,10 +626,7 @@ async function main() {
       // A failing audit is entirely file-and-line findings, so the listing is the report.
       failureNeedsDetail: true,
       blocksOnFailure: true,
-      // No detail flag is forwarded: `audit-comments` already asks for its own listing, and a
-      // `--no-verbose` here would arrive after it and mute the warning lines this row counts.
-      // Under `vl --verbose` the listing prints, because the aggregator echoes a warned check's
-      // captured output.
+      // Omit detail flags because audit-comments enables its own listing and --no-verbose would mute counted WARN lines.
     }),
     runAudit(),
 
@@ -764,8 +654,7 @@ async function main() {
           skippedReason: "No local DB configured",
         }),
     runLocalesCheck("Localization Keys (bun run check-locales)", ["bun", "run", "check-locales"]),
-    // An untruncated string over its Discord cap rejects the whole payload, so that blocks. A
-    // string the code already truncates only reads clipped, so it surfaces as a warning.
+    // Untruncated overlong strings reject Discord payloads and block, while pre-truncated strings only warn.
     runWarningCheck(
       "Localization Discord Limits (bun run check-locale-lengths)",
       ["bun", "run", "check-locale-lengths"],
@@ -787,8 +676,7 @@ async function main() {
     ),
   ]);
 
-  // This check imports the complete command graph. Keep it outside the parallel
-  // block so Windows/Bun does not run multiple command-graph loaders at once.
+  // Run sequentially outside Promise.all so Windows/Bun never loads multiple complete command graphs concurrently.
   const commandReferenceResult = await runCheck(
     "Command Reference Freshness (bun run check-command-reference)",
     ["bun", "run", "check-command-reference"],
@@ -838,8 +726,6 @@ async function main() {
   console.log("VALIDATION RESULTS");
   console.log("====================================\n");
 
-  // Compute before printing, so avoids relying on printItem side-effects and handles
-  // any item that might not match a category filter
   const allFatalPassed = results.every(
     (r) => r.skippedReason !== undefined || r.exitCode === 0 || r.isWarning || !r.fatal,
   );
@@ -916,14 +802,8 @@ async function main() {
     for (const item of items) printItem(item);
   };
 
-  /**
-   * Test-file sections, where one row per file is detail rather than a verdict.
-   *
-   * There are roughly 360 test files, so listing every green one buries the handful
-   * that matter. Only the non-green rows are printed under quiet mode, with the green
-   * count that replaces them stated explicitly so a silent section can never be
-   * mistaken for a section that did not run.
-   */
+  // Quiet mode omits green test rows to avoid burying failures, and states the green count explicitly so a quiet
+  // section cannot look skipped.
   const printTestSection = (title: string, items: ResultItem[], emptyMessage: string) => {
     if (verboseOutput) {
       printSection(title, items, emptyMessage);
@@ -987,9 +867,7 @@ async function main() {
     results.filter((r) => CATEGORIES.DOCUMENTATION(r)),
   );
 
-  // Safety net: a check whose name matches no predicate still gates the exit code
-  // but would otherwise never be printed, leaving a ❌ run with nothing to explain
-  // it. Surfacing strays here means adding a check can never make it invisible.
+  // Print uncategorized checks so any newly added gate still surfaces in output when failing.
   const categorized = new Set(Object.values(CATEGORIES).flatMap((matches) => results.filter((r) => matches(r))));
   const uncategorized = results.filter((r) => !categorized.has(r));
   if (uncategorized.length > 0) {
@@ -998,10 +876,7 @@ async function main() {
 
   console.log("\n====================================");
 
-  // A machine-readable final line, because a caller (agent harness, background job
-  // wrapper, CI step) otherwise has to infer the outcome from the narrative above or
-  // write its own exit marker into the log. Printed last so that a reader who trusts
-  // only the tail of the output still gets the verdict and the counts behind it.
+  // Emit a machine-readable `vl-status:` trailer last so harnesses and log tail readers get an unambiguous verdict.
   const grade = (r: ResultItem): "skip" | "pass" | "warn" | "fail" => {
     if (r.skippedReason !== undefined) return "skip";
     if (r.isWarning) return "warn";

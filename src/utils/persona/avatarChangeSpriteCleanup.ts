@@ -3,17 +3,8 @@ import { personaRepository, personaSpriteRepository } from "@/utils/db/repositor
 import { log } from "@/utils/misc/logger";
 import { isSharedPresetAssetReference } from "@/utils/storage/avatarStorage";
 
-/**
- * Removes the preset sprites a persona inherited once its avatar stops showing the preset character.
- *
- * Materialization copies preset sprites by reference, so a user who repaints a default persona with
- * a new avatar would otherwise keep the preset character's expressions under a different face. Only
- * rows whose image is a shared `presets/` reference go: sprites the user uploaded belong to the new
- * identity, and the shared image files stay because other servers still resolve them. Failures are
- * logged rather than thrown because the avatar write has already committed by the time this runs.
- *
- * @returns How many preset sprites were removed
- */
+// Errors are logged rather than thrown because the avatar write has already committed, and shared preset files stay
+// untouched for other servers.
 export async function removePresetSpritesAfterAvatarChange(personaId: number, serverDiscId: string): Promise<number> {
   try {
     const sprites = await personaSpriteRepository.listForPersona(personaId);
@@ -31,12 +22,6 @@ export async function removePresetSpritesAfterAvatarChange(personaId: number, se
   }
 }
 
-/**
- * Clears the preset character reference a persona inherited once its avatar stops showing the preset
- * character, for the same reason as the sprites above. A reference the user uploaded stays.
- *
- * @returns Whether the preset reference was cleared
- */
 export async function clearPresetCharacterReferenceAfterAvatarChange(
   personaId: number,
   serverDiscId: string,

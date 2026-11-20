@@ -22,11 +22,8 @@ interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
-  /**
-   * Names the account setting that turns this fallback off. Only a success on the server route of
-   * a turn that started on personal credentials has one, because every other route is either the
-   * server's own or a model the user configured themselves.
-   */
+  // Only true when a personal-credential turn falls back onto the server route because other routes are either
+  // server-owned or user-configured.
   offerPersonalFallbackOptOut?: boolean;
 }
 
@@ -50,15 +47,8 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
   return truncateForEmbedDescription(failureList, FAILURE_LIST_DESCRIPTION_RESERVE);
 }
 
-/**
- * The fallback slot the receipt names for the model that answered.
- *
- * Both routes number their own configured slots, so a personal success names its personal slot and a
- * server-route success names the server's. A model that is not in its route's fallback list is that
- * route's own lead: it holds no slot, so the receipt reports the first model of the route that
- * answered instead of borrowing a number from the failure count, which named a slot the reader
- * cannot see anywhere on the page.
- */
+// Route lead models missing from the fallback list report the route's first slot because borrowing the failure count
+// would name a slot absent from config.
 export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
   const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
     entry.kind === "llm"
@@ -121,7 +111,7 @@ export async function sendFallbackModelUsageNotice({
     const buttonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel);
     const disabledButtonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel, true);
 
-    // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
+    // Webhooks target the parent channel, so threadId is required when editing a notice inside a thread.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id

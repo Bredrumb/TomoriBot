@@ -214,9 +214,8 @@ describe("v2 config export projections", () => {
   });
 
   it("tolerates jsonb columns that hold a JSON string instead of the value", async () => {
-    // Both columns really are string-typed in deployed data: an older writer handed the driver a value it encoded a
-    // second time, so jsonb_typeof is 'string' and the driver returns that string. The export must still produce the
-    // record and array shapes its own schema promises, because the bot reads those same rows without complaint.
+    // Deployed rows can hold double-encoded JSON strings in these columns, so export must normalize them
+    // to schema shapes.
     const originalTriggers = workspaceRow.deliberate_tool_triggers;
     const originalBiases = workspaceRow.llm_logit_biases;
     workspaceRow.deliberate_tool_triggers = JSON.stringify(originalTriggers);

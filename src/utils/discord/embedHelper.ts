@@ -27,35 +27,22 @@ import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embe
 
 type Provider = keyof typeof TRANSLATOR_COLORS;
 
-/**
- * Discord's maximum field value length for embeds
- */
+// Constant is 1024 because Discord rejects embed field values exceeding 1024 characters.
 const MAX_FIELD_VALUE_LENGTH = 1024;
 
-/**
- * Discord's maximum embed description length.
- */
+// Constant is 4096 because Discord rejects embed descriptions exceeding 4096 characters.
 const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 
-/**
- * Tip-item locale key for the Official Support Server link, appended to every rendered tip modal.
- */
 const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
 const TIP_DETAILS_BUTTON_ID = "error_tip_details";
 const ERROR_DETAIL_BUTTON_ID = "error_full_detail";
 const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
 
-/**
- * Truncates text so it fits within Discord's embed description limit, optionally reserving
- * space for other content that shares the same description (e.g. a headline above the detail).
- * @returns The value, truncated with a trailing ellipsis when it would otherwise overflow.
- */
 export function truncateForEmbedDescription(value: string, reservedChars = 0): string {
   const available = Math.max(0, MAX_EMBED_DESCRIPTION_LENGTH - reservedChars);
   if (value.length <= available) {
     return value;
   }
-  // Reserve 3 characters for the ellipsis; if there is not even room for that, hard-cut.
   return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
 
@@ -63,24 +50,13 @@ export type WebhookEmbedContext = Omit<PersonaPostContext, "channel" | "persona"
   persona?: PersonaPostContext["persona"];
 };
 
-/**
- * Truncates a field value to Discord's maximum allowed length.
- * Adds ellipsis if truncation occurs.
- * @returns Truncated value that fits within Discord's limits
- */
 function truncateFieldValue(value: string): string {
   if (value.length <= MAX_FIELD_VALUE_LENGTH) {
     return value;
   }
-  // Reserve 3 characters for ellipsis
   return `${value.substring(0, MAX_FIELD_VALUE_LENGTH - 3)}...`;
 }
 
-/**
- * Creates a standard info embed for non-interaction contexts.
- * This is a low-level utility - prefer using sendStandardEmbed for consistency.
- * @param locale - The locale to use for strings
- */
 export function createStandardEmbed(locale: string, options: StandardEmbedOptions): EmbedBuilder {
   const {
     titleKey,
@@ -100,7 +76,6 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     return new EmbedBuilder().setColor(color).setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color));
   }
 
-  // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description
     ? description
     : descriptionKey
@@ -126,13 +101,11 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
   return embed;
 }
 
-/** Builds the localized markdown shown by a "What You Can Do" text modal. */
 function createTipText(
   locale: string,
   tipKeys: string[],
   tipVars: Record<string, string | number | boolean> = {},
 ): string | null {
-  // Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
   const items = tipKeys
     .filter((key) => key !== SUPPORT_SERVER_TIP_KEY)
     .map((key) => localizer(locale, key, tipVars).trim())
@@ -165,7 +138,6 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
     fields,
   } = options;
 
-  // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description
     ? description
     : descriptionKey
@@ -177,30 +149,19 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
     .setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color))
     .setDescription(descriptionText)
     .addFields(
-      // Map over the fields provided in options
-      fields.map(
-        // Define the transformation for each field
-        (field): APIEmbedField => {
-          // Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
-          const name = field.nameKey
-            ? localizer(locale, field.nameKey, field.nameVars) // Use nameVars for name
-            : (field.name ?? "");
+      fields.map((field): APIEmbedField => {
+        const name = field.nameKey ? localizer(locale, field.nameKey, field.nameVars) : (field.name ?? "");
 
-          // Determine the field value: Use localized valueKey if present, otherwise use direct value
-          const rawValue = field.valueKey
-            ? localizer(locale, field.valueKey, field.valueVars) // Localize valueKey using valueVars
-            : (field.value ?? ""); // Otherwise, use the value directly
+        const rawValue = field.valueKey ? localizer(locale, field.valueKey, field.valueVars) : (field.value ?? "");
 
-          // Truncate value to Discord's maximum field value length (1024 chars)
-          const value = truncateFieldValue(rawValue);
+        const value = truncateFieldValue(rawValue);
 
-          return {
-            name,
-            value,
-            inline: field.inline ?? false,
-          };
-        },
-      ),
+        return {
+          name,
+          value,
+          inline: field.inline ?? false,
+        };
+      }),
     );
 
   if (footerKey) {
@@ -220,11 +181,6 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
   return embed;
 }
 
-/**
- * Shows a standard embed in a text channel. This follows the pattern of interactionHelpers
- * by handling the sending of the embed directly.
- * @param locale - The locale to use for strings
- */
 export async function sendStandardEmbed(
   channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
   locale: string,
@@ -301,11 +257,6 @@ export async function sendStandardEmbed(
   modalButtons.attach(deliveredMessage, disableButtons);
 }
 
-/**
- * Builds the tip and full-error buttons an embed offers, plus the collectors that open them once the
- * message is sent.
- * @param logLabel - Prefix for the collectors' failure logs.
- */
 export function prepareEmbedModalButtons(
   locale: string,
   options: Pick<StandardEmbedOptions, "tipKeys" | "tipVars" | "restrictedDetail">,
@@ -361,10 +312,6 @@ export function prepareEmbedModalButtons(
 }
 
 const TRANSLATION_TIMEOUT = 90000;
-/**
- * Creates an embed with translation buttons that cycle between different translations.
- * Returns a promise that resolves when the buttons are disabled (timeout or all providers shown).
- */
 export async function sendTranslationEmbed(message: Message, options: TranslationEmbedOptions): Promise<void> {
   const { translations, initialProvider = TranslationProvider.GOOGLE, timeout = TRANSLATION_TIMEOUT } = options;
 

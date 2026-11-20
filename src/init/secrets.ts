@@ -10,17 +10,12 @@ import { readApiKeyInactivityDays } from "@/utils/security/apiKeyRetention";
 // it runs, and a name registered late would silently stay out of the loaded secret object.
 registerSecretEnvKeys([...SUPPORTER_SECRET_ENV_KEYS, "TOMORI_PUBLIC_BASE_URL"]);
 
-/**
- * Loads the selected secret source before consumers initialize database connections or keys.
- *
- * Must be called before any module that reads credentials from process.env.
- *
- */
+// Secret loading must run before any module reads credentials from process.env because it assigns secrets into
+// process.env.
 export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   log.section("Loading Application Secrets...");
   const secrets = await getAppSecrets();
 
-  // Assign secrets to process.env for backwards compatibility with existing code
   process.env.DISCORD_TOKEN = secrets.DISCORD_TOKEN;
   process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
   process.env.POSTGRES_PORT = secrets.POSTGRES_PORT;
@@ -77,14 +72,11 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   // An empty list must survive loading because it admits no one, while dropping it would read as unset and admit everyone.
   if (secrets.VERTEX_ALLOWED_OWNERS !== undefined) process.env.VERTEX_ALLOWED_OWNERS = secrets.VERTEX_ALLOWED_OWNERS;
 
-  // Must be set before any module reads MEMORY_PROTECTION(). Deployment env wins: a stale bundle
-  // value could otherwise restore a limit above physical memory, leaving the guard unreachable.
+  // Set before MEMORY_PROTECTION() reads it, letting deployment env win so a stale bundle cannot exceed physical
+  // memory.
   if (secrets.CONTAINER_MEMORY_LIMIT_MB && !process.env.CONTAINER_MEMORY_LIMIT_MB)
     process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
-  // Propagate Supporter Billing secrets/config. The key list is owned by the billing module so this
-  // shared startup file carries no billing-specific vocabulary; a dumb copy loop with no parsing.
-  // No-op in dev/self-host where these keys are unset.
   for (const key of SUPPORTER_SECRET_ENV_KEYS) {
     const value = secrets[key];
     if (value) process.env[key] = value;
@@ -105,7 +97,7 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
           : "AWS Secrets Manager";
   log.success(`Secrets loaded successfully from ${secretsSource}`);
 
-  // Initialize encryption key manager after process.env is fully populated
+  // Initialize after process.env is populated because keyManager reads CRYPTO_SECRET_* from env.
   keyManager.initialize();
 
   const rotationStatus = keyManager.getRotationStatus();

@@ -8,10 +8,6 @@ export interface ElevenLabsTranscriptionAdapterRequest {
   mimeType?: string | null;
 }
 
-/**
- * Thin adapter wrapping `transcribeWithElevenLabs` for use via the
- * custom endpoint pathway (capability = "transcription", api_style = "elevenlabs-transcription").
- */
 export async function transcribeViaElevenLabsAdapter(
   request: ElevenLabsTranscriptionAdapterRequest,
 ): Promise<ElevenLabsSttResult> {

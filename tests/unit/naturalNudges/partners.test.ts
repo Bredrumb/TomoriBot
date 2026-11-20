@@ -6,7 +6,6 @@ function candidate(name: string, tickets: number, channelIds: string[]): Partner
   return { persona: name, tickets, channelIds: new Set(channelIds) };
 }
 
-/** Zero draws the first live entry of every raffle; the first call also decides whether a second partner joins. */
 function wantsOne(): () => number {
   let calls = 0;
   return () => (calls++ === 0 ? PLAY_SCENE_SECOND_PARTNER_CHANCE : 0);

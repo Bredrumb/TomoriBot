@@ -1,17 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Phase 6 follow-up: complete the snake_case → camelCase rename that
- * `scripts/rename_tomori_fields.ts` left unfinished. Replaces:
- *   - tomoriId       → personaId
- *   - targetTomoriId → targetPersonaId
- *
- * Word-boundary regex ensures we don't touch unrelated identifiers
- * (e.g. `TomoriIdentity` or `mytomoriId` would be skipped because neither exists,
- * but the boundary is the safety net).
- *
- * Scope: src/, tests/. Skipped: plans/ (historical), scripts/ (manual review).
- * Run: `bun scripts/rename_tomori_camelcase.ts`
- */
 import { Glob } from "bun";
 import { readFile, writeFile } from "node:fs/promises";
 

@@ -9,16 +9,8 @@ import {
 } from "discord.js";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 
-/**
- * Renders a stored sampler value at the precision its owner typed.
- *
- * The sampler columns are Postgres `real`, so a value typed as `0.6` reads back widened to a double
- * as 0.6000000238418579. Printed raw that exceeds the 10-character limit on the modal Text Inputs
- * carrying it, which Discord rejects as 50035 with no partial render. binary32 holds about 7.2
- * decimal digits, so 7 significant digits recovers the stored decimal without truncating a value
- * someone genuinely typed. The integer columns, Top K and Maximum Output Tokens, cannot pick up the
- * artifact and are passed through.
- */
+// Postgres real widens floats (such as 0.6) past Discord's 10-char modal input limit (50035), so 7 significant digits
+// recover binary32 without truncation.
 export function formatStoredParameterValue(value: number): string {
   return String(Number(value.toPrecision(7)));
 }

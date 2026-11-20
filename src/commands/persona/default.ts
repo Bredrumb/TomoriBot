@@ -83,14 +83,8 @@ export function resolveAvailablePersonaName(
   return null;
 }
 
-/**
- * Names a preset alter after a word it still answers to. The default bot name and the shared first
- * trigger usually belong to the main persona, so naming the alter after them leaves it unable to be
- * called by its own name, and `{bot}` in the preset prompt would render that borrowed name. Falls back
- * to {@link resolveAvailablePersonaName} when every candidate trigger is already claimed.
- *
- * @param answeredTriggers - The alter's triggers after dropping those other personas own
- */
+// Alters prefer a trigger they still answer to because the main persona usually owns the default name and `{bot}` in
+// the prompt renders the chosen name.
 export function resolveAlterPersonaName(
   defaultName: string,
   presetTriggerWords: string[],
@@ -135,7 +129,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     subcommand.setName("default").setDescription(localizer("en-US", "commands.persona.default.description")),
   );
 
-/** One builder for both default routes, because the `/nsfw` route's option locale aliases assume identical option names. */
+// Both default routes share this builder because the `/nsfw` route's option locale aliases assume identical option
+// names.
 export const addPresetTargetTypeOption = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.addStringOption((option) =>
     option
@@ -154,16 +149,6 @@ export const addPresetTargetTypeOption = (subcommand: SlashCommandSubcommandBuil
       ),
   );
 
-/**
- * Applies a preset personality configuration to Tomori.
- * - type=default: updates the main persona.
- * - type=alter: creates an alter persona from the selected preset.
- *
- * Preset trigger words come from persona_presets.preset_trigger_words,
- * with locale base-trigger fallback for backward compatibility.
- * Persona naming prefers the locale default bot name, then falls back to
- * preset trigger words in order if the preferred name is already taken.
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -173,10 +158,6 @@ export async function execute(
   await applyPresetDefault(client, interaction, userData, locale, { nsfw: false });
 }
 
-/**
- * Shared body of `/persona default` and `/nsfw persona default`; `nsfw` decides which presets the
- * picker lists and which submitted values it accepts.
- */
 export async function applyPresetDefault(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -207,7 +188,6 @@ export async function applyPresetDefault(
     return;
   }
 
-  // Check permissions (ManageGuild required in guilds)
   if (interaction.guild) {
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
@@ -337,19 +317,13 @@ export async function applyPresetDefault(
         return;
       }
 
-      // Capture the persona's current sprite images BEFORE re-pointing, so we
-      //      can clean up server-owned ones afterward (resetting to the preset set).
-      //      For a still-pointer persona these are shared preset URLs (the delete
-      //      guard skips them); for a materialized persona they are its own rows.
+      // Captured before applyPresetPointerToPersona drops sprite rows and clears avatar/reference columns; storage delete
+      // guards skip shared preset assets.
       const spritesBeforeReset = await personaSpriteRepository.listForPersona(targetPersonaId);
 
-      // applyPresetPointerToPersona clears webhook_avatar_url, so retain the current
-      // server-owned image for deletion afterward. The guard skips shared presets/ images.
       const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
       const previousCharRefUrl = mainPersona.char_ref_url ?? null;
 
-      // Turn the main persona into a live preset pointer (this also drops the
-      //      persona's own sprite rows, so it resolves preset sprites live again).
       const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
         personaId: targetPersonaId,
         nickname: resolvedPersonaName,
@@ -388,18 +362,12 @@ export async function applyPresetDefault(
 
       invalidateTomoriStateCache(serverDiscId);
 
-      // Finish the sprite reset: delete server-owned sprite images now that
-      //      the rows are gone (the guard skips shared preset images), and drop the
-      //      stale sprite cache so the next read resolves the new preset's sprites.
       await Promise.all(spritesBeforeReset.map((sprite) => deletePersonaSpriteFromStorage(sprite.avatar_url)));
       invalidatePersonaSpriteCache(targetPersonaId);
 
-      // The old server-owned main avatar is unreferenced after the repoint clears
-      // webhook_avatar_url. The guard skips shared presets/.
       if (previousMainAvatarUrl) {
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
       }
-      // The repoint also clears the character reference; the owner check skips shared preset art.
       if (previousCharRefUrl) {
         await deleteCharRef(previousCharRefUrl, "personas", targetPersonaId);
       }
@@ -441,9 +409,8 @@ export async function applyPresetDefault(
                 ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
-              // Stamp the applied avatar hash so the background fan-out reconciler
-              // skips this server until the catalog art changes again (avoids a
-              // redundant guild-avatar re-PATCH on the next boot).
+              // Stamps the applied avatar hash so the background reconciler skips redundant guild-avatar PATCHes until
+              // catalog art changes.
               await personaRepository.markServerMainAvatarSynced(interaction.guild.id);
             } else {
               avatarUpdateFailed = true;
@@ -545,10 +512,8 @@ export async function applyPresetDefault(
       return;
     }
 
-    // Drop trigger words already owned by an existing persona (e.g. the shared
-    // "tomori"/base words owned by the main persona) so this alter stays
-    // unambiguous. Mirrors the live single-owner dedup the loader applies, where
-    // a newly created alter is the lowest-priority claimant.
+    // Drops triggers already claimed by existing personas so the new alter stays unambiguous, matching the loader's
+    // single-owner priority.
     const claimedTriggerWords = [
       ...getBaseTriggerWords(locale),
       ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
@@ -671,12 +636,8 @@ export async function applyPresetDefault(
       files: avatarAttachment ? [avatarAttachment] : [],
     });
 
-    // No per-server avatar upload: a preset-pointer alter leaves webhook_avatar_url
-    // NULL and live-resolves the shared preset avatar (preset_avatar_shared_url)
-    // at state-load time. This both dedups storage (N servers share one image) and
-    // makes catalog avatar edits fan out to this alter on the next reseed, exactly
-    // like its sprites/triggers/prompt. The avatar is materialized by reference
-    // only if the user later forks the persona with a content edit.
+    // Preset-pointer alters leave webhook_avatar_url NULL and resolve shared preset art at load time so storage stays
+    // deduplicated and catalog avatar updates fan out until the persona is forked.
 
     log.success(
       `Applied preset "${selectedPreset.persona_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,

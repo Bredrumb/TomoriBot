@@ -1,9 +1,3 @@
-/**
- * Guards the shared route-interaction fake. A route suite observes this object's recording arrays
- * and capability predicates, so a change to what it records has to fail here rather than inside a
- * route suite whose assertion happens to be shaped differently.
- */
-
 import { describe, expect, it } from "bun:test";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 

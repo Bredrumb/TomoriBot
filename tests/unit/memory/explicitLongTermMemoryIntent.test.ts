@@ -3,8 +3,7 @@ import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTerm
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { EXPLICIT_MEMORY_PACK_KEY, getIntentPackUnion } from "@/utils/text/localeIntentPacks";
 
-// The phrase lists that were hardcoded before they moved into the locale trees. Keep their matching
-// behavior stable while asserting every shipped locale contributes its registered phrases.
+// Baseline phrases from each locale tree so locale edits keep matching behavior stable.
 const PREVIOUS_ENGLISH_PHRASES = [
   "remember",
   "don't forget",

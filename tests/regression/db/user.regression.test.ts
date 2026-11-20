@@ -1,11 +1,3 @@
-/**
- * Regression harness: UserRepository domain.
- *
- * Covers: loadUserRow, registerUser, setPrivacyLevel, updateUser,
- * loadUserRowsByNormalizedNickname.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { type ChatInputCommandInteraction, Client } from "discord.js";
 import { execute as executePersonalNuke } from "@/commands/personal/nuke";
@@ -89,13 +81,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     expect(user?.user_nickname).toBe("_rt_renamed");
   });
 
-  /**
-   * `/personal nuke` is the erasure route the Privacy Policy names, so its blast radius is a
-   * published promise rather than an implementation detail. This pins all four halves of that
-   * promise: personal rows die, server-owned rows survive with authorship severed, reminders go
-   * in both directions, and an opt-out outlives the erasure so it cannot silently re-enable
-   * collection.
-   */
+  // /personal nuke is the Privacy Policy erasure route, so opt-out must survive deletion to avoid silently
+  // re-enabling collection.
   describe("nukeUser", () => {
     const NUKE_DISC_ID = "_rt_user_nuke_target";
     const OTHER_DISC_ID = "_rt_user_nuke_bystander";
@@ -131,8 +118,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
                ('server', ${FIXTURE_IDS.serverDiscId}, NULL, '_rt_chan', '_rt_server_stm')
       `;
 
-      // One reminder the target authored, one somebody else aimed at them, and one that touches
-      // them not at all. Only the third may survive.
       await testSql`
         INSERT INTO reminders (server_id, channel_disc_id, user_discord_id, user_nickname,
                                reminder_purpose, reminder_time, created_by_user_id)
@@ -278,12 +263,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     });
   });
 
-  // Deliberately skip this test in normal runs; enable it manually to verify the
-  // harness detects regressions. To prove it works: add "WHERE 1=0" to the
-  // loadUserRow SELECT and confirm this test fails.
+  // Manual regression probe: enable and inject `WHERE 1=0` into loadUserRow to verify the harness fails.
   it.skip("[REGRESSION PROBE] loadUserRow returns the correct row after rename", async () => {
     const user = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
-    // If loadUserRow's SELECT were broken (e.g. wrong WHERE), this would be null
     expect(user?.user_nickname).toBe("_rt_renamed");
   });
 });

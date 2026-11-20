@@ -38,7 +38,7 @@ const checkerInputSchema = z.object({
   required: z.array(z.string()),
 });
 
-/** The checker is called with the draft alone, so `text` must be its only required input. */
+// Rule checkers are invoked with the draft alone, so `text` must be the only required parameter.
 export function isCompatibleRuleChecker(declaration: FunctionDeclaration): boolean {
   if (!declaration.name) return false;
   const parsed = checkerInputSchema.safeParse(declaration.parametersJsonSchema ?? declaration.parameters);

@@ -53,7 +53,6 @@ function makeStreamContext(thinkingLevel: string | null): StreamContext {
   } as unknown as StreamContext;
 }
 
-/** Streams one turn against a fake NIM and returns every request body the adapter sent. */
 async function captureRequestBodies(
   thinkingLevel: string | null,
   respond: (body: Record<string, unknown>) => Response,

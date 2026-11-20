@@ -20,9 +20,7 @@ export async function cleanupMainPersonaSpritesAfterImport(params: {
     ? params.spritesBeforeImport
     : await personaSpriteRepository.deleteAllForPersona(params.personaId);
 
-  // The pointer transaction already performed the sprite-row write. Invalidate only after that
-  // transaction has reported success, while materialized imports invalidate in the repository
-  // immediately after their DELETE succeeds.
+  // Materialized imports invalidate on repository DELETE, whereas pointer imports must invalidate only after commit.
   if (params.importedAsPointer) {
     invalidatePersonaSpriteCache(params.personaId);
   }

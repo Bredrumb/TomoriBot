@@ -1,12 +1,3 @@
-/**
- * Exact-boundary controls and adversarial tests for Discord Components V2 message limits.
- *
- * Enforces Discord's documented message component contract:
- * - at most 40 total nested components across the entire serialized tree
- * - at most 4,000 Unicode codepoints across all Text Display components
- * - Action Row and Section grammar, component cardinality, field limits, and uniqueness
- */
-
 import { describe, expect, it } from "bun:test";
 import {
   ButtonStyle,
@@ -91,10 +82,8 @@ function createValidMessagePayload(): ComponentsV2MessagePayload {
 describe("componentsV2Limits Unicode truncation primitive", () => {
   it("measures text length in Unicode codepoints", () => {
     expect(getDiscordTextLength("hello")).toBe(5);
-    // Emoji surrogate pair: 2 UTF-16 units but 1 Unicode codepoint
     expect(getDiscordTextLength("😀")).toBe(1);
     expect("😀".length).toBe(2);
-    // Combining mark: 2 codepoints
     expect(getDiscordTextLength("e\u0301")).toBe(2);
   });
 
@@ -102,15 +91,13 @@ describe("componentsV2Limits Unicode truncation primitive", () => {
     expect(truncateDiscordText("hello", 10)).toBe("hello");
     expect(truncateDiscordText("hello world", 8, "...")).toBe("hello...");
 
-    // Surrogate pair: taking 4 codepoints with suffix "..." (3) leaves budget 1.
-    // "😀" is 1 codepoint and must not be split into an orphaned high surrogate.
+    // Budget 4 minus the 3-char suffix leaves 1 codepoint, so "😀" stays whole instead of splitting a surrogate.
     const emojiStr = "😀😀😀😀😀";
     const truncatedEmoji = truncateDiscordText(emojiStr, 4, "...");
     expect(truncatedEmoji).toBe("😀...");
     expect(getDiscordTextLength(truncatedEmoji)).toBe(4);
 
-    // Combining character grapheme cluster: "e\u0301" is 1 grapheme of 2 codepoints.
-    // With budget 4 and suffix "..." (3), available is 1, so "e\u0301" (2) does not fit and is not split.
+    // With 1 codepoint left after the 3-char suffix, the 2-codepoint grapheme "e\u0301" cannot fit without splitting.
     const combiningStr = "e\u0301e\u0301e\u0301";
     const truncatedCombining = truncateDiscordText(combiningStr, 4, "...");
     expect(truncatedCombining).toBe("...");
@@ -126,13 +113,11 @@ describe("componentsV2Limits Unicode truncation primitive", () => {
     expect(getDiscordTextLength(truncated)).toBe(100);
     expect(truncated.endsWith("...")).toBe(true);
 
-    // 100 emojis: 100 codepoints, fits within 100 limit even though UTF-16 length is 200
     const emojis100 = "😀".repeat(100);
     expect(emojis100.length).toBe(200);
     expect(getDiscordTextLength(emojis100)).toBe(100);
     expect(safeSelectOptionText(emojis100, 100)).toBe(emojis100);
 
-    // 101 emojis: 101 codepoints, truncated to 97 emojis + "..."
     const emojis101 = "😀".repeat(101);
     const truncatedEmojis = safeSelectOptionText(emojis101, 100);
     expect(getDiscordTextLength(truncatedEmojis)).toBe(100);
@@ -142,13 +127,6 @@ describe("componentsV2Limits Unicode truncation primitive", () => {
 
 describe("componentsV2Limits recursive component count boundaries", () => {
   it("accepts exact 40 components and rejects 41 components while hiding components in layout trees", () => {
-    // Top-level is 1 Container.
-    // Inside Container:
-    // - 1 Section with 3 TextDisplays and 1 Button accessory = 5
-    // - 5 ActionRows with 5 Buttons each = 5 * 6 = 30
-    // - 1 ActionRow with 3 Buttons = 4
-    // Container node itself = 1
-    // Total nested components = 1 + 5 + 30 + 4 = 40.
     const payload40: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [
@@ -193,13 +171,11 @@ describe("componentsV2Limits recursive component count boundaries", () => {
 
     const container40 = payload40.components[0] as ContainerComponentData<ComponentInContainerData>;
 
-    // The top-level array has length 1, demonstrating that shallow length checks are insufficient.
     expect(payload40.components.length).toBe(1);
     const validResult = validateComponentsV2MessageLimits(payload40);
     expect(validResult.valid).toBe(true);
     expect(validResult.violations).toEqual([]);
 
-    // Adding 1 button to the final ActionRow takes total to 41. Top-level length remains 1.
     const payload41: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [
@@ -236,7 +212,6 @@ describe("componentsV2Limits recursive component count boundaries", () => {
 
 describe("componentsV2Limits Text Display character budget boundaries", () => {
   it("accepts exact 4,000 characters and rejects 4,001 characters across multiple Text Displays", () => {
-    // 1,500 + 1,500 + 1,000 = 4,000 characters
     const payload4000: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [
@@ -271,7 +246,6 @@ describe("componentsV2Limits Text Display character budget boundaries", () => {
     expect(validResult.valid).toBe(true);
     expect(validResult.violations).toEqual([]);
 
-    // Increasing the third text display by 1 character reaches 4,001
     const payload4001: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [
@@ -299,7 +273,6 @@ describe("componentsV2Limits Text Display character budget boundaries", () => {
   });
 
   it("measures Text Display characters by Unicode codepoints for emoji payloads", () => {
-    // 4,000 emojis: 4,000 codepoints, accepted even though UTF-16 length is 8,000
     const payloadEmoji4000: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [
@@ -311,7 +284,6 @@ describe("componentsV2Limits Text Display character budget boundaries", () => {
     };
     expect(validateComponentsV2MessageLimits(payloadEmoji4000).valid).toBe(true);
 
-    // 4,001 emojis: 4,001 codepoints, rejected
     const payloadEmoji4001: ComponentsV2MessagePayload = {
       flags: MessageFlags.IsComponentsV2,
       components: [

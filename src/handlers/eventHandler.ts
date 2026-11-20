@@ -39,12 +39,8 @@ const eventFolderMap: Record<string, string> = {
   stickerUpdate: "guildStickersUpdate",
 };
 
-/**
- * REST rate limits arrive on `client.rest`, not on the client.
- *
- * discord.js v14 keeps the limiter in the REST instance, so a `rateLimit` listener on the client
- * never fires and the handler folder would be dead weight.
- */
+// REST rate limits attach to client.rest rather than client because discord.js v14 keeps the limiter on REST and
+// client.on never fires.
 const REST_RATE_LIMIT_FOLDER = "rateLimit";
 
 async function getExistingEventFolders(eventsBasePath: string): Promise<Set<string>> {
@@ -131,10 +127,6 @@ async function loadEventHandlerMap(eventsBasePath: string): Promise<Map<string, 
   return handlerMap;
 }
 
-/**
- * Sets up all event listeners for the Discord client after loading event modules.
- * Maps specific Discord events to handler folders.
- */
 const setupEventListeners = async (client: Client): Promise<void> => {
   log.section("Starting Event Listeners Setup...");
   const eventsBasePath = path.join(__dirname, "..", "events");

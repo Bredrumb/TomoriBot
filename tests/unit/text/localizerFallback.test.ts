@@ -4,12 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-/**
- * `initializeLocalizer()` scans `<cwd>/src/locales` once per process and latches, and the
- * repository's own `ja` tree changes as translations land, so a fixed real key would be brittle.
- * These cases run against a synthetic two-locale tree in a
- * child process instead: real loader, real lookup, no module mocking and no shared state.
- */
+// Tests run in a subprocess with synthetic locales because initializeLocalizer() latches once per process from cwd
+// and real translations shift.
 type Probe = {
   hit: string;
   fallback: string;

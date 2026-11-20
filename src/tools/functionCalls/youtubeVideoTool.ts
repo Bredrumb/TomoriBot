@@ -1,9 +1,3 @@
-/**
- * YouTube Video Processing Tool
- * Allows the AI to selectively process YouTube videos on-demand for Google/Gemini provider
- * This prevents automatic processing of all YouTube links which can cause timeouts
- */
-
 import { log, ColorCode } from "../../utils/misc/logger";
 import type { EnhancedVideoContent } from "@/types/tool/enhancedContextTypes";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
@@ -14,10 +8,6 @@ import {
   resolveEffectiveOpenRouterSeesYouTube,
 } from "@/utils/provider/openrouterModelCapabilities";
 
-/**
- * Tool for processing YouTube videos on-demand using Google's Gemini API
- * Only available for Google provider to leverage Gemini's YouTube processing capabilities
- */
 export class YouTubeVideoTool extends BaseTool {
   name = "process_youtube_video";
   description =
@@ -44,9 +34,6 @@ export class YouTubeVideoTool extends BaseTool {
     required: ["youtube_url"],
   };
 
-  /**
-   * YouTube URL detection patterns (from tomoriChat.ts)
-   */
   private static readonly YOUTUBE_URL_PATTERNS = [
     /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
     /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/i,
@@ -54,23 +41,11 @@ export class YouTubeVideoTool extends BaseTool {
     /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i,
   ];
 
-  /**
-   * Check if YouTube tool is available for the given provider
-   * This tool requires video processing capabilities
-   * @param _provider - LLM provider name (unused - availability based on model capabilities)
-   * @returns True for all providers (actual check happens in isAvailableForContext)
-   */
   isAvailableFor(_provider: string): boolean {
-    // Provider-agnostic, but requires vision capability check in isAvailableForContext
     return true;
   }
 
-  /**
-   * Enhanced availability check that considers context flags and model vision capabilities
-   * @returns True if tool should be available
-   */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    // Base provider check
     if (!this.isAvailableFor(provider)) {
       return false;
     }
@@ -99,11 +74,6 @@ export class YouTubeVideoTool extends BaseTool {
     return true;
   }
 
-  /**
-   * Execute YouTube video processing
-   * @param args - Arguments containing youtube_url and optional reason
-   * @returns Promise resolving to tool result with processed video data
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableYouTubeProcessing) {
       log.info(
@@ -185,7 +155,7 @@ export class YouTubeVideoTool extends BaseTool {
             uri: youtubeUrl,
             mimeType: "video/youtube",
             isYouTubeLink: true,
-            enhancedContext: true, // Special marker for processing
+            enhancedContext: true,
           } as EnhancedVideoContent,
         ],
       };
@@ -218,11 +188,6 @@ export class YouTubeVideoTool extends BaseTool {
     }
   }
 
-  /**
-   * Extract video ID from YouTube URL using existing patterns from tomoriChat.ts
-   * @param url - YouTube URL to extract ID from
-   * @returns Video ID string or null if not found
-   */
   private extractVideoId(url: string): string | null {
     for (const pattern of YouTubeVideoTool.YOUTUBE_URL_PATTERNS) {
       const match = url.match(pattern);
@@ -233,19 +198,10 @@ export class YouTubeVideoTool extends BaseTool {
     return null;
   }
 
-  /**
-   * Helper method to check if a URL is a valid YouTube URL
-   * @param url - URL to validate
-   * @returns True if the URL matches YouTube patterns
-   */
   static isValidYouTubeUrl(url: string): boolean {
     return YouTubeVideoTool.YOUTUBE_URL_PATTERNS.some((pattern) => pattern.test(url));
   }
 
-  /**
-   * Helper method to get all video IDs from a text containing multiple YouTube URLs
-   * @param text - Text that may contain YouTube URLs
-   */
   static extractAllVideoIds(text: string): string[] {
     const videoIds: string[] = [];
     for (const pattern of YouTubeVideoTool.YOUTUBE_URL_PATTERNS) {

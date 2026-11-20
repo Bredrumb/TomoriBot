@@ -1,10 +1,3 @@
-/**
- * Regression harness: migration 063 fork naming-config backfill.
- *
- * Migration 062 gave every existing persona an empty naming config, including
- * personas already forked out of a preset pointer. 063 fills those in from the
- * catalog without disturbing pointers or configs an owner has since edited.
- */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";

@@ -90,11 +90,8 @@ export const CONFIG_CHANNEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["actio
   "channels-overrides-text-model-range-select",
 ]);
 
-/**
- * Range entries that open a modal on a chosen page. They are selects rather than buttons because
- * the page index rides the option value, which is what keeps one route id under Discord's limit
- * no matter how large the roster grows.
- */
+// Range triggers use selects rather than buttons so the page index rides the option value, keeping the route id under
+// Discord's customId limit.
 export const CONFIG_CHANNEL_SELECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "channels-welcome-range-select",
   "channels-autoch-range-select",
@@ -147,13 +144,6 @@ const CHANNEL_OVERRIDE_TYPES = new Set<ChannelOverrideChannelTarget["type"]>([
   ChannelType.AnnouncementThread,
 ]);
 
-/**
- * Reads the persona page a range select was opened on.
- *
- * The range entry carries its own start rather than the route id, mirroring how the Fallbacks
- * provider select carries `start|provider`: the button that opens page one and the select that
- * opens the rest then share one handler and one modal builder.
- */
 function personaRangeStart(interaction: GlobalRoutableInteraction): number {
   if (!interaction.isStringSelectMenu()) return 0;
   const start = Number.parseInt(interaction.values[0] ?? "", 10);

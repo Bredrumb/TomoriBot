@@ -1,11 +1,3 @@
-/**
- * AI-Powered Preset Generation for the NVIDIA NIM provider.
- *
- * Tries json_schema response format first; falls back to json_object
- * (with schema injected into the system prompt) if the model does not
- * support json_schema. Includes a full tool-calling loop for models
- * with web-search tools enabled (has_tools=true).
- */
 import { log } from "@/utils/misc/logger";
 import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
@@ -35,10 +27,6 @@ interface NvidiaPresetGenerationOptions {
   maxToolRounds?: number;
 }
 
-/**
- * Determine whether an HTTP error indicates that the response_format
- * parameter is not supported by the model, warranting a json_object fallback.
- */
 function shouldFallbackResponseFormat(status: number, errorBody: string): boolean {
   if (status !== 400 && status !== 422) {
     return false;
@@ -58,10 +46,6 @@ function shouldFallbackResponseFormat(status: number, errorBody: string): boolea
   return mentionsFormat && indicatesUnsupported;
 }
 
-/**
- * Build a system prompt that steers the model toward the preset JSON schema.
- * Used for json_object fallback mode when the model does not support json_schema.
- */
 function buildNvidiaPresetSystemPrompt(): string {
   const schema = buildPresetResponseSchema();
   return [
@@ -74,12 +58,6 @@ function buildNvidiaPresetSystemPrompt(): string {
   ].join("\n\n");
 }
 
-/**
- * Generate preset data from user prompts using the NVIDIA NIM API.
- *
- * @param _locale - User's locale (reserved for future error localisation)
- * @returns Generated preset or a typed error result
- */
 export async function generatePresetFromPromptNvidia(
   apiKey: string,
   params: GeneratePresetParams,
@@ -95,7 +73,6 @@ export async function generatePresetFromPromptNvidia(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // Build the initial user message content (text + optional image)
   const contentParts: PresetContentPart[] = [{ type: "text", text: buildPresetPrompt(params) }];
 
   if (params.imageBase64 && params.imageMimeType) {
@@ -111,8 +88,6 @@ export async function generatePresetFromPromptNvidia(
   const userContent =
     contentParts.length === 1 && contentParts[0].type === "text" ? contentParts[0].text : contentParts;
 
-  // Messages start with just the user prompt; system message is prepended
-  // on each request when in json_object fallback mode
   const messages: PresetMessage[] = [{ role: "user", content: userContent }];
 
   type FormatMode = "json_schema" | "json_object";
@@ -167,7 +142,6 @@ export async function generatePresetFromPromptNvidia(
     if (!response.ok) {
       const errorBody = await response.text();
 
-      // Fall back to json_object if json_schema is not supported by this model
       if (
         !formatFallbackDone &&
         formatMode === "json_schema" &&
@@ -285,7 +259,6 @@ export async function generatePresetFromPromptNvidia(
       continue;
     }
 
-    // Extract and parse the final JSON response
     const responseText = extractResponseText(message.content);
     if (!responseText) {
       return {

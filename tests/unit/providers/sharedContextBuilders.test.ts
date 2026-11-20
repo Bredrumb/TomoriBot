@@ -37,10 +37,6 @@ describe("shared GIF context placeholders", () => {
     );
   });
 
-  /**
-   * The hint registers the message ID with the media map so `process_gif` can resolve it later. The
-   * registration is the part a caller cannot reconstruct, so it is asserted alongside the wording.
-   */
   it("registers the message ID while building the development hint", () => {
     const registered: Array<{ messageId: string; kind: string }> = [];
     const messageIdMap = {

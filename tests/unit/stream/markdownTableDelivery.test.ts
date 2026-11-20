@@ -2,16 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { autoCloseIncompleteMarkers, findRegularOverflowFlushIndex } from "@/utils/discord/stream/bufferManager";
 import { extractMarkdownTableSegments, findMarkdownTableBlockAt } from "@/utils/text/markdownTable";
 
-/**
- * Counts the body rows the table renderer would draw for the first table in `text`.
- * A row lost to buffer damage shows up here as a smaller count.
- */
 function renderedRowCount(text: string): number {
   const tableSegment = extractMarkdownTableSegments(text).find((segment) => segment.type === "table");
   return tableSegment?.type === "table" ? tableSegment.table.rows.length : 0;
 }
 
-/** Counts how many distinct tables survive in `text`. */
 function tableCount(text: string): number {
   return extractMarkdownTableSegments(text).filter((segment) => segment.type === "table").length;
 }
@@ -19,9 +14,8 @@ function tableCount(text: string): number {
 const FLUSH_TARGET = 1000;
 
 describe("autoCloseIncompleteMarkers with markdown tables", () => {
-  // A table is ALWAYS held to the final flush (EOF never terminates a table block), so
-  // every table-bearing response runs through this repair. Appending a closer after the
-  // last row used to change that row's cell count and drop it from the rendered image.
+  // Tables hold until the final flush, so auto-closing delimiters inside cells must not change row cell counts
+  // and drop rows.
   it.each([
     ["an underscore in a cell", "Here you go:\n| Field | Type |\n|---|---|\n| user_id | int |\n| name | text |"],
     ["a footnote asterisk in a cell", "Here you go:\n| Model | Notes |\n|---|---|\n| Opus | Best* |\n| Haiku | Fast |"],
@@ -89,9 +83,7 @@ describe("findRegularOverflowFlushIndex with markdown tables", () => {
 
     const flushIndex = findRegularOverflowFlushIndex(buffer, FLUSH_TARGET);
 
-    // Nothing of the table may leave in the first message...
     expect(tableCount(buffer.slice(0, flushIndex))).toBe(0);
-    // ...and the retained buffer keeps every row for a single rendered image.
     expect(renderedRowCount(buffer.slice(flushIndex))).toBe(24);
   });
 

@@ -5,24 +5,16 @@ import {
 } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Read cache for the message → sprite-label mapping.
- *
- * Entries are immutable once written (a sent message's sprite never changes),
- * so this cache never needs invalidation : the TTL exists only to bound memory.
- * Negative results are cached too: most persona webhook messages are plain
- * (non-sprite) sends, and caching the miss avoids re-querying them every turn.
- */
+// Sent message sprites are immutable, so TTL only bounds memory without invalidation, and negative entries cache
+// plain sends to avoid repeat DB queries.
 
 const CACHE_TTL_MS = 120 * 60 * 1000;
 
 const parsedRetentionDays = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_RETENTION_DAYS || "30", 10);
 const RETENTION_DAYS = Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0 ? parsedRetentionDays : 30;
 
-// Housekeeping internals (not operational limits), both piggybacked on the write path so no timer
-// wiring is needed. The sweep is time-gated, not size-gated: the production working set peaks just
-// under any threshold high enough to be cheap, so a size gate never fired and expired entries stayed
-// until restart. A lower size gate would rescan the whole map on every insert once it held fresh entries.
+// Piggybacked on writes to avoid timers, and time-gated rather than size-gated because a cheap size threshold never
+// fires while a low one rescans fresh entries on every insert.
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 const PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -67,12 +59,6 @@ function sweepExpiredEntries(now: number): void {
   }
 }
 
-/**
- * Batch-resolves uncached message IDs in one DB round trip and seeds the cache,
- * including negative entries for IDs with no sprite mapping. Call this once per
- * context build with the webhook message IDs of the fetched history window so
- * subsequent per-message lookups are cache hits.
- */
 export async function primePersonaSpriteMessageRecords(messageDiscIds: string[]): Promise<void> {
   const uncachedIds = messageDiscIds.filter((messageDiscId) => getFreshEntry(messageDiscId) === undefined);
   if (uncachedIds.length === 0) {
@@ -91,10 +77,6 @@ export async function primePersonaSpriteMessageRecords(messageDiscIds: string[])
   }
 }
 
-/**
- * Read-through lookup for a single message's sprite mapping.
- * Returns null when the message has no sprite mapping (cached negatively).
- */
 export async function getPersonaSpriteMessageRecord(messageDiscId: string): Promise<PersonaSpriteMessageRow | null> {
   const cached = getFreshEntry(messageDiscId);
   if (cached !== undefined) {
@@ -111,12 +93,8 @@ export async function getPersonaSpriteMessageRecord(messageDiscId: string): Prom
   return record;
 }
 
-/**
- * Persists a sprite-message mapping after a successful webhook send and seeds
- * the cache so the very next context build resolves it without a DB read.
- * Failures are logged and swallowed: a lost row degrades the future context
- * label to the plain persona name, never an error.
- */
+// DB write failures are logged and swallowed because a lost mapping safely degrades future context labels to the
+// plain persona name.
 export async function recordPersonaSpriteMessage(input: PersonaSpriteMessageRecordInput): Promise<void> {
   const written = await personaSpriteMessageRepository.record(input);
   if (written) {

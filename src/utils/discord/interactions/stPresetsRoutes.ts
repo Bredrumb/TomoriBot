@@ -176,7 +176,6 @@ function resolveNodesPanelPage(presetId: number, totalCount: number, requestedRa
   };
 }
 
-/** Macro labels quote preset text verbatim, so each one is capped before it reaches the receipt. */
 const MACRO_LABEL_DISPLAY_MAX = 40;
 const MACRO_LABELS_SHOWN = 4;
 
@@ -197,10 +196,6 @@ function formatUnsupportedMacros(locale: string, labels: readonly string[]): str
     : list;
 }
 
-/**
- * The caveats an import carries beyond its node counts: what the preset holds that will not run as
- * written here. Each is a separate receipt line so the success detail stays scannable.
- */
 function buildImportNotes(locale: string, result: Extract<ImportStPresetResult, { status: "success" }>): string[] {
   const notes: string[] = [];
   if (result.commentOnlyCount > 0) {
@@ -299,12 +294,8 @@ async function renderStPresetsPanel(
   );
 }
 
-/**
- * The route-kind guards in `execute` already reject every non-button action, but that check is a
- * compound condition TypeScript cannot carry into the individual branches, so the narrower type has
- * to be re-asserted where the raw modal transport needs it. Do not replace this with a cast: a modal
- * submission reaching the transport would attempt a modal response on an acknowledged interaction.
- */
+// Must stay a runtime check rather than a TS cast because a modal submission reaching `showModal` would attempt a
+// modal reply on an acknowledged interaction.
 function requireButton(interaction: GlobalRoutableInteraction, action: string): ButtonInteraction {
   if (!interaction.isButton()) {
     throw new Error(`ST presets ${action} route requires a button interaction`);
@@ -725,7 +716,6 @@ export function createStPresetsInteractionRoute(
         return;
       }
 
-      // Remaining button/modal actions that acknowledge via deferUpdate
       const initialScope = await beginPanelInteraction(interaction, {
         authorize: isRouteAuthorized,
         onDenied: async () => {

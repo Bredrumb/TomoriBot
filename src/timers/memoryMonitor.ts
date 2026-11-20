@@ -1,8 +1,3 @@
-/**
- * Memory Monitor System
- * Periodically checks memory usage and logs status changes
- */
-
 import type { Client } from "discord.js";
 import { clearEmergencyCaches } from "@/utils/cache/emergencyCacheClearer";
 import { log } from "@/utils/misc/logger";
@@ -13,9 +8,6 @@ import {
   registerMemoryEmergencyHandler,
 } from "@/utils/security/rateLimiter";
 
-/**
- * Class to manage the memory monitoring system
- */
 class MemoryMonitor {
   private intervalId: NodeJS.Timeout | null = null;
   private unregisterEmergencyHandler: (() => void) | null = null;
@@ -25,13 +17,10 @@ class MemoryMonitor {
   private readonly client?: Client;
 
   constructor(pollIntervalMs = 30000, client?: Client) {
-    this.POLL_INTERVAL_MS = pollIntervalMs; // Default 30 seconds
+    this.POLL_INTERVAL_MS = pollIntervalMs;
     this.client = client;
   }
 
-  /**
-   * Starts the memory monitoring timer
-   */
   public start(): void {
     if (this.isRunning) {
       log.warn("Memory monitor is already running");
@@ -66,9 +55,6 @@ class MemoryMonitor {
     log.success("Memory monitor started successfully");
   }
 
-  /**
-   * Stops the memory monitoring timer
-   */
   public stop(): void {
     if (!this.isRunning) {
       log.warn("Memory monitor is not running");
@@ -90,15 +76,11 @@ class MemoryMonitor {
     log.success("Memory monitor stopped successfully");
   }
 
-  /**
-   * Checks memory status and logs if status has changed
-   */
   public async checkMemoryStatus(): Promise<void> {
     try {
       const memCheck = memoryGuard.checkMemory();
       const currentStatus = memCheck.status;
 
-      // Only log if status changed (avoid spam)
       if (currentStatus !== this.lastStatus) {
         const summary = formatMemoryStatus(memCheck);
 
@@ -117,9 +99,6 @@ class MemoryMonitor {
     }
   }
 
-  /**
-   * Gets the current status of the memory monitor
-   */
   public getStatus(): {
     isRunning: boolean;
     intervalMs: number;
@@ -135,11 +114,7 @@ class MemoryMonitor {
 
 let memoryMonitorInstance: MemoryMonitor | null = null;
 
-/**
- * @param clientOrPollIntervalMs - Optional Discord client or polling interval in milliseconds (default 30000)
- * @param pollIntervalMs - Optional polling interval when a client is provided
- * @public Dynamically loaded by `src/init/timers.ts` on main and release.
- */
+/** @public Dynamically loaded by `src/init/timers.ts` on main and release. */
 export function initializeMemoryMonitor(clientOrPollIntervalMs?: Client | number, pollIntervalMs?: number): void {
   if (memoryMonitorInstance) {
     log.warn("Memory monitor already initialized");

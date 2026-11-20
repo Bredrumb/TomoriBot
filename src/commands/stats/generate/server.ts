@@ -12,9 +12,6 @@ import { gatherServerCardData } from "@/utils/stats/serverCardGatherer";
 import { renderServerCard, CARD_W, getServerCardHeight } from "@/utils/stats/statsInfographic";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 
-/**
- * Configures the /stats generate server subcommand: renders this server's Server Leaderboard card.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("server")
@@ -29,9 +26,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Sends this server's Server Leaderboard card as a public PNG.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

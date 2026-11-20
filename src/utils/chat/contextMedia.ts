@@ -238,9 +238,8 @@ export function appendSupportedMediaFromMessage(
   let videoCount = 0;
 
   for (const attachment of sourceMessage.attachments.values()) {
-    // Some Discord message types (e.g. IsComponentsV2) may omit contentType in the
-    // API response. Fall back to filename-based inference so attachments aren't
-    // silently dropped, which would cause the whole message to be skipped.
+    // Infer contentType from filename when Discord omits it (such as on IsComponentsV2) so attachments are not
+    // silently dropped.
     const effectiveContentType = getEffectiveAttachmentContentType(attachment);
 
     if (isSupportedImageAttachmentContentType(effectiveContentType)) {
@@ -314,7 +313,8 @@ export function appendComponentMediaFromMessage(
   return { imageCount, videoCount };
 }
 
-/** Anything that is not image, video, or audio media falls to `read_file`, which rejects what it cannot parse. */
+// All non-media files intentionally pass as document attachments instead of using a MIME allowlist, because read_file
+// rejects unparseable formats itself.
 function isDocumentAttachment(attachment: Attachment): boolean {
   const effectiveContentType = getEffectiveAttachmentContentType(attachment);
   return (
@@ -363,14 +363,6 @@ type ForwardedMessageSnapshot = {
   member: Message["member"] | null;
 };
 
-/**
- * Render a forwarded message into context text and harvest its media.
- *
- * Resolves nested forwards first (see {@link resolveForwardChain}), so a forward of a
- * forward still yields the original's text and attachments instead of an empty block.
- *
- * @param args - Wrapper message, in-progress context content, and media collectors
- */
 export async function buildForwardContext(args: {
   message: Message;
   content: string;
@@ -396,9 +388,8 @@ export async function buildForwardContext(args: {
     };
   }
 
-  // Chase forwards-of-forwards: Discord flattens nested snapshots to nothing, so an
-  // unresolved chain must say so explicitly. Staying silent leaves the model asserting
-  // a forward it cannot see, which invites it to invent a media ID.
+  // Emit an explicit notice for unresolved nested forwards because Discord flattens them to nothing, preventing the
+  // model from hallucinating unseen media IDs.
   const chain = await resolveForwardChain(args.message);
   if (chain.unresolved) {
     return {
@@ -467,10 +458,8 @@ export async function buildForwardContext(args: {
     );
 
     if (args.imageAttachments.length > preForwardImageCount || args.videoAttachments.length > preForwardVideoCount) {
-      // Register the WRAPPER message id, not the original's: the original message
-      // lives in the source channel, so tools resolving media IDs against the
-      // current channel could never fetch it. The wrapper resolves in-channel and
-      // carries the same media inside its messageSnapshots.
+      // Register the in-channel wrapper ID rather than the original's because media tools resolve against the
+      // current channel and the wrapper carries messageSnapshots.
       if (!mediaSourceMessageIds.includes(args.message.id)) {
         mediaSourceMessageIds.push(args.message.id);
       }

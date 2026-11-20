@@ -102,11 +102,8 @@ export function buildConditioningRemoveModal(
   };
 }
 
-/**
- * A legacy message carries at most five action rows of five buttons, so the page selector can
- * address 25 batches. Entries are sorted newest first, so a server past this ceiling reaches its
- * most recent 1,250 and the prompt reports both counts rather than dropping the rest silently.
- */
+// Legacy messages allow five rows of five buttons (25 batches, or 1250 newest-first entries), so callers beyond this
+// ceiling must surface both counts.
 export const CONDITIONING_PAGE_SELECT_MAX_BUTTONS = DISCORD_ACTION_ROW_BUTTONS_MAX * 5;
 export const CONDITIONING_PAGE_SELECT_MAX_ENTRIES = CONDITIONING_PAGE_SELECT_MAX_BUTTONS * CONDITIONING_MODAL_CAPACITY;
 

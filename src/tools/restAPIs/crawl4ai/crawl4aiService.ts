@@ -1,10 +1,3 @@
-/**
- * Crawl4AI REST API service.
- *
- * Hidden HTTP client used by the unified `fetch_url` dispatcher. Availability
- * requires `CRAWL4AI_BASE_URL` plus a successful cached `/health` probe.
- */
-
 import { log } from "@/utils/misc/logger";
 import { readBoundedResponse, ResponseSizeError } from "@/utils/security/boundedResponse";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
@@ -55,15 +48,10 @@ function getCrawl4aiToken(): string | null {
   return raw || null;
 }
 
-/** Reads configuration only, so callers can decide on Crawl4AI without paying for a health request. */
 export function isCrawl4aiConfigured(): boolean {
   return getCrawl4aiBaseUrl() !== null;
 }
 
-/**
- * Parse CRAWL4AI_COOKIES_JSON into a cookie array. Returns an empty array if
- * the env var is unset or malformed (logs a warning on parse failure).
- */
 export function getCrawl4aiCookies(): Crawl4aiCookie[] {
   const raw = process.env.CRAWL4AI_COOKIES_JSON?.trim();
   if (!raw) return [];
@@ -171,9 +159,6 @@ function toCrawlResponse(body: unknown): Crawl4aiCrawlResponse | null {
   return body as unknown as Crawl4aiCrawlResponse;
 }
 
-/**
- * Maps a bounded-read or JSON failure to the result shape both endpoints return.
- */
 function describeBodyFailure(endpoint: string, error: unknown): Crawl4aiApiResult<never> | null {
   if (error instanceof ResponseSizeError) {
     log.warn(`${SERVICE_NAME} ${endpoint} response exceeded its byte limit`);
@@ -186,10 +171,6 @@ function describeBodyFailure(endpoint: string, error: unknown): Crawl4aiApiResul
   return null;
 }
 
-/**
- * Returns a parenthesized log suffix naming the likely token problem for an auth rejection, or an
- * empty string for any other status.
- */
 function authFailureHint(status: number): string {
   if (status !== 401 && status !== 403) return "";
   return getCrawl4aiToken()
@@ -304,11 +285,8 @@ export async function crawl4aiMarkdown(
   }
 }
 
-/**
- * Fetch a URL via /crawl with browser-level cookie injection.
- * Used when CRAWL4AI_COOKIES_JSON is set, so /md does not support cookies.
- * Returns a normalised Crawl4aiMarkdownResponse so callers stay uniform.
- */
+// Crawl4AI `/md` does not support `browser_config` cookies, so cookie-authenticated fetches must hit `/crawl`
+// instead.
 export async function crawl4aiCrawlWithCookies(
   request: Crawl4aiMarkdownRequest,
   cookies: Crawl4aiCookie[],
@@ -370,10 +348,7 @@ export async function crawl4aiCrawlWithCookies(
     const rawLen = result.markdown?.raw_markdown?.length ?? 0;
     log.info(`${SERVICE_NAME} /crawl response: fit_markdown=${fitLen}chars raw_markdown=${rawLen}chars`);
 
-    // Respect the requested filter mode: raw requests read raw_markdown directly;
-    // fit (default) prefers fit_markdown and falls back to raw_markdown.
-    // Use || (not ??) because /crawl returns fit_markdown as "" (not null) when
-    // pruning removes all content, and ?? does not fall through on empty strings.
+    // Use || instead of ?? because /crawl returns "" (not null) for fit_markdown when pruning strips all content.
     const markdown =
       request.f === "raw"
         ? result.markdown?.raw_markdown || ""

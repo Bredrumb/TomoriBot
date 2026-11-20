@@ -16,10 +16,8 @@ function createEngine(name: FetchEngineName): FetchEngine {
   }
 }
 
-/**
- * Setting `CRAWL4AI_BASE_URL` is the opt-in. `safe_http` always ends the chain, so a stopped or
- * failing crawler degrades to the guarded in-process fetch.
- */
+// Engine chain always ends with safe_http so a stopped or failing Crawl4AI instance degrades to the guarded
+// in-process fetch.
 export function getFetchUrlEngineOrder(): FetchEngineName[] {
   if (!isCrawl4aiConfigured()) return ["safe_http"];
 

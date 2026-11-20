@@ -41,9 +41,7 @@ export interface DeepSeekThinkingRequest extends ThinkingModeRequest {
 }
 
 export interface CustomThinkingRequest {
-  /** Ollama-native boolean thinking toggle (on/off only). */
   think?: boolean;
-  /** OpenAI-convention effort level (vLLM, other compatible servers). */
   reasoning_effort?: "none" | "low" | "medium" | "high" | "xhigh";
 }
 
@@ -93,9 +91,7 @@ function isGeminiProModel(model: string): boolean {
   return normalizeModel(model).includes("pro");
 }
 
-// Pro models and Gemini 3.7 Flash onward reject MINIMAL with a 400 instead of clamping it, while
-// every Gemini 3 model accepts LOW. An allow-list therefore costs an unlisted release a little extra
-// thinking rather than every request; add a Flash release here once it is confirmed to accept MINIMAL.
+// Allow-list MINIMAL only for confirmed Gemini 3 Flash releases because Pro and 3.7+ reject it with 400 unlike LOW.
 const GEMINI_MINIMAL_THINKING_PREFIXES = [
   "gemini-3-flash",
   "gemini-3.1-flash-lite",
@@ -109,17 +105,15 @@ function supportsGeminiMinimalThinking(model: string): boolean {
 }
 
 interface AnthropicThinkingProfile {
-  /** How `none` turns thinking off; `null` where the model always thinks and `none` falls to low effort. */
+  // Null sentinel means the model always thinks, so "none" falls back to low effort instead of disabling thinking.
   off: "disabled" | "between_tools" | null;
-  /** The API rejects `top_p` and any `temperature` other than 1 with a 400 even when thinking is off. */
+  // API rejects top_p or non-1 temperature with 400 even when thinking is off, so sampling must stay omitted.
   samplingLocked: boolean;
   extraHighEffort: "xhigh" | "max";
 }
 
-// Each family answers another family's off switch or sampling fields with a 400, so every profile
-// was confirmed against the live API. An unlisted release keeps the pre-adaptive request (no thinking
-// fields, sampling sent); add it here once its accepted fields are confirmed. A longer codename
-// precedes its prefix so `claude-sonnet-5-5` is not read as `claude-sonnet-5`.
+// Live-verified profiles ordered longest-prefix-first so unlisted releases fall back safely without 400s from
+// mismatched switches or sampling fields.
 const ANTHROPIC_THINKING_PROFILES: ReadonlyArray<readonly [prefix: string, profile: AnthropicThinkingProfile]> = [
   ["claude-fable-", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
   ["claude-opus-5-5", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
@@ -379,17 +373,8 @@ export function buildCustomThinkingRequest(
   return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
 }
 
-/**
- * Maps `thinking_level` onto NVIDIA NIM, which serves many model families behind one endpoint and
- * each family reads a different switch, so every level other than `auto` sends all of them:
- * `enable_thinking` (Nemotron) and `thinking` (DeepSeek) are chat-template kwargs that other
- * templates ignore, and `reasoning_effort` is the only control GLM and gpt-oss honor.
- *
- * `none` still sends effort `"low"`: NIM validates `reasoning_effort` against low/medium/high on
- * gpt-oss and Llama and returns 400 for `"none"`, and GLM ignores both template switches, so low
- * effort is the closest it gets to off. Levels map to effort rather than a token budget because
- * NIM's V2 model runner rejects `reasoning_budget`.
- */
+// NIM serves multiple families on one endpoint, so all switches are sent together, "none" maps to "low" to avoid
+// 400s, and rejected reasoning_budget is omitted.
 export function buildNvidiaThinkingRequest(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,

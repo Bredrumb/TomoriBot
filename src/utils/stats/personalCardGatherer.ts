@@ -1,20 +1,3 @@
-/**
- * personalCardGatherer.ts: data-gathering layer for the Personal "Wrapped"
- * infographic card.
- *
- * This is the ONLY file in the infographic stack that touches the DB.
- * `gatherPersonalCardData` calls the StatsRepository read methods and returns a
- * `PersonalCardData` struct that `renderPersonalCard` consumes as a pure function.
- *
- * Rules applied here (not in the renderer):
- * - AVATARS: user and favorite-persona references are resolved via
- *   `loadStoredPersonaAvatarDataUri` (handles both local dev paths and remote
- *   HTTP(S) URLs) and base64-encoded for the card's embedded `<img>` data URI.
- *   Fetch failure is graceful, so returns null so the renderer shows a placeholder.
- * - PALETTE: the first favorite persona avatar is sampled into an accessible,
- *   light-mode card palette. A neutral fallback keeps cards readable if it is
- *   unavailable or cannot be decoded.
- */
 import { statRepository } from "@/utils/db/repositories";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { log } from "@/utils/misc/logger";
@@ -24,21 +7,13 @@ import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColo
 import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/statsInfographic";
 
-/** Arguments for `gatherPersonalCardData`. */
 export interface GatherPersonalCardArgs {
-  /** Internal `users` FK (not the Discord snowflake). */
   userId: number;
-  /** Internal `servers` FK: passed for "this server" scope; omit for global. */
   serverId?: number;
-  /** Discord guild snowflake ID, used to resolve persona names/avatars from cache. */
   guildDiscId: string;
-  /** Display name shown on the card. */
   username: string;
-  /** Discord CDN URL for the invoking user's avatar. */
   userAvatarUrl?: string | null;
-  /** BCP-47 locale passed through to `PersonalCardData`. */
   locale: string;
-  /** Selected time window, so drives gating and window floor. */
   timeframe: Timeframe;
 }
 
@@ -64,9 +39,7 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
       getCachedAllPersonas(guildDiscId),
       loadStatsPresetAvatarLookup(),
     ]);
-    // Ranked by total tokens (desc) so the list order matches the card's
-    // Tokens/Spent columns. `getPersonaTokenCostBreakdown` already orders the
-    // whole population by tokens, so the top five are the genuine token leaders.
+    // getPersonaTokenCostBreakdown sorts all rows by tokens desc, so slice(0, 5) matches the card's Tokens/Spent order.
     favoritePersonas = await Promise.all(
       personaTokenCosts.slice(0, 5).map(async (entry) => {
         const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);

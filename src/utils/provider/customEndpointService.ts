@@ -68,8 +68,7 @@ export interface CustomEndpointRegistrationInput {
   seesImages?: boolean;
   seesVideos?: boolean;
   supportsStructOutput?: boolean;
-  // Strict chat-completion compatibility toggles (text capability). Synced to the synthetic llms
-  // row so the runtime resolves them uniformly with built-in providers.
+  // Text compatibility toggles synced to the synthetic llms row so runtime resolves them like built-in providers.
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
   supportsAssistantPrefill?: boolean;
@@ -77,8 +76,7 @@ export interface CustomEndpointRegistrationInput {
   // the panel reads the endpoint row, so both must carry the same value.
   verbatimToolCalling?: boolean;
   extraConfig?: Record<string, unknown>;
-  // When set, edit that exact endpoint row in place (update its model + row by id) instead of
-  // registering a new model. Add flows omit it; the edit command supplies the selected row's id.
+  // Present only when editing an existing endpoint row in place rather than adding a new registration.
   editingEndpointId?: number;
 }
 
@@ -101,14 +99,8 @@ async function getExistingSavedConfig(
     : await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, provider);
 }
 
-/**
- * Drops the cached row for a synthetic text model just written.
- *
- * TomoriState invalidation alone is not enough: rebuilding the state reads the model through
- * `llmModelRepo.loadById`, which is cache-first, so the rebuilt state would carry the pre-edit
- * capability flags. Dropping the entry makes that read fall through to the row that was just
- * written.
- */
+// TomoriState invalidation alone leaves llmModelRepo.loadById serving stale pre-edit capability flags from the LLM
+// cache, so this drops that cache entry.
 function forgetCachedTextModel(modelId: number | null | undefined): void {
   if (modelId != null) {
     forgetCachedLlm(modelId);
@@ -208,13 +200,8 @@ async function upsertSyntheticCapabilityModel(
   }
 }
 
-/**
- * Writes the synthetic model row backing an endpoint and returns its id.
- *
- * On the add path (no existing model ref) it inserts a fresh synthetic model. On the edit path it
- * updates the existing model row in place by id, so a renamed model_name (which changes the derived
- * codename) does not orphan the row that live config still references by id.
- */
+// Edits must update the existing synthetic model row in place by id so renaming model_name (which changes codename)
+// does not orphan live config references.
 async function writeSyntheticCapabilityModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
@@ -591,14 +578,12 @@ export async function registerCustomEndpoint(
     return null;
   }
 
-  // New registrations become active immediately. Edits preserve the existing
-  // active slot unless the provider did not have one yet.
+  // New registrations activate immediately, while edits keep the existing active slot when one is already set.
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
   const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
 
   const savedConfig = await buildSavedConfigForCustomEndpoint(input.scope, provider, existingConfig, input, modelId);
-  // Registering an image-capable text model never claims the vision slot: that write also moved the
-  // live text model, so one submit silently changed two models. Vision is chosen via /model vision.
+  // Never assign vision_llm_id here because vision is chosen separately via /model vision without changing text.
   const nextSavedConfig = {
     ...savedConfig,
     llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
@@ -716,17 +701,6 @@ export async function setActiveCustomEndpoint(params: {
   return await llmProviderRepo.setActiveCustomEndpoint(params);
 }
 
-/**
- * Resolves the custom endpoint row backing a provider for a capability.
- *
- * When an active model id is supplied, the specific endpoint owning that synthetic model is
- * returned: this is how the runtime picks the right row when several models share a connection.
- * When omitted (or no match), it falls back to the most-recently-updated endpoint for the connection.
- *
- * @param provider      - Internal custom provider name (custom:<connection_id>)
- * @param capability    - Endpoint capability
- * @param activeModelId - Optional id of the currently-active synthetic model for this capability
- */
 export async function resolveCustomEndpointForProvider(
   provider: string,
   capability: CustomEndpointCapability,
@@ -740,13 +714,8 @@ export async function resolveCustomEndpointForProvider(
   return await llmProviderRepo.loadCustomEndpointByConnection(parsed.connectionId, capability, activeModelId);
 }
 
-/**
- * The endpoint a custom text request targets and the `num_ctx` it sends.
- *
- * Shared by the request builder and the context budget because the truncation window must equal
- * the `num_ctx` actually sent. The model config mirror wins when set (a fallback hop pins it), and
- * only then is the endpoint row skipped.
- */
+// Shared by the request builder and context budget so truncation matches the sent num_ctx; the config mirror wins
+// because fallback hops pin it there.
 export async function resolveCustomTextEndpointTarget(tomoriState: TomoriState): Promise<{
   endpointUrl: string | null;
   modelNameHint: string | null;
@@ -795,15 +764,12 @@ export async function validateCustomEndpointReachability(params: {
       return response.ok ? { ok: true } : { ok: false, reason: `HTTP ${response.status} ${response.statusText}` };
     }
 
-    // openai-compatible-transcription servers expose /v1/models (OpenAI-compatible) or /models.
-    // The stored URL may already carry /v1, so probe versioned and unversioned roots instead of
-    // blindly appending /v1 (which would double it into /v1/v1/models).
+    // Probe normalized /v1/models then /models because stored transcription URLs may already include /v1.
     if (params.apiStyle === "openai-compatible-transcription") {
       const versionedRoot = /\/v1$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
       const unversionedRoot = /\/v1$/i.test(baseUrl) ? baseUrl.replace(/\/v1$/i, "") : baseUrl;
       const response = await fetchUserRemoteUrl(`${versionedRoot}/models`, { headers }, fetchOptions);
       if (response.ok) return { ok: true };
-      // Fall back to the shorter /models path some servers expose.
       const fallback = await fetchUserRemoteUrl(`${unversionedRoot}/models`, { headers }, fetchOptions);
       return fallback.ok ? { ok: true } : { ok: false, reason: `HTTP ${response.status} ${response.statusText}` };
     }
@@ -822,8 +788,7 @@ export async function validateCustomEndpointReachability(params: {
         { headers, signal: AbortSignal.timeout(10_000) },
         fetchOptions,
       );
-      // Discovery is optional on compatible gateways. A route miss proves reachability only;
-      // protocol and model support remain the operator's declaration until execution.
+      // Treat 404/405 as reachable because discovery is optional on gateways and execution checks models later.
       const ok = response.ok || response.status === 404 || response.status === 405;
       await response.body?.cancel();
       log.info(
@@ -854,8 +819,7 @@ export async function validateCustomEndpointReachability(params: {
   }
 }
 
-// These protocols append their operation to a versioned base. Other styles use an origin
-// route or a preset URL, so adding /v1 would change their target.
+// Only these versioned-base protocols append /v1 because other styles target origin or preset paths.
 const VERSIONED_API_STYLES = new Set<CustomEndpointApiStyle>([
   "openai-compatible",
   "openai-compatible-transcription",
@@ -864,14 +828,6 @@ const VERSIONED_API_STYLES = new Set<CustomEndpointApiStyle>([
   "openai-decisions",
 ]);
 
-/**
- * Normalizes a user-supplied endpoint URL before it is stored.
- *
- * A bare origin is extended with /v1 for versioned styles. Each owning adapter appends
- * its operation route, including the separate Decision protocols.
- * URLs that already end in /v1, or that carry a custom path such as a gateway prefix,
- * are kept verbatim: appending blindly would corrupt /api/v1 into /api/v1/v1.
- */
 export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApiStyle, endpointUrl: string): string {
   const trimmed = endpointUrl.trim().replace(/\/+$/, "");
   if (!VERSIONED_API_STYLES.has(apiStyle)) {
@@ -903,13 +859,8 @@ export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApi
   return trimmed;
 }
 
-/**
- * Decrypts the credential saved for one connection, looked up under that connection's own owner.
- * Capability-level resolution would instead return whichever text credential wins the workspace
- * policy, which can belong to a different provider entirely.
- *
- * @returns `null` when the connection has no stored credential or it cannot be decrypted.
- */
+// Must look up credentials under the connection's own owner because capability-level resolution can return another
+// provider's winning text key.
 export async function loadCustomConnectionCredential(
   connection: CustomEndpointConnectionRow,
   failureContext?: ErrorContext,

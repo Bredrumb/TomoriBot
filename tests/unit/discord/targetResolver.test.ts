@@ -8,11 +8,6 @@ import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { createParticipantAlias } from "@/utils/text/participants/aliases";
 import { createDiscordUserKey, createPersonaKey, serializeParticipantKey } from "@/utils/text/participants/identity";
 
-/**
- * Builds a minimal ToolContext carrying only the conversation-user metadata that
- * `resolveUserTarget`'s first (conversation) stage reads. That stage short-circuits
- * before any guild/client access, so a partial cast is safe for these cases.
- */
 function buildContext(conversationUsers: ConversationUserReference[]): ToolContext {
   const contextItem: StructuredContextItem = {
     role: "user",
@@ -131,9 +126,7 @@ it("resolves a persona in conversation without treating it as a separate user", 
 });
 
 describe("resolveUserTarget — conversation stage primary-name precedence", () => {
-  // Reproduces the real collision: the asking user is rendered as their DB
-  // nickname "Misuzu" but carries server nickname "Zallya" as a secondary
-  // alias, while a different account's actual name is "Zallya".
+  // Reproduces the collision where a user's secondary alias matches another user's primary name, so primary wins.
   const misuzu: ConversationUserReference = {
     targetId: "111",
     displayLabel: "Misuzu",
@@ -223,11 +216,8 @@ interface FakeGuildMember {
   username: string;
 }
 
-/**
- * Builds a ToolContext whose guild answers the two calls the post-conversation
- * stages make: a prefix search (what Discord's member search actually does) and a
- * fetch by ID. Members absent from the map reject, matching a left server.
- */
+// Discord member search matches by prefix and fetch rejects for departed members, so the fake reproduces both
+// behaviors.
 function buildGuildContext(
   members: FakeGuildMember[],
   options?: { namingConfig?: PersonaNamingConfig; personaLineageId?: number },

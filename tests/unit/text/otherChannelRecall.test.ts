@@ -47,7 +47,6 @@ scopedMock.module("@/utils/cache/userCache", () => ({
 
 const { buildShortTermMemoryContext } = await import("@/utils/text/context/memories");
 
-/** A row warmed from the DB after its summary was cleared: no messages, summary, or category values. */
 function hydratedEntry(channelId: string, lastUpdated: number, overrides: Partial<ShortTermMemoryEntry> = {}) {
   return { messages: [], serverId: "server-1", channelId, lastUpdated, ...overrides } satisfies ShortTermMemoryEntry;
 }

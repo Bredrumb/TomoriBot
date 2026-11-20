@@ -5,18 +5,12 @@ export interface ElevenLabsAdapterRequest {
   apiKey: string;
   voiceId: string;
   script: string;
-  /**
-   * Per-invocation overrides merged into the request's `voice_settings`.
-   * Omit entirely to keep the request body byte-identical to the provider defaults.
-   */
+  // voiceSettings must be omitted rather than set to an empty object so the request body stays identical to
+  // ElevenLabs defaults.
   voiceSettings?: Record<string, unknown>;
   abortSignal?: AbortSignal;
 }
 
-/**
- * Thin adapter that wraps `synthesizeSpeechWithElevenLabs` for use via the
- * custom endpoint pathway. Reads `speech_voice_id`.
- */
 export async function synthesizeSpeechViaElevenLabsAdapter(
   request: ElevenLabsAdapterRequest,
 ): Promise<ElevenLabsTtsResult> {

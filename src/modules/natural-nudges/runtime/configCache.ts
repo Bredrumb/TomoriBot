@@ -9,7 +9,8 @@ import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { MIN_IDLE_NUDGE_HEAT, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";
 
-/** Heat and automatic channels move over days, so five minutes stale costs a few counted messages at most. */
+// Five-minute TTL is acceptable because heat and automatic channels change over days, costing at most a few counted
+// messages.
 const GATE_TTL_MS = 5 * 60 * 1000;
 
 export interface NaturalNudgeGate {
@@ -22,7 +23,6 @@ export interface NaturalNudgeGate {
 interface GateEntry {
   expiresAt: number;
   eligible: boolean;
-  /** Shared by every message that arrives while the first read is still loading. */
   gate: Promise<NaturalNudgeGate | null>;
   serverId: number | null;
 }
@@ -88,7 +88,6 @@ async function loadGate(guildId: string, now: Date, entry: GateEntry): Promise<N
   };
 }
 
-/** Null for a guild with no workspace; a failed read is not cached, so the next message retries. */
 export async function readNaturalNudgeGate(guildId: string): Promise<NaturalNudgeGate | null> {
   const now = new Date();
   const cached = entries.get(guildId);
@@ -122,7 +121,8 @@ export async function readNaturalNudgeGate(guildId: string): Promise<NaturalNudg
   return entry.gate;
 }
 
-/** Call after a successful settings write; entries still loading are dropped too, since they may predate it. */
+// Must be called after a successful write, and also drops serverId === null entries because in-flight loads may
+// predate the write.
 export function invalidateNaturalNudgeConfigCache(serverId: number): void {
   for (const [guildId, entry] of entries) {
     if (entry.serverId === serverId || entry.serverId === null) entries.delete(guildId);

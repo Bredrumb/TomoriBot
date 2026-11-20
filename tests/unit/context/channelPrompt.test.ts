@@ -8,11 +8,6 @@ const SERVER_PROMPT = "SERVER SYSTEM PROMPT";
 const CHANNEL_PROMPT = "CHANNEL-SCOPED PROMPT";
 const PERSONA_PROMPT = "PERSONA PROMPT";
 
-/**
- * Builds the minimal params `buildPromptContextItems` reads. `convertMentions`
- * and `toolPromptMacroResolver` are identity passthroughs so assertions compare
- * against the raw prompt text.
- */
 function makeParams(overrides: {
   systemPrompt?: string | null;
   channelPromptOverride?: { prompt: string; mode: "append" | "replace" } | null;
@@ -38,7 +33,6 @@ function makeParams(overrides: {
   };
 }
 
-/** Returns the joined text of the first item carrying `tag`, or undefined. */
 function textForTag(items: StructuredContextItem[], tag: ContextItemTag): string | undefined {
   const item = items.find((i) => i.metadataTag === tag);
   if (!item) return undefined;

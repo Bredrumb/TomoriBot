@@ -1,18 +1,3 @@
-/**
- * API Key Rotation Utility
- * Provides load balancing (round-robin) and failover capabilities for LLM API keys.
- *
- * Key Features:
- * - Round-robin distribution across multiple API keys
- * - Automatic failover on API errors
- * - Cooldown-based recovery (60s for rate limits, 5min for other errors)
- * - Main key pointer design (uses the server model config api_key as virtual key in pool)
- *
- * Schema split (migration 014): config columns live in api_key_rotation; telemetry lives in
- * api_key_rotation_runtime_state. Selection queries LEFT JOIN both tables so callers receive the
- * full ApiKeyRotationRow shape. Telemetry writes target only the runtime state table.
- */
-
 import { sql } from "@/utils/db/client";
 import { invalidateNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { log } from "../misc/logger";
@@ -21,31 +6,19 @@ import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { type ApiKeyRotationErrorType, type TomoriState, apiKeyRotationSchema } from "@/types/db/schema";
 
-/** Cooldown duration for rate limit errors (429) in milliseconds */
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 
-/** Cooldown duration for other API errors (401, 403, etc.) in milliseconds */
 const API_ERROR_COOLDOWN_MS = 5 * 60_000;
 
-/** Maximum number of key attempts per request before giving up */
 export const MAX_KEY_ATTEMPTS = 3;
 
 export interface SelectedKeyResult {
   usageContext?: ProviderUsageContext;
-  /** The decrypted API key ready for use */
   apiKey: string;
-  /** The rotation_key_id to use for recording success/error (null for main key without pointer) */
   rotationKeyId: number | null;
-  /** Whether this is the main key from the assembled server config */
   isMainKey: boolean;
 }
 
-/**
- * Checks if a key is currently in cooldown based on its last error
- * @param lastErrorAt - Timestamp of the last error
- * @param lastErrorType - Type of the last error ('rate_limit' or 'api_error')
- * @returns True if the key is still in cooldown
- */
 function isKeyInCooldown(
   lastErrorAt: Date | null | undefined,
   lastErrorType: ApiKeyRotationErrorType | null | undefined,
@@ -61,22 +34,6 @@ function isKeyInCooldown(
   return now - errorTime < cooldownMs;
 }
 
-/**
- * Selects the next available API key using round-robin with cooldown filtering.
- * If rotation is not active (< 2 keys), returns null to signal using main key directly.
- *
- * Selection Algorithm:
- * 1. Query api_key_rotation JOIN api_key_rotation_runtime_state for server_id
- * 2. If 0-1 rows → no rotation, return null (use the assembled server config api_key directly)
- * 3. If 2+ rows → rotation active:
- *    a. Filter: is_enabled = true AND cooldown expired
- *    b. Sort by: usage_count ASC (round-robin)
- *    c. Select first key not in excludeKeyIds
- *    d. Decrypt and return
- *
- * @param excludeKeyIds - Array of rotation_key_ids to exclude (already tried and failed)
- * @returns Selected key result, or null if rotation not active or all keys exhausted
- */
 export async function selectApiKey(
   tomoriState: TomoriState,
   excludeKeyIds: number[] = [],
@@ -99,7 +56,6 @@ export async function selectApiKey(
       ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
     `;
 
-    // If less than 2 keys, rotation is not active
     if (!rotationKeys || rotationKeys.length < 2) {
       log.info(`Key rotation not active for server ${serverId} (${rotationKeys?.length || 0} keys)`);
       return null;
@@ -114,7 +70,6 @@ export async function selectApiKey(
       }
       const key = parsed.data;
 
-      // Skip disabled keys
       if (!key.is_enabled) {
         continue;
       }
@@ -161,13 +116,6 @@ export async function selectApiKey(
   }
 }
 
-/**
- * Checks if there is at least one available rotation key (excluding provided IDs).
- * This avoids decrypting keys and skips user-facing logging for peek checks.
- *
- * @param excludeKeyIds - Array of rotation_key_ids to exclude (already tried and failed)
- * @returns True if another usable rotation key exists
- */
 export async function hasAvailableRotationKey(
   tomoriState: TomoriState,
   excludeKeyIds: number[] = [],
@@ -233,13 +181,7 @@ export async function hasAvailableRotationKey(
   }
 }
 
-/**
- * Records a successful API call for a rotation key.
- * Increments usage_count, resets error_count and cooldown fields in the runtime state table.
- * Uses UPSERT to ensure the runtime row exists even if somehow absent after migration.
- *
- * @param rotationKeyId - The rotation_key_id to update
- */
+// Runtime state uses UPSERT rather than UPDATE so success tracking still works if a key lacks a runtime row.
 export async function recordKeySuccess(rotationKeyId: number): Promise<void> {
   try {
     await sql`
@@ -262,14 +204,7 @@ export async function recordKeySuccess(rotationKeyId: number): Promise<void> {
   }
 }
 
-/**
- * Sets cooldown based on error type and increments error_count in the runtime state table.
- * Uses UPSERT to ensure the runtime row exists even if somehow absent after migration.
- *
- * @param rotationKeyId - The rotation_key_id to update
- * @param errorType - Type of error ('rate_limit' for 429, 'api_error' for others)
- * @param errorMessage - Human-readable error message
- */
+// Runtime state uses UPSERT rather than UPDATE so cooldowns still apply if a key lacks a runtime row.
 export async function recordKeyError(
   rotationKeyId: number,
   errorType: ApiKeyRotationErrorType,
@@ -298,14 +233,6 @@ export async function recordKeyError(
   }
 }
 
-/**
- * Also creates the main key pointer if this is the first rotation key.
- * Each api_key_rotation insert is followed by a runtime state row insert.
- *
- * @param provider - The LLM provider name (must match current provider)
- * @param apiKey - The raw API key to encrypt and store
- * @returns True if the key was added successfully
- */
 export async function addRotationKey(serverId: number, provider: string, apiKey: string): Promise<boolean> {
   const normalizedProvider = provider.toLowerCase();
 
@@ -335,7 +262,6 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
       }
     }
 
-    // Encrypt and store the new rotation key, then seed runtime state
     const { encrypted, version } = await encryptApiKey(apiKey);
 
     const keyResult = await sql`
@@ -361,13 +287,6 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
   }
 }
 
-/**
- * Purges all rotation keys for a specific server+provider pair.
- * Used when removing a saved provider config to ensure a clean break.
- * Runtime state rows cascade-delete automatically via FK ON DELETE CASCADE.
- *
- * @param provider - The provider name (lowercase) to purge keys for
- */
 export async function purgeRotationKeysForProvider(serverId: number, provider: string): Promise<number> {
   try {
     const result = await sql`
@@ -387,7 +306,6 @@ export async function purgeRotationKeysForProvider(serverId: number, provider: s
   }
 }
 
-/** Returns the additional-key count for one provider pool. */
 export async function getRotationKeyCountForProvider(serverId: number, provider: string): Promise<number> {
   try {
     const result = await sql`

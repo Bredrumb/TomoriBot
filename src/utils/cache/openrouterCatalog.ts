@@ -1,11 +1,3 @@
-/**
- * Shared refresh machinery for OpenRouter's catalog endpoints.
- *
- * OpenRouter publishes sibling catalogs (text, embedding, image, video, decisions) that each
- * list only their own modality, so a model absent from one says nothing about the others.
- * Every catalog needs the same refresh discipline, which this module centralizes.
- */
-
 import { log } from "@/utils/misc/logger";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
@@ -18,47 +10,28 @@ export const openRouterPriceSchema = z
 const DEFAULT_MIN_REFRESH_INTERVAL_MS = 60 * 1000;
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 
-/**
- * Floor on the gap between refresh *attempts*, shared by every catalog.
- *
- * The gate counts attempts rather than successes so a persistently failing endpoint cannot
- * be turned into a request amplifier: a miss costs one upstream fetch per window regardless
- * of how the previous attempt ended, process-wide. That bound is the only thing standing
- * between a permanently invalid codename on the chat path and a fetch per turn, so the
- * window stays short rather than absent. Zero disables it.
- *
- * @param catalogMinRefreshIntervalMs - Per-catalog override; the shared default applies when omitted.
- */
+// Cooldown counts attempts (not successes) so failing endpoints or invalid codenames cannot amplify requests; passing
+// 0 disables it.
 function getOpenRouterCatalogMinRefreshIntervalMs(catalogMinRefreshIntervalMs?: number): number {
   return catalogMinRefreshIntervalMs ?? DEFAULT_MIN_REFRESH_INTERVAL_MS;
 }
 
-/**
- * Age past which a catalog is considered stale and eligible for a background refresh.
- *
- * @param catalogTtlMs - Per-catalog override; the shared default applies when omitted.
- */
 export function getOpenRouterCatalogTtlMs(catalogTtlMs?: number): number {
   return catalogTtlMs ?? DEFAULT_TTL_MS;
 }
 
-/** Codenames reach us from Discord input and from the database, neither of which enforces case. */
 export function normalizeOpenRouterCodename(codename: string): string {
   return codename.trim().toLowerCase();
 }
 
 export interface OpenRouterCatalogSource<TEntry> {
-  /** Human-readable catalog name used in log lines. */
   label: string;
   url: string;
-  /**
-   * Cooldown between refresh attempts for this catalog, defaulting to the shared window.
-   * Production catalogs leave it unset; a test that must reach the network passes 0.
-   */
+  // Production catalogs leave this unset to use the shared window, while tests pass 0 so lookups can bypass the
+  // cooldown and reach the network.
   minRefreshIntervalMs?: number;
-  /** Freshness window for this catalog, defaulting to the shared TTL. */
   ttlMs?: number;
-  /** Throws when the payload is malformed, which is treated as a failed refresh. */
+  // Implementations throw on malformed payloads so the catalog treats invalid responses as failed refreshes.
   parse(payload: unknown): TEntry[];
   keyOf(entry: TEntry): string;
 }
@@ -73,22 +46,19 @@ interface OpenRouterCatalogStatus {
 
 export interface OpenRouterCatalog<TEntry> {
   initialize(): Promise<void>;
-  /** Resolves true when the in-memory map holds a usable catalog, refreshed or not. */
+  // Boolean result reflects whether a usable catalog is in memory, refreshed or not, so a failed refresh with cached
+  // data still resolves true.
   refresh(options?: { force?: boolean }): Promise<boolean>;
   refreshIfStale(): Promise<boolean>;
-  /** Synchronous lookup against whatever is already cached; never triggers a fetch. */
   get(codename: string): TEntry | undefined;
-  /** Iterates the current immutable-by-convention snapshot without triggering a refresh. */
+  // Yielded snapshot entries are shared and immutable by convention, so callers must not mutate them in place.
   values(): IterableIterator<TEntry>;
-  /**
-   * Lookup that refreshes once, subject to the cooldown, when the codename is unknown.
-   * `fresh` refreshes before the lookup instead and ignores the cooldown.
-   */
+  // Unknown codenames refresh once subject to cooldown, whereas `fresh` refreshes before lookup without honoring the
+  // cooldown.
   getOrFetch(codename: string, options?: { fresh?: boolean }): Promise<TEntry | undefined>;
   isReady(): boolean;
   size(): number;
   getStatus(): OpenRouterCatalogStatus;
-  /** Test seam: drops cached entries and timing state. */
   reset(): void;
 }
 
@@ -152,9 +122,8 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
     try {
       const next = await fetchCatalog();
 
-      // Swapping a fully built map is what makes a mid-life refresh safe: readers either
-      // see the whole old catalog or the whole new one, and a failed fetch below leaves
-      // a working catalog untouched rather than emptying it.
+      // Swapping the built map atomically keeps readers on a complete snapshot, so a failed fetch leaves cached data
+      // intact.
       entries = next;
       ready = true;
       lastSuccessAt = Date.now();
@@ -247,10 +216,8 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
         return cached;
       }
 
-      // A miss is the only signal we get that the boot-time snapshot predates a model,
-      // and an unready catalog means boot never completed, so both must be able to reach
-      // the network. Returning early on `!ready` is what used to strand the whole feature
-      // until a restart.
+      // Never return early on `!ready`, because both an unready catalog and a cache miss must reach the network to
+      // recover without a restart.
       await refresh();
       return entries.get(key);
     },
@@ -279,7 +246,6 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
   };
 }
 
-/** Shape shared by the embedding and image catalogs, which we consult only for existence. */
 export interface OpenRouterCatalogModelEntry {
   id: string;
   name: string | null;

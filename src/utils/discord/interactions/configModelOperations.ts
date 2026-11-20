@@ -84,10 +84,8 @@ import {
   parseCommaSeparatedStopStrings,
 } from "@/utils/provider/stopStringConfig";
 
-/** Sentinel a fallback slot select carries to empty that slot. */
 export const CONFIG_FALLBACK_CLEAR_VALUE = "__none__";
 
-/** Distinguishes a custom-endpoint fallback pick from an LLM codename in a slot select value. */
 export const CONFIG_FALLBACK_ENDPOINT_PREFIX = "ce:";
 
 export function resolveNaiPresetTarget(state: TomoriState): "kayra" | "erato" | "xialong" | null {
@@ -95,7 +93,6 @@ export function resolveNaiPresetTarget(state: TomoriState): "kayra" | "erato" | 
   return getNovelAIProfile(state.llm.llm_codename).samplingPresetTarget;
 }
 
-/** Capability slot to the saved-provider capability whose eligibility list backs it. */
 const SAVED_PROVIDER_CAPABILITY: Record<Exclude<ConfigModelCapability, "decision">, SavedProviderCapability> = {
   text: "text",
   vision: "vision",
@@ -114,7 +111,6 @@ function isConfigSpeechCapability(capability: ConfigModelCapability): capability
   return capability === "tts-design" || capability === "tts-clone";
 }
 
-/** Server transcription endpoints, the connections the STT slot lists as `custom:<id>` providers. */
 async function loadServerTranscriptionEndpoints(serverId: number): Promise<CustomEndpointRow[]> {
   return (await llmProviderRepo.loadCustomEndpointsForServer(serverId)).filter(
     (endpoint) => endpoint.capability === "transcription" && endpoint.custom_endpoint_id !== undefined,
@@ -134,14 +130,8 @@ async function loadServerSpeechEndpoints(serverId: number, mode: VoiceSourceMode
   );
 }
 
-/**
- * Splits the single `image` eligibility list across the panel's two image slots.
- *
- * `/model image` picks its target column from the chosen provider's `imageGeneration` style, so a
- * provider that would write `nai_diffusion_model_id` must not appear under Standard Image and vice
- * versa. A custom label always writes the standard column whatever its connection points at, which
- * is why the custom check comes first here exactly as it does in the command.
- */
+// Custom check runs first because /model image always writes custom providers to the standard column regardless of
+// the underlying connection.
 export function isNaiPipelineProvider(provider: string): boolean {
   if (isCustomProvider(provider)) return false;
   return getStaticProviderInfo(provider)?.featureSupport.imageGeneration === "nai-pipeline";
@@ -225,7 +215,8 @@ export async function loadConfigModelProviders(serverId: number, capability: Con
   ];
 }
 
-/** Decision models are not a saved-provider capability, so their providers come from owned registrations. */
+// Decision is not a saved-provider capability, so this loader derives providers from owned registrations rather than
+// saved provider configs.
 async function loadDecisionModelProviders(serverId: number): Promise<SavedProviderConfigRow[]> {
   const options = await loadDecisionModelsForScope({ kind: "server", ownerId: serverId });
   const owned = new Set(
@@ -237,19 +228,13 @@ async function loadDecisionModelProviders(serverId: number): Promise<SavedProvid
   );
 }
 
-/** One selectable model in a capability slot, flattened so the renderer needs no per-slot branch. */
 export type ConfigModelChoice = ProviderModelChoice;
 
-/** Text models one provider offers that can answer with structured output, grouped by provider. */
 export interface StructuredOutputModelGroup {
   provider: string;
   models: ConfigModelChoice[];
 }
 
-/**
- * Server text models able to return structured output: the provider must support it (every
- * provider but NovelAI) and so must the model. Out-of-turn structured calls choose from these.
- */
 export async function loadStructuredOutputModelGroups(
   serverId: number,
   locale: string,
@@ -445,7 +430,8 @@ export interface ConfigModelOperations {
   }): Promise<ConfigNaiParametersResult>;
 }
 
-/** Speech slots hold either a hosted model or a custom endpoint, so `provider` picks which id is meant. */
+// Speech slots store both hosted model and custom endpoint ids, so provider is needed to select which id column is
+// returned.
 export function currentModelIdForCapability(
   state: TomoriState,
   capability: ConfigModelCapability,
@@ -578,14 +564,8 @@ async function setServerSpeechTarget(
   return written ? { status: "success", modelName: choice.name, reembedded: false } : { status: "write-failed" };
 }
 
-/**
- * Promotes a Text model exactly as `/model text` does for the server scope.
- *
- * The saved-provider snapshot supplies the samplers, key, and thinking level so a provider switch
- * restores what that provider was last configured with. The fallback chain is pruned rather than
- * cleared because it is cross-provider by design: only the model being promoted has to leave it,
- * or every later fallback edit would be blocked by its own primary.
- */
+// Since fallback chains are cross-provider, promotion prunes only the newly promoted model rather than clearing the
+// chain or leaving a self-fallback.
 async function promoteTextModel(
   tomoriState: TomoriState,
   serverDiscId: string,
@@ -791,7 +771,8 @@ export const configModelOperations: ConfigModelOperations = {
         if (!updated) return { status: "write-failed" };
       }
 
-      // Stored vectors from another embedding family cannot be searched by the active model, so mismatched documents are re-embedded rather than left unsearchable.
+      // Stored vectors from another embedding family cannot match the active model, so mismatched documents
+      // are re-embedded rather than left unsearchable.
       const shouldReembed = familyChanged || hasMismatchedChunks;
       let reembedded = false;
       if (shouldReembed && ragAvailable) {
@@ -1156,9 +1137,7 @@ export const configModelOperations: ConfigModelOperations = {
         continue;
       }
       if (raw === CONFIG_FALLBACK_CLEAR_VALUE) continue;
-      // A pick that no longer resolves drops that slot alone. One submission edits five positions
-      // at once, so failing the whole write would also discard the untouched slots it was carrying
-      // through, and a catalog that changed while the modal sat open is an ordinary race here.
+      // Drop only an unresolved pick so a catalog race on one slot does not discard the other four edits.
       if (raw.startsWith(CONFIG_FALLBACK_ENDPOINT_PREFIX)) {
         const endpointId = Number.parseInt(raw.slice(CONFIG_FALLBACK_ENDPOINT_PREFIX.length), 10);
         const endpoint = selectableEndpoints.find((candidate) => candidate.custom_endpoint_id === endpointId);
@@ -1228,8 +1207,7 @@ export const configModelOperations: ConfigModelOperations = {
   },
 
   async setImageDefaultTags({ tomoriState, serverDiscId, negative, rawInput }) {
-    // An empty submission restores the built-in defaults rather than creating a new empty state,
-    // which is the reset path the absorbed commands already offer.
+    // Empty input restores built-in defaults because clearing tags resets to defaults rather than storing blank.
     if (rawInput.trim().length === 0) {
       const defaults = negative ? [...DEFAULT_IMAGE_NEGATIVE_TAGS] : [...DEFAULT_IMAGE_POSITIVE_TAGS];
       const reset = await configRepository.updateNovelaiImagegenConfig(
@@ -1291,10 +1269,8 @@ export const configModelOperations: ConfigModelOperations = {
   },
 };
 
-/**
- * Uploaded entries carry no id: `buildLogitBiasEntries` derives one, so accepting a supplied id
- * would let a file overwrite an unrelated stored entry.
- */
+// Uploaded logit-bias entries exclude id because buildLogitBiasEntries derives it and trusting a supplied id would
+// overwrite unrelated stored entries.
 const uploadedLogitBiasSchema = logitBiasEntrySchema
   .pick({ text: true, value: true })
   .extend({ value: logitBiasEntrySchema.shape.value.min(LOGIT_BIAS_MIN).max(LOGIT_BIAS_MAX) })

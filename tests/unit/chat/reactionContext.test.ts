@@ -9,10 +9,8 @@ import { ContextItemTag } from "@/types/misc/context";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 
-/**
- * Reactor lookups are sequential Discord REST calls, so ordinary turns must render counts from the
- * gateway payload alone and defer names to a `reveal_message_metadata` restart.
- */
+// Reactor lookups require sequential Discord REST calls, so ordinary turns must use gateway payload counts alone and
+// defer names to reveal_message_metadata.
 
 type ReactorFixture = { id: string; globalName: string | null; username: string };
 

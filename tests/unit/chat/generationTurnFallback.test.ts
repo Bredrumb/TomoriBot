@@ -15,19 +15,10 @@ import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice"
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
-// Capture the REAL repository barrel before the mock below replaces it. Importing
-// it is side-effect-free (the DB client connects lazily, not at import), and
-// `mock.module` runs in source order (not hoisted), so this static import resolves
-// to the real module. Spreading it into the mock keeps every repository export
-// present, so command modules pulled into the SUT's dynamic-import graph can
-// satisfy their static `import { ... }` bindings. Without this, running this file
-// in its own process (per-file isolation in runTests.ts) fails to link exports
-// like `serverScheduleRepository` that the graph imports but the stub omitted.
+// Capture real modules before mock.module runs because Bun mocks are process-global and partial factories break
+// linking in transitive imports or later test files.
 import * as realRepositories from "@/utils/db/repositories";
 import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
-// Same link-time capture for every other module mocked below, for the same
-// reason: a partial factory leaks for the rest of the run and breaks files
-// loaded later. Spreading the real namespace keeps each mock full-surface.
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
 import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
@@ -47,9 +38,7 @@ import { sumTurnUsage } from "@/utils/text/tokenEstimate";
 import { STREAM_INTERRUPTED_CODE } from "@/utils/provider/providerErrorClassification";
 
 const queuedResults: GenerationTurnResult[] = [];
-// Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
-// shared sink before returning its queued result, simulating messages the stream committed to
-// Discord during that attempt. Undefined entries push nothing.
+// Parallel to queuedResults: delivered-message refs each attempt pushes into the sink before returning.
 const queuedDeliveries: Array<Array<{ messageId: string; channelId: string; webhookId: string | null }> | undefined> =
   [];
 const toolLoopCalls: Array<{
@@ -73,11 +62,7 @@ const fallbackNoticeCalls: Array<{
 }> = [];
 const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 const serverSavedConfigLoads: Array<{ serverId: number; provider: string }> = [];
-// Flipped off to model a user who has no personal key saved for the provider a
-// chain entry belongs to.
 let personalKeyAvailable = true;
-// Records the server text quota admissions the fallback phase takes, so a test can tell an
-// admission that never happened from one that was granted.
 const textQuotaAdmissions: Array<{
   triggerKey: string;
   isPersonaJob: boolean;
@@ -89,11 +74,9 @@ let textQuotaAdmissionResult: { allowed: boolean; state: TextQuotaTriggerState |
   state: null,
 };
 let textQuotaAdmissionFailure: Error | null = null;
-// Records the server cooldown admissions the fallback phase takes, and decides their answer.
 const cooldownAdmissions: Array<{ serverDiscId: string; cooldownUserDiscId: string; notifyUser: boolean | undefined }> =
   [];
 let cooldownAdmissionResult = true;
-// Records the timeout notices the fallback phase resends for a suppressed attempt.
 const timeoutNotices: Array<{ providerName: string; sawStreamProgress: boolean }> = [];
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
 let personalOverlayState: TomoriState | null = null;
@@ -107,9 +90,6 @@ type TestStopContext = {
   client: Client;
 };
 
-// The real `ColorCode` enum passes through the spread, so its values stay the
-// hex STRINGS modules call string methods on at load time (e.g. contextEmbeds.ts
-// does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories/ApiKeyRetentionRepository": retention,
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
@@ -168,11 +148,8 @@ scopedMock.module("@/utils/cache/openrouterCapabilityCache", () => ({
 }));
 
 scopedMock.module("@/utils/db/repositories", () => ({
-  // Spread the real barrel first so every export the SUT graph imports is present,
-  // then override only the repository methods this test's code path actually drives.
   ...realRepositories,
-  // Each repository is a class INSTANCE: its methods live on the prototype and
-  // a spread would drop them, so delegate and shadow only what this file drives.
+  // Use overrideMembers because repository exports are class instances whose prototype methods spread drops.
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     // A stored key for every provider, so a cross-provider fallback arm can be constructed here
     // instead of failing on `applySavedProviderConfig`'s missing-credentials throw.
@@ -215,8 +192,6 @@ scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
   },
 }));
 
-// The admission itself reads quota usage from the database and notifies the user through Discord;
-// this file only needs to observe that the server fallback phase asked, and to decide the answer.
 scopedMock.module("@/utils/chat/admissionGuards", () => ({
   ...realAdmissionGuards,
   checkTextQuotaForAdmission: async (params: {
@@ -235,8 +210,6 @@ scopedMock.module("@/utils/chat/admissionGuards", () => ({
     if (textQuotaAdmissionFailure) throw textQuotaAdmissionFailure;
     return textQuotaAdmissionResult;
   },
-  // The real cooldown admission reads and writes cooldown rows; the phase's own decision to ask at
-  // all is what these tests are about, so the answer is supplied here.
   enforceServerTriggerCooldownForAdmission: async (params: {
     serverDiscId: string;
     cooldownUserDiscId: string;
@@ -304,9 +277,6 @@ scopedMock.module("@/utils/provider/providerFactory", () => ({
   }),
 }));
 
-// The spread keeps the full real export surface intact. `mock.module` is
-// process-wide and never restored, so a partial stub would leave later test
-// files unable to link against any omitted export.
 scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,
   decryptApiKey: async (key: Buffer) => (key.toString() === "personal-encrypted-key" ? "personal-key" : "server-key"),
@@ -397,7 +367,6 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       apiKey: params.providerConfig.apiKey,
       credentialSource: params.context.textCredentialSource,
     });
-    // Simulate this attempt committing messages to the channel before it resolves.
     const deliveries = queuedDeliveries.shift();
     if (deliveries) {
       if (!params.context.streamingContext.deliveredMessageRefs) {
@@ -676,15 +645,12 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
         queueDepth: 0,
         skipLock: false,
       },
-      // The account preference the server fallback guard reads, on the same cached row the turn
-      // planner took the personal routing decision from.
       userRow: { user_id: 4, user_disc_id: "user_1", personal_server_fallback_enabled: true },
     },
     userDiscId: "user_1",
   } as unknown as ChatTurnContext;
 }
 
-/** Turns the fixture into a user-triggered turn that runs on the user's own text provider. */
 function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, personalPrimary: LlmRow): ChatTurnContext {
   const context = makeContext(serverPrimary, serverFallback);
   context.textCredentialSource = "personal";
@@ -701,7 +667,6 @@ function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, pers
   return context;
 }
 
-/** The error the personal route returns before every server route attempt in these tests. */
 function personalRouteFailure(): GenerationTurnResult {
   return {
     status: "error",
@@ -710,7 +675,6 @@ function personalRouteFailure(): GenerationTurnResult {
   };
 }
 
-/** An attempt that posted `text` to Discord before failing, as the tool loop reports it. */
 function partialFailure(status: "error" | "timeout", text: string): GenerationTurnResult {
   return {
     status,
@@ -728,7 +692,6 @@ function partialFailure(status: "error" | "timeout", text: string): GenerationTu
   };
 }
 
-/** An attempt whose stream Google ended partway through after `text` was posted. */
 function interruptedStream(text: string): GenerationTurnResult {
   return {
     status: "error",
@@ -774,7 +737,6 @@ function collectingSink(): ChatResponseSink & { emittedErrors: unknown[]; finali
   };
 }
 
-/** Pins the model-randomizer draw so a pool's lead model is decided by the test, not by chance. */
 async function runWithFixedRandom(leadFraction: number, run: () => Promise<void>): Promise<void> {
   const originalRandom = Math.random;
   Math.random = () => leadFraction;
@@ -1433,7 +1395,6 @@ describe("runGenerationTurn fallback behavior", () => {
       makeLlm(2, "server-fallback"),
       makeLlm(3, "personal-primary"),
     );
-    // A failing quota lookup must not replace the user's own provider error with its own.
     textQuotaAdmissionFailure = new Error("quota lookup unavailable");
     queuedResults.push(personalRouteFailure());
     const sink = collectingSink();
@@ -1637,7 +1598,6 @@ describe("runGenerationTurn fallback behavior", () => {
     const result = await runGenerationTurn(context, sink);
 
     expect(result.status).toBe("completed");
-    // The server answered, so the personal timeout is superseded rather than reported.
     expect(timeoutNotices).toHaveLength(0);
     expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
   });
@@ -1691,7 +1651,6 @@ describe("runGenerationTurn fallback behavior", () => {
       makeLlm(2, "server-fallback"),
       makeLlm(3, "personal-primary"),
     );
-    // The personal overlay carries the personal route's own randomizer flag; the server's stays off.
     personalOverlayState = {
       ...(personalOverlayState as TomoriState),
       config: { ...(personalOverlayState as TomoriState).config, model_randomizer_enabled: true },
@@ -1782,8 +1741,6 @@ describe("runGenerationTurn fallback behavior", () => {
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     await runGenerationTurn(context, sink);
 
-    // Only the primary runs: the unusable entry leaves the pool rather than
-    // falling through to the server's key.
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["primary-model"]);
     expect(personalSavedConfigLoads).toEqual([{ userId: 4, provider: "deepseek" }]);
     expect(emittedErrors).toHaveLength(1);
@@ -1981,12 +1938,6 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls).toHaveLength(0);
   });
 
-  /**
-   * A destination the bot cannot post into fails identically for every key and every model, so
-   * spending a generation per remaining arm only to discard it at the same send is waste. A 50001
-   * arrives here as error data rather than as a stop, which is the route that used to keep its
-   * fallback arms.
-   */
   it("abandons the fallback chain when the destination refuses the send for missing access", async () => {
     const primaryModel = makeLlm(1, "primary-model");
     const fallbackModel = makeLlm(2, "fallback-model");
@@ -2012,8 +1963,6 @@ describe("runGenerationTurn fallback behavior", () => {
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     const result = await runGenerationTurn(context, sink);
 
-    // Abandoning the attempt falls through to the skipped result, and the queued fallback is still
-    // there: that is the evidence no second generation was spent.
     expect(result.status).toBe("skipped");
     expect(queuedResults).toHaveLength(1);
     expect(fallbackNoticeCalls).toHaveLength(0);
@@ -2143,9 +2092,8 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(StreamOrchestrator.getAndClearStopContext(context.channel.id)).not.toBeNull();
   });
 
-  // Verbatim prompt scaffolding is decided once, against the primary model, but each attempt runs
-  // its own provider and parser. These two cases pin the per-attempt adaptation so a fallback in
-  // either direction gets the shape its own adapter understands.
+  // Prompt scaffolding targets the primary model, so each fallback attempt must adapt verbatim schemas and nudges
+  // to its own adapter.
   describe("verbatim tool-calling adaptation across the fallback chain", () => {
     const NUDGE_PROBE = "write the tool call as exactly one Markdown inline code span or fenced code block";
 
@@ -2175,7 +2123,6 @@ describe("runGenerationTurn fallback behavior", () => {
 
     it.each([false, true])("injects fallback schemas matching the advertised sprite roster: %j", async (hasSprites) => {
       const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "unused-fallback"));
-      // A registered custom endpoint whose model opted into verbatim tool calling.
       context.currentPersona.fallback_chain = [
         {
           kind: "llm",
@@ -2245,7 +2192,6 @@ describe("runGenerationTurn fallback behavior", () => {
         expect(Boolean(schema?.function.parameters.properties.sprite)).toBe(hasSprites);
         expect(schema?.function.parameters.required).not.toContain("sprite");
       }
-      // The native primary's own context stays free of verbatim scaffolding.
       const primaryItems = toolLoopCalls[0]?.contextItems ?? [];
       expect(primaryItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)).toBe(
         false,
@@ -2253,7 +2199,6 @@ describe("runGenerationTurn fallback behavior", () => {
     });
 
     it("strips both verbatim halves when falling back from a verbatim custom model to a native one", async () => {
-      // A primary that opted into verbatim tool calling, failing over to the native `google` model.
       const verbatimPrimary = {
         ...makeLlm(1, "primary-model"),
         llm_provider: "custom:42",
@@ -2261,7 +2206,6 @@ describe("runGenerationTurn fallback behavior", () => {
         verbatim_tool_calling: true,
       } as LlmRow;
       const context = makeContext(verbatimPrimary, makeLlm(2, "native-fallback"));
-      // The base context that primary would have produced: the schema dump plus the nudge note.
       context.contextItems = [
         {
           role: "user",
@@ -2287,14 +2231,12 @@ describe("runGenerationTurn fallback behavior", () => {
         fallbackItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS),
       ).toBe(false);
       expect(fallbackItems.some((item) => contextItemText(item).includes(NUDGE_PROBE))).toBe(false);
-      // The user's own context note shares the tag, so it must survive the strip.
       expect(fallbackItems.some((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY)).toBe(true);
     });
 
     it("strips a lone verbatim nudge on a native fallback when no schemas were emitted", async () => {
-      // Stage 07b drops the schema dump when no tools resolve or resolution throws, while stage 11
-      // still writes the nudge. Keying the strip on the dump alone would leave the format
-      // instruction on a provider that has no verbatim parser.
+      // Stage 11 writes the verbatim nudge even when stage 07b drops the schema dump, so stripping cannot key on the
+      // dump alone.
       const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "native-fallback"));
       context.contextItems = [
         { role: "user", parts: [{ type: "text", text: "hello" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
@@ -2317,8 +2259,8 @@ describe("runGenerationTurn fallback behavior", () => {
     });
 
     it("adds the schema dump without duplicating a nudge the base context already carries", async () => {
-      // Verbatim primary -> another verbatim arm: the nudge is already present, so only the dump is
-      // missing. Injecting both unconditionally would stack two copies of the instruction.
+      // Verbatim-to-verbatim fallback already carries the nudge in base context, so only the schema dump is injected
+      // to avoid duplicating it.
       const verbatimPrimary = {
         ...makeLlm(1, "primary-model"),
         llm_provider: "custom:42",

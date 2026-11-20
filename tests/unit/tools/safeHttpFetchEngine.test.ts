@@ -290,11 +290,6 @@ describe("user remote fetch redirect credentials", () => {
     for (const server of servers.splice(0)) server.stop(true);
   });
 
-  /**
-   * A loopback server whose routes answer or redirect. Two servers on different ports are two
-   * origins, which is all a cross-origin credential test needs. Routes stay mutable so a fixture
-   * can redirect to a server started after it.
-   */
   function fixture(routes: Record<string, FixtureRoute> = {}) {
     process.env[RUN_ENV_NAME] = "development";
     const received: RecordedRequest[] = [];

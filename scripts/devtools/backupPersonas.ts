@@ -12,12 +12,6 @@ function resolveBackupsRoot(): string {
   return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
 
-// For each persona: writes a single import-compatible file, a PNG with embedded
-// metadata when an avatar is stored (restores the PFP too), or a flat JSON matching
-// the /persona import schema otherwise, plus a `.meta.json` companion file carrying extras
-// (webhook avatar URL, trigger words, server memories) that /persona import does not
-// consume. Organized into per-server subdirectories.
-
 interface ServerRow {
   server_id: number;
   server_disc_id: string;
@@ -34,10 +28,8 @@ interface PersonaRow {
 }
 
 interface PersonaManifestEntry {
-  /** Import-compatible file: upload this via /persona import. */
   filename: string;
   format: "png" | "json";
-  /** Companion file with extras (meta + memories) not consumed by /persona import. */
   meta_filename: string;
   nickname: string;
   persona_id: number;
@@ -59,7 +51,6 @@ interface BundleManifest {
   servers: ServerManifest[];
 }
 
-/** Retrieve all registered servers. */
 async function getAllServers(): Promise<ServerRow[]> {
   return await sql<ServerRow[]>`
     SELECT server_id, server_disc_id
@@ -68,7 +59,6 @@ async function getAllServers(): Promise<ServerRow[]> {
   `;
 }
 
-/** Retrieve all personas (main first, then alters) for a server. */
 async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   return await sql<PersonaRow[]>`
     SELECT
@@ -86,7 +76,6 @@ async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   `;
 }
 
-/** Retrieve server-scoped memories for a persona lineage. */
 async function getMemoriesForPersona(serverId: number, lineageId: number): Promise<string[]> {
   const rows = await sql<{ content: string }[]>`
     SELECT content
@@ -144,7 +133,6 @@ async function runBackup(): Promise<void> {
 
     log.info(`  Server ${server.server_disc_id}: ${personas.length} persona(s)`);
 
-    // Per-server subdirectory to avoid filename collisions
     const serverDir = join(bundleDir, server.server_disc_id);
     mkdirSync(serverDir, { recursive: true });
 
@@ -159,7 +147,6 @@ async function runBackup(): Promise<void> {
       const typeTag = is_alter ? "alter" : "main";
 
       try {
-        // Canonical export (identical to /persona export)
         const exportResult = await presetRepository.exportPresetData(server.server_disc_id, persona.persona_id);
         if (!exportResult.success) {
           log.error(`    FAILED: ${nickname} (${typeTag}) — ${exportResult.error}`);
@@ -179,9 +166,7 @@ async function runBackup(): Promise<void> {
         });
         const base = `${sanitized}_${persona.persona_id}`;
 
-        // Prefer a PNG with embedded metadata because it round-trips through
-        //     /persona import as the exact PresetExport shape AND restores
-        //     the avatar. Only possible when a stored avatar exists.
+        // Prefer a metadata-embedded PNG when an avatar exists so /persona import restores both preset data and avatar.
         let pngWithMetadata: Buffer | null = null;
         if (persona.webhook_avatar_url) {
           try {
@@ -200,9 +185,7 @@ async function runBackup(): Promise<void> {
           }
         }
 
-        // Write the primary import-compatible file: PNG if we built one above,
-        //     otherwise the flat PresetExport as-is (no wrapper), so it passes
-        //     presetExportSchema directly like /persona import expects.
+        // Write the metadata PNG or unwrapped PresetExport JSON so /persona import validates it via presetExportSchema.
         let filename: string;
         let format: "png" | "json";
         if (pngWithMetadata) {
@@ -215,7 +198,6 @@ async function runBackup(): Promise<void> {
           writeFileSync(join(serverDir, filename), `${JSON.stringify(exportResult.data, null, 2)}\n`);
         }
 
-        // Companion file with extras /persona import doesn't consume (meta + memories)
         const metaFilename = `${base}.meta.json`;
         const metaPayload = {
           meta: {

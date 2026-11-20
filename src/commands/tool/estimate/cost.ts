@@ -76,40 +76,26 @@ import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 
-// Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
-// so this command and the post-turn stat recorder share one source of truth. The
-// higher-level, cost-specific helpers below stay here because only this command
-// needs them.
-
-/**
- * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
- * This is provider/model dependent, but it matters when you have ~80 messages of history.
- */
+// Per-message wrapper overhead is included because chat-format role markers and separators add up across ~80 history
+// messages.
 const TOKENS_PER_CHAT_MESSAGE_OVERHEAD = 4;
 
-/**
- * Conversation history is formatted as "{authorName}: {message}" in contextBuilder.ts.
- * Approximate average speaker prefix length (name + ": ").
- */
+// Speaker prefix length is approximated because contextBuilder.ts formats history entries as "{authorName}:
+// {message}".
 const AVG_SPEAKER_PREFIX_CHARS = 12;
 
-/**
- * Approximate fixed-length instruction blocks included in contextBuilder.ts.
- * These are intentionally rounded; exact lengths vary with server/bot/user names.
- */
+// Rounded estimates of contextBuilder.ts instruction blocks are used because exact lengths vary with server, bot, and
+// user names.
 const DEFAULT_SYSTEM_PROMPT_CHARS_EST = DEFAULT_SYSTEM_PROMPT.length;
 const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
-const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
+// Header and footer chars only, excluding per-sticker lines.
+const STICKER_USAGE_RULES_CHARS_EST = 270;
 
-/** Assumed reply lengths the cost estimate reports side by side, in tokens. */
+// Measured in tokens rather than characters because these constants define the output bands reported side by side.
 const EST_OUTPUT_SHORT = 80;
 const EST_OUTPUT_TYPICAL = 220;
 const EST_OUTPUT_LONG = 500;
-
-// First-party pricing is read from the `llms` catalog columns, so a model with no
-// catalog price reports "pricing unavailable" instead of billing against a
-// provider-wide guess (see resolveModelPricing in @/utils/provider/modelPricing).
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -143,27 +129,23 @@ interface ZaiFamilyProviderConfig {
   tools?: Array<Record<string, unknown>>;
 }
 
-/**
- * Scenario definitions for cost estimation
- * These represent minimum, average, and maximum usage patterns
- */
 interface ScenarioEstimate {
   name: string;
   components: {
-    systemPersonality: number; // Attributes + humanizer instruction
-    serverInfo: number; // Server name, description
-    serverEmojis: number; // Up to 10 emojis
-    serverStickers: number; // Sticker list (if enabled)
-    serverMemories: number; // Server-wide memories
-    userMemories: number; // Personal memories for all users
-    userStatus: number; // Presence info for all users
-    reminders: number; // Pending reminders
-    currentContext: number; // Time, channel info
-    toolSchemas: number; // Function/tool schemas (if tool calling is enabled)
-    sampleDialogues: number; // Example conversations
-    conversationHistory: number; // Recent messages
+    systemPersonality: number;
+    serverInfo: number;
+    serverEmojis: number;
+    serverStickers: number;
+    serverMemories: number;
+    userMemories: number;
+    userStatus: number;
+    reminders: number;
+    currentContext: number;
+    toolSchemas: number;
+    sampleDialogues: number;
+    conversationHistory: number;
   };
-  outputTokens: number; // Expected response length
+  outputTokens: number;
 }
 
 interface LiveCostMeasurement {
@@ -226,25 +208,11 @@ interface DeepseekProbeResponse {
   usage?: DeepseekProbeUsage;
 }
 
-/**
- * Estimate tokens for a chat history made of many short messages.
- * Includes a small fixed per-message overhead for chat wrappers plus speaker prefixes.
- * @param avgMessageChars - Average characters per message (excluding speaker prefix)
- */
 function estimateChatHistoryTokens(messageCount: number, avgMessageChars: number): number {
   const totalChars = messageCount * (avgMessageChars + AVG_SPEAKER_PREFIX_CHARS);
   return charsToTokensText(totalChars) + messageCount * TOKENS_PER_CHAT_MESSAGE_OVERHEAD;
 }
 
-/**
- * Compute the "persona average" output-token band shared by the live and character-estimate
- * paths: merge the persona's seeded sample-dialogue replies with its recent turns from channel
- * history and average their character length. Returns null when neither source exists (the
- * caller then falls back to the typical output band).
- * @param tomoriState - Active server/persona state (carries sample_dialogues_out)
- * @param personaReplyCharLengths - Character lengths of recent persona turns in this channel
- * @returns Estimated output token count, or null when no persona reply samples are available
- */
 function resolveSampleOutputTokens(tomoriState: TomoriState, personaReplyCharLengths: number[]): number | null {
   const sampleDialogueCharLengths = (tomoriState.sample_dialogues_out ?? []).map((s) => s.length);
   const allPersonaReplyLengths = [...sampleDialogueCharLengths, ...personaReplyCharLengths];
@@ -257,10 +225,6 @@ function resolveSampleOutputTokens(tomoriState: TomoriState, personaReplyCharLen
   return charsToTokensText(averageChars);
 }
 
-/**
- * Estimate tool schema token overhead based on currently registered tools.
- * Falls back to a conservative constant if tools are not initialized.
- */
 function estimateToolSchemaTokens(): number {
   try {
     const stateForContext = {
@@ -310,9 +274,6 @@ function estimateToolSchemaTokens(): number {
   }
 }
 
-/**
- * Build scenario estimates based on memory limits and usage patterns
- */
 function buildScenarioEstimates(): {
   minimum: ScenarioEstimate;
   average: ScenarioEstimate;
@@ -322,62 +283,44 @@ function buildScenarioEstimates(): {
   const baseToolSchemaTokens = estimateToolSchemaTokens();
   const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5);
 
-  // Minimum Scenario (Light usage)
-  // - 1 user with 0 memories
-  // - Minimal persona (single short description)
-  // - 80 messages in history (short messages)
-  // - 10 emojis (constant)
   const minimum: ScenarioEstimate = {
     name: "Minimum",
     components: {
-      systemPersonality: charsToTokensText(450 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST), // Short description + default system prompt + mention rule
-      serverInfo: charsToTokensText(220), // Basic server info
-      serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34), // Rules + header + 10 emoji codes
+      systemPersonality: charsToTokensText(450 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST),
+      serverInfo: charsToTokensText(220),
+      serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: 0,
       serverMemories: 0,
       userMemories: 0,
-      userStatus: charsToTokensText(220), // 1 user status block (heading + presence line)
+      userStatus: charsToTokensText(220),
       reminders: 0,
-      currentContext: charsToTokensText(200), // Time + channel
+      currentContext: charsToTokensText(200),
       toolSchemas: baseToolSchemaTokens,
       sampleDialogues: 0,
       conversationHistory: estimateChatHistoryTokens(80, 40),
     },
-    outputTokens: EST_OUTPUT_SHORT, // Short response (1-2 short paragraphs)
+    outputTokens: EST_OUTPUT_SHORT,
   };
 
-  // Average Scenario (Moderate usage)
-  // - 3 users with 10 memories each (~128 chars avg per memory)
-  // - 10 server memories (~128 chars avg each)
-  // - Typical persona + a few sample dialogues
-  // - 80 messages in history (1-2 sentences per message)
-  // - 10 emojis (constant)
   const average: ScenarioEstimate = {
     name: "Average",
     components: {
-      // Persona attributes (commonly 6 items) + fixed system prompt blocks.
       systemPersonality: charsToTokensText(6 * 700 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST),
       serverInfo: charsToTokensText(260),
       serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 8 * 70),
-      serverMemories: charsToTokensText(10 * avgMemoryChars + 80), // + heading/formatting
-      userMemories: charsToTokensText(3 * 10 * avgMemoryChars + 3 * 90), // + per-user headings
+      serverMemories: charsToTokensText(10 * avgMemoryChars + 80),
+      userMemories: charsToTokensText(3 * 10 * avgMemoryChars + 3 * 90),
       userStatus: charsToTokensText(3 * 220),
-      reminders: charsToTokensText(3 * (80 + 1 * 140)), // 1 reminder per user on average
+      reminders: charsToTokensText(3 * (80 + 1 * 140)),
       currentContext: charsToTokensText(200),
       toolSchemas: baseToolSchemaTokens,
       sampleDialogues: estimateChatHistoryTokens(10, 160),
       conversationHistory: estimateChatHistoryTokens(80, 140),
     },
-    outputTokens: EST_OUTPUT_TYPICAL, // Typical response (a few paragraphs / short explanation)
+    outputTokens: EST_OUTPUT_TYPICAL,
   };
 
-  // Maximum Scenario (Heavy usage)
-  // - 5 users, each holding a full personal memory allowance at max memory length
-  // - A full server memory allowance at max memory length
-  // - Maxed persona + maxed sample dialogues
-  // - 80 messages in history (multi-paragraph messages)
-  // - 10 emojis (constant)
   const maximum: ScenarioEstimate = {
     name: "Maximum",
     components: {
@@ -386,19 +329,19 @@ function buildScenarioEstimates(): {
           DEFAULT_SYSTEM_PROMPT_CHARS_EST +
           MENTION_PING_RULE_CHARS_EST,
       ),
-      serverInfo: charsToTokensText(450), // Detailed description
+      serverInfo: charsToTokensText(450),
       serverEmojis: charsToTokensText(EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34),
       serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 25 * 90),
       serverMemories: charsToTokensText(limits.maxServerMemories * limits.maxMemoryLength),
       userMemories: charsToTokensText(5 * limits.maxPersonalMemories * limits.maxMemoryLength),
-      userStatus: charsToTokensText(5 * 300), // activities can bloat presence strings
-      reminders: charsToTokensText(5 * (100 + 3 * 160)), // 3 reminders per user
+      userStatus: charsToTokensText(5 * 300),
+      reminders: charsToTokensText(5 * (100 + 3 * 160)),
       currentContext: charsToTokensText(240),
       toolSchemas: Math.round(baseToolSchemaTokens * 1.25),
       sampleDialogues: estimateChatHistoryTokens(limits.maxSampleDialogues * 2, limits.maxSampleDialogueLength),
       conversationHistory: estimateChatHistoryTokens(80, 350),
     },
-    outputTokens: EST_OUTPUT_LONG, // Detailed response (multi-paragraph explanation)
+    outputTokens: EST_OUTPUT_LONG,
   };
 
   return { minimum, average, maximum };
@@ -408,11 +351,6 @@ function calculateTotalInputTokens(scenario: ScenarioEstimate): number {
   return Object.values(scenario.components).reduce((sum, val) => sum + val, 0);
 }
 
-/**
- * Calculate cost for a scenario based on provider pricing
- * @param inputPricePerMillion - Input token price per million
- * @param outputPricePerMillion - Output token price per million
- */
 function calculateCost(
   inputTokens: number,
   outputTokens: number,
@@ -424,15 +362,8 @@ function calculateCost(
   return inputCost + outputCost;
 }
 
-/**
- * Illustrative example pricing for the legacy (no-server / no-key) estimate embed.
- *
- * Reads the Google default model's catalog price so the static example stays in lockstep with the
- * seeded source of truth (src/db/seed/catalog/models.ts) instead of a duplicated env/hardcoded value.
- * The `?? ` literals are a defensive backstop only, because the Google default row always carries a price.
- *
- * @returns Representative input/output price per million tokens
- */
+// Catalog pricing drives the legacy example so it stays synced with models.ts, leaving the fallback literals as
+// defensive backstops only.
 function getLegacyExampleGooglePricing(): { input: number; output: number } {
   for (const section of llmSections) {
     for (const row of section.rows) {
@@ -674,10 +605,8 @@ async function buildRuntimeParityContext(
     const mediaSourceMessageIds =
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
-    // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapsing here is only correct while both sides are
-    // pure text, because a merged turn would leave the two messages' media
-    // indistinguishable.
+    // Consecutive same-author turns merge only when both are text-only so media attachments stay attributable to their
+    // source message, matching buildSimplifiedHistory.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
@@ -726,8 +655,6 @@ async function buildRuntimeParityContext(
   const serverName = isDMChannel ? "Direct Message" : interaction.guild?.name || "Unknown Server";
   const serverDescription = isDMChannel ? null : interaction.guild?.description || null;
 
-  // Resolve per-channel system prompt override so the estimate stays in parity with
-  // what the live pipeline would actually inject for this channel (append/replace).
   const channelPromptOverride = tomoriState.server_id
     ? await getCachedChannelPrompt(tomoriState.server_id, interaction.channelId)
     : null;
@@ -818,8 +745,7 @@ async function measureGoogleInputTokens(
   const inBandPrelude: typeof tokenCountContents = [];
 
   if (payload.systemInstruction) {
-    // Gemini API countTokens rejects request-level systemInstruction.
-    // Mirror adapter fallback behavior by injecting instructions in-band.
+    // Gemini countTokens rejects request-level systemInstruction, so instructions are injected in-band like the adapter.
     inBandPrelude.push({
       role: "user",
       parts: [
@@ -832,8 +758,7 @@ async function measureGoogleInputTokens(
     });
   }
   if (providerConfig.tools && providerConfig.tools.length > 0) {
-    // Gemini API countTokens rejects request-level tools in Gemini API mode.
-    // Inject schemas in-band so measured prompt tokens include tool payload size.
+    // Gemini countTokens rejects request-level tools, so schemas are injected in-band to include their token weight.
     inBandPrelude.push({
       role: "user",
       parts: [
@@ -859,7 +784,7 @@ async function measureGoogleInputTokens(
     throw new Error("Google countTokens did not return totalTokens");
   }
 
-  // First-party providers carry their price on the catalog row; no env fallback remains.
+  // First-party rates live solely on the llms catalog row, so missing pricing errors instead of guessing.
   const pricing = resolveModelPricing(tomoriState);
   if (!pricing) {
     throw new Error(`No catalog price for Google model ${providerConfig.model}`);
@@ -874,21 +799,13 @@ async function measureGoogleInputTokens(
   };
 }
 
-/**
- * Mirrors {@link measureGoogleInputTokens} because Vertex shares the Gemini wire
- * format and tokenizer. The only differences:
- *   - The client is built from the stored composite key ("{project}::{location}")
- *      via ADC (createVertexClient) instead of a plain GoogleGenAI API key.
- *   - System instruction + tool schemas are injected in-band before countTokens,
- *      matching the Google path so the measured prompt includes their token cost.
- * @param tomoriState - Active server/persona state (carries model + catalog pricing)
- */
+// Vertex mirrors measureGoogleInputTokens because it shares Gemini's wire format and tokenizer, differing only in
+// composite ADC keys and in-band countTokens setup.
 async function measureVertexInputTokens(
   tomoriState: TomoriState,
   apiKey: string,
   contextItems: StructuredContextItem[],
 ): Promise<LiveCostMeasurement> {
-  // Build the same provider config the streaming path would use (model + tools).
   const provider = new VertexProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as VertexProviderConfig;
   const adapter = new VertexStreamAdapter();
@@ -896,8 +813,7 @@ async function measureVertexInputTokens(
   const tokenCountContents = [...payload.contents];
   const inBandPrelude: typeof tokenCountContents = [];
 
-  // countTokens does not accept request-level systemInstruction, so inject in-band
-  //    so the instruction's tokens are still counted (mirrors the Google path).
+  // Mirrors Google's in-band systemInstruction injection because Vertex countTokens also rejects it request-level.
   if (payload.systemInstruction) {
     inBandPrelude.push({
       role: "user",
@@ -1050,10 +966,8 @@ export async function measureOpenRouterInputTokens(
     throw new Error("OpenRouter model pricing unavailable for other-model");
   }
 
-  // The live OpenRouter cache wins because it tracks OpenRouter's rate changes; the DB price
-  // is only the fallback, seeded from the catalog or mirrored from the live rates at startup
-  // by syncOpenrouterCatalogPricing. Do not invert this order: a stale catalog row would
-  // silently under- or over-report the cost users see.
+  // Live OpenRouter pricing takes precedence over the DB catalog fallback so rate changes are not shadowed by stale
+  // startup rows.
   const livePricing = getOpenRouterPricing(providerConfig.model);
   const pricing = livePricing
     ? { input: livePricing.promptPricePerMillion, output: livePricing.completionPricePerMillion }
@@ -1135,13 +1049,10 @@ async function measureDeepseekInputTokens(
   };
 }
 
-/** Z.ai reasoning models where temperature must be omitted from probe requests */
+// Z.ai reasoning models require omitting temperature from probe requests, so listed models skip the temperature
+// parameter.
 const ZAI_REASONING_MODELS = ["glm-5.1", "glm-5", "glm-4.7"];
 
-/**
- * Send a minimal probe request to Z.ai to measure actual input token count.
- * Uses the same OpenAI-compatible usage response pattern as DeepSeek.
- */
 async function measureZaiInputTokens(
   providerName: "zai" | "zaicoding",
   tomoriState: TomoriState,
@@ -1211,10 +1122,6 @@ const ANTHROPIC_COUNT_TOKENS_URL = "https://api.anthropic.com/v1/messages/count_
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_TOKEN_COUNTING_BETA = "token-counting-2024-11-01";
 
-/**
- * Use Anthropic's dedicated /v1/messages/count_tokens endpoint to measure exact
- * input token usage for the current context without generating any output.
- */
 async function measureAnthropicInputTokens(
   tomoriState: TomoriState,
   apiKey: string,
@@ -1292,8 +1199,6 @@ const liveTokenCounters: Record<
 async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
   locale: string,
-  // Accept the structural shape (omit `provider`) so Track A's character estimate, which has
-  // no LiveProvider, so can reuse this embed alongside live LiveCostMeasurement objects.
   measurement: Omit<LiveCostMeasurement, "provider">,
   sampleOutputTokens: number | null,
   isCharacterEstimate = false,
@@ -1305,8 +1210,6 @@ async function sendLiveEstimateEmbed(
     measurement.outputPricePerMillion,
   );
 
-  // Track A (character estimate) swaps in copy that makes the approximation explicit, so users
-  // never mistake a chars/token guess for a provider-measured exact count.
   const inputTitleKey = isCharacterEstimate
     ? "commands.tool.estimate.cost.current_input_estimated_title"
     : "commands.tool.estimate.cost.current_input_title";
@@ -1391,8 +1294,6 @@ async function sendLegacyEstimateEmbed(
   showFallbackNotice: boolean,
 ): Promise<void> {
   const scenarios = buildScenarioEstimates();
-  // This embed is purely illustrative (no server/key context), so it borrows the catalog price of the
-  // Google default model as a representative example rather than any per-server rate.
   const { input: inputPrice, output: outputPrice } = getLegacyExampleGooglePricing();
   const exampleProvider = "Google Gemini";
 
@@ -1527,18 +1428,6 @@ async function sendLiveEstimateUnavailableEmbed(
   );
 }
 
-/**
- * Track A fallback: render a character-based cost estimate for providers that have no live
- * token-counting API, using the same runtime-parity context the live path would assemble.
- *
- * This is a graceful degradation from the old "unavailable" message: it still shows a real,
- * context-aware number (flagged as a character estimate) and the model's catalog pricing.
- * Falls back to {@link sendLiveEstimateUnavailableEmbed} only when the model has no catalog
- * price (nothing to multiply tokens against) or the context build fails.
- * @param client - Discord client (for channel history fetch)
- * @param tomoriState - Active server/persona state (model, pricing, config)
- * @param errorContext - Structured logging context for failures
- */
 async function sendCharacterEstimateFallbackEmbed(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -1552,7 +1441,6 @@ async function sendCharacterEstimateFallbackEmbed(
     return;
   }
 
-  // Assemble the same context the live pipeline would (no live provider → no truncator).
   let contextItems: StructuredContextItem[];
   let personaReplyCharLengths: number[] = [];
   try {
@@ -1569,7 +1457,6 @@ async function sendCharacterEstimateFallbackEmbed(
     return;
   }
 
-  // Approximate input tokens from character counts (no provider counting API available).
   const estimatedInputTokens = estimateContextItemsTokens(contextItems);
   const sampleOutputTokens = resolveSampleOutputTokens(tomoriState, personaReplyCharLengths);
 
@@ -1588,17 +1475,9 @@ async function sendCharacterEstimateFallbackEmbed(
   );
 }
 
-/**
- * Configure the /tool estimate cost subcommand
- * Shows users estimated API costs for paid providers
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("cost").setDescription(localizer("en-US", "commands.tool.estimate.cost.description"));
 
-/**
- * Execute the /tool estimate cost command
- * Displays estimated API costs for different usage scenarios
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

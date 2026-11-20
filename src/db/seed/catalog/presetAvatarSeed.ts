@@ -1,12 +1,3 @@
-// Seeds official preset avatars (the image at each persona's `avatarPath`) into
-// the shared `presets/` storage prefix and records the resulting URL + content
-// hash on `persona_presets`. Pointer ALTER personas then live-resolve this
-// shared avatar by (preset_lineage_id, preset_language), and the main-avatar
-// fan-out reconciler uses the hash to gate Discord guild-avatar PATCHes.
-//
-// This is the avatar analogue of presetSpriteSeed.ts: same content-addressed,
-// upload-once, idempotent model. See docs/subsystems/persona-presets.md.
-
 import { createHash } from "node:crypto";
 import type { SQL } from "bun";
 import { resolveAvatarPath } from "@/utils/image/avatarHelper";
@@ -17,17 +8,9 @@ import { personaSections } from "./personas";
 import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput } from "./types";
 
-/** Length of the content hash embedded in shared avatar filenames + version token. */
 const CONTENT_HASH_LENGTH = 12;
 
-/**
- * Seeds every catalog persona's avatar into shared storage, uploading each image
- * once and stamping `preset_avatar_shared_url` + `preset_avatar_hash` on the
- * matching `persona_presets` row. Never throws, because a failed image is logged and
- * skipped so a single bad asset cannot abort startup.
- *
- * @param client - Active DB client/transaction
- */
+// Failed uploads are logged and skipped instead of throwing because one bad preset avatar must not abort startup.
 export async function seedPersonaAvatarsFromCatalog(
   client: SQL,
 ): Promise<{ declarations: number; seeded: number; failed: number }> {
@@ -40,18 +23,11 @@ export async function seedPersonaAvatarsFromCatalog(
   return { declarations: personas.length, seeded, failed: personas.length - seeded };
 }
 
-/**
- * Seeds a single preset avatar: reads + normalizes the image, uploads it only
- * when its content changed (content-addressed filename), and stamps the shared
- * URL + hash onto the preset row.
- */
 async function seedOneAvatar(
   client: SQL,
   persona: PersonaInput,
   uploadedThisRun: Map<string, string>,
 ): Promise<boolean> {
-  // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
-  //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
   try {
     const rawBuffer = await resolveAvatarPath(persona.avatarPath);
@@ -95,9 +71,7 @@ async function seedOneAvatar(
     return false;
   }
 
-  // Stamp the shared URL + version hash onto the preset row. The hash is the
-  //    fan-out gate: a changed avatar yields a new hash, so the reconciler
-  //    re-PATCHes only the servers that have not yet received it.
+  // preset_avatar_hash gates main-avatar fan-out so the reconciler only re-PATCHes servers with a stale hash.
   const updated = await client`
     UPDATE persona_presets
     SET

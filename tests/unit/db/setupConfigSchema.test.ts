@@ -69,9 +69,7 @@ describe("setupConfigSchema", () => {
   });
 
   it("rejects a config with no provider access at all", () => {
-    // providerAccess is the only provider-selection field: the legacy `provider`/`encryptedApiKey`
-    // pair and the `userByokMode`/`deferredCustomEndpointSetup` booleans are gone, so omitting it is
-    // a missing field rather than a shape the refinement has to reason about.
+    // Legacy provider/key fields are gone, so omitting `providerAccess` is a plain missing-field error.
     expect(() =>
       setupConfigSchema.parse({
         ...baseConfig,

@@ -1,81 +1,44 @@
-/**
- * Short-Term Memory Cache
- *
- * Stores recent conversations (up to the configured messages per channel) and tool-generated summaries
- * for cross-channel and cross-server awareness.
- *
- * Features:
- * - Cache-only crude conversations plus durable summaries, categories, and cadence state
- * - Separately configurable TTLs for crude conversations and summaries
- * - Persona-shared guild STM plus privacy-respecting cross-server user STM
- * - Relative timestamp formatting (e.g., "2 hours ago")
- *
- * Design:
- * - User key pattern: `shortterm:user:${userId}:${channelId}` or `shortterm:user:${userId}:${channelId}:${personaId}`
- * - Server key pattern: `shortterm:server:${serverId}:${channelId}` or `shortterm:server:${serverId}:${channelId}:${personaId}`
- * - Conversations: Most recent condensed turns (user + model messages), up to the configured limit
- * - Summaries: Tool-generated context that can augment or supersede crude conversations
- * - Cross-model compatible: Summaries created by any model work for all models
- */
-
 import { sql } from "@/utils/db/client";
 import { normalizeStmCategories, type ShortTermMemoryRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 import { z } from "zod";
 import { broadcastInvalidation, invalidationKey, registerInvalidation } from "@/utils/cache/invalidationBus";
 
-/**
- * A single message in a short-term memory conversation
- */
 interface ShortTermMessage {
   role: "user" | "model";
   content: string;
   timestamp: number;
-  /** Original speaker name (persona name or username) for multi-persona labeling */
   speakerName?: string;
 }
 
 export interface ShortTermMemoryEntry {
-  /** Array of conversation messages, capped by the configured per-channel limit */
   messages: ShortTermMessage[];
 
-  /** Optional tool-generated summary rendered according to the server STM mode */
   summary?: string;
 
-  /** Structured memory categories for category-mode STM (slug → value map) */
   categories?: Record<string, string>;
 
-  /** Turns elapsed since the last STM refresh (used for cadence-gated nudges) */
   turnsSinceRefresh?: number;
 
-  /** Monotonic turn counter at the time of the last refresh */
   lastRefreshedTurn?: number;
 
-  /** Discord server ID (or "DM" for direct messages) */
+  // Sentinel value "DM" represents direct messages because `serverId` is always a required string.
   serverId: string;
 
-  /** Optional server name (for same-server channel mentions) */
   serverName?: string;
 
-  /** Discord channel ID */
   channelId: string;
 
-  /** Optional channel name (for same-server channel mentions) */
   channelName?: string;
 
-  /** Tomori persona ID for persona-scoped memory */
   personaId?: number | null;
 
-  /** Persona lineage ID for cross-server persona matching */
   personaLineageId?: number | null;
 
-  /** Unix timestamp (ms) of last update */
+  // Unix timestamp in milliseconds because `lastUpdated` omits the unit from its name.
   lastUpdated: number;
 }
 
-/**
- * Cache statistics for monitoring performance
- */
 interface CacheStats {
   hits: number;
   misses: number;
@@ -110,20 +73,15 @@ const stats: CacheStats = {
 // In-flight DB hydrations keyed by cache key: prevents duplicate reads and allows awaiting.
 const pendingHydrations = new Map<string, Promise<void>>();
 
-// Servers/users whose full STM row set has been bulk-loaded from the DB this process.
-// After the one-shot bulk warm, every live STM write updates the cache directly, so we
-// never need to re-query: this guards against re-running the bulk SELECT each turn.
+// Tracks bulk-loaded scopes so live turns do not re-run the full STM SELECT query.
 const bulkWarmedServers = new Set<string>();
 const bulkWarmedUsers = new Set<string>();
 
 // Functional unique-index conflict target used in all short_term_memories upserts.
 const STM_CONFLICT = `(scope_kind, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), channel_disc_id, COALESCE(persona_id, 0))`;
 
-/**
- * Ensures a short_term_memories row exists for the given scope identity.
- * Does NOT overwrite existing categories, summary, or counters: safe to call
- * on every conversation turn to guarantee the row is present before later updates.
- */
+// Non-destructive insert guarantees the row exists before later updates because it leaves existing summaries,
+// categories, and counters untouched.
 async function ensureStmRow(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -141,9 +99,6 @@ async function ensureStmRow(
   );
 }
 
-/**
- * Upserts the summary field for a scope row; inserts the row if absent.
- */
 async function upsertStmSummary(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -163,11 +118,8 @@ async function upsertStmSummary(
   );
 }
 
-/**
- * Nulls the summary column on an existing scope row.
- * Used by summary-mode clear to durably remove the summary so it doesn't
- * resurrect on the next cache miss via hydrateEntryFromDb.
- */
+// Summary-mode clear must null the DB column so cleared summaries do not resurrect from `hydrateEntryFromDb` on the
+// next cache miss.
 async function clearStmSummary(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -187,9 +139,6 @@ async function clearStmSummary(
   );
 }
 
-/**
- * Upserts the categories JSONB field for a scope row; inserts the row if absent.
- */
 async function upsertStmCategories(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -209,9 +158,6 @@ async function upsertStmCategories(
   );
 }
 
-/**
- * Atomically increments turns_since_refresh on a scope row (insert-or-increment).
- */
 async function incrementStmCounter(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -230,9 +176,6 @@ async function incrementStmCounter(
   );
 }
 
-/**
- * Resets turns_since_refresh to 0 and advances last_refreshed_turn by 1.
- */
 async function resetStmCounter(
   scopeKind: "server" | "user",
   serverDiscId: string | null,
@@ -253,10 +196,6 @@ async function resetStmCounter(
   );
 }
 
-/**
- * Reads a single short_term_memories row from DB and warms the in-memory cache.
- * Only writes to cache if the key is still absent after the async round-trip.
- */
 async function hydrateEntryFromDb(
   key: string,
   scopeKind: "server" | "user",
@@ -284,21 +223,11 @@ async function hydrateEntryFromDb(
   }
 }
 
-/**
- * Writes a persisted STM row into the in-memory cache under the given key, unless the
- * key is already warm (a live write wins over stale DB state). Shared by the single-key
- * hydration and the bulk warmers.
- *
- * @param key - Cache key (built via getServerCacheKey / getUserCacheKey)
- * @param row - Raw row from `SELECT * FROM short_term_memories`
- */
+// Existing warm keys are never overwritten so concurrent live writes always win over stale DB state.
 function warmRowIntoCache(key: string, row: ShortTermMemoryRow): void {
-  // Only warm if another path hasn't already populated this key.
   if (cache.has(key)) return;
-  // `sql.unsafe` returns the JSONB `categories` column as a raw JSON string (it bypasses
-  // the zod row schema that would normally parse it), so normalize it back to an object.
-  // Without this, `Object.keys`/`Object.entries` would enumerate the string
-  // character-by-character downstream and corrupt rendering.
+  // `sql.unsafe` returns JSONB `categories` as a raw string instead of a parsed object, so normalize it to avoid
+  // character-by-character enumeration downstream.
   const normalizedCategories = normalizeStmCategories(row.categories);
   const hasCategories = Object.keys(normalizedCategories).length > 0;
   cache.set(key, {
@@ -315,23 +244,11 @@ function warmRowIntoCache(key: string, row: ShortTermMemoryRow): void {
   });
 }
 
-/**
- * Generate cache key for a user in a channel, optionally scoped to a persona
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- */
 function getUserCacheKey(userId: string, channelId: string, personaId?: number | null): string {
   if (personaId) return `${USER_CACHE_PREFIX}:${userId}:${channelId}:${personaId}`;
   return `${USER_CACHE_PREFIX}:${userId}:${channelId}`;
 }
 
-/**
- * Generate cache key for a server-shared channel memory, optionally scoped to a persona
- * @param serverId - Discord server ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- */
 function getServerCacheKey(serverId: string, channelId: string, personaId?: number | null): string {
   if (personaId) {
     return `${SERVER_CACHE_PREFIX}:${serverId}:${channelId}:${personaId}`;
@@ -339,10 +256,6 @@ function getServerCacheKey(serverId: string, channelId: string, personaId?: numb
   return `${SERVER_CACHE_PREFIX}:${serverId}:${channelId}`;
 }
 
-/**
- * Check if a cache entry has expired based on TTL
- * @returns True if expired, false otherwise
- */
 function isExpired(entry: ShortTermMemoryEntry): boolean {
   const now = Date.now();
   const age = now - entry.lastUpdated;
@@ -352,9 +265,6 @@ function isExpired(entry: ShortTermMemoryEntry): boolean {
   return age > ttl;
 }
 
-/**
- * Format a timestamp as a relative time string
- */
 export function getRelativeTimestamp(timestamp: number): string {
   const now = Date.now();
   const diffMs = now - timestamp;
@@ -453,10 +363,6 @@ function collectMemories(
   return memories;
 }
 
-/**
- * Parses a cache key back into its scope identity components.
- * Returns null for unrecognised key formats.
- */
 function parseStmKey(key: string): {
   scopeKind: "server" | "user";
   discId: string;
@@ -521,21 +427,8 @@ function getShortTermMemoryByKey(key: string): ShortTermMemoryEntry | undefined 
   return entry;
 }
 
-/**
- * Ensures the cache entry for a channel is populated before a synchronous read.
- * Call this (with await) before `getShortTermMemoryForServerChannel` or
- * `getShortTermMemoryForUserChannel` so the first post-restart turn sees the
- * persisted summary/categories instead of an empty cache.
- *
- * No-ops when the entry is already warm. If a background hydration is already
- * in flight (triggered by a concurrent sync read), awaits that same promise
- * rather than launching a second DB query.
- *
- * @param scopeKind - "server" for guild channels, "user" for DMs
- * @param discId    - Server snowflake (server scope) or user snowflake (user scope)
- * @param channelId - Channel snowflake
- * @param personaId - Optional persona ID for persona-scoped memory
- */
+// Callers must await this before synchronous STM reads so post-restart turns see persisted data, and concurrent
+// hydrations coalesce onto one query.
 export async function preWarmStmEntry(
   scopeKind: "server" | "user",
   discId: string,
@@ -549,7 +442,6 @@ export async function preWarmStmEntry(
 
   if (cache.has(key)) return;
 
-  // Reuse an in-flight hydration rather than launching a second DB query
   const inflight = pendingHydrations.get(key);
   if (inflight) {
     await inflight;
@@ -565,18 +457,8 @@ export async function preWarmStmEntry(
   await promise;
 }
 
-/**
- * Bulk-warms every persisted server-scoped STM row for a guild into the cache in a single
- * query. Call this (with await) before the synchronous `getShortTermMemoriesForServer`
- * read so cross-channel recall is available on the FIRST turn after a restart instead of
- * the second: the single-key pre-warm only covers the current channel, but cross-channel
- * recall needs every channel's row.
- *
- * One-shot per server per process: once warmed, live STM writes keep the cache current,
- * so we never re-query. Concurrent callers share the in-flight promise.
- *
- * @param serverDiscId - Guild snowflake
- */
+// One-shot per server per process; await before getShortTermMemoriesForServer so cross-channel recall has every
+// channel's row on the first turn after restart.
 export async function preWarmServerStmEntries(serverDiscId: string): Promise<void> {
   if (!serverDiscId || serverDiscId === "DM" || bulkWarmedServers.has(serverDiscId)) return;
 
@@ -608,13 +490,6 @@ export async function preWarmServerStmEntries(serverDiscId: string): Promise<voi
   await promise;
 }
 
-/**
- * Bulk-warms every persisted user-scoped STM row for a user into the cache in a single
- * query. Used for DM recall and cross-server folding. Same one-shot semantics as
- * {@link preWarmServerStmEntries}.
- *
- * @param userDiscId - User snowflake
- */
 export async function preWarmUserStmEntries(userDiscId: string): Promise<void> {
   if (!userDiscId || bulkWarmedUsers.has(userDiscId)) return;
 
@@ -644,12 +519,10 @@ export async function preWarmUserStmEntries(userDiscId: string): Promise<void> {
   await promise;
 }
 
-/** Users whose user-scoped rows have not been bulk-warmed into the cache yet. */
 export function filterUnwarmedStmUsers(userDiscIds: readonly string[]): string[] {
   return [...new Set(userDiscIds)].filter((id) => id && !bulkWarmedUsers.has(id));
 }
 
-/** Warms every row read for `userDiscIds` and marks those users warm, including ones with no rows. */
 export function warmUserStmRows(userDiscIds: readonly string[], rows: readonly ShortTermMemoryRow[]): void {
   for (const row of rows) {
     if (row.user_disc_id) {
@@ -689,20 +562,8 @@ function updateSummaryForKey(
   }
 
   cache.set(key, existing);
-  // (categories, turnsSinceRefresh, lastRefreshedTurn preserved automatically since we mutate existing)
 }
 
-/**
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param messages - Conversation messages with optional speaker names; the configured storage cap is applied
- * @param serverId - Discord server ID (or "DM" for direct messages)
- * @param serverName - Optional server name for same-server channel mentions
- * @param channelName - Optional channel name for same-server channel mentions
- * @param personaId - Optional persona ID for persona-scoped memory
- * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
- */
 export function storeShortTermMemory(
   userId: string,
   channelId: string,
@@ -753,7 +614,6 @@ export function storeShortTermMemory(
       );
     }
 
-    // Ensure durable rows exist (fire-and-forget; DO NOTHING on conflict to preserve categories/summary)
     const serverDiscId = serverId !== "DM" ? serverId : null;
     void ensureStmRow("user", serverDiscId, userId, channelId, resolvedPersonaId, resolvedLineageId).catch((err) =>
       log.warn("[shortTermMemoryCache] Failed to persist user STM row", { error: err }),
@@ -775,13 +635,6 @@ export function storeShortTermMemory(
   }
 }
 
-/**
- * Get all short-term memories for a user across channels, optionally scoped to a persona lineage
- *
- * @param userId - Discord user ID
- * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
- * @param personaLineageId - Optional persona lineage ID to filter by (only returns entries matching this lineage)
- */
 export function getShortTermMemoriesForUser(
   userId: string,
   excludeChannelId?: string,
@@ -799,13 +652,6 @@ export function getShortTermMemoriesForUser(
   }
 }
 
-/**
- * Get all server-shared short-term memories for a guild, optionally scoped to a persona lineage
- *
- * @param serverId - Discord server ID
- * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
- * @param personaLineageId - Optional persona lineage ID to filter by
- */
 export function getShortTermMemoriesForServer(
   serverId: string,
   excludeChannelId?: string,
@@ -827,14 +673,6 @@ export function getShortTermMemoriesForServer(
   }
 }
 
-/**
- * Get short-term memory for a specific user/channel pair, optionally scoped to a persona
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- * @returns Memory entry if found and not expired, undefined otherwise
- */
 export function getShortTermMemoryForUserChannel(
   userId: string,
   channelId: string,
@@ -855,14 +693,6 @@ export function getShortTermMemoryForUserChannel(
   }
 }
 
-/**
- * Get short-term memory for a specific server/channel pair, optionally scoped to a persona
- *
- * @param serverId - Discord server ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- * @returns Memory entry if found and not expired, undefined otherwise
- */
 export function getShortTermMemoryForServerChannel(
   serverId: string,
   channelId: string,
@@ -887,18 +717,6 @@ export function getShortTermMemoryForServerChannel(
   }
 }
 
-/**
- * Update the summary for short-term memory entries (used by update_short_term_memory tool)
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param summary - Tool-generated summary text
- * @param serverId - Discord server ID (required if creating new entry)
- * @param serverName - Server name (optional, for new entries)
- * @param channelName - Channel name (optional, for new entries)
- * @param personaId - Optional persona ID for persona-scoped memory
- * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
- */
 export function updateShortTermMemorySummary(
   userId: string,
   channelId: string,
@@ -944,7 +762,6 @@ export function updateShortTermMemorySummary(
       );
     }
 
-    // Persist to DB after successful cache update (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     void upsertStmSummary(
       "user",
@@ -978,13 +795,6 @@ export function updateShortTermMemorySummary(
   }
 }
 
-/**
- * Invalidate (remove) a specific short-term memory entry
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- */
 export function invalidateShortTermMemory(
   userId: string,
   channelId: string,
@@ -1017,15 +827,8 @@ export function invalidateShortTermMemory(
   }
 }
 
-/**
- * Durably clear a short-term memory summary: evicts cache and nulls the
- * summary column in the DB so the cleared state survives cache misses.
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- * @param serverId - Optional Discord server ID (omit or "DM" for DMs)
- */
+// Cache eviction alone lets hydrateEntryFromDb resurrect old summaries on a miss, so this also nulls the DB summary
+// column.
 export function clearShortTermMemorySummary(
   userId: string,
   channelId: string,
@@ -1035,8 +838,6 @@ export function clearShortTermMemorySummary(
   try {
     invalidateShortTermMemory(userId, channelId, personaId, serverId);
 
-    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
-    // summary on the next cache miss, so the clear must also reach the DB.
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     const resolvedPersonaId = personaId ?? null;
     void clearStmSummary("user", serverDiscId, userId, channelId, resolvedPersonaId).catch((err) =>
@@ -1059,16 +860,8 @@ export function clearShortTermMemorySummary(
   }
 }
 
-/**
- * Deletes the persisted rows a cache-clear just evicted.
- *
- * Eviction alone is not durable: hydrateEntryFromDb would resurrect the old row on the next cache
- * miss, so the clear must also reach the DB. Fire-and-forget, because the clear is synchronous and
- * a failed delete must not fail the caller.
- *
- * The caller also keeps its original failure message and named identifiers, so an operator can
- * still identify the affected scope without decoding positional SQL parameters.
- */
+// Fire-and-forget DB delete keeps synchronous clears non-failing; callers pass failureMessage and metadata so
+// operators see scope without decoding SQL params.
 interface StmDeleteInput {
   whereClause: string;
   params: Array<string | number | null>;
@@ -1082,11 +875,6 @@ function deleteStmRowsInBackground({ whereClause, params, failureMessage, metada
     .catch((err) => log.warn(`[shortTermMemoryCache] ${failureMessage}`, { error: err, ...metadata }));
 }
 
-/**
- * Clear all short-term memories for a specific channel (used by /refresh)
- *
- * @param channelId - Discord channel ID
- */
 export function clearShortTermMemoryForChannel(channelId: string): void {
   try {
     let clearedCount = 0;
@@ -1118,13 +906,6 @@ export function clearShortTermMemoryForChannel(channelId: string): void {
   }
 }
 
-/**
- * Clear one server-scoped short-term memory entry for a specific channel/persona pair.
- *
- * @param serverId - Discord server ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- */
 export function clearShortTermMemoryForServerChannel(
   serverId: string,
   channelId: string,
@@ -1163,11 +944,6 @@ export function clearShortTermMemoryForServerChannel(
   }
 }
 
-/**
- * Clear all user-scoped short-term memories for a user (used by /personal memories clear action)
- *
- * @param userId - Discord user ID
- */
 export function clearShortTermMemoryForUser(userId: string): void {
   try {
     evictUserShortTermMemory(userId);
@@ -1210,10 +986,6 @@ registerInvalidation(
   () => evictUserShortTermMemory(),
 );
 
-/**
- * Remove expired entries from cache (cleanup job)
- * Should be called periodically (e.g., every 30 minutes)
- */
 export function clearExpiredEntries(): void {
   try {
     let expiredCount = 0;
@@ -1233,13 +1005,8 @@ export function clearExpiredEntries(): void {
   }
 }
 
-/**
- * Clear all short-term memories.
- *
- * This is intentionally not used by normal cache invalidation paths because STM
- * is user-visible conversational state. It exists for explicit emergency memory
- * pressure handling where the operator has opted into sacrificing STM.
- */
+// Reserved for emergency memory pressure only and excluded from normal invalidation because STM holds user-visible
+// conversational state.
 export function clearShortTermMemoryCache(): void {
   try {
     const clearedCount = cache.size;
@@ -1252,10 +1019,6 @@ export function clearShortTermMemoryCache(): void {
   }
 }
 
-/**
- * Get cache statistics for monitoring performance
- *
- */
 export function getShortTermMemoryCacheStats(): CacheStats & {
   size: number;
   hitRate: string;
@@ -1270,19 +1033,6 @@ export function getShortTermMemoryCacheStats(): CacheStats & {
   };
 }
 
-/**
- * Update category values for STM entries (both user and server scope).
- * Writes through to the durable short_term_memories DB row after updating cache.
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param categories - Map of category slug → value
- * @param serverId - Discord server ID (or "DM")
- * @param serverName - Optional server name
- * @param channelName - Optional channel name
- * @param personaId - Optional persona ID for persona-scoped memory
- * @param personaLineageId - Optional persona lineage ID
- */
 export async function updateShortTermMemoryCategories(
   userId: string,
   channelId: string,
@@ -1341,7 +1091,6 @@ export async function updateShortTermMemoryCategories(
       cache.set(serverKey, serverEntry);
     }
 
-    // Persist to DB after cache is updated (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     await upsertStmCategories(
       "user",
@@ -1367,16 +1116,8 @@ export async function updateShortTermMemoryCategories(
   }
 }
 
-/**
- * Increment the turn counter on the live scope row after a bot-participation cycle.
- * In guilds the live scope is server-shared (pass serverId, userId=null).
- * In DMs the live scope is user-scoped (pass userId, serverId=null).
- *
- * @param channelId - Discord channel ID
- * @param serverId - Discord server ID for guild scope; null for DM
- * @param userId - Discord user ID for DM scope; null for guild
- * @param personaId - Optional persona ID
- */
+// Guild live STM is server-shared (serverId, userId=null) and DM STM is user-scoped (userId, serverId=null), because
+// serverId truthiness selects the scope.
 export async function incrementStmTurnCounter(
   channelId: string,
   serverId: string | null,
@@ -1403,15 +1144,8 @@ export async function incrementStmTurnCounter(
   }
 }
 
-/**
- * Reset the turn counter on the live scope row after a successful STM refresh.
- * Advances last_refreshed_turn monotonically so callers can track refresh epochs.
- *
- * @param channelId - Discord channel ID
- * @param serverId - Discord server ID for guild scope; null for DM
- * @param userId - Discord user ID for DM scope; null for guild
- * @param personaId - Optional persona ID
- */
+// Mutually exclusive serverId/userId scope matches incrementStmTurnCounter, and last_refreshed_turn advances
+// monotonically so callers can track refresh epochs.
 export async function resetStmTurnCounter(
   channelId: string,
   serverId: string | null,

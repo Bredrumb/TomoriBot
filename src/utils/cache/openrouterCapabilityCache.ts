@@ -1,26 +1,10 @@
-/**
- * OpenRouter Capability Cache
- *
- * Caches per-model metadata from OpenRouter's text catalog so routing decisions use the
- * provider's own view of a model rather than database flags, which drift as OpenRouter
- * changes what a model supports.
- *
- * The catalog refreshes on a miss and on a TTL, so a model published after boot becomes
- * usable without a restart and long-lived deployments do not serve a frozen snapshot of
- * pricing and context limits.
- */
-
 import { createOpenRouterCatalog } from "@/utils/cache/openrouterCatalog";
 
-/**
- * OpenRouter API model response structure
- * Based on https://openrouter.ai/api/v1/models endpoint
- */
 interface OpenRouterModel {
   id: string;
   name: string;
   description?: string;
-  context_length?: number; // Total context window size (input + output tokens)
+  context_length?: number;
   supported_parameters?: string[];
   pricing?: {
     prompt?: string | number;
@@ -32,37 +16,29 @@ interface OpenRouterModel {
     instruct_type?: string;
   };
   top_provider?: {
-    max_completion_tokens?: number; // Maximum output tokens the provider supports
+    max_completion_tokens?: number;
   };
 }
 
-/**
- * Cached model capabilities
- * Extracted from OpenRouter API's supported_parameters and architecture fields
- */
 export interface ModelCapabilities {
-  hasTools: boolean; // Function calling support
-  seesImages: boolean; // Vision/image input support
-  seesVideos: boolean; // Video input support
-  supportsStructuredOutput: boolean; // JSON mode / structured output support
+  hasTools: boolean;
+  seesImages: boolean;
+  seesVideos: boolean;
+  supportsStructuredOutput: boolean;
 }
 
-/**
- * Cached model token limits
- * Extracted from OpenRouter API's context_length and top_provider fields
- */
 export interface ModelTokenLimits {
-  contextLength: number; // Total context window (input + output)
-  maxCompletionTokens: number | undefined; // Max output tokens, undefined if not reported
+  // Combined input and output tokens (OpenRouter context_length counts both).
+  contextLength: number;
+  maxCompletionTokens: number | undefined;
 }
 
-/** Values are normalized to USD per million tokens for prompt/completion cost math. */
+// Values are normalized to USD per million tokens because the field names omit the currency unit.
 export interface ModelPricing {
   promptPricePerMillion: number;
   completionPricePerMillion: number;
 }
 
-/** Everything the catalog knows about one text model, swapped as a unit on refresh. */
 export interface OpenRouterModelMetadata {
   id: string;
   capabilities: ModelCapabilities;
@@ -74,22 +50,8 @@ export interface OpenRouterModelMetadata {
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
-/**
- * Determines if a model supports function calling
- *
- * Requirements:
- * - Prefer explicit "tools" in supported_parameters
- * - Fall back to description-based detection when OpenRouter metadata is inconsistent
- *
- * Rationale:
- * - OpenRouter tool calling works when the model accepts the `tools` parameter.
- * - `tool_choice` is optional for our chat path because OpenRouter defaults it to
- *   automatic selection when omitted.
- * - Some models expose native function calling but do not advertise `tool_choice`.
- * - Some models also advertise native function calling in the description while
- *   omitting `tools` from supported_parameters, so we need a fallback to avoid
- *   incorrectly disabling working tools.
- */
+// Description fallback and ignoring `tool_choice` are required because some OpenRouter models omit `tools` or
+// `tool_choice` from `supported_parameters`.
 function detectToolSupport(model: OpenRouterModel): boolean {
   if (model.supported_parameters && Array.isArray(model.supported_parameters)) {
     if (model.supported_parameters.includes("tools")) {
@@ -97,18 +59,12 @@ function detectToolSupport(model: OpenRouterModel): boolean {
     }
   }
 
-  // OpenRouter metadata is occasionally contradictory: the model description can
-  // advertise native function/tool calling even when supported_parameters omits `tools`.
   const normalizedDescription = model.description?.toLowerCase() ?? "";
   return normalizedDescription.includes("function calling") || normalizedDescription.includes("tool calling");
 }
 
-/**
- * Determines if a model supports image inputs (vision)
- *
- * OpenRouter uses arrow notation ("text+image->text"), not "vision"/"multimodal";
- * the other keywords are accepted only as forward compatibility with format changes.
- */
+// OpenRouter uses arrow notation ("text+image->text") rather than "vision" or "multimodal", so those extra keywords
+// exist only for forward compatibility.
 function detectImageSupport(model: OpenRouterModel): boolean {
   const modality = model.architecture?.modality?.toLowerCase();
 
@@ -194,13 +150,8 @@ const textCatalog = createOpenRouterCatalog<OpenRouterModelMetadata>({
   keyOf: (entry) => entry.id,
 });
 
-/**
- * Fetches the text catalog once at startup.
- *
- * Failure here is non-fatal and no longer permanent: callers refresh on a cache miss and
- * the background refresher retries on the TTL, so a boot-time network blip degrades to
- * database flags for one refresh window instead of the process lifetime.
- */
+// Startup fetch failures stay non-fatal because cache-miss refreshes and TTL retries recover after one refresh window
+// instead of failing boot.
 export async function initializeOpenRouterCapabilityCache(): Promise<void> {
   await textCatalog.initialize();
 }
@@ -209,12 +160,6 @@ export function refreshOpenRouterCapabilityCacheIfStale(): Promise<boolean> {
   return textCatalog.refreshIfStale();
 }
 
-/**
- * Gets cached capabilities for a specific OpenRouter model.
- *
- * @returns undefined when the model is not cached; use {@link getOrFetchOpenRouterCapabilities}
- * when a miss should be allowed to reach the network.
- */
 export function getOpenRouterCapabilities(modelCodename: string): ModelCapabilities | undefined {
   return textCatalog.get(modelCodename)?.capabilities;
 }
@@ -223,17 +168,10 @@ export function getOpenRouterSupportedParameters(modelCodename: string): Readonl
   return textCatalog.get(modelCodename)?.supportedParameters;
 }
 
-/** Raw tokenizer label reported by OpenRouter, used to pick a logit-bias encoder. */
 export function getOpenRouterTokenizer(modelCodename: string): string | undefined {
   return textCatalog.get(modelCodename)?.tokenizer;
 }
 
-/**
- * Reports whether the catalog holds a usable snapshot.
- *
- * Consumers gate on this to decide between OpenRouter metadata and database flags; it says
- * nothing about any individual model, so a lookup can still miss.
- */
 export function isOpenRouterCapabilityCacheReady(): boolean {
   return textCatalog.isReady();
 }
@@ -250,7 +188,6 @@ export function getOpenRouterPricing(modelCodename: string): ModelPricing | unde
   return textCatalog.get(modelCodename)?.pricing;
 }
 
-/** Every complete rate in the current text catalog, keyed by OpenRouter codename. */
 export function getAllOpenRouterPricing(): ReadonlyMap<string, ModelPricing> {
   const pricing = new Map<string, ModelPricing>();
   for (const model of textCatalog.values()) {
@@ -265,14 +202,8 @@ export function resetOpenRouterCapabilityCache(): void {
   textCatalog.reset();
 }
 
-/**
- * Gets capabilities for an OpenRouter model, refreshing the catalog on a miss.
- *
- * Use this wherever the codename can be newer than the cached catalog (scoped model
- * registration, account-setting resolution). The refresh is cooldown-gated, so repeated
- * lookups of a codename OpenRouter does not publish cost one fetch per window; `fresh`
- * lifts that gate for callers a human is waiting on.
- */
+// Cache misses trigger a cooldown-gated refresh, while `fresh` refreshes upfront without the cooldown so interactive
+// callers see newly published models.
 export async function getOrFetchOpenRouterCapabilities(
   modelCodename: string,
   options?: { fresh?: boolean },

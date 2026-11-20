@@ -1,7 +1,3 @@
-/**
- * /model override remove aggregate view tests
- * Retained aggregate destructive command browsing channel and persona overrides together.
- */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ButtonStyle,
@@ -62,7 +58,6 @@ const LLM_A: LlmRow = {
   llm_codename: "gemini-2.5-flash",
 } as unknown as LlmRow;
 
-/** Override browsing reads the persona's server, id, lineage, and nickname, so all four stay fixed. */
 function makePersona(overrides: Partial<TomoriState>): TomoriState {
   return createPersona({
     server_id: 9,
@@ -249,8 +244,8 @@ describe("/model override remove - (2) literal wire types and defaults", () => {
     const persona = makePersonaEntry(55, "Mirri");
     const modal = buildModelOverrideRemoveModal("en-US", 0, "abcd1234", "nonce123", [channel, persona]);
 
-    // Discord component types are bare wire integers. Type 19 is FileUpload and is destructive
-    // because it supplies no values on submit. Each wrapper must pin type 18 and component type 22.
+    // Discord component types are bare integers, so pinning 18 and 22 guards against
+    // FileUpload (19) supplying no submit values and clearing every row.
     expect(modal.components.length).toBeGreaterThan(0);
     for (const wrapper of modal.components) {
       expect(wrapper.type).toBe(18);
@@ -320,7 +315,6 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
     expect(modalShown).toBe(true);
     expect(modalCustomId).toBeDefined();
     expect(modalCustomId?.startsWith("model-overrides:v1:remove-submit:")).toBe(true);
-    // First and only acknowledgment: no intermediate reply or deferral
     expect(interaction.replied).toBe(false);
     expect(interaction.deferred).toBe(false);
 
@@ -334,7 +328,6 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
     const stateSpy = spyOn(tomoriStateCache, "getCachedTomoriState").mockResolvedValue(
       makePersona({}) as Awaited<ReturnType<typeof tomoriStateCache.getCachedTomoriState>>,
     );
-    // 55 channels: exceeds 50 modal capacity
     const channels = Array.from({ length: 55 }, (_, i) => ({
       channelDiscId: `channel-${String(i).padStart(3, "0")}`,
       llm: LLM_A,
@@ -364,7 +357,7 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
       components: unknown[];
       flags: number;
     };
-    expect(replyPayload.flags).toBe(64); // Ephemeral
+    expect(replyPayload.flags).toBe(64);
     expect(replyPayload.components).toBeDefined();
     expect(replyPayload.embeds[0].toJSON().description).toBe(
       localizer("en-US", "commands.model.override.remove.page_select_prompt", { total: "55" }),
@@ -418,7 +411,6 @@ describe("/model override remove - (5) route button opens requested batch withou
     let presentedBatchLength = 0;
     let presentedPage = -1;
 
-    // 60 total entries: batch 1 has entries 50..59 (10 entries)
     const allEntries: ModelOverrideEntry[] = Array.from({ length: 60 }, (_, i) =>
       makeChannelEntry(`channel-${String(i).padStart(3, "0")}`),
     );
@@ -521,7 +513,7 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
       action: "remove-submit",
       locale: "en-US",
       page: 0,
-      fp: "stale_fp", // Deliberately mismatching fingerprint
+      fp: "stale_fp",
       nonce: "nonce-12345678",
     };
     const customId = buildModelOverrideRouteId(submitRoute);
@@ -552,7 +544,6 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
         return true;
       },
       showRemoveModal: async () => undefined,
-      // Every field lookup returns undefined (absent checkbox evidence)
       takeCheckboxValues: () => undefined,
       createNonce: () => "nonce-12345678",
     };
@@ -593,7 +584,6 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
         return true;
       },
       showRemoveModal: async () => undefined,
-      // Group 0 has "0" checked (channel-1 kept). Persona at index 1 is unchecked.
       takeCheckboxValues: () => ["0"],
       createNonce: () => "nonce-12345678",
     };
@@ -640,7 +630,6 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
         return true;
       },
       showRemoveModal: async () => undefined,
-      // Empty array is valid evidence: all items in batch were unchecked by user
       takeCheckboxValues: () => [],
       createNonce: () => "nonce-12345678",
     };
@@ -721,22 +710,20 @@ describe("/model override remove - (7) combined scopes and ordered positions con
     const rawPersonas = [
       makePersonaEntry(99, "Zoe"),
       makePersonaEntry(50, "Alice"),
-      makePersonaEntry(10, "Alice"), // Same nickname, lower id should come first
+      makePersonaEntry(10, "Alice"),
       makePersonaEntry(2, "Bob"),
     ];
 
     const sorted = sortModelOverrideEntries(rawChannels, rawPersonas);
 
-    // Channels must come first, sorted by channelDiscId
-    expect(sorted[0]).toEqual(rawChannels[1]); // channel-a
-    expect(sorted[1]).toEqual(rawChannels[2]); // channel-m
-    expect(sorted[2]).toEqual(rawChannels[0]); // channel-z
+    expect(sorted[0]).toEqual(rawChannels[1]);
+    expect(sorted[1]).toEqual(rawChannels[2]);
+    expect(sorted[2]).toEqual(rawChannels[0]);
 
-    // Personas come second, sorted by persona_nickname then persona_id
-    expect(sorted[3]).toEqual(rawPersonas[2]); // Alice (id 10)
-    expect(sorted[4]).toEqual(rawPersonas[1]); // Alice (id 50)
-    expect(sorted[5]).toEqual(rawPersonas[3]); // Bob (id 2)
-    expect(sorted[6]).toEqual(rawPersonas[0]); // Zoe (id 99)
+    expect(sorted[3]).toEqual(rawPersonas[2]);
+    expect(sorted[4]).toEqual(rawPersonas[1]);
+    expect(sorted[5]).toEqual(rawPersonas[3]);
+    expect(sorted[6]).toEqual(rawPersonas[0]);
   });
 
   it("assigns positional indices as modal option values matching presented batch order", () => {
@@ -764,7 +751,6 @@ describe("/model override remove - (7) combined scopes and ordered positions con
     expect(allOptions[2].value).toBe("2");
     expect(allOptions[3].value).toBe("3");
 
-    // Channels first, then personas in presented modal options
     expect(allOptions[0].label).toBe("#general");
     expect(allOptions[2].label).toBe("Alpha");
     expect(allOptions[3].label).toBe("Beta");
@@ -1091,7 +1077,6 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
     );
     const options = (modal.components[0].component as { options: Array<{ label: string; description: string }> })
       .options;
-    // A summary inside the checkbox option description allowance is never ellipsized.
     expect(options[0].description).toBe("deepseek/deepseek-v4-flash-2026-02-14-exp (OpenRouter)");
     expect(options[0].description).not.toContain("...");
 

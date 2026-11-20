@@ -241,12 +241,6 @@ type MemoryImportMappingsResult =
   | { status: "ok"; kind: "personal_memories"; mappings: PersonalMemoryImportMapping[] }
   | { status: "refused" };
 
-/**
- * Binds every confirmed bucket to the key the repository call for its kind takes. A workspace destination carries
- * the persona the destination list offered, because that list is what the user saw and mapped against; a personal
- * destination is already the lineage. A bucket whose destination is missing, or a workspace destination that is
- * not one of the offered personas, refuses the whole write rather than importing part of the bundle.
- */
 export function buildMemoryImportMappings(
   kind: MemoryTransferKind,
   buckets: readonly MemoryBucket[],
@@ -331,8 +325,7 @@ async function defaultGetPersonalMemoryDestinations(
 }
 
 function replyInteraction(interaction: GlobalRoutableInteraction): ButtonInteraction | ModalSubmitInteraction {
-  // replyInfoEmbed's signature predates select-menu callers. Its body uses only
-  // members shared by select menus: guild, user, deferred, replied, id, webhook, and reply methods.
+  // Type assertion stays safe because replyInfoEmbed touches only members shared with select menus.
   return interaction as unknown as ButtonInteraction | ModalSubmitInteraction;
 }
 
@@ -473,8 +466,7 @@ async function loadMemoryDestinations(
   locale: string,
   snapshot: TransferSnapshotRecord,
 ): Promise<MemoryTransferDestination[] | null> {
-  // The snapshot's own destination key addresses the workspace, so a DM-backed workspace lists its personas rather
-  // than answering nothing for want of a guild. A personal import addresses the importing account instead.
+  // Resolve against snapshot destinationKey rather than interaction guild because DM workspaces have no guild.
   const destinations =
     snapshot.ownership === "personal"
       ? await dependencies.getPersonalMemoryDestinations(snapshot.destinationKey, locale)
@@ -666,9 +658,7 @@ export function createTransferInteractionRoute(
           return;
         }
 
-        // The strategy is what the mapping surface renders, so choosing one opens it in place of the preview. The
-        // controls that reach this action exist only on the preview, which is why a placeholder here left the whole
-        // mapping flow unreachable.
+        // Strategy picks open mapping directly because those controls only render once a strategy is chosen.
         const memorySnapshot = await requireMemorySnapshot(interaction, route.locale, updated.snapshot);
         if (!memorySnapshot) return;
         const destinations = await loadMemoryDestinations(dependencies, interaction, route.locale, updated.snapshot);
@@ -964,9 +954,7 @@ export function createTransferInteractionRoute(
         if (!destinations) return;
 
         if (memorySnapshot.strategy === "replace" && route.action === "memory-confirm") {
-          // The mapping panel's Confirm only ever opens the destructive preview. It is deliberately not the control
-          // that writes, so a repeated or duplicated click on it re-renders the preview instead of committing the
-          // Replace the preview exists to gate.
+          // Re-render the preview rather than writing so duplicate clicks on Confirm cannot skip the Replace gate.
           const updated = dependencies.updateSnapshotState(
             route.nonce,
             interaction.user.id,
@@ -990,9 +978,7 @@ export function createTransferInteractionRoute(
           return;
         }
 
-        // Only the destructive preview renders the confirm control, so reaching it without the recorded preview, or
-        // on a snapshot whose strategy is no longer the Replace that preview described, means a forged or stale
-        // control rather than a reader who was shown what Replace clears.
+        // Reject missing previews or non-replace strategies because only the destructive preview renders this control.
         if (
           (route.action === "memory-replace-confirm" && memorySnapshot.strategy !== "replace") ||
           (memorySnapshot.strategy === "replace" && snapshot.replaceConfirmed !== true)
@@ -1044,8 +1030,7 @@ export function createTransferInteractionRoute(
 
         let snapshotConsumed = false;
         try {
-          // Acknowledge as an update before the transaction, so the receipt replaces the panel it was confirmed on.
-          // A plain defer would open a new ephemeral and leave the mapping controls on screen.
+          // Acknowledge via deferUpdate so the receipt replaces this panel instead of spawning a duplicate ephemeral.
           await interaction.deferUpdate();
 
           const importResult =
@@ -1067,13 +1052,9 @@ export function createTransferInteractionRoute(
                 });
 
           if (!importResult.success) {
-            // Each bundle write is one transaction, so a failed result left no partially imported destination
-            // behind. The snapshot is deliberately left unconsumed: a failed apply is not a reason to destroy the
-            // pending import.
+            // Preserve the snapshot on failure because failed bundle transactions leave imported state untouched.
             const failureDescriptionKey = importResult.error ?? "commands.transfer.memory_import_failed_description";
-            // A failed apply carries no reason of its own, and the operation only logs when starting
-            // an import, so the cause is named on the receipt and reported once by the delivery
-            // layer. Emitting panel_failure here would double-count it against the chokepoint.
+            // Report panel_failure_detail only because the delivery chokepoint owns the main panel_failure metric.
             log.metric("panel_failure_detail", {
               reason: "memory_import_apply_failed",
               detail: failureDescriptionKey,
@@ -1125,8 +1106,7 @@ export function createTransferInteractionRoute(
             { locale: route.locale },
           );
         } finally {
-          // A write that did not commit releases its claim, so a failed import stays retryable. A committed one has
-          // already consumed the snapshot, which this release then simply fails to find.
+          // Release only uncommitted claims because applied imports have already consumed the snapshot.
           if (!snapshotConsumed) {
             dependencies.releaseSnapshotClaim(
               route.nonce,
@@ -1278,8 +1258,7 @@ export function createTransferInteractionRoute(
           return;
         }
 
-        // Acknowledge as an update before the transaction, so the receipt can replace the checklist's parent panel.
-        // A plain defer would open a new ephemeral message and leave the panel, and its buttons, on screen.
+        // Update in place rather than deferReply so the completion notice replaces the checklist panel.
         await interaction.deferUpdate();
 
         const importResult = await dependencies.applyConfigImport(
@@ -1288,11 +1267,9 @@ export function createTransferInteractionRoute(
           candidate.destinationKey,
         );
         if (!importResult.success) {
-          // The import is one transaction, so a failed result left no partially applied section behind. The snapshot
-          // is deliberately left unconsumed: a failed apply is not a reason to destroy the pending import.
+          // Leave the snapshot unconsumed on retryable failures because the import transaction rolled back cleanly.
           const failureDescriptionKey = importResult.error ?? "commands.transfer.config_import_failed_description";
-          // Same blind spot as the memory apply above: the notice carries no receipt of its own, so
-          // the cause is named on the receipt and reported once by the delivery layer.
+          // Emit panel_failure_detail alone so delivery does not double-count panel_failure.
           log.metric("panel_failure_detail", {
             reason: "config_import_apply_failed",
             detail: failureDescriptionKey,
@@ -1318,8 +1295,7 @@ export function createTransferInteractionRoute(
           return;
         }
 
-        // The write is committed, so the snapshot is consumed whether or not this read still finds it. Consuming
-        // before the write would destroy a pending import that then failed to apply.
+        // Consume only after commit so a failed apply never destroys the user's pending import.
         dependencies.consumeSnapshot(route.nonce, interaction.user.id, candidate.ownership, candidate.destinationKey);
 
         await deliverGuardedPanel(

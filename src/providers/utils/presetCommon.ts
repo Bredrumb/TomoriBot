@@ -1,12 +1,3 @@
-/**
- * Shared schemas, prompts, and utilities for AI-powered preset generation.
- *
- * All providers that support preset generation (OpenRouter, Custom, DeepSeek,
- * NVIDIA, ZAI, Zaicoding) use the same response schema, prompt builder, and
- * response extraction logic. This module provides a single source of truth so
- * each provider's presetGenerator.ts only handles the provider-specific HTTP wiring,
- * tool adapter integration, and response format negotiation.
- */
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationErrorType } from "@/types/provider/featureInterfaces";
 import { PRESET_MAX_STRING_LENGTH } from "@/types/preset/presetExport";
@@ -19,17 +10,10 @@ import {
   type NaturalNudgeInterest,
 } from "@/modules/natural-nudges/db/types";
 
-/** A text or image_url content part in an OpenAI-compatible message. */
 export type PresetContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
-/**
- * Shape the preset generation prompt asks the model to return.
- *
- * Every field is optional because this describes untrusted model output: the prompt
- * states the counts, and {@link validatePresetGenerationFields} is what holds the model
- * to them. Lists are mutable because the accepted result is handed straight into
- * `PresetExportData`.
- */
+// Fields are optional for untrusted model output before validation, and lists stay mutable because accepted results
+// pass straight into PresetExportData.
 interface PresetGenerationFields {
   attribute_list?: string[];
   sample_dialogues_in?: string[];
@@ -37,7 +21,6 @@ interface PresetGenerationFields {
   interests?: unknown;
 }
 
-/** Validated generation output, keyed the way `PresetExportData` stores it. */
 interface GeneratedPresetFields {
   attribute_list: string[];
   sample_dialogues_in: string[];
@@ -45,21 +28,14 @@ interface GeneratedPresetFields {
   natural_nudge_interests: NaturalNudgeInterest[];
 }
 
-/** Attributes every generated preset must carry, matching the order the prompt specifies. */
 export const PRESET_ATTRIBUTE_COUNT = 6;
-/** Dialogue pairs every generated preset must carry, matching the 3 guided + 2 free structure. */
+// Must equal 5 because the generation prompt requires 3 guided plus 2 free dialogue pairs.
 export const PRESET_DIALOGUE_PAIR_COUNT = 5;
-/** Upper end of the interest count the prompt asks for, below the stored cap so edits leave room. */
+// Target stays below the stored interest cap so subsequent user edits still have room.
 const GENERATED_PRESET_INTEREST_TARGET = 5;
 
-/**
- * Why a generated payload cannot become a preset.
- *
- * `UNPARSABLE` and `PARSE_FAILED` mean no usable object came back; `INCOMPLETE` and the
- * per-field codes mean the object arrived but the model did not follow the schema. Callers
- * need the distinction because it decides `errorType` (`INVALID_JSON` or
- * `VALIDATION_ERROR`) and whether the raw provider error is worth showing.
- */
+// Unparsable codes stay distinct from schema-miss codes because callers use them to choose errorType and whether to
+// show raw provider errors.
 export type PresetFieldFailureCode =
   | "UNPARSABLE"
   | "PARSE_FAILED"
@@ -68,11 +44,6 @@ export type PresetFieldFailureCode =
   | "DIALOGUES_IN"
   | "DIALOGUES_OUT";
 
-/**
- * The failures where the payload arrived intact but broke the contract, as opposed to a
- * response nothing could read. Exported as data so a provider can branch on the class
- * without re-listing the per-field codes.
- */
 export const PRESET_SCHEMA_MISS_CODES: readonly PresetFieldFailureCode[] = [
   "ATTRIBUTE_LIST",
   "DIALOGUES_IN",
@@ -81,7 +52,6 @@ export const PRESET_SCHEMA_MISS_CODES: readonly PresetFieldFailureCode[] = [
 
 export interface PresetFieldFailure {
   code: PresetFieldFailureCode;
-  /** Count the offending list actually held, when the list arrived but was the wrong length. */
   received?: number;
 }
 
@@ -89,36 +59,22 @@ export type PresetFieldsResult =
   | { ok: true; preset: GeneratedPresetFields }
   | { ok: false; failure: PresetFieldFailure };
 
-/**
- * Sanitize sample dialogue by removing speaker prefixes
- * Removes patterns like "User:", "Character:", "{{char}}:", etc.
- *
- */
 export function sanitizeSampleDialogueText(dialogue: string): string {
   if (!dialogue) return "";
 
   const cleaned = dialogue
-    .replace(/^{{char}}:\s*/i, "") // Remove {{char}}: prefix
-    .replace(/^{{character}}:\s*/i, "") // Remove {{character}}: prefix
-    .replace(/^{user}:\s*/i, "") // Remove {user}: prefix
-    .replace(/^User:\s*/i, "") // Remove User: prefix
-    .replace(/^Character:\s*/i, "") // Remove Character: prefix
-    .replace(/^[^:]+:\s*/, ""); // Remove any "Name:" style prefix
+    .replace(/^{{char}}:\s*/i, "")
+    .replace(/^{{character}}:\s*/i, "")
+    .replace(/^{user}:\s*/i, "")
+    .replace(/^User:\s*/i, "")
+    .replace(/^Character:\s*/i, "")
+    .replace(/^[^:]+:\s*/, "");
 
   return cleaned.trim();
 }
 
-/**
- * Check a candidate payload against the preset contract, sanitizing the dialogues it accepts.
- *
- * This is the one place the 6-attribute and 5-pair counts are enforced for generated
- * presets: the schema in {@link buildPresetResponseSchema} and the prompt in
- * {@link buildPresetPrompt} state them, and a provider that ignored them has to be caught
- * here before the preset reaches the export schema.
- *
- * A repaired payload is expected to be missing fields: a response the token ceiling cut
- * short loses whatever followed the cut, so only an intact leading section can pass.
- */
+// Providers can ignore prompt counts and repaired truncated JSON drops trailing fields, so this gate enforces the
+// full contract before export.
 export function validatePresetGenerationFields(candidate: unknown): PresetFieldsResult {
   if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
     return { ok: false, failure: { code: "UNPARSABLE" } };
@@ -155,10 +111,7 @@ export function validatePresetGenerationFields(candidate: unknown): PresetFields
   };
 }
 
-/**
- * Interests are optional garnish on a generated preset, so a malformed entry is dropped rather than
- * failing the whole generation.
- */
+// Malformed interests are dropped instead of failing generation because interests are optional garnish on a preset.
 export function acceptGeneratedInterests(candidate: unknown): NaturalNudgeInterest[] {
   if (!Array.isArray(candidate)) return [];
   return candidate
@@ -169,7 +122,6 @@ export function acceptGeneratedInterests(candidate: unknown): NaturalNudgeIntere
     .slice(0, NATURAL_NUDGE_INTEREST_LIMIT);
 }
 
-/** Interests property shared by every preset generation schema. */
 export function buildPresetInterestsSchemaProperty() {
   return {
     type: "array" as const,
@@ -185,19 +137,8 @@ export function buildPresetInterestsSchemaProperty() {
   };
 }
 
-/**
- * Turn a raw preset generation response into validated preset fields.
- *
- * A response no parser could read is retried with {@link tryRepairIncompleteJson}, because
- * an output-token ceiling can cut the payload off mid-object: the fields that did finish are
- * still usable, and whether enough of them survived is what
- * {@link validatePresetGenerationFields} decides.
- *
- * @param parse - Parser for this provider's response format, applied to the response text.
- * @param logFailure - Receives the parser's own message when it threw. The failure code
- *                     cannot carry the reason a provider rejected the payload, and that
- *                     reason is what separates a vendor quirk from a truncation.
- */
+// Unparsable responses retry repair for token-limit truncation, while logFailure keeps parser errors because failure
+// codes cannot distinguish vendor quirks.
 export function extractPresetGenerationFields(
   raw: string,
   parse: (raw: string) => unknown,
@@ -218,14 +159,8 @@ export function extractPresetGenerationFields(
   return validatePresetGenerationFields(candidate);
 }
 
-/**
- * The rephrase-only message a failed payload produces, for providers whose error text the
- * user sees verbatim.
- *
- * The mixed causes are deliberate: an unreadable response, a payload the token ceiling cut
- * short, and a schema the model ignored all reach the user as one instruction to retry,
- * because nothing the user can change would separate them.
- */
+// Unreadable, truncated, and generic schema failures share one retry prompt because nothing the user can change
+// separates those causes.
 export function presetGenerationFailureMessage(failure: PresetFieldFailure): string {
   switch (failure.code) {
     case "ATTRIBUTE_LIST":
@@ -239,10 +174,6 @@ export function presetGenerationFailureMessage(failure: PresetFieldFailure): str
   }
 }
 
-/**
- * Whether a failure is a validation miss (`VALIDATION_ERROR`) or a payload nothing could
- * read (`INVALID_JSON`), which is the `errorType` every provider reports.
- */
 export function presetGenerationFailureErrorType(failure: PresetFieldFailure): PresetGenerationErrorType {
   switch (failure.code) {
     case "ATTRIBUTE_LIST":
@@ -254,7 +185,6 @@ export function presetGenerationFailureErrorType(failure: PresetFieldFailure): P
   }
 }
 
-/** Message shape used inside the preset generation tool-calling loop. */
 export type PresetMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: string | PresetContentPart[] }
@@ -265,7 +195,6 @@ export type PresetMessage =
     }
   | { role: "tool"; tool_call_id: string; content: string };
 
-/** Shape of a single tool call from the model response. */
 export interface PresetToolCall {
   id?: string;
   type?: string;
@@ -275,13 +204,6 @@ export interface PresetToolCall {
   };
 }
 
-/**
- * JSON Schema for the preset generation structured output.
- *
- * Used by providers that support `response_format: { type: "json_schema", json_schema: { ... } }`
- * (OpenRouter, NVIDIA). For providers that only support `json_object` mode, this schema
- * is injected into the system prompt alongside `buildPresetPrompt()`.
- */
 export function buildPresetResponseSchema() {
   const maxStringLength = PRESET_MAX_STRING_LENGTH;
 
@@ -315,24 +237,13 @@ export function buildPresetResponseSchema() {
   };
 }
 
-/**
- * Build the full preset generation prompt from user-supplied parameters.
- *
- * This is the canonical prompt used by all providers. It includes detailed guidance
- * for the 3 guided + 2 free dialogue structure, character limit reminders, and
- * optional sections for an upload-derived appearance description, web search, existing
- * preset context, and additional instructions.
- *
- * Takes `GeneratePresetParams` itself rather than a hand-copied subset, so a new input
- * cannot silently fail to reach the prompt.
- */
+// Taking full GeneratePresetParams rather than a subset prevents new preset inputs from silently failing to reach the
+// prompt.
 export function buildPresetPrompt(
   params: GeneratePresetParams,
   options?: {
-    /**
-     * True when the caller has already run search and appends the results itself, so the
-     * prompt must not also tell the model to call web search tools it was not given.
-     */
+    // Prompt search-tool instructions are suppressed when this is true because the caller already ran search and
+    // appends the results.
     webSearchResultsProvided?: boolean;
   },
 ): string {
@@ -438,21 +349,14 @@ ${params.appearanceDescription.trim()}`;
   return prompt;
 }
 
-/**
- * Recursively strip JSON Schema array constraints unsupported by Anthropic's
- * structured-output endpoint (`maxItems`, `minItems`).
- *
- * Use this before sending a schema to any Anthropic model (including via
- * OpenRouter) to avoid the "property 'maxItems' is not supported" error.
- */
+// Anthropic structured outputs reject maxItems and minItems even via OpenRouter, so strip them before sending schemas
+// to Anthropic models.
 export function stripAnthropicUnsupportedConstraints(schema: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(schema)) {
     if (key === "maxItems" || key === "minItems") continue;
 
-    // Recurse into nested schema objects (properties, items, etc.) but not into
-    // plain arrays like `enum` whose elements are primitive values
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
       result[key] = stripAnthropicUnsupportedConstraints(value as Record<string, unknown>);
     } else {
@@ -463,14 +367,6 @@ export function stripAnthropicUnsupportedConstraints(schema: Record<string, unkn
   return result;
 }
 
-/**
- * Extract text from an OpenAI-compatible response `content` field.
- *
- * Handles three formats:
- * - Plain string content
- * - Array of content parts (filters for `type: "text"` parts)
- * - Null/undefined → empty string
- */
 export function extractResponseText(content: unknown): string {
   if (typeof content === "string") {
     return content;
@@ -494,9 +390,6 @@ export function extractResponseText(content: unknown): string {
   return "";
 }
 
-/**
- * Build a standard ToolResult for tool-call errors.
- */
 export function buildToolErrorResult(message: string): ToolResult {
   return {
     success: false,

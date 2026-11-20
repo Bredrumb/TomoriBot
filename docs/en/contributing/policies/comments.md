@@ -28,9 +28,7 @@ instead.
 if (opensModal) return showModal();
 ```
 
-When writing new code and unsure, leave the comment out. When cleaning up existing comments and
-unsure, keep it: a wrong deletion can erase the only record of a constraint. A comment that
-restates the next line and also carries a keep fact is a keep.
+When unsure, omit the comment and make the name, type, or function boundary carry the meaning.
 
 ## Never write
 
@@ -38,7 +36,6 @@ restates the next line and also carries a keep fact is a keep.
   `parseCompositeKey(...)`.
 - A restated function, type, variable, or parameter name.
 - Step numbers (`// 1. Parse the value`, `// 5c-2. Build the menu`) or `// Rule 3:` scaffolding.
-  Numbered JSDoc lists are allowed only when the order is part of an exported contract.
 - Section banners or dividers; extract a named function instead.
 - Commented-out code.
 - What the code used to do, a line number, or an old phase or task label.
@@ -47,9 +44,7 @@ restates the next line and also carries a keep fact is a keep.
 - Commentary about the comment ("Two exclusions are load-bearing", "Important:").
 - Justification aimed at a reviewer. That belongs in the PR description.
 
-A comment past two or three lines usually retells how the code came to be, and the constraint
-sentence is already in it. Cut to that sentence. Ordering, security, and compatibility rules sometimes need a short
-paragraph.
+Keep each comment to one sentence. A new comment may wrap over two lines.
 
 ```ts
 // Never sweep the client's own member: discord.js resolves permissions through it.
@@ -58,33 +53,11 @@ paragraph.
 Examples in docs are illustrative. Deployment sizes, record counts, and host details do not belong in
 this public repository (see [Docs Authoring](/contributing/localization/docs-authoring/#audience)).
 
-## JSDoc
+## No JSDoc
 
-The signature already states names and types, so a tag that repeats them adds nothing and goes stale.
-
-```ts
-/**
- * Extract image URLs from a Brave image search response.
- * @param response - Image search API response   // remove: the type says this
- * @returns Promise<string[]>                    // remove: so does the return type
- */
-```
-
-Keep tags that say what the type cannot: units, ranges, valid values, nullability the type does not
-encode, failure behavior, ordering and lifecycle, side effects, cancellation, and idempotency.
-
-```ts
-/**
- * @param modes - Empty when the provider reports no capabilities
- * @returns Comma-joined list, or empty string when no modes are supported
- * @throws {NvidiaImageModelUnavailableError} When the codename has no registered spec
- */
-```
-
-A partial tag list is correct. Never add tags to make a block look complete, and never delete a useful
-tag because its neighbours have none. The summary line follows the same rule: `Build system prompt for
-LLM` above `buildSystemPrompt()` goes, while "Finds the most active text channel that's accessible to
-the bot" above `findBestChannel()` stays, because it defines "best".
+Use TypeScript types and names to describe declarations. Preserve a constraint that protects against
+an actual bug in a single `//` sentence. The single-line `/** @public <caller> */` directive is
+allowed for Knip exemptions on release-only or dynamically imported exports.
 
 ## Dashes
 
@@ -124,20 +97,20 @@ test runner.
 | Rule | Kind | Catches |
 |---|---|---|
 | `prose-dash` | Error | Dashes in comments, `docs/` Markdown, and `src/locales/` string literals. Skips code, URLs, link targets, CLI flags, `-# `, and empty table cells |
-| `jsdoc-restatement` | Error | A tag that equals its parameter name or type after normalization |
+| `disallowed-jsdoc` | Error | JSDoc blocks except single-line Knip directives and license headers |
 | `numbered-narration` | Error | Step numbers on line comments |
 | `rule-scaffolding` | Error | `Rule N:` and `Rule #N` prefixes |
-| `obvious-narration` | Warning (error on changed lines) | Summary echoes and action-verb narration |
+| `obvious-narration` | Warning (error on changed lines) | Action-verb narration and section banners |
 | `orphaned-comment` | Error | Cleanup damage: a continuation with no opening line, a bare divider, an empty JSDoc block |
 | `duplicate-comment` | Audit warning | Blocks with the same text after normalizing markers, whitespace, and case. Floor: 12 words and 60 characters |
-| `long-comment-block` | Audit warning | A non-JSDoc block of 11 lines or more outside `tests/` |
-| `long-new-comment` | Error on changed lines | A new comment over 3 prose lines. JSDoc tags do not count toward the limit |
+| `long-comment-block` | Audit warning | A non-JSDoc block of 8 lines or more outside `tests/` |
+| `long-new-comment` | Error on changed lines | A new comment over 2 lines |
+| `new-multi-sentence` | Error on changed lines | A new line-comment block with multiple sentences |
 | `unexplained-comment` | Warning on changed lines | A new `//` block with no reason, condition, or unit signal (`because`, `so`, `when`, a colon, and similar) |
 
 A locale tree counts as one identity for `duplicate-comment`, so an English comment copied into every
 translated tree reports once. Suppression comments are skipped because each one is a separate lint
-decision. The standing `long-comment-block` finding is the pricing table in
-`src/db/seed/catalog/models.ts`, where the length is the data.
+decision.
 
 `COMMENT_AUDIT_DUPLICATE_MIN_WORDS`, `COMMENT_AUDIT_DUPLICATE_MIN_CHARS`, and
 `COMMENT_AUDIT_LONG_BLOCK_LINES` override the limits for recalibration only. The bot never reads them,

@@ -1,8 +1,3 @@
-/**
- * Pure satori renderers for the `/stats generate` infographics.
- * Gatherers provide the complete data structs; this module never reads the DB
- * or Discord API.
- */
 import { TIMEFRAME_LABEL_KEYS } from "@/utils/discord/statsDashboardCatalog";
 import type { Timeframe } from "@/utils/stats/statsDashboard";
 import { localizer } from "@/utils/text/localizer";
@@ -39,7 +34,6 @@ export function Fragment(props: { children?: unknown }): unknown {
   return props.children;
 }
 
-/** Logical canvas width. All typography is sized for a Discord-scale preview. */
 export const CARD_W = 1080;
 const BASE_CARD_W = 1080;
 const CARD_SCALE = CARD_W / BASE_CARD_W;
@@ -48,13 +42,10 @@ function scaled(value: number): number {
   return Math.max(1, Math.round(value * CARD_SCALE));
 }
 
-/** Cards deliberately use different heights for their share-card layouts. */
 export const PERSONAL_CARD_H = scaled(1920);
 export const PERSONA_CARD_H = scaled(1920);
-/** @deprecated Use the card-specific height helpers instead. */
 export const CARD_H = PERSONAL_CARD_H;
 
-/** TomoriBot brand palette. */
 export const CARD_THEME = {
   bg: "#1d100e",
   surface: "#2c1815",
@@ -103,7 +94,7 @@ function arcPoint(cx: number, cy: number, radius: number, angle: number): { x: n
   return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
 }
 
-/** Produces a data-URI-safe SVG donut without unsupported CSS conic gradients. */
+// SVG paths are used instead of CSS conic gradients because Satori does not support them.
 export function buildDonutSvg(
   segments: Array<{ value: number; color: string }>,
   size = 112,
@@ -145,7 +136,6 @@ export interface PersonalCardPalette {
   border: string;
 }
 
-/** Neutral fallback used when the leading persona has no usable avatar image. */
 export const DEFAULT_PERSONAL_CARD_PALETTE: PersonalCardPalette = {
   background: "#f6f5ef",
   surface: "#eae7dc",
@@ -359,7 +349,6 @@ function PersonalTotal(
   );
 }
 
-/** Personal Wrapped is intentionally a tall 9:16 card for Discord previews. */
 export function getPersonalCardHeight(_data: PersonalCardData): number {
   return PERSONAL_CARD_H;
 }
@@ -461,11 +450,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
                 marginBottom: -scaled(24),
               }}
             >
-              {/* Three-layer stacked-card silhouette floating on the card background
-                  (no panel/border), each square the same size as the avatar and
-                  staggered up-left: accent back → secondary-accent mid → avatar front.
-                  Personal-only (it replaces PersonalHeroDecor here), so the Server card
-                  (which still uses the shared decor) is unaffected. */}
               <div
                 style={{
                   display: "flex",
@@ -561,7 +545,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
             {data.favoriteModelName ?? t.noData}
           </div>
         </div>
-        {/* Spacer pushes the aggregate totals + signature to the card bottom. */}
         <div style={{ display: "flex", flex: 1, minHeight: scaled(20) }} />
         <div
           style={{
@@ -643,12 +626,10 @@ export interface PersonaCardData {
   favoriteTools: BreakdownSegment[];
 }
 
-/** Time-window cards omit the all-time memory row and use a shorter portrait frame. */
 export function getPersonaCardHeight(data: PersonaCardData): number {
   return data.totalTriggers === 0 ? scaled(860) : data.memoryCount === null ? scaled(1800) : PERSONA_CARD_H;
 }
 
-/** Large light-mode avatar used only by the centered Persona Affinity identity block. */
 function PersonaImage(
   props: Record<string, unknown> & {
     name: string;
@@ -1106,10 +1087,6 @@ export function renderPersonaCard(data: PersonaCardData): VNode {
   );
 }
 
-/**
- * One persona's vertical-bar entry, ranked by total tokens (highest = leftmost).
- * `accent` is sampled from the persona avatar in the gatherer and tints the bar.
- */
 export interface ServerPersonaBar extends PersonIcon {
   rank: number;
   totalTokens: number;
@@ -1117,14 +1094,12 @@ export interface ServerPersonaBar extends PersonIcon {
   accent: string;
 }
 
-/** One member's horizontal-bar entry, ranked by triggers; `accent` tints the bar. */
 export interface ServerMemberBar extends PersonIcon {
   rank: number;
   triggers: number;
   accent: string;
 }
 
-/** One model's horizontal-bar entry, ranked by total tokens processed (no icon). */
 export interface ServerModelBar {
   name: string;
   totalTokens: number;
@@ -1148,15 +1123,12 @@ export interface ServerCardData {
   serverUserCount: number;
 }
 
-/** Server card padding; the shorter top inset keeps the header visually anchored. */
 const SERVER_SIDE_PAD = scaled(66);
 const SERVER_TOP_PAD = scaled(42);
 const SERVER_BOTTOM_PAD = scaled(66);
 const SERVER_LOWER_W = CARD_W - SERVER_SIDE_PAD * 2;
-/** Pixels reserved at an avatar-tipped bar's end for its avatar + name label. */
 const SERVER_BAR_TIP_RESERVE = scaled(360);
 const SERVER_BAR_TRACK_W = SERVER_LOWER_W - SERVER_BAR_TIP_RESERVE;
-/** Model bars need no avatar, so their tip reserve (name only) is smaller. */
 const SERVER_MODEL_TRACK_W = SERVER_LOWER_W - scaled(280);
 const SERVER_BAR_TEXT_PAD = scaled(24);
 const SERVER_BAR_TEXT_FONT_SIZE = scaled(27);
@@ -1169,10 +1141,6 @@ const SERVER_BAR_ROW_H = scaled(98);
 const SERVER_TOTALS_H = scaled(150);
 const SERVER_FOOTER_H = scaled(112);
 
-/**
- * Picks black or white text for legibility on a solid `hex` fill using the WCAG
- * relative-luminance threshold. Pure + synchronous so it stays renderer-safe.
- */
 function readableInkOn(hex: string): string {
   const clean = hex.replace("#", "");
   if (clean.length < 6) return "#ffffff";
@@ -1187,7 +1155,6 @@ function readableInkOn(hex: string): string {
   return luminance > 0.5 ? "#1d1410" : "#ffffff";
 }
 
-/** Circular avatar whose ring uses a per-entry `accent` over the card palette. */
 function AccentAvatar(
   props: Record<string, unknown> & {
     name: string;
@@ -1231,7 +1198,6 @@ function AccentAvatar(
   );
 }
 
-/** Avatar + name shown at the tip of an avatar-bearing bar (personas, members). */
 function ServerBarTip(
   props: Record<string, unknown> & {
     name: string;
@@ -1264,10 +1230,7 @@ function ServerBarTip(
   );
 }
 
-/**
- * Satori exposes no text-measurement API, so use conservative Noto Sans JP
- * glyph-width estimates when deciding whether an in-bar label will fit.
- */
+// Conservative Noto Sans JP glyph widths are estimated here because Satori exposes no text measurement API.
 function estimateServerBarTextWidth(text: string): number {
   const emWidth = Array.from(text).reduce((total, character) => {
     if (/\s/u.test(character)) return total + 0.35;
@@ -1285,11 +1248,6 @@ export interface ServerBarLayout {
   insideText: string;
 }
 
-/**
- * Preserves the leader-relative width of each row. A row only grows past that
- * proportional width when its compact label would not fit; the long label is
- * used whenever the proportional bar has enough room for it.
- */
 export function getServerBarLayout(
   fraction: number,
   trackWidth: number,
@@ -1310,10 +1268,6 @@ export function getServerBarLayout(
   };
 }
 
-/**
- * One horizontal bar: a fill sized as a share of the leader, with a compact
- * in-bar label only when the full label cannot fit.
- */
 function ServerBarRow(
   props: Record<string, unknown> & {
     fillColor: string;
@@ -1374,7 +1328,6 @@ function ServerBarRow(
   );
 }
 
-/** Title row above each bar block, tinted to the card accent (natural height). */
 function ServerBlockTitle(props: Record<string, unknown> & { title: string; palette: PersonalCardPalette }): VNode {
   return (
     <div
@@ -1392,16 +1345,11 @@ function ServerBlockTitle(props: Record<string, unknown> & { title: string; pale
   );
 }
 
-/** Clamps a block's row count to [1, max]; the floor reserves a row for "empty". */
+// Row count is clamped to a floor of 1 because empty blocks still render a placeholder row.
 function serverBlockRowCount(length: number, max: number): number {
   return Math.max(1, Math.min(length, max));
 }
 
-/**
- * Content-aware height: the card grows with its actual persona/member/model rows
- * (no fixed hero), so small servers stay compact and full ones never clip. The
- * sum reuses the same section-height constants the renderer pins, keeping it exact.
- */
 export function getServerCardHeight(data: ServerCardData): number {
   if (data.totalTriggers === 0) return scaled(980);
   const rows =
@@ -1476,7 +1424,6 @@ export function renderServerCard(data: ServerCardData): VNode {
         fontFamily: CARD_THEME.fontFamily,
       }}
     >
-      {/* 1. Header row: server icon + name + timeframe subtitle. */}
       <div
         style={{
           display: "flex",
@@ -1514,7 +1461,6 @@ export function renderServerCard(data: ServerCardData): VNode {
 
       {hasData ? (
         <>
-          {/* 2. Top Personas: horizontal bars (tokens | cost inside, avatar + name at tip). */}
           <ServerBlockTitle title={t.topPersonas} palette={palette} />
           {personas.length > 0 ? (
             personas.map((entry) => (
@@ -1538,7 +1484,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 3. Most Active Members: triggers inside, avatar + name at tip. */}
           <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
           {members.length > 0 ? (
             members.map((entry) => (
@@ -1562,7 +1507,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 4. Top Models: tokens | cost inside, model name at tip (no avatar). */}
           <ServerBlockTitle title={t.topModels} palette={palette} />
           {models.length > 0 ? (
             models.map((entry) => (
@@ -1592,7 +1536,6 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* Spacer pushes the server totals + signature to the card bottom. */}
           <div style={{ display: "flex", flex: 1, minHeight: scaled(16) }} />
 
           <div

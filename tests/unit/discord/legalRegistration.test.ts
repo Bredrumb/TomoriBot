@@ -11,17 +11,8 @@ import * as realPersonaRepositoryModule from "@/utils/db/repositories/PersonaRep
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
-/**
- * The hosted-policy decision is one boolean read by four surfaces: the `/legal` registration
- * gate, the plaintext notices, the `/help` dashboard, and the guild welcome. This file drives
- * all four from one value, so a future edit that reads `RUN_ENV` directly in one of them fails
- * here rather than shipping a surface that disagrees with the others.
- *
- * `process.env.RUN_ENV` is steered as well as the predicate, because the command loader re-derives
- * `/legal`'s description from the leaf set it actually gated, and that path reads the real
- * predicate. Steering only the mock would let the leaf set and the wording answer from two
- * different environments and still look green.
- */
+// Both RUN_ENV and the mock must stay synchronized because commandLoader re-derives the description through the
+// unmocked predicate.
 let hostedEnvironment = false;
 const isHostedPolicyEnvironment = (): boolean => hostedEnvironment;
 
@@ -41,16 +32,10 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories/PersonaRepository": realPersonaRepositoryModule,
 });
 
-/** Captures the embed options the guild-join handler hands to the shared embed sender. */
 const sentEmbeds: Array<{ descriptionKey: string; descriptionVars?: Record<string, string | number | boolean> }> = [];
 
-/**
- * What the stubbed workspace lookup answers, and how many times it was asked.
- *
- * The call count is the evidence that the stub reached the handler: the handler swallows a read
- * failure and falls through to the same embed, so a passing assertion alone cannot tell a
- * controlled answer from a database that was never there.
- */
+// serverIdReads is tracked because the guild-join handler swallows DB errors into the same welcome embed, so output
+// alone cannot prove the stub ran.
 const serverIdStub: number | null = 1;
 let serverIdReads = 0;
 const recordedServerIdReads = (): number => serverIdReads;
@@ -73,12 +58,8 @@ scopedMock.module("@/utils/discord/embedHelper", () => ({
   },
 }));
 
-/**
- * The guild-join handler imports the repository singletons by their own module path, not through
- * the barrel, so these stubs target the modules it actually resolves. A barrel mock would leave
- * the handler on the real singletons, letting a swallowed database failure masquerade as the
- * controlled "no personas yet" state this test claims to drive.
- */
+// Repositories are mocked by direct file path rather than the barrel because the guild-join handler imports them
+// directly and swallows DB errors.
 scopedMock.module("@/utils/db/repositories/ServerRepository", () => ({
   ...realServerRepositoryModule,
   serverRepository: overrideMembers(realServerRepositoryModule.serverRepository, {
@@ -101,7 +82,6 @@ beforeAll(async () => {
   await initializeLocalizer();
 });
 
-/** Captured at module load so the file leaves the process environment as it found it. */
 const originalRunEnv = process.env.RUN_ENV;
 
 beforeEach(() => {

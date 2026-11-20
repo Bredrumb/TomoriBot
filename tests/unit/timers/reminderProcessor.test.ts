@@ -1,11 +1,8 @@
 import { DiscordAPIError } from "discord.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
-// Static imports are hoisted and evaluated before any `mock.module` runs, so
-// these namespaces hold the genuine exports. Spreading them keeps every mock
-// full-surface: `mock.module` is process-global and never restored, so a partial
-// factory would break unrelated test files loaded later in a monolithic
-// `bun test`.
+// Static imports evaluate before `mock.module`, so spreading them keeps full surfaces across unrelated files in
+// process-global `bun test` runs.
 import * as realMatrix from "@/utils/bridges/matrix";
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
@@ -33,11 +30,8 @@ const scheduleReminderRetryMock = mock(
 );
 const deleteReminderByIdMock = mock(async () => true);
 const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
-const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
-// Every factory spreads the real surface first, then overrides only the exports
-// this file actually needs to control.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/events/messageCreate/tomoriChat": realTomoriChat,
@@ -62,7 +56,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
 scopedMock.module("@/events/messageCreate/tomoriChat", () => ({
   ...realTomoriChat,
   tomoriChat: tomoriChatMock,
-  suppressNextSelfReply: suppressNextSelfReplyMock,
 }));
 
 scopedMock.module("@/utils/discord/mentionHelper", () => ({
@@ -89,14 +82,8 @@ scopedMock.module("@/utils/bridges/matrix", () => ({
 
 let ReminderProcessor: typeof import("@/timers/reminderProcessor").ReminderProcessor;
 
-/**
- * Silencing goes through `spyOn` on the live `log` singleton rather than a module mock. Nothing
- * here asserts on the logger, so the mock only ever suppressed noise, but registering it left the
- * module record replaced for the rest of the process: a later file's `spyOn(log, ...)` then
- * installs nothing at all, silently, and its assertions see the real implementation's output.
- * That cost `tests/unit/tools/searxngAvailabilityTransition.test.ts` a false failure. `spyOn`
- * mutates the singleton production already resolves at call time and is undone below.
- */
+// Log silencing uses spyOn on the live singleton rather than mock.module because mock.module persists across files
+// and breaks later spyOn calls.
 const silencedLogMethods = ["error", "info", "success", "warn"] as const;
 const logSpies = silencedLogMethods.map((method) => spyOn(realLogger.log, method));
 
@@ -186,7 +173,6 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     );
     deleteReminderByIdMock.mockImplementation(async () => true);
     tomoriChatMock.mockImplementation(async () => "run");
-    suppressNextSelfReplyMock.mockClear();
     ensureDiscordUserMentionMock.mockClear();
   });
 
@@ -331,7 +317,6 @@ describe("ReminderProcessor delivery retry cap", () => {
       }),
     );
     deleteReminderByIdMock.mockImplementation(async () => true);
-    suppressNextSelfReplyMock.mockClear();
     ensureDiscordUserMentionMock.mockClear();
   });
 

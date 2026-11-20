@@ -29,19 +29,8 @@ function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecA
   return periodMatch[0] === "." && periodEndIndex === buffer.length;
 }
 
-/**
- * Moves a flush offset out of any markdown table it lands inside.
- *
- * Table rows end in newlines, so every sentence/whitespace heuristic happily treats a row
- * boundary as a safe break; but cutting there splits the block, and only the fragment that
- * still parses as a table reaches the PNG renderer. The rest is delivered as raw pipes.
- *
- * Cutting *before* the table is preferred: it keeps the whole table together for the next
- * flush. When the table starts at offset 0 there is no prose to flush ahead of it, so the
- * cut moves past the table's end instead, and 0 is returned when even that is unavailable
- * (the caller treats 0 as "no safe cut, hold the buffer").
- *
- */
+// Splitting inside a markdown table breaks PNG rendering into raw pipes, so this snaps the cut outside (returning 0
+// to hold the buffer if neither side fits).
 function snapFlushIndexOutOfMarkdownTable(buffer: string, index: number): number {
   const enclosingTable = findMarkdownTableBlockAt(buffer, index);
   if (!enclosingTable) return index;
@@ -196,24 +185,12 @@ export function drainDetailsBlocksFromBuffer(state: StreamState): void {
   }
 }
 
-// Markers the hold counts. "_" is deliberately absent: in chat prose it is far more often an
-// identifier or a kaomoji character ("_id", "user_id", "-_-", "^_^") than emphasis, and a false hold
-// stops streaming for the rest of the response, while a missed "_span_" only loses protection the
-// hold never provided. The chunker still recognizes "_" spans in the text it receives whole.
+// "_" is omitted from hold markers because identifiers and kaomoji ("user_id", "-_-") trigger false holds that
+// stall streaming.
 const HOLD_EMPHASIS_MARKERS: readonly EmphasisMarker[] = ["*", "~"];
 
-/**
- * Counts the marker characters of `marker` that are still open.
- *
- * Runs are classified by the flanking rules a renderer applies (see
- * {@link classifyEmphasisMarkerRun}), so prose full of stray markers ("2 * 3", a `* ` bullet,
- * "Best*") never holds the buffer, and each run is weighted by its length so a nested
- * "**bold *italic***" closes both levels instead of stranding the outer run. Depth clamps at zero in
- * step with the parenthesis count, so an orphan closer cannot cancel a genuinely open marker.
- *
- * The ceiling: a false positive defers this response's remaining flushes to the final flush
- * (longer messages, no loss), where a false negative splits the span across two messages.
- */
+// Depth clamps at zero and runs weight by length per flanking rules so stray markers never lock flushes; false
+// positives defer to final flush, negatives split.
 function countOpenEmphasisMarkers(buffer: string, marker: EmphasisMarker): number {
   let depth = 0;
 
@@ -233,11 +210,8 @@ function countOpenEmphasisMarkers(buffer: string, marker: EmphasisMarker): numbe
 }
 
 export function hasIncompleteSemanticMarkers(buffer: string): boolean {
-  // Only an unmatched OPENER is worth holding for: text is ordered, so a ")" that already passed
-  // can never be matched by a "(" that follows. Counting it would both stall forever (the buffer
-  // only grows, so a net-negative depth never returns to zero and every later flush defers to the
-  // final one) and let an emoticon cancel a genuinely open parenthetical, splitting mid-aside.
-  // Emoticons are the common source: "B)", ":)", ">:)".
+  // Count only unmatched "(" openers because stray ")" from emoticons (":)") would drive depth negative and stall
+  // every flush until end of stream.
   let unclosedOpeners = 0;
   for (const char of buffer) {
     if (char === "(") unclosedOpeners++;
@@ -263,7 +237,7 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     return true;
   }
 
-  // Only surplus openers hold the buffer, for the same never-closing stall described above.
+  // Hold only on surplus opening quotes (>) so stray closing quotes cannot stall later flushes.
   const unclosedQuotePair = PAIRED_QUOTE_MARKS.find(
     ([open, close]) => buffer.split(open).length > buffer.split(close).length,
   );
@@ -271,11 +245,8 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     return true;
   }
 
-  // An unclosed emphasis run is the same hazard as an unclosed quote: the newline and period breaks
-  // in processBufferContent would cut inside "*...and more*", and chunkMessage() can only protect a
-  // span it receives whole. Inline code and URLs are blanked first, because a `*args` argument list
-  // and a /_next/ path segment are not emphasis. The final auto-close pass already repairs these
-  // markers, so a hold here can never outlive the response.
+  // Mask inline code and URLs before checking open emphasis runs so `*args` or /_next/ never trigger a false
+  // hold.
   const emphasisScanText = maskInlineCodeAndUrls(buffer);
   for (const marker of HOLD_EMPHASIS_MARKERS) {
     const openMarkers = countOpenEmphasisMarkers(emphasisScanText, marker);
@@ -284,8 +255,8 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     }
   }
 
-  // A handle like "@{Mirri J. Juno}" holds a period the sentence break would cut at, and the
-  // later mention resolver only recognizes the handle whole.
+  // Hold incomplete "@{...}" handles because dotted names (such as "@{Mirri.Juno}") would split at sentence
+  // breaks before mention resolution.
   const lastMentionOpen = emphasisScanText.lastIndexOf("@{");
   if (lastMentionOpen !== -1 && emphasisScanText.indexOf("}", lastMentionOpen) === -1) {
     return true;
@@ -330,14 +301,8 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
   return false;
 }
 
-/**
- * Appends closing markers for every unbalanced inline-markdown marker in the text.
- *
- * Splitting this out of {@link autoCloseIncompleteMarkers} lets the public function run the
- * repair over prose only, so a table's cell contents never influence the counts and the
- * closers never land on a table row.
- *
- */
+// Runs only on prose outside tables (via autoCloseIncompleteMarkers) so table cell contents never skew marker counts
+// or receive appended closers.
 function appendUnbalancedMarkerClosers(buffer: string): string {
   let fixedBuffer = buffer;
   const fixes: string[] = [];
@@ -424,10 +389,8 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
     return appendUnbalancedMarkerClosers(buffer);
   }
 
-  // Count markers across prose only. A table's cells routinely hold characters that are
-  //    not unclosed inline markdown at all (`user_id`, a `Best*` footnote, `(approx` (and
-  //    a table at the end of a response ALWAYS reaches this repair, because EOF never
-  //    terminates a table block (more rows could still stream in).
+  // Count unclosed markers across prose only because trailing tables stay unclosed at EOF and cell text often
+  // contains raw "*", "_", or "(".
   const proseOnly = segments
     .filter((segment) => segment.type === "text")
     .map((segment) => segment.content)
@@ -435,13 +398,8 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
   const closers = appendUnbalancedMarkerClosers(proseOnly).slice(proseOnly.length);
   if (!closers) return buffer;
 
-  // Land the closers on the last prose segment rather than the buffer's end. Appending
-  //    after the final row changes that row's cell count, so the renderer stops recognizing
-  //    it as a body row and drops it from the image, so the dropped row then leaks out as raw
-  //    pipe-delimited text underneath the rendered table.
-  //    Only a segment with real prose in it can host them: a text segment sitting between two
-  //    tables is often just the newline separating them, and closers placed there would land
-  //    on the NEXT table's header line and break that table instead.
+  // Append closers to the last non-whitespace prose segment because appending after a table or on a blank
+  // separator corrupts table rows or headers.
   let lastProseIndex = -1;
   for (let index = segments.length - 1; index >= 0; index--) {
     if (segments[index].type === "text" && segments[index].content.trim()) {
@@ -455,9 +413,8 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
     return buffer;
   }
 
-  // Insert ahead of the segment's trailing whitespace. That whitespace is the newline
-  //    separating prose from the table below it, so appending after it would push the closers
-  //    onto the table's first line.
+  // Insert closers before trailing whitespace because that newline separates prose from the following table's
+  // header.
   const proseSegment = segments[lastProseIndex].content;
   const proseCore = proseSegment.replace(/\s+$/u, "");
   const proseTrailingWhitespace = proseSegment.slice(proseCore.length);

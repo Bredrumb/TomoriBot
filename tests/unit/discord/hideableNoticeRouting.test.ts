@@ -37,7 +37,6 @@ beforeAll(async () => initializeLocalizer());
 
 const SOURCE_URL = "https://discord.com/channels/1/200/300";
 
-/** A guild channel every member can read unless `restricted` denies `@everyone` the channel. */
 function fakeChannel(id: string, options: { dm?: boolean; parentId?: string; restricted?: boolean } = {}) {
   const sent: string[] = [];
   const delivered: string[] = [];
@@ -121,7 +120,6 @@ const memoryNotice = {
 
 const BLOCK_TITLE_VARS = { persona_name: "Mirri", user_name: "Bau", duration_hours: 72 };
 
-/** Delivers the block confirmation the `block_user` tool posts after saving a row. */
 function sendBlockNotice(context: ToolContext): Promise<void> {
   return sendUserBlockedNotice({
     context,

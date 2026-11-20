@@ -14,10 +14,6 @@ import { gatherPersonaCardData } from "@/utils/stats/personaCardGatherer";
 import { renderPersonaCard, CARD_W, getPersonaCardHeight } from "@/utils/stats/statsInfographic";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 
-/**
- * Configures the /stats generate persona subcommand: renders the caller's Persona Affinity card
- * for a persona chosen through autocomplete.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("persona")
@@ -41,10 +37,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 export const autocomplete = handleServerPersonaAutocomplete;
 
-/**
- * Validates the selected persona privately, then sends the caller's Persona Affinity card as a
- * public PNG.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

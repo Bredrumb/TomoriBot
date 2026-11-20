@@ -202,8 +202,8 @@ describe("help dashboard", () => {
     const container = getContainer("en-US", "setup", "custom-endpoints", "comfyui");
     const serialized = JSON.stringify(container);
 
-    // The select's closed value is the section name, so no display may repeat it as a heading. The
-    // variant heading stays: the subsection select sits below the body rather than heading it.
+    // The closed section select already displays the section name, while the variant heading
+    // stays above the body because the subsection select sits below it.
     expect(serialized).toContain(pageTitle);
     expect(textDisplays(container).some((content) => content.startsWith(`## ${pageTitle}`))).toBe(false);
 
@@ -341,20 +341,6 @@ describe("help dashboard", () => {
   });
 });
 
-/**
- * Setup > Getting Started > Get an API Key is the only screen that mounts a provider picker, so
- * these assertions are the whole coverage of that render path. The expected option lists are taken
- * from the catalog's own id tuples rather than hand-written copies, because a second literal list
- * here would keep passing after the guide table itself moved.
- *
- * `buildProviderGuideModal` is reached only through the provider select route, so "reachable" means
- * a value in one of these two pickers; asserting the modal renders would prove only that the guide
- * exists.
- *
- * `BaseComponentData.type` spans the whole enum and the narrowed `"components" in comp` branch loses
- * its type argument, so the provider picker is recognized by a predicate over the concrete row type
- * rather than by the type field alone.
- */
 function isProviderSelect(child: ActionRowComponentData): child is StringSelectMenuComponentData {
   if (!("customId" in child) || typeof child.customId !== "string") return false;
   return child.type === ComponentType.StringSelect && child.customId.startsWith("help:v2:provider:");
@@ -482,9 +468,8 @@ describe("help provider picker", () => {
     expect(footer?.type).toBe(ComponentType.TextDisplay);
     const footerContent = footer && "content" in footer ? footer.content : "";
 
-    // Resolving the key with the variant's own variables and requiring the result to match is what
-    // makes this assertion able to fail: the footer's node declares `setup`, so rendering it with
-    // the page's variables instead would leave the token literal and disagree here.
+    // Resolving with the variant's own variables ensures this assertion can fail, because
+    // using the page's variables leaves the footer's `setup` token literal.
     const variant = HELP_CATEGORIES.find((c) => c.id === "setup")
       ?.pages.find((p) => p.id === "getting-started")
       ?.variants?.find((v) => v.id === "get-api-key");

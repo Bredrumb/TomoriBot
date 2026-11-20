@@ -17,28 +17,23 @@ describe("rename-command-path", () => {
   });
 
   it("replaces bare form, code-span form, escaped-backtick form, and preserves BOM", async () => {
-    // The script hardcodes search directories to src/locales, docs, .github, README.md relative to process.cwd()
-    // To test it without altering the real repo, we spawn it with cwd set to our tmpDir
-    // And create the expected folders there.
+    // Spawn with cwd = tmpDir because the script hardcodes src/locales, docs, .github, and README.md relative
+    // to process.cwd().
 
     await mkdir(join(tmpDir, "docs"), { recursive: true });
     await mkdir(join(tmpDir, ".github", "release"), { recursive: true });
     await mkdir(join(tmpDir, "src", "locales"), { recursive: true });
 
-    // File 1: docs/test.md (UTF-8)
     const docsContent = "Here is a bare /config setup command.\nAnd a code-span `/config setup` form.";
     await writeFile(join(tmpDir, "docs", "test.md"), docsContent, "utf8");
 
-    // File 2: src/locales/en-US.ts (UTF-8 with BOM)
     const localeContent = "export default { desc: `Use \\`/config setup\\` now.` };";
     const bomLocaleContent = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(localeContent, "utf8")]);
     await Bun.write(join(tmpDir, "src", "locales", "en-US.ts"), bomLocaleContent);
 
-    // File 3: .github/release/skipped.md (Excluded directory)
     const skippedContent = "`/config setup` should not change here.";
     await writeFile(join(tmpDir, ".github", "release", "skipped.md"), skippedContent, "utf8");
 
-    // Dry-run
     const procDry = spawn(["bun", "run", scriptPath, "config setup", "setup"], { cwd: tmpDir, stdout: "pipe" });
     await procDry.exited;
 
@@ -68,9 +63,7 @@ describe("rename-command-path", () => {
   });
 
   it("leaves a single-word path alone inside source paths and URLs", async () => {
-    // A multi-word path cannot appear in a path or URL, so `config setup` above cannot detect a
-    // missing left boundary. Waves 4 through 6 rename single-word roots, where /memory matches as
-    // a segment of src/commands/memory/... and of any docs URL unless the boundary holds.
+    // Single-word roots match segments inside source paths and docs URLs unless the left boundary holds.
     await mkdir(join(tmpDir, "docs"), { recursive: true });
 
     const content = [

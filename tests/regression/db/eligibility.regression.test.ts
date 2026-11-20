@@ -1,13 +1,3 @@
-/**
- * Regression harness: batched per-persona queries against the loaders they summarize.
- *
- * The memories panel marks personas with history documents and counts personal memories per
- * lineage from one batched query each. A batched query that drifts from its loader shows a
- * marker or count the opened page contradicts, so each is compared with its loader over real
- * Postgres rather than mocked SQL.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md).
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";
@@ -19,9 +9,7 @@ interface PersonaRef {
 }
 
 async function insertPersona(serverId: number, nickname: string): Promise<PersonaRef> {
-  // is_alter = true: the base fixture already owns the single main persona per
-  // server (personas_one_main_per_server), and these keys never depend on the
-  // alter/main distinction.
+  // Use is_alter = true because the base fixture already owns the server's single main persona.
   const [row] = await testSql<PersonaRef[]>`
     INSERT INTO personas (server_id, persona_nickname, is_alter)
     VALUES (${serverId}, ${nickname}, true)
@@ -30,11 +18,8 @@ async function insertPersona(serverId: number, nickname: string): Promise<Person
   return { persona_id: row.persona_id, persona_lineage_id: Number(row.persona_lineage_id) };
 }
 
-/**
- * True when a table exists. The RAG schema (`documents`) is only created when
- * pgvector is installed, so the document case skips on a Postgres without the
- * extension while the base-schema memory case always runs.
- */
+// The RAG `documents` table exists only when pgvector is installed, so document tests check this to skip without
+// pgvector while base memory tests still run.
 async function tableExists(name: string): Promise<boolean> {
   const [row] = await testSql<Array<{ exists: boolean }>>`
     SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS exists
@@ -47,9 +32,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("batched per-persona queries agree with the
   let altUserId: number;
   let hasDocuments = false;
 
-  let pOwn: PersonaRef; // upload and history document, personal memory
-  let pEmpty: PersonaRef; // nothing
-  let pShareA: PersonaRef; // upload document only
+  let pOwn: PersonaRef;
+  let pEmpty: PersonaRef;
+  let pShareA: PersonaRef;
 
   beforeAll(async () => {
     await setupTestDb();
@@ -67,8 +52,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("batched per-persona queries agree with the
     pShareA = await insertPersona(serverId, "_rt_p_share_a");
 
     if (hasDocuments) {
-      // pOwn has an upload AND a history doc; pShareA has an upload only (proves
-      // the history filter distinguishes them).
       await testSql`
         INSERT INTO documents (server_id, persona_id, document_name, text_content)
         VALUES (${serverId}, ${pOwn.persona_id}, '_rt_own_upload', 'x')
@@ -99,14 +82,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("batched per-persona queries agree with the
   });
 
   it("personaIdsWithHistoryDocuments agrees with loadHistoryDocuments and excludes upload-only personas", async () => {
-    if (!hasDocuments) return; // RAG schema absent (no pgvector), so skip history parity
+    if (!hasDocuments) return;
     const batch = await serverMemoryRepository.personaIdsWithHistoryDocuments(serverId);
     for (const persona of [pOwn, pEmpty, pShareA]) {
       const loaderNonEmpty =
         (await serverMemoryRepository.loadHistoryDocuments(serverId, persona.persona_id)).length > 0;
       expect(batch.has(persona.persona_id)).toBe(loaderNonEmpty);
     }
-    // Only pOwn has a history document; pShareA's upload-only doc must not count.
     expect([...batch]).toEqual([pOwn.persona_id]);
     expect(batch.has(pShareA.persona_id)).toBe(false);
   });

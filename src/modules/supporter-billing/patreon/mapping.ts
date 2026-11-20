@@ -117,7 +117,7 @@ const connectedDiscordSchema = z
   })
   .passthrough();
 
-/** Patreon reports a connected Discord account only when the patron connected one on Patreon. */
+// Patreon reports a Discord account only if the patron connected it on Patreon.
 export function patreonConnectedDiscordUserId(identityResponse: unknown): string | null {
   const parsed = connectedDiscordSchema.safeParse(identityResponse);
   return parsed.success ? (parsed.data.data.attributes?.social_connections?.discord?.user_id ?? null) : null;

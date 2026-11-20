@@ -29,7 +29,7 @@ interface TextDisplayModalOptions {
 interface TextDisplayModalCollectorOptions {
   message: Message;
   customId: string;
-  /** Anyone in the channel may press, so the modal is rendered per click in the presser's language. */
+  // Anyone in the channel may press, so the modal is rendered per click in the presser's language.
   render: (locale: string) => Pick<TextDisplayModalOptions, "title" | "content">;
   timeoutMs: number;
   onExpire?: () => Promise<void>;
@@ -42,7 +42,6 @@ interface TextDisplayModalButtonSpec {
   label: string;
 }
 
-/** Builds a read-only modal from markdown-capable text display components. */
 export function buildTextDisplayModal({ customId, title, content }: TextDisplayModalOptions): ModalBuilder {
   const chunks: string[] = [];
   for (let offset = 0; offset < content.length; offset += TEXT_DISPLAY_LIMIT) {
@@ -61,7 +60,6 @@ export function buildTextDisplayModal({ customId, title, content }: TextDisplayM
   return modal;
 }
 
-/** Builds the single-button row used to open a read-only text modal. */
 export function buildTextDisplayModalButton(
   customId: string,
   label: string,
@@ -70,7 +68,6 @@ export function buildTextDisplayModalButton(
   return buildTextDisplayModalRow([{ customId, label }], disabled);
 }
 
-/** Builds one row of buttons that each open a read-only text modal. */
 export function buildTextDisplayModalRow(
   buttons: TextDisplayModalButtonSpec[],
   disabled = false,
@@ -82,7 +79,6 @@ export function buildTextDisplayModalRow(
   );
 }
 
-/** Wires a message button to a read-only modal for the collector lifetime. */
 export function attachTextDisplayModalCollector({
   message,
   customId,

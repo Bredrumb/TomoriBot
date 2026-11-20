@@ -1,14 +1,5 @@
-/**
- * Aggregate recording and logging for terminal provider failures.
- *
- * Kept as its own leaf module so `src/types/stream/interfaces.ts` (where `BaseStreamAdapter`
- * lives) takes on exactly one narrow runtime dependency instead of pulling the repository layer
- * into a file almost everything imports.
- *
- * Scope constraint: this is operational telemetry only. Nothing behavioral may read the
- * `provider_error` counter, so no persona, routing, or model-selection decision ever takes a
- * failure rate as input.
- */
+// Leaf module so BaseStreamAdapter avoids repo coupling; operational telemetry only, so routing, persona, and model
+// selection must never read provider_error.
 
 import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
@@ -42,31 +33,28 @@ export async function readProviderErrorBody(response: Response, apiKey: string):
 }
 
 export interface ProviderFailureReport {
-  /** Stable prefix shared by every record of this failure, so operators can filter on it. */
+  // Stable prefix shared by every record of a failure, so operators can filter logs reliably.
   summary: string;
   errorType: string;
   error: unknown;
-  /**
-   * Bad input, cancellation, timeouts, and authentication or quota refusals. These are counted and
-   * traced without an `error_logs` row.
-   */
+  // When true, failures (bad input, timeouts, cancellations, auth or quota refusals) are counted and traced without
+  // creating an error_logs row.
   expected: boolean;
-  /** Provider status and response body, already scrubbed of the request's own credential. */
+  // Provider status and body, which callers must pre-scrub of the request credential so raw secrets never reach logs.
   detail?: string;
   serverId?: number | null;
   userId?: number | null;
-  /** Metric dimensions drawn from fixed sets; they are also copied into the record's metadata. */
+  // Values must come from fixed sets rather than unbounded strings because these keys become metric dimensions and
+  // are copied into record metadata.
   dimensions: Record<string, string | number>;
   metadata?: Record<string, unknown>;
-  /** Exact credentials removed from the message, attached error, and metadata before truncation or persistence. */
+  // Exact credentials scrubbed from the message, error, and metadata before truncation or persistence, so truncation
+  // never splits a secret.
   redactValues?: readonly string[];
 }
 
-/**
- * Logs a failure at the point a pipeline converts it into a result object, a reply, or a tool error.
- * The message carries `detail` unchanged, so the record matches what a gated "Show Full Error"
- * modal displays.
- */
+// Detail is kept unchanged in the logged message so operator records match what the gated "Show Full Error" modal
+// displays.
 export async function reportProviderFailure(report: ProviderFailureReport): Promise<void> {
   const message = report.detail ? `${report.summary}: ${report.detail}` : report.summary;
   const context = {
@@ -83,13 +71,8 @@ export async function reportProviderFailure(report: ProviderFailureReport): Prom
   await log.error(message, report.error, context, { redactValues: report.redactValues });
 }
 
-/**
- * Reports a provider failure chunk once per stream attempt, whether or not the user sees it, so
- * callers handling the returned result must not report it again.
- * @param args.requestApiKey - The key this attempt sent, which may be a personal or rotated key rather than the server's.
- * @param args.denied - TomoriBot refused the request itself, so there is no provider text and no incident.
- * @param args.surfaced - Whether the error UI will show this failure to the user.
- */
+// Reported once per stream attempt regardless of surfaced so callers do not re-report it, while requestApiKey is
+// scrubbed since it may be personal or rotated.
 export async function reportStreamProviderFailure(args: {
   providerError: ProviderError;
   providerName: string;
@@ -127,19 +110,13 @@ export async function reportStreamProviderFailure(args: {
   });
 }
 
-/** Response bodies are unbounded, and logger truncation is opt-in per deployment. */
+// Detail is bounded here because provider response bodies are unbounded while logger truncation is opt-in per
+// deployment.
 function boundOperatorDetail(detail: string): string {
   return detail.length > OPERATOR_ERROR_DETAIL_CHARS ? `${detail.slice(0, OPERATOR_ERROR_DETAIL_CHARS)}...` : detail;
 }
 
-/**
- * Record one `provider_error` counter for a failure that reached the user.
- *
- * Never throws: a telemetry write must not be able to turn a recoverable provider error into a
- * crash on the error path itself.
- *
- * @param providerName - Adapter identity used as the first half of the metric key.
- */
+// Never throws because a telemetry write must not turn a recoverable provider error into a crash on the error path.
 export function recordProviderErrorStat(
   providerName: string,
   providerError: ProviderError,

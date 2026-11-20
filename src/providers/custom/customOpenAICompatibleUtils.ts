@@ -277,9 +277,7 @@ export function parseCustomJsonResponse(text: string): unknown {
     } catch {}
   }
 
-  // A response cut off by max_tokens never reaches a closing brace, so every attempt
-  // above fails. Repairing the tail from the first brace recovers whatever fields
-  // finished instead of discarding an otherwise-complete object.
+  // Truncated max_tokens output never reaches a closing brace, so repair from the first brace to recover finished fields.
   if (firstBrace !== -1) {
     const repaired = tryRepairIncompleteJson(cleanedText.slice(firstBrace));
     if (repaired) {

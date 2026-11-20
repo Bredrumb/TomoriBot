@@ -15,12 +15,8 @@ export interface TextQuotaTriggerState {
 
 export const textQuotaTriggerStates = new Map<string, TextQuotaTriggerState>();
 
-/**
- * Trigger keys whose server-side admission was refused, by the time it was refused.
- *
- * A refusal stores no quota state (nothing was granted), so without this a reply that runs several
- * persona turns against one trigger would take the check again and post one quota embed per turn.
- */
+// Separate from textQuotaTriggerStates because refusals store no grant, preventing multi-persona replies from posting
+// repeated quota embeds.
 const refusedTextQuotaTriggers = new Map<string, number>();
 
 export function markTextQuotaRefused(triggerKey: string): void {
@@ -31,10 +27,6 @@ export function hasTextQuotaBeenRefused(triggerKey: string): boolean {
   return refusedTextQuotaTriggers.has(triggerKey);
 }
 
-/**
- * Trigger keys that have already shown one credential refusal, so later persona turns of the same
- * reply stay silent.
- */
 const reportedCredentialRefusals = new Map<string, number>();
 
 export function claimCredentialRefusalNotice(triggerKey: string): boolean {
@@ -43,7 +35,6 @@ export function claimCredentialRefusalNotice(triggerKey: string): boolean {
   return true;
 }
 
-/** Gives back the unit a trigger reserved when no turn in that trigger produced a reply. */
 export async function releaseTextQuotaForTrigger(triggerKey: string): Promise<void> {
   const state = textQuotaTriggerStates.get(triggerKey);
   if (!state || state.consumed || !state.reservation) return;

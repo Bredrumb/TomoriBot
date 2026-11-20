@@ -9,7 +9,8 @@ export interface McpAuthorizationServer {
   issuer: string;
   metadata: AuthorizationServerMetadata;
   tokenEndpoint: string;
-  /** Sent verbatim: the SDK's parsed URL would append a slash that exact-match servers reject. */
+  // The resource string is kept verbatim because the SDK URL parser appends a trailing slash that exact-match servers
+  // reject.
   resource: string;
   scope: string | undefined;
   issParameterSupported: boolean;
@@ -18,10 +19,8 @@ export interface McpAuthorizationServer {
 
 export class McpOAuthDiscoveryError extends Error {}
 
-/**
- * Discovery and registration reach authorization-server origins, which the MCP transport fetch
- * refuses by design, so they get their own SSRF-gated, bounded fetch instead of a widened one.
- */
+// Discovery and registration use a separate SSRF-gated fetch because the MCP transport fetch refuses auth-server
+// origins by design.
 export function createMcpOAuthDiscoveryFetch(fetchImpl?: OAuthFetch): FetchLike {
   return async (input, init) => {
     const url = new URL(input.toString());
@@ -49,7 +48,6 @@ export function unionMcpScopes(...lists: (string | null | undefined)[]): string 
   return scopes.size > 0 ? [...scopes].join(" ") : undefined;
 }
 
-/** Challenged scope first, then the resource's advertised scopes, otherwise the server default. */
 export function selectMcpScope(
   challengedScope: string | undefined,
   resourceScopes: readonly string[] | undefined,
@@ -61,12 +59,8 @@ export function selectMcpScope(
   return scopes.length > 0 ? [...new Set(scopes)].join(" ") : undefined;
 }
 
-/**
- * Finds the authorization server for an MCP server and checks what the SDK leaves unchecked: the
- * metadata issuer, the protected resource audience, and HTTPS endpoints.
- *
- * @throws McpOAuthDiscoveryError When the server cannot be signed in to safely
- */
+// Explicit issuer, protected resource audience, and HTTPS endpoint checks are required because the MCP SDK leaves
+// them unchecked.
 export async function discoverMcpAuthorizationServer(
   serverUrl: string,
   challenge: McpAuthorizationChallenge,

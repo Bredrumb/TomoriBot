@@ -766,9 +766,6 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
 
       const admission = await evaluateChatAdmission(incoming);
 
-      // The stalled lookup could not attest the repost, so this stays an ordinary
-      // webhook: the transport failure is counted truthfully, no identity or proxy
-      // record is written, and the message cannot claim a trigger.
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ timeout_or_error: 1, unmatched: 0 });
       expect(getMessageProxyMessageRecord(webhookMessageId)).toBeNull();
@@ -785,10 +782,6 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
 describe("evaluateChatAdmission verified proxy follow-ups", () => {
   const channelId = "proxy-follow-up-thread";
 
-  /**
-   * Stubs every read between a PluralKit repost and the queue gate. The host selected PluralKit, and
-   * the identity write succeeds without a local user ID so no bio seed reaches the database.
-   */
   function stubVerifiedPluralKitRepost(args: {
     hostDiscId: string;
     originalMessageId: string;
@@ -841,7 +834,6 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
     };
   }
 
-  /** The host's original is still held by its speedbump, as it is while PluralKit reposts it. */
   function holdOriginal(hostDiscId: string, originalMessageId: string) {
     return createMessageProxyExpectation({
       instance: { serviceId: "pluralkit", instanceId: "pluralkit:official", origin: "https://api.pluralkit.me" },

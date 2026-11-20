@@ -13,7 +13,6 @@ import { SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 
 declare module "@/utils/provider/providerUsage" {
   interface ProviderUsageContext {
-    /** Request ownership for a member-funded provider call; absent on server-key calls. */
     readonly supporterFunding?: SupporterFundingContext;
   }
 }
@@ -59,7 +58,7 @@ export interface SupporterFundingFailureDetails {
   minimumBalanceUsd?: number;
   modelCodename?: string;
   retryAt?: Date;
-  /** False when capacity returns only after the operator adds credit, so retrying cannot help. */
+  // False when capacity returns only after the operator adds credit, so retrying cannot help.
   retryable?: boolean;
 }
 
@@ -100,10 +99,7 @@ export interface SupporterUsageContext extends ProviderUsageContext {
 
 const usageContexts = new WeakMap<SupporterFundingContext, SupporterUsageContext>();
 
-/**
- * One canonical context per funding object, because request ownership is compared by identity
- * between credentials, spend refusals, the denial translator and stream presentation.
- */
+// Funding contexts must retain identity because credentials, refusals, and presentation compare ownership by identity.
 export function getSupporterUsageContext(funding: SupporterFundingContext): SupporterUsageContext {
   const existing = usageContexts.get(funding);
   if (existing) return existing;

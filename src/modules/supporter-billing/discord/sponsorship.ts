@@ -133,13 +133,7 @@ const EMPTY_MODEL_SELECTIONS = {
   vision_llm_id: null,
 };
 
-/**
- * Selects the funding tier's defaults on the keyless subscription entry, moving those capabilities off
- * BYOK providers whose saved keys and models remain. Decision defaults are only registered, because
- * selecting one turns on a separate response feature.
- * @returns The capabilities whose default could not be registered or selected.
- * @throws {SupporterRequestDeniedError} When funding is unavailable or the text default fails.
- */
+// Decision defaults are registered without selecting them because selection enables a separate response feature.
 export async function activateSupporterDefaults(target: SupporterDefaultsTarget): Promise<SupporterCapability[]> {
   const { funding } = await validateSupporterModelRegistration({
     scope:
@@ -276,10 +270,7 @@ async function selectSupporterVisionDefault(
   );
 }
 
-/**
- * Stored document vectors are only searchable with their own embedding family, and activation cannot
- * afford a synchronous re-embed, so a default from another family is registered but left unselected.
- */
+// Stored vectors require their embedding family, so a different default is registered but not selected without re-embedding.
 async function canSwitchEmbeddingModel(target: SupporterDefaultsTarget, embeddingModelId: number): Promise<boolean> {
   const currentId =
     target.kind === "server"

@@ -87,17 +87,12 @@ export function formatVector(values: number[]): string {
   return `[${values.join(",")}]`;
 }
 
-// postgres.js passes JS arrays as plain toString() output for TEXT[] columns, which PostgreSQL
-// rejects ("Array value must start with {"). Format explicitly as a PostgreSQL array literal.
+// postgres.js passes JS arrays as plain toString() for TEXT[], so format an explicit PostgreSQL array literal.
 function toPgTextArray(values: string[]): string {
   if (values.length === 0) return "{}";
   return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
 }
 
-/**
- * Creates a document record without chunks. Use with appendDocumentChunks for
- * incremental writes across long-running extraction pipelines.
- */
 export async function createDocumentRecord(params: {
   serverId: number;
   personaId: number | null;
@@ -121,10 +116,6 @@ export async function createDocumentRecord(params: {
   return Number(row.document_id);
 }
 
-/**
- * Appends a batch of chunks (with embeddings) to an existing document starting
- * at the given chunk index.
- */
 export async function appendDocumentChunks(params: {
   documentId: number;
   documentName: string;
@@ -158,16 +149,10 @@ export async function appendDocumentChunks(params: {
   });
 }
 
-/**
- * Sets text_content after all chunks have been appended.
- */
 export async function finalizeDocumentContent(documentId: number, textContent: string): Promise<void> {
   await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
 }
 
-/**
- * Keeps text_content consistent with stored chunks after edits or deletes.
- */
 export async function rebuildDocumentTextContent(documentId: number): Promise<void> {
   const rows = await sql<Array<{ content: string }>>`
     SELECT content
@@ -193,9 +178,8 @@ export async function insertDocumentWithChunks(params: {
   embeddings: number[][];
   embeddingModelId: number;
   embeddingFamily: string;
-  /** Document origin: 'upload' (default) or 'history' */
   sourceType?: string;
-  /** Discord channel IDs restricting retrieval; empty means every channel. */
+  // Empty array means unrestricted across every channel, because retrieval treats an empty scope as global.
   channelDiscIds?: string[];
 }): Promise<number> {
   const {
@@ -296,12 +280,9 @@ export async function retrieveRelevantDocumentChunks(params: {
   maxResults: number;
   minSimilarity: number;
   batchSize?: number;
-  /**
-   * When set, excludes chunks whose document is scoped to channels outside this list. Pass the current
-   * channel and, inside a thread, its parent so a thread inherits its channel's scope.
-   */
+  // Callers inside a thread must pass both the thread and parent channel IDs so the thread inherits its parent's
+  // document scope.
   channelIds?: readonly string[] | null;
-  /** Optional sink filled in place, so callers that only need chunks keep the same return type. */
   timings?: RetrievalTimings;
 }): Promise<RetrievedDocumentChunk[]> {
   const {
@@ -355,13 +336,7 @@ export async function retrieveRelevantDocumentChunks(params: {
       ? sql`AND d.persona_id IS NULL`
       : sql`AND (d.persona_id = ${personaId} OR d.persona_id IS NULL)`;
 
-  // Hybrid retrieval: vector similarity + full-text search merged via Reciprocal Rank Fusion.
-  //
-  // RRF score = Σ 1/(k + rank_i) for each ranked list a chunk appears in (k=60 is standard).
-  // Chunks that score well in both lists rank higher than single-list results, which is
-  // especially effective for proper-noun-heavy content where embeddings can miss exact name
-  // matches. fts_candidates is a no-op when plainto_tsquery returns an empty tsquery (all
-  // stop words), so pure vector ranking applies transparently as the fallback.
+  // RRF (k=60) merges vector and FTS ranks for exact-name recall and falls back to vector-only on empty tsquery.
   const sqlStartedAt = performance.now();
   const rows = await sql<
     Array<{

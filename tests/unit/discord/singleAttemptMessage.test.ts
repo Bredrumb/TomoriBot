@@ -13,7 +13,6 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.destroy();
 });
 
-/** Discord's 429, with a Retry-After short enough to keep the test fast. */
 function rateLimited(): Response {
   return Response.json(
     { message: "You are being rate limited.", retry_after: 0.05, global: false },
@@ -21,7 +20,6 @@ function rateLimited(): Response {
   );
 }
 
-/** A real channel whose bot REST transport answers from `responses`, then accepts every POST. */
 function fixture(responses: Array<() => Response>) {
   const client = new Client({ intents: [] });
   clients.push(client);

@@ -1,11 +1,3 @@
-/**
- * BraveEngine : wraps the internal Brave service classes into a uniform
- * WebSearchEngine. Routes on category to the appropriate Internal*Tool.
- *
- * Supports the common 4 categories (text/image/video/news).
- * Availability gates on whether a Brave API key is configured (global or per-guild).
- */
-
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import {
@@ -25,7 +17,6 @@ export class BraveEngine implements WebSearchEngine {
   private readonly newsTool = new InternalBraveNewsSearchTool();
 
   async available(context: ToolContext): Promise<boolean> {
-    // Brave needs an API key (global env var OR per-server OptApiKey).
     return await isBraveSearchAvailable(context.tomoriState?.server_id);
   }
 

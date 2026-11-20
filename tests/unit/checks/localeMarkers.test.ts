@@ -27,14 +27,12 @@ describe("protocol marker and title validation", () => {
       },
     ];
 
-    // Different placeholder name
     expect(() =>
       buildProtocolLookup(entries, ["en-US", "ja"], (loc) =>
         loc === "en-US" ? "Memory learned for {persona}" : "記憶: {wrong_name}",
       ),
     ).toThrow("Protocol template placeholders differ");
 
-    // Missing placeholder in translation
     expect(() =>
       buildProtocolLookup(entries, ["en-US", "ja"], (loc) =>
         loc === "en-US" ? "Memory learned for {persona}" : "記憶保存",
@@ -51,12 +49,10 @@ describe("protocol marker and title validation", () => {
       },
     ];
 
-    // Bare placeholder with no anchor text
     expect(() => buildProtocolLookup(entries, ["en-US"], () => "{reminder}")).toThrow(
       "Protocol title template has no literal anchor",
     );
 
-    // Valid with literal text
     expect(() => buildProtocolLookup(entries, ["en-US"], () => "Reminder: {reminder}")).not.toThrow();
   });
 });

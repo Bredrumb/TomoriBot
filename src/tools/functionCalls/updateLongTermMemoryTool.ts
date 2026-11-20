@@ -1,10 +1,3 @@
-/**
- * Update Long-Term Memory Tool
- *
- * Replaces an existing server or personal memory using its ID.
- * The ID is shown in context as "ID:123".
- */
-
 import { log, ColorCode } from "@/utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { PrivacyLevel } from "../../types/db/schema";

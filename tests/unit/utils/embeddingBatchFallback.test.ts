@@ -1,16 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { embedWithBatchFallback } from "@/utils/embeddings/embeddingProvider";
 
-/**
- * Regression guard for embedding models that ignore batching.
- *
- * Some models (observed with the Gemini embedding family) accept only one content per
- * request and return a single embedding for a multi-input batch instead of erroring. That
- * surfaced to users as `Embedding count mismatch: expected 7, got 1` and aborted
- * `/memory history import` outright, even though the extraction itself had succeeded.
- */
 describe("embedWithBatchFallback", () => {
-  /** Builds a fake embedder that only ever honours the first input of a batch. */
   function singleInputEmbedder(calls: string[][]) {
     return async (batch: string[]): Promise<number[][]> => {
       calls.push(batch);
@@ -28,7 +19,6 @@ describe("embedWithBatchFallback", () => {
     const result = await embedWithBatchFallback(["a", "bb", "ccc"], "fake:batching-model", embed);
 
     expect(result).toEqual([[1], [2], [3]]);
-    // A cooperative model must not pay for extra requests.
     expect(calls).toHaveLength(1);
   });
 
@@ -41,7 +31,6 @@ describe("embedWithBatchFallback", () => {
     );
 
     expect(result).toEqual([[1], [2], [3]]);
-    // One doomed batch attempt, then one call per input.
     expect(calls[0]).toEqual(["a", "bb", "ccc"]);
     expect(calls.slice(1)).toEqual([["a"], ["bb"], ["ccc"]]);
   });
@@ -52,7 +41,6 @@ describe("embedWithBatchFallback", () => {
     await embedWithBatchFallback(["a", "bb"], modelKey, singleInputEmbedder(firstCalls));
     expect(firstCalls[0]).toEqual(["a", "bb"]);
 
-    // The second run must go straight to per-input calls, with no batch attempt.
     const secondCalls: string[][] = [];
     const result = await embedWithBatchFallback(["x", "yy"], modelKey, singleInputEmbedder(secondCalls));
 

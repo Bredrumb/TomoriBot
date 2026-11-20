@@ -1,21 +1,6 @@
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Interface defining all secrets required for TomoriBot production deployment.
- *
- * Core Secrets:
- * - Discord bot authentication token
- * - PostgreSQL database connection parameters
- * - Encryption key for database-stored API keys
- *
- * Optional Secrets:
- * - CRYPTO_SECRET_V1, V2, etc. for key rotation support
- * - DISCORD_WEBHOOK_URL for logging webhooks
- * - AVATAR_GCS_BUCKET / VOICE_SAMPLE_GCS_* for GCP Cloud Storage (GCP deployments)
- * - AVATAR_S3_* / VOICE_SAMPLE_S3_* / CHARREF_S3_* for S3-compatible object storage
- * - S3_ENDPOINT and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for R2 or other S3-compatible backends
- */
 export interface TomoriSecrets {
   DISCORD_TOKEN: string;
   POSTGRES_HOST: string;
@@ -25,17 +10,15 @@ export interface TomoriSecrets {
   POSTGRES_DB: string;
   CRYPTO_SECRET?: string;
   CRYPTO_SECRET_CURRENT?: string;
-  CRYPTO_SECRET_V1?: string; // Optional: Key rotation support
-  CRYPTO_SECRET_V2?: string; // Optional: Key rotation support
-  CRYPTO_SECRET_V3?: string; // Optional: Key rotation support
-  DISCORD_WEBHOOK_URL?: string; // Optional: Error logging webhook
-  // GCP Cloud Storage (set when deployed to GCP; injected as env vars by Cloud Run terraform)
+  CRYPTO_SECRET_V1?: string;
+  CRYPTO_SECRET_V2?: string;
+  CRYPTO_SECRET_V3?: string;
+  DISCORD_WEBHOOK_URL?: string;
   AVATAR_GCS_BUCKET?: string;
   AVATAR_PUBLIC_BASE_URL?: string;
   VOICE_SAMPLE_GCS_BUCKET?: string;
   VOICE_SAMPLE_GCS_PREFIX?: string;
   VOICE_SAMPLE_PUBLIC_BASE_URL?: string;
-  // AWS S3 storage (set when deployed to AWS)
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   S3_ENDPOINT?: string;
@@ -110,44 +93,6 @@ function optionalSecretFields(): string[] {
   return [...OPTIONAL_SECRET_FIELDS, ...registeredSecretNames];
 }
 
-/**
- * Fetches application secrets from the appropriate backend based on environment.
- *
- * Resolution order:
- * 1. Development / test-production → process.env (dotenv)
- * 2. Production + SECRET_FILE set → mounted JSON secret file
- * 3. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON, legacy fallback)
- * 4. Production (fallback) → AWS Secrets Manager API call
- *
- * Mounted secret file path:
- * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
- * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
- * - File content is identical JSON shape to the AWS secret string
- * - No SDK call needed: plain fs.readFileSync
- *
- * AWS Configuration:
- * - AWS_REGION environment variable (defaults to "us-east-1")
- * - AWS credentials from environment, IAM role, or ~/.aws/credentials
- *
- * Key Version Auto-Detection:
- * - Scans for CRYPTO_SECRET_V1, CRYPTO_SECRET_V2, CRYPTO_SECRET_V3, etc.
- * - Dynamically includes all found versions
- * - Integrates seamlessly with existing CryptoKeyManager
- *
- * Error Handling:
- * - Missing required fields → throws error with missing key list
- * - File read / JSON parse errors → descriptive error message
- * - AWS network/permission errors → descriptive error message
- *
- * @returns {Promise<TomoriSecrets>} Object containing all application secrets
- * @throws {Error} If required secrets are missing or the secret backend fails
- *
- * @example
- * // In src/index.ts
- * const secrets = await getAppSecrets();
- * process.env.DISCORD_TOKEN = secrets.DISCORD_TOKEN;
- * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
- */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
   secretsLoaded = true;
 
@@ -155,8 +100,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   const isProduction = runEnv === "production";
   const isTestProduction = process.env.TEST_PRODUCTION === "true";
 
-  // Development mode OR test production mode: Use process.env (loaded via dotenv)
-  // TEST_PRODUCTION allows testing production behavior locally without AWS
+  // TEST_PRODUCTION reads local process.env instead of AWS Secrets Manager so production paths can be tested locally.
   if (!isProduction || isTestProduction) {
     log.info(`Loading secrets from .env (${isTestProduction ? "test production" : "development"} mode)`);
 
@@ -170,14 +114,12 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: process.env.CRYPTO_SECRET || "",
     };
 
-    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
     for (const key of Object.keys(process.env)) {
       if ((/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") && process.env[key]) {
         secrets[key] = process.env[key];
       }
     }
 
-    // Optional fields: read from process.env matching the same keys as the JSON secret blob
     for (const field of optionalSecretFields()) {
       if (process.env[field]) {
         secrets[field] = process.env[field];
@@ -195,7 +137,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   if (secretFile) {
     log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // Read and parse the JSON blob written by the platform secret mount
       const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
         throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
@@ -213,7 +154,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
       };
 
-      // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
       for (const key of Object.keys(rawSecrets)) {
         if (/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") {
           secrets[key] = rawSecrets[key];
@@ -221,7 +161,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // Optional fields: same shape as AWS secret blob
       for (const field of optionalSecretFields()) {
         if (rawSecrets[field] !== undefined) {
           secrets[field] = rawSecrets[field];
@@ -249,7 +188,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
     }
   }
 
-  // Production mode: Fetch from AWS Secrets Manager
   const awsRegion = process.env.AWS_REGION || "us-east-1";
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
@@ -278,8 +216,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
     };
 
-    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
-    // This allows for unlimited key rotation versions
     for (const key of Object.keys(rawSecrets)) {
       if (/^CRYPTO_SECRET_V[1-9]\d*$/.test(key) || key === "CRYPTO_SECRET_CURRENT") {
         secrets[key] = rawSecrets[key];
@@ -299,7 +235,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 
     return secrets;
   } catch (error) {
-    // Enhance error message for common AWS errors
     if (error instanceof Error) {
       if (error.name === "ResourceNotFoundException") {
         throw new Error(
@@ -332,21 +267,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   }
 }
 
-/**
- * Validates that all required secrets are present and non-empty.
- *
- * Required Fields:
- * - DISCORD_TOKEN (Discord bot authentication)
- * - POSTGRES_HOST (Database connection)
- * - POSTGRES_PORT (Database port)
- * - POSTGRES_USER (Database user)
- * - POSTGRES_PASSWORD (Database password)
- * - POSTGRES_DB (Database name)
- * - CRYPTO_SECRET or a versioned field (encryption key for database-stored credentials)
- *
- * @param {TomoriSecrets} secrets - Secrets object to validate
- * @throws {Error} If any required secret is missing or empty
- */
 function validateRequiredSecrets(secrets: TomoriSecrets): void {
   const requiredFields: (keyof TomoriSecrets)[] = [
     "DISCORD_TOKEN",
@@ -377,7 +297,6 @@ function validateRequiredSecrets(secrets: TomoriSecrets): void {
   }
 }
 
-/** Scalar config values retain their environment form, but master keys must be strings. */
 function parseSecretObject(content: string): Record<string, string> {
   let parsed: unknown;
   try {

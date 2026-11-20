@@ -48,10 +48,6 @@ const routes = {
   editGeneration: "generation-open",
 };
 
-/**
- * The block always emits an action row in the positions these cases inspect, and its declared
- * element type is the container-wide union, whose other members carry no `components` array.
- */
 type ParameterRow = {
   components: Array<{ type: number; customId?: string; options?: unknown[]; disabled?: boolean }>;
 };
@@ -118,12 +114,8 @@ describe("personal provider parameter controls", () => {
     expect(asParameterRow(disabled[2]).components.map((component) => component.disabled)).toEqual([true, true]);
   });
 
-  /**
-   * The sampler columns are Postgres `real`, so `Math.fround` is what the driver hands back after a
-   * round trip: a typed 0.6 returns as 0.6000000238418579. Discord rejects the whole modal with
-   * 50035 when any prefilled value exceeds its own `max_length`, so the prefill is measured against
-   * the limit the same payload declares rather than against a constant repeated here.
-   */
+  // Postgres real returns Math.fround values and Discord rejects modals with 50035 if any prefill exceeds max_length,
+  // so this checks the payload's own limit.
   it("keeps prefilled sampler values inside each field's own max_length after a float4 round trip", () => {
     const roundTripped = {
       provider: "deepseek",

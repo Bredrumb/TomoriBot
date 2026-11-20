@@ -20,24 +20,15 @@ import {
   resolveOpenRouterPollingUrl,
 } from "@/providers/openrouter/openrouterVideoRequest";
 
-// Bun's BoringSSL stack produces a non-standard TLS/HTTP fingerprint that Cloudflare
-// identifies and serves cached HTML to, rather than routing to the API origin.
-// Both fetch() and Bun's node:https shim share this same fingerprint.
-// We bypass this by spawning an external process for HTTP requests:
-//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest: uses .NET's Schannel TLS
-//     and proper HTTP/2 negotiation, confirmed to bypass Cloudflare.
-//   - Linux/Docker: curl with HTTP/2 support (via nghttp2, standard on Alpine/Debian).
-//     Linux curl produces a different TLS fingerprint than Bun and negotiates HTTP/2
-//     correctly, which Cloudflare allows through.
+// Use pwsh on Windows or HTTP/2 curl on Linux because Cloudflare rejects Bun's BoringSSL TLS fingerprint with cached
+// HTML.
 
-/** Shape returned by the external HTTP helpers */
 interface ExternalHttpResponse {
   status: number;
   headers: Record<string, string>;
   bodyBuffer: Buffer;
 }
 
-/** Whether the current platform is Windows (determines which HTTP backend to use) */
 const IS_WINDOWS = process.platform === "win32";
 
 interface ExternalRequestLimits {
@@ -45,19 +36,17 @@ interface ExternalRequestLimits {
   abortSignal?: AbortSignal;
 }
 
-/** Submit and poll replies are small JSON documents; this only stops a broken or hostile stream. */
+// Capped at 1 MiB because submit and poll replies are small JSON documents and larger streams indicate broken or
+// hostile responses.
 const MAX_API_RESPONSE_BYTES = 1024 * 1024;
 const CURL_HEADER_ALLOWANCE_BYTES = 64 * 1024;
 const MAX_HELPER_STDERR_BYTES = 64 * 1024;
-// Both helpers time their own request out at 120 seconds. This covers a helper that hangs before
-// or after its request, which those timeouts cannot see.
+// Exceeds the helpers' 120-second request timeouts to catch subprocess hangs before or after the HTTP call.
 const EXTERNAL_REQUEST_DEADLINE_MS = 150_000;
 const VIDEO_DOWNLOAD_TIMEOUT_MS = 120_000;
 
-/**
- * Reads a helper's output with a byte cap and a deadline, killing the process on overflow, timeout
- * or cancellation so neither its pipe nor its upstream transfer keeps running.
- */
+// Subprocess is killed on overflow, timeout, or cancellation so neither its pipe nor its upstream transfer keeps
+// running.
 export async function readBoundedProcessOutput(
   proc: Subprocess<"pipe", "pipe", "pipe">,
   maxStdoutBytes: number,
@@ -88,18 +77,8 @@ export async function readBoundedProcessOutput(
   }
 }
 
-/**
- * Inline pwsh script that reads a JSON request envelope from stdin and performs
- * the HTTP request using Invoke-WebRequest.
- *
- * Input (stdin JSON): { url, method, headers, body? }
- * Output (stdout JSON): { status, bodyBase64, location }
- *
- * The response body is base64-encoded so binary content (MP4 video) survives the text pipe.
- * -SkipHttpErrorCheck prevents throwing on non-2xx status codes (PowerShell 7+ feature).
- * Redirects are returned rather than followed, matching curl without `-L`, so the caller applies
- * its own destination policy to the Location.
- */
+// Redirects are returned unfollowed (matching curl without -L) so the caller applies its own destination and key
+// policy to Location.
 export const PWSH_HTTP_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 $req = [Console]::In.ReadToEnd() | ConvertFrom-Json
@@ -135,10 +114,7 @@ $out = @{ status = [int]$resp.StatusCode; bodyBase64 = $bodyB64; location = [str
 [Console]::Out.Write(($out | ConvertTo-Json -Compress))
 `;
 
-/**
- * HTTP request via PowerShell 7's Invoke-WebRequest.
- * Used on Windows where system curl lacks HTTP/2 support.
- */
+// PowerShell Invoke-WebRequest is used on Windows because Windows system curl lacks HTTP/2 support.
 async function pwshHttpRequest(
   url: string,
   method: "GET" | "POST",
@@ -148,9 +124,6 @@ async function pwshHttpRequest(
 ): Promise<ExternalHttpResponse> {
   const requestEnvelope = JSON.stringify({ url, method, headers, body });
 
-  // Spawn pwsh with the inline HTTP script
-  //    -NoProfile: skip user profile loading for faster startup
-  //    -NonInteractive: no prompts: fail immediately on errors
   const proc = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-Command", PWSH_HTTP_SCRIPT], {
     stdin: "pipe",
     stdout: "pipe",
@@ -180,11 +153,8 @@ async function pwshHttpRequest(
   return { status: envelope.status, headers: envelope.location ? { location: envelope.location } : {}, bodyBuffer };
 }
 
-/**
- * Quotes a value for a curl config file. Inside double quotes curl unescapes only backslash,
- * double quote, and the `t`, `n`, `r`, and `v` control escapes, so escaping exactly those keeps
- * any header or JSON body byte-exact.
- */
+// Only \\, \", t, n, r, and v are escaped because curl unescapes only those inside -K double quotes, keeping headers
+// and JSON bodies byte-exact.
 function quoteCurlConfigValue(value: string): string {
   const escaped = value
     .replace(/\\/g, "\\\\")
@@ -196,10 +166,8 @@ function quoteCurlConfigValue(value: string): string {
   return `"${escaped}"`;
 }
 
-/**
- * Builds the curl config read from stdin, so the bearer token and request body never appear in
- * the process table where other local users can read command-line arguments.
- */
+// Curl config is read from stdin instead of argv so the bearer token and request body never appear in the OS process
+// table.
 export function buildCurlRequestConfig(headers: Record<string, string>, body?: string): string {
   const lines = Object.entries(headers).map(([key, value]) => `header = ${quoteCurlConfigValue(`${key}: ${value}`)}`);
   if (body !== undefined) {
@@ -209,15 +177,6 @@ export function buildCurlRequestConfig(headers: Record<string, string>, body?: s
   return `${lines.join("\n")}\n`;
 }
 
-/**
- * Used on Linux where curl has HTTP/2 support (via nghttp2) and produces a standard
- * TLS fingerprint that Cloudflare allows through.
- *
- * Key curl flags for correctness and security:
- *   --proto =https: restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
- *   -K -: reads headers and body from stdin instead of argv
- *   -H "Expect:"; suppresses 100-Continue which breaks the -i header/body parser
- */
 async function curlHttpRequest(
   url: string,
   method: "GET" | "POST",
@@ -240,9 +199,8 @@ async function curlHttpRequest(
     "-",
   ];
 
-  // Suppress Expect: 100-continue because curl sends this for POST bodies over ~1KB,
-  //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
-  //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
+  // Suppress Expect: 100-continue because curl emits an extra HTTP/1.1 100 header block that breaks the first
+  // \r\n\r\n split.
   args.push("-H", "Expect:");
   args.push("-i");
   args.push(url);
@@ -290,17 +248,6 @@ async function curlHttpRequest(
   return { status, headers: responseHeaders, bodyBuffer };
 }
 
-/**
- * Makes an HTTP request via an external process to bypass Bun's TLS fingerprint.
- * Dispatches to the appropriate backend based on the current platform:
- *   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest
- *   - Linux/Docker: curl with HTTP/2 support
- *
- * @param url - The full URL to request (must be HTTPS)
- * @param limits - Body byte cap and optional cancellation applied to the helper process
- * @param body - Optional JSON body string for POST requests
- * @returns Object with HTTP status code, response headers, and raw body as a Buffer
- */
 async function externalHttpRequest(
   url: string,
   method: "GET" | "POST",
@@ -308,12 +255,11 @@ async function externalHttpRequest(
   limits: ExternalRequestLimits,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // Validate URL scheme: only HTTPS allowed to prevent protocol attacks
   if (!url.startsWith("https://")) {
     throw new Error(`externalHttpRequest: URL must use HTTPS, got: ${url.slice(0, 80)}`);
   }
 
-  // Sanitize header values: strip CRLF to prevent header injection
+  // Strip CRLF to prevent HTTP header injection.
   const sanitizedHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
@@ -339,7 +285,6 @@ async function externalHttpRequest(
 
 const OPENROUTER_ORIGIN = "https://openrouter.ai";
 
-/** OpenRouter stable video generation endpoint */
 const OPENROUTER_VIDEO_URL = `${OPENROUTER_ORIGIN}/api/v1/videos`;
 
 function safeVideoErrorText(value: string, apiKey: string): string {
@@ -398,13 +343,11 @@ export async function fetchOpenRouterVideoApi(url: string, init: RequestInit): P
   }
 }
 
-/** Polling interval for OpenRouter video jobs (30 seconds, per OpenRouter docs) */
+// OpenRouter docs specify a 30s polling interval for video jobs, so polling matches that cadence.
 const POLL_INTERVAL_MS = 30_000;
 
-/** Maximum poll attempts before timeout (~10 minutes at 30s intervals) */
 const MAX_POLL_ATTEMPTS = 20;
 
-/** Shape of the OpenRouter video job creation response */
 export const openRouterVideoJobSchema = z.object({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,200}$/),
   polling_url: z.string().optional(),
@@ -416,23 +359,8 @@ export const openRouterVideoJobSchema = z.object({
 });
 type OpenRouterVideoSubmitResponse = z.infer<typeof openRouterVideoJobSchema>;
 
-/** Shape of the OpenRouter video job poll response (confirmed via live API) */
 type OpenRouterVideoPollResponse = z.infer<typeof openRouterVideoJobSchema>;
 
-/**
- * Generate a video using OpenRouter's stable video generation API.
- *
- * Flow:
- *   1. POST to /api/v1/videos with model, prompt, and parameters
- *   2. Receive a job ID with "pending" status
- *   3. Poll every 30s via GET /api/v1/videos/:jobId until "completed" or "failed"
- *   4. Download the MP4 from the unsigned_urls or content endpoint
- *
- * Supported models are discovered from OpenRouter's dedicated video model catalog.
- *
- * @param request - Video generation request with apiKey, model, prompt, and optional parameters
- * @returns Raw MP4 video data as a Buffer, or null values on failure
- */
 export async function generateOpenRouterNativeVideo(
   request: ProviderNativeVideoGenerationRequest,
 ): Promise<ProviderNativeVideoGenerationResult> {
@@ -465,9 +393,8 @@ async function generateVideo(
   const modelCapabilities = await getOrFetchOpenRouterVideoModelCapabilities(request.model);
   const normalizedOptions = normalizeOpenRouterVideoOptions(request, modelCapabilities);
   request.abortSignal?.throwIfAborted();
-  // `frame_images` preserves TomoriBot's image-to-video contract: the referenced image is
-  // the exact first frame. `input_references` is intentionally not used because the stable
-  // API defines it as loose subject/style guidance rather than frame control.
+  // Use frame_images rather than input_references because input_references gives loose guidance instead of exact
+  // first-frame control.
   const body = buildOpenRouterVideoRequestBody(request, normalizedOptions, modelCapabilities);
 
   log.info(
@@ -482,7 +409,6 @@ async function generateVideo(
   };
   const submitBodyJson = JSON.stringify(body);
 
-  // Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
   const send = fetchOpenRouterVideoApi;
   const submitResponse = await send(OPENROUTER_VIDEO_URL, {
     method: "POST",
@@ -534,8 +460,7 @@ async function generateVideo(
     `OpenRouter video generation: job submitted, polling for completion (jobId: ${jobId}, pollingUrl: ${pollingUrl})`,
   );
 
-  // Poll for completion using the polling_url returned by the submit response.
-  //    The URL format is determined by OpenRouter and may differ from a simple ID-based path.
+  // Poll the submit response's polling_url directly because OpenRouter's polling path can differ from an ID path.
   const pollHeaders = {
     Authorization: `Bearer ${request.apiKey}`,
     Accept: "application/json",
@@ -552,9 +477,7 @@ async function generateVideo(
       const pollBodyText = pollRaw.bodyBuffer.toString("utf8");
 
       if (pollRaw.status < 200 || pollRaw.status >= 300) {
-        // Short-circuit on permanent auth errors, so retrying won't help for 401/403
-        // Note: 404 is NOT terminal here. OpenRouter's async job system may return 404 briefly
-        // after submission due to eventual consistency because the job takes a few seconds to propagate.
+        // Short-circuit only on 401/403 because OpenRouter can briefly return 404 while a newly submitted job propagates.
         if (pollRaw.status === 401 || pollRaw.status === 403) {
           return {
             done: true,
@@ -598,10 +521,7 @@ async function generateVideo(
     abortSignal: request.abortSignal,
   });
 
-  // Download the video
-  //    Use unsigned_urls if available, otherwise use the content endpoint.
-  //    The video file may not be immediately available after the poll returns "completed"
-  //    due to eventual consistency in OpenRouter's storage, so retry a few times on 404.
+  // Retry 404 downloads because OpenRouter storage is eventually consistent right after a job marks completed.
   const usageReport = { costUsd: completedJob.usage?.cost ?? undefined, providerRequestId: jobId };
   hold?.reportCost(usageReport.costUsd);
   const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
@@ -638,12 +558,8 @@ async function generateVideo(
   };
 }
 
-/**
- * Downloads a finished video. Only OpenRouter's own origin needs the external helper (for its
- * TLS fingerprint) and receives the API key. Any other host, including a redirect Location from
- * OpenRouter, goes through the bot's pinned downloader: anonymous, SSRF-gated per hop, byte
- * capped and deadline bound. A provider response can never route the key or the helper elsewhere.
- */
+// Only OpenRouter's origin uses the external helper and API key; any other host or redirect goes through the
+// anonymous SSRF-gated downloader so keys never leak.
 export async function downloadOpenRouterVideo(
   videoUrl: string,
   apiKey: string,

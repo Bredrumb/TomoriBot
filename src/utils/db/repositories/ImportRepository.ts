@@ -418,10 +418,6 @@ function getStmCategories(value: unknown): Array<{ position: number; label: stri
   });
 }
 
-/**
- * The planner and checker models must be offered to this workspace, at most one checker may be set, and
- * every custom idle nudge must name known checks.
- */
 async function validateNudgesImport(
   serverId: number,
   nudges: NonNullable<WorkspaceConfigExportData["nudges"]>,
@@ -467,16 +463,8 @@ async function importNudgesSection(
     await naturalNudgeRepository.replaceCustomIdleNudges(serverId, customIdleNudges, tx);
 }
 
-/**
- * ImportRepository: owns all data import operations.
- *
- * Handles personal and server data import, per-domain slice imports
- * (memories, settings, config), import file validation, and cache
- * invalidation after successful writes. Private SQL methods hold raw
- * database logic; public methods add cache invalidation on top.
- * Composite methods (importPersonalData, importServerData) call private
- * SQL sub-methods directly to avoid double cache invalidation.
- */
+// Private sql* methods skip cache invalidation so composite public methods can combine them without double
+// invalidation.
 class ImportRepository {
   private prepareWorkspaceConfig(
     input: unknown,
@@ -645,7 +633,7 @@ class ImportRepository {
 
     values.push(tablePatch.id);
     const idPlaceholder = `$${values.length}`;
-    // Identifiers come from fixed section definitions. Values remain bound parameters so a portable field cannot alter the statement.
+    // tableName and idColumn come from fixed section definitions and values stay bound, so portable data cannot alter SQL.
     const result = await tx.unsafe(
       `UPDATE ${tablePatch.tableName} SET ${setParts.join(", ")} WHERE ${tablePatch.idColumn} = ${idPlaceholder} RETURNING ${tablePatch.idColumn}`,
       values,
@@ -831,10 +819,7 @@ class ImportRepository {
     `;
   }
 
-  /**
-   * Imports selected workspace config sections as one database operation.
-   * Validation and target-row checks happen before the transaction so a failed patch cannot follow a committed patch.
-   */
+  // Validate target rows before the transaction so a failed patch cannot follow a committed patch.
   async importWorkspaceConfig(
     serverDiscId: string,
     input: WorkspaceConfigExportData | WorkspaceConfigExport,
@@ -883,10 +868,6 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Imports selected personal config sections as one database operation.
-   * Validation and target-row checks happen before the transaction so a failed patch cannot follow a committed patch.
-   */
   async importPersonalConfig(
     userDiscId: string,
     input: PersonalConfigExportData | PersonalConfigExport,
@@ -916,7 +897,6 @@ class ImportRepository {
     }
   }
 
-  /** Upserts a user row by Discord ID and returns the internal user_id. */
   private async ensureUserId(userDiscId: string): Promise<number | null> {
     const upserted = await sql.begin(async (tx) => {
       const rows = await tx<Array<{ user_id: number }>>`
@@ -957,7 +937,6 @@ class ImportRepository {
     return serverRows[0]?.server_id ?? null;
   }
 
-  /** Normalizes bigint/string/number persona_lineage_id values to a plain number. */
   private coerceLineageId(value: number | string | bigint | null | undefined): number | null {
     if (typeof value === "bigint") return Number(value);
     if (typeof value === "string" && value.trim() !== "") return Number(value);
@@ -965,7 +944,6 @@ class ImportRepository {
     return null;
   }
 
-  /** Returns the main persona persona_id and persona_lineage_id for a server. */
   private async resolveMainTomoriScope(
     serverId: number,
   ): Promise<{ personaId: number; personaLineageId: number } | null> {
@@ -1154,7 +1132,6 @@ class ImportRepository {
 
       invalidateUserCache(userDiscId);
 
-      // Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
@@ -1190,10 +1167,8 @@ class ImportRepository {
       if (!(await validateDraftingImportReferences(serverId, config)))
         return { success: false, error: "commands.config.drafting.import_unavailable" };
 
-      // STM customization travels as nested keys (stm_config / stm_categories) that are
-      // restored via shortTermMemoryRepository.fromExportShape, NOT the dynamic flat-config
-      // SQL writer: so exclude them from the column-name allowlist validation below.
-      // humanizer_degree is legacy input that resolveImportedHumanizer maps onto the toggle columns, not a column name.
+      // Exclude nested STM keys (restored via shortTermMemoryRepository) and legacy humanizer_degree (mapped by
+      // resolveImportedHumanizer) because they are not columns in the flat-config allowlist.
       const configFields = Object.keys(config).filter(
         (f) => f !== "stm_config" && f !== "stm_categories" && f !== "humanizer_degree",
       );
@@ -1296,8 +1271,7 @@ class ImportRepository {
         user_info_updates_enabled: config.user_info_updates_enabled,
       };
 
-      // server_notice_embeds_configs: tool notice key suppressions
-      // ToolNoticeKey union type is satisfied by the validated string values from the export schema.
+      // Export schema validates each tool notice key string, so the union cast is safe.
       const noticeEmbedsPatch: Partial<ServerNoticeEmbedsConfigRow> = {
         tool_notice_hidden_keys:
           config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
@@ -1446,8 +1420,6 @@ class ImportRepository {
           ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
           : Promise.resolve(true),
 
-        // STM customization (config + categories) restores via the repository's export
-        // shape, which upserts server_stm_configs and replace-alls stm_categories.
         config.stm_config !== undefined || config.stm_categories !== undefined
           ? shortTermMemoryRepository.fromExportShape(serverDiscId, {
               stm_config: config.stm_config ?? null,
@@ -1563,11 +1535,6 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Raw composite personal import; no cache invalidation.
-   * Used internally by importPersonalData (which adds cache) and
-   * fromExportShape (which intentionally skips cache for pipeline use).
-   */
   private async sqlImportPersonalData(
     userDiscId: string,
     importData: PersonalExportData,
@@ -1599,10 +1566,6 @@ class ImportRepository {
     };
   }
 
-  /**
-   * Raw composite server import; no cache invalidation.
-   * Used internally by importServerData (which adds cache).
-   */
   private async sqlImportServerData(
     serverDiscId: string,
     importData: ServerExportData,
@@ -1925,23 +1888,12 @@ class ImportRepository {
     }
   }
 
-  /**
-   * Imports personal settings for a user from an export payload.
-   * @param userDiscId - Discord user snowflake
-   * @param importData - PersonalSettingsExportData payload
-   */
   async importPersonalSettings(userDiscId: string, importData: PersonalSettingsExportData): Promise<ImportResult> {
     const result = await this.sqlImportPersonalSettings(userDiscId, importData);
     if (result.success) invalidateUserCache(userDiscId);
     return result;
   }
 
-  /**
-   * Imports the full personal data bundle (settings + memories).
-   * @param userDiscId - Discord user snowflake
-   * @param importData - PersonalExportData payload
-   * @param personaLineageId - Persona lineage namespace to import memories into (default 0)
-   */
   async importPersonalData(
     userDiscId: string,
     importData: PersonalExportData,
@@ -1952,12 +1904,6 @@ class ImportRepository {
     return result;
   }
 
-  /**
-   * Imports the full server data bundle (config + memories).
-   * @param serverDiscId - Discord server snowflake
-   * @param importData - ServerExportData payload
-   * @param personaId - Optional specific tomori ID to scope memories
-   */
   async importServerData(
     serverDiscId: string,
     importData: ServerExportData,
@@ -1968,10 +1914,6 @@ class ImportRepository {
     return result;
   }
 
-  /**
-   * Validates a raw JSON import payload and returns the detected type + data.
-   * @param jsonData - Raw JSON object from the uploaded import file
-   */
   validateImportFile(jsonData: unknown): ImportValidationResult {
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.data.import.error_not_json" };
@@ -2053,14 +1995,8 @@ class ImportRepository {
     return { valid: false, error: `commands.data.import.error_unknown_type|${type}` };
   }
 
-  /**
-   * Imports a previously exported personal data bundle (IRepository contract).
-   * Intentionally bypasses cache invalidation: this is a pipeline/batch entry
-   * point where the caller controls cache lifecycle.
-   *
-   * @param ownerId - Discord user snowflake
-   * @param data    - Previously exported ExportResult from ExportRepository.toExportShape
-   */
+  // Cache invalidation is intentionally skipped because callers invoke this batch entry point in a pipeline and
+  // control cache lifecycle.
   async fromExportShape(ownerId: string | number, data: ExportResult): Promise<boolean> {
     if (!data.success || !data.data) return false;
     const envelope = data.data as { type?: string; data?: PersonalExportData };
@@ -2070,5 +2006,4 @@ class ImportRepository {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const importRepository = new ImportRepository();

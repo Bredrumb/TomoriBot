@@ -113,7 +113,7 @@ function typeLabelKey(serverType: string | null | undefined): string {
   return "commands.mcps.type_general";
 }
 
-/** A manual enable or disable clears `failure_reason`, so a disabled row that keeps one was disabled automatically. */
+// A manual enable or disable clears failure_reason, so any disabled row still holding one was auto-disabled.
 function connectionHealthLine(locale: string, row: GuildMcpServerRow): string | null {
   if (!row.failure_reason) return null;
   if (!row.is_enabled) return localizer(locale, FAILURE_REASON_KEYS[row.failure_reason].disabled);

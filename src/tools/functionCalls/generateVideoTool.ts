@@ -9,14 +9,6 @@ import {
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
-/**
- * Video Generation Tool
- * Allows TomoriBot to generate videos using the active provider's native video API.
- * Supports text-to-video and image-to-video (via media_id reference).
- *
- * Key difference from image generation: all video APIs are async with polling,
- * so the execute() method blocks for 30s-5min while the video renders.
- */
 
 import { AttachmentBuilder } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
@@ -53,15 +45,11 @@ import { isExpectedVideoFailure, ProviderVideoFilteredError } from "@/providers/
 import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
-/** Discord file size limit for non-boosted servers (25 MB) */
+// Discord rejects attachments over 25 MB in non-boosted servers, so video uploads are capped at that byte limit.
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 const DEFAULT_VIDEO_DURATION_SECONDS = 5;
 const MAX_VIDEO_DURATION_SECONDS = 20;
 
-/**
- * Tool for generating videos using the active provider's native video API.
- * Registered automatically by the tool initializer from src/tools/functionCalls/.
- */
 export class GenerateVideoTool extends BaseTool {
   name = "generate_video";
   description =
@@ -153,34 +141,18 @@ export class GenerateVideoTool extends BaseTool {
       : rawMediaId;
   }
 
-  /**
-   * Standard video generation is available for any tool-capable chat model.
-   * The actual execution provider is resolved from the configured video slot.
-   * @returns Always true, so actual availability is gated by config + credential resolution
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Hide the tool unless a video slot is configured for the active state.
-   */
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
     return (context?.tomoriState.config.video_model_id ?? null) !== null;
   }
 
-  /**
-   * Check if video generation is enabled in Tomori config.
-   * @returns True if video generation is enabled
-   */
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.videogen_enabled;
   }
 
-  /**
-   * Get the video model codename from the database via repository.
-   * @returns The model codename string (e.g., "gemini-omni-1.1-flash")
-   */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
     const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
 
@@ -221,11 +193,6 @@ export class GenerateVideoTool extends BaseTool {
     return message;
   }
 
-  /**
-   * Extract the first image from a Discord message for image-to-video generation.
-   * Returns the source URL directly, so providers that need base64 can fetch it themselves.
-   * @returns Reference image with url and mimeType, or null if no image found
-   */
   private async extractReferenceImageFromMessage(
     messageId: string,
     context: ToolContext,
@@ -238,13 +205,12 @@ export class GenerateVideoTool extends BaseTool {
         log.info(`Using image from replied-to message ${sourceMessageId} for image-to-video reference ${messageId}`);
       }
 
-      // Return the URL directly, so embedding large images as base64 in the request body
-      // can exceed provider body size limits. Providers fetch the URL themselves.
+      // Leave data empty and pass the URL so large images do not exceed provider request size limits.
       return {
         url: image.proxyUrl || image.url,
         ...(image.proxyUrl && image.proxyUrl !== image.url ? { fallbackUrl: image.url } : {}),
         mimeType: image.mimeType,
-        data: "", // Empty: providers that need base64 must fetch the url themselves
+        data: "",
       };
     } catch (error) {
       log.error(`Failed to extract reference image from message ${messageId}`, error as Error);
@@ -252,21 +218,7 @@ export class GenerateVideoTool extends BaseTool {
     }
   }
 
-  /**
-   * Execute video generation.
-   *
-   * Flow:
-   *   1. Validate params and check permissions/quota
-   *   2. Look up video model and decrypt API key
-   *   3. Send progress notice (video gen takes 1-3 min)
-   *   4. Optionally extract reference image from message
-   *   5. Route to appropriate provider implementation
-   *   6. Check Discord file size limit
-   *   7. Send video attachment to Discord
-   *   8. Settle the quota reservation and return success
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
     const startedAtMs = Date.now();
 
     const validation = this.validateParameters(args);
@@ -321,7 +273,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // Default to allowed; overwritten below for server-credential users
     let quotaCheck: VideoQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let failureProvider: string | undefined;
@@ -405,7 +356,6 @@ export class GenerateVideoTool extends BaseTool {
       const executionProvider = creds.provider;
       failureProvider = executionProvider;
 
-      // Send progress notice, so video generation takes 1-3 minutes
       const baseNoticeDescription = localizer(
         context.locale,
         usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",

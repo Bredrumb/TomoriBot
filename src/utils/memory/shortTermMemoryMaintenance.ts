@@ -18,14 +18,8 @@ export interface ShortTermMemoryMaintenanceParams {
   disableShortTermMemoryUpdate?: boolean;
 }
 
-/**
- * Returns whether autonomous short-term-memory maintenance is due for this turn.
- *
- * This intentionally does not depend on user wording. The STM cadence is an internal
- * maintenance trigger, so Deliberate Tool Mode should treat a due refresh the same way
- * it treats user-requested tool intent and expose only `update_short_term_memory` when
- * no other tool is needed.
- */
+// STM refresh is an internal cadence independent of user wording, so Deliberate Tool Mode must still expose
+// update_short_term_memory when due.
 export async function isShortTermMemoryMaintenanceDue(params: ShortTermMemoryMaintenanceParams): Promise<boolean> {
   const { tomoriState } = params;
 

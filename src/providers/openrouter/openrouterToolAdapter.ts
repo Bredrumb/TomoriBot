@@ -1,9 +1,3 @@
-/**
- * OpenRouter Tool Adapter
- * Converts generic tools to OpenAI-compatible function format and back
- * OpenRouter uses the OpenAI function calling specification
- */
-
 import { log } from "../../utils/misc/logger";
 import type {
   Tool,
@@ -14,9 +8,6 @@ import type {
 } from "../../types/tool/interfaces";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
 
-/**
- * OpenAI-compatible function declaration format (used by OpenRouter)
- */
 interface OpenAIFunctionDeclaration extends Record<string, unknown> {
   name: string;
   description: string;
@@ -38,9 +29,6 @@ interface OpenAIObjectSchema extends OpenAIParameterSchema {
   required: string[];
 }
 
-/**
- * OpenRouter tool adapter implementation with MCP capabilities
- */
 export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
   private static instance: OpenrouterToolAdapter;
 
@@ -55,9 +43,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     return "openrouter";
   }
 
-  /**
-   * Convert a generic tool to OpenAI function declaration format
-   */
   convertTool(tool: Tool): Record<string, unknown> {
     try {
       const openaiFunction: OpenAIFunctionDeclaration = {
@@ -77,13 +62,8 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert tool result back to OpenAI-specific format
-   * @returns OpenAI-specific result format (text content)
-   */
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
-      // OpenAI expects text content in tool responses
       if (result.success) {
         let resultText = result.message || "Tool executed successfully";
 
@@ -126,9 +106,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert multiple tools to OpenAI tools array format
-   */
   convertToolsArray(tools: Tool[]): Array<Record<string, unknown>> {
     if (tools.length === 0) {
       return [];
@@ -148,12 +125,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Get all available tools (built-in + MCP) in provider-specific format
-   * Implementation of MCPCapableToolAdapter interface
-   * @param serverId - Optional Discord server ID for server-specific tool selection
-   * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
     serverId?: number,
@@ -162,11 +133,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     return this.getAllToolsInOpenrouterFormat(builtInTools, serverId, allowedMCPFunctions);
   }
 
-  /**
-   * Get all available tools (built-in + MCP) in OpenRouter (OpenAI) tools format
-   * @param serverId - Optional Discord server ID for server-specific tool selection
-   * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   */
   async getAllToolsInOpenrouterFormat(
     builtInTools: Tool[],
     serverId?: number,
@@ -175,14 +141,12 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
         log.info(`Converted ${builtInTools.length} built-in tools to OpenAI format`);
       }
 
-      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();
@@ -231,13 +195,8 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Validate that a tool is compatible with this provider
-   * @returns boolean - True if compatible
-   */
   validateToolCompatibility(tool: Tool): boolean {
     try {
-      // Basic validation: check required fields
       if (!tool.name || !tool.description || !tool.parameters) {
         log.warn(
           `Tool validation failed: missing required fields (name: ${!!tool.name}, description: ${!!tool.description}, parameters: ${!!tool.parameters})`,
@@ -259,9 +218,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert generic parameter type to OpenAI type
-   */
   private cloneParameterSchema(schema: Tool["parameters"]): OpenAIObjectSchema {
     return JSON.parse(JSON.stringify(schema)) as OpenAIObjectSchema;
   }
@@ -286,9 +242,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     return true;
   }
 
-  /**
-   * Extract relevant data from a complex object for result text
-   */
   private extractRelevantData(data: Record<string, unknown>): string | null {
     try {
       if (Object.keys(data).length === 0) {
@@ -305,9 +258,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
   }
 }
 
-/**
- * Singleton accessor for the OpenRouter tool adapter
- */
 export function getOpenrouterToolAdapter(): OpenrouterToolAdapter {
   return OpenrouterToolAdapter.getInstance();
 }

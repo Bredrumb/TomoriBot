@@ -1,28 +1,15 @@
 import type { Collection, Message } from "discord.js";
 
-/** Discord snowflakes are 17 to 20 digits; anything else is a name or an opaque key. */
+// Bound to 17 to 20 digits because Discord snowflakes fall in that length range, separating them from names and
+// opaque keys.
 export const DISCORD_ID_PATTERN = /^\d{17,20}$/;
 
-/**
- * How far a candidate may sit from the requested id and still count as it. Discord
- * snowflakes are time-ordered, so an id one off from a real message is the model retyping
- * a digit rather than naming a different message.
- */
+// Small numeric distance catches a model mistyping a digit rather than naming another message, because Discord
+// snowflakes are time-ordered.
 export const MAX_FUZZY_DISTANCE = 1000n;
 
-/**
- * Find the nearest message when the model retyped a message id with a small typo.
- *
- * The nearest candidate wins only when it is strictly closer than the current best and not
- * the requested id itself, so an exact hit is never replaced by a neighbour.
- *
- * A candidate that cannot be read as a snowflake abandons the search rather than being
- * skipped, matching the fail-closed behaviour of the per-site loops this replaced. Discord
- * only ever hands out snowflake ids, so the case is unreachable in practice and either
- * answer is a miss for a model that already named an unreadable id.
- *
- * @returns The closest match and its distance, or null when nothing is close enough.
- */
+// Unparseable snowflake candidates abort the search instead of skipping, preserving fail-closed behavior since
+// Discord only issues snowflakes.
 export function findFuzzyMessageMatch(
   messages: Collection<string, Message>,
   requestedId: string,

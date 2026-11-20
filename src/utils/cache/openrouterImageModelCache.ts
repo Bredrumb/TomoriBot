@@ -1,10 +1,5 @@
-/**
- * OpenRouter image generation model catalog.
- *
- * `/api/v1/models` lists a handful of chat models that can emit images, but the image
- * *generation* surface is a separate and much larger catalog, so registration validates
- * against this endpoint rather than filtering output modalities off the text list.
- */
+// OpenRouter exposes a separate, larger image generation catalog beyond `/api/v1/models` chat models, so registration
+// validates against this endpoint.
 
 import {
   createOpenRouterCatalog,

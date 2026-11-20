@@ -7,7 +7,6 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 import { createPersona } from "../../helpers/fixtures";
 
-/** A reply keeps the trigger's reserved unit; a turn with no reply gives it back. */
 const releaseCalls: Array<{ serverId: number; userDiscId: string; reservation: QuotaReservation }> = [];
 
 const scopedMock = createScopedModuleMocker(mock, {

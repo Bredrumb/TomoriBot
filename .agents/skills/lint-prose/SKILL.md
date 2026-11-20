@@ -1,6 +1,6 @@
 ---
 name: lint-prose
-description: Remove AI writing patterns and excess information (obvious statements, text that restates a panel) from TomoriBot prose. Use when writing or reviewing Markdown under docs/, contributor guides, code comments, JSDoc, locale strings, commit messages, or pull request bodies.
+description: Remove AI writing patterns and excess information (obvious statements, text that restates a panel) from TomoriBot prose. Use when writing or reviewing Markdown under docs/, contributor guides, code comments, locale strings, commit messages, or pull request bodies.
 ---
 
 # Lint prose

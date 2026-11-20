@@ -7,9 +7,7 @@ config();
 const args = new Set(process.argv.slice(2));
 const skipPrompt = args.has("--yes") && process.env.TOMORI_NUKE_CONFIRM === "NUKE DATABASE";
 
-// Construct DATABASE_URL from individual POSTGRES_* vars if not explicitly set.
-// Bun's sql tag reads DATABASE_URL from the environment; without this, it falls
-// back to its default connection (postgres / no password) and fails.
+// Bun's sql tag reads DATABASE_URL from the environment, so derive it when only POSTGRES_* vars are set.
 if (!process.env.DATABASE_URL) {
   const host = process.env.POSTGRES_HOST || "localhost";
   const port = process.env.POSTGRES_PORT || "5432";
@@ -25,15 +23,6 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-/**
- * Destroys the entire TomoriBot database by dynamically discovering and
- * dropping all tables in the public schema.
- *
- * Uses pg_tables to enumerate tables at runtime so this script never goes
- * stale when new tables are added to the schema.
- *
- * DANGER: This is irreversible. Run `bun run backup` first.
- */
 async function nukeDatabase(): Promise<void> {
   log.section("⚠️ DATABASE DESTRUCTION SCRIPT ⚠️");
   log.info("This will DELETE ALL TABLES and DATA in the connected PostgreSQL database.");
@@ -88,7 +77,6 @@ async function nukeDatabase(): Promise<void> {
       }
     }
 
-    // Re-enable FK checks
     await sql`SET session_replication_role = 'origin';`;
 
     log.section("Database successfully nuked! 💣");

@@ -17,7 +17,8 @@ const TRUTHY_LITERALS = new Set(["true", "1", "yes", "on"]);
 const FALSY_LITERALS = new Set(["false", "0", "no", "off"]);
 const ITERATOR_METHODS = new Set(["forEach", "map", "filter", "some", "every", "flatMap"]);
 const VALUE_PARSER_PATTERN = /^(parse|read|resolve|get|to|coerce)[A-Z]/;
-/** Their second argument is a radix, not a default. */
+// parseInt and parseFloat are excluded from two-argument fallback extraction because their second argument is a
+// radix, not a default value.
 const RADIX_PARSERS = new Set(["parseInt", "parseFloat"]);
 
 function scriptKindFor(path: string): ts.ScriptKind {
@@ -30,7 +31,6 @@ function parse(file: SourceFile): ts.SourceFile {
   return ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true, scriptKindFor(file.path));
 }
 
-/** Matches `process.env`, `Bun.env`, and `import.meta.env`. */
 function isEnvObject(node: ts.Expression): boolean {
   if (!ts.isPropertyAccessExpression(node) || node.name.text !== "env") {
     return false;
@@ -65,7 +65,6 @@ function functionName(fn: FunctionLike): string | undefined {
   return undefined;
 }
 
-/** Finds the nearest enclosing function that declares `name` as a parameter. */
 function owningFunction(node: ts.Node, name: string): { fn: FunctionLike; index: number } | undefined {
   for (let current = node.parent; current; current = current.parent) {
     if (isFunctionLike(current)) {
@@ -105,11 +104,8 @@ function unwrapExpression(node: ts.Expression): ts.Expression {
   return current;
 }
 
-/**
- * Env-name helpers keyed by file. A call resolves to the caller file's own function when it
- * declares one with that name, so a local value parser cannot be mistaken for a same-named name
- * helper defined elsewhere.
- */
+// Calls resolve to the caller file's own declaration first so a local value parser is never mistaken for a same-named
+// env helper elsewhere.
 export class HelperRegistry {
   private readonly byKey = new Map<string, number>();
   private readonly byName = new Map<string, number>();
@@ -133,18 +129,12 @@ export class HelperRegistry {
     return true;
   }
 
-  /** Returns the name-parameter index when `name`, as seen from `file`, is an env helper. */
   indexFor(file: string, name: string): number | undefined {
     const key = this.resolveKey(file, name);
     return key.startsWith("*::") ? this.byName.get(name) : this.byKey.get(key);
   }
 }
 
-/**
- * Collects helper functions: any named function whose parameter reaches an env index, directly
- * or by forwarding into another helper's name parameter. Solved to a fixpoint across all files
- * because helpers are commonly defined in one module and wrapped in another.
- */
 export function discoverHelpers(parsed: ts.SourceFile[]): HelperRegistry {
   const registry = new HelperRegistry();
   const edges: (ForwardEdge & { file: string })[] = [];
@@ -241,7 +231,6 @@ function collectConstants(sourceFile: ts.SourceFile): FileConstants {
   return constants;
 }
 
-/** Evaluates a literal or simple arithmetic default. Returns undefined for anything else. */
 function evaluateLiteral(node: ts.Expression, constants: FileConstants): string | undefined {
   const expression = unwrapExpression(node);
   const text = stringValue(expression);
@@ -282,11 +271,6 @@ function fallbackFrom(node: ts.Expression, constants: FileConstants): Fallback {
   return { unrecoverable: unwrapExpression(node).getText().replace(/\s+/g, " ").slice(0, 60) };
 }
 
-/**
- * Climbs from a read through wrappers that keep its value (parentheses, `!`, casts, and string
- * normalizers such as `.trim()`), so the caller can inspect the operator that actually decides
- * the fallback.
- */
 function climbTransparent(node: ts.Expression): ts.Expression {
   let current: ts.Expression = node;
   for (;;) {
@@ -336,12 +320,6 @@ interface PendingRead {
   ownFallback?: Fallback;
 }
 
-/**
- * Scans TypeScript and JavaScript files. Reads are recognized through the env object, through any
- * helper found by {@link discoverHelpers}, and through same-file constants; every other string
- * that looks like a declared name is kept as a literal reference, which blocks a dead verdict
- * without being counted as proof of a read.
- */
 export function scanTypeScript(files: SourceFile[]): ScanResult {
   const result: ScanResult = {
     consumers: [],
@@ -523,10 +501,6 @@ export function scanTypeScript(files: SourceFile[]): ScanResult {
       ts.forEachChild(node, visit);
     };
 
-    /**
-     * A `??` or `||` chain resolves every env read in it to the same trailing fallback, and two or
-     * more distinct names in one chain are aliases feeding a single setting.
-     */
     const handleChain = (top: ts.BinaryExpression): void => {
       const operands: ts.Expression[] = [];
       flattenChain(top, operands);
@@ -556,11 +530,6 @@ export function scanTypeScript(files: SourceFile[]): ScanResult {
       }
     };
 
-    /**
-     * Recovers a fallback from what surrounds a read: `??=`, a comparison with a boolean literal,
-     * or a value parser such as `parseIntegerEnv(process.env.X, 80)` whose next argument is the
-     * default.
-     */
     const contextFallback = (read: ts.Expression): { fallback?: Fallback; helper?: string } => {
       const outer = climbTransparent(read);
       const parent = outer.parent;
@@ -601,11 +570,6 @@ export function scanTypeScript(files: SourceFile[]): ScanResult {
   return result;
 }
 
-/**
- * Recovers the `if (!raw) return DEFAULT_X;` idiom: in a function that reads exactly one env name,
- * a single distinct `return DEFAULT_*` resolving to a same-file literal is that name's fallback.
- * More than one read or more than one default value leaves the fallback unrecovered.
- */
 function guardReturnFallback(read: ts.Node, constants: FileConstants): Fallback | undefined {
   let owner: ts.Node | undefined = read.parent;
   while (owner && !isFunctionLike(owner)) owner = owner.parent;
@@ -631,10 +595,8 @@ function guardReturnFallback(read: ts.Node, constants: FileConstants): Fallback 
   return envNames.size === 1 && defaults.size === 1 ? { value: [...defaults][0] } : undefined;
 }
 
-/**
- * True when a chain's value is only tested for truthiness, as in `!!(A || B)`. Such a chain asks
- * whether any name is set, so its names are not aliases for one setting.
- */
+// A truthiness-tested chain such as !!(A || B) asks whether any variable is set, so its operands are not aliases for
+// one setting.
 function isBooleanContext(chain: ts.Node): boolean {
   let node: ts.Node = chain;
   while (ts.isParenthesizedExpression(node.parent)) node = node.parent;
@@ -646,7 +608,8 @@ function isBooleanContext(chain: ts.Node): boolean {
   return ts.isCallExpression(parent) && ts.isIdentifier(parent.expression) && parent.expression.text === "Boolean";
 }
 
-/** `?? ""` only normalizes unset to empty, so a guard-return default is the more meaningful fallback. */
+// Empty fallback (`?? ""`) only normalizes unset to empty, so a guard-return default is preferred as the real
+// fallback.
 function preferGuardDefault(
   fallback: Fallback | undefined,
   read: ts.Node,
@@ -662,7 +625,6 @@ function climbTransparentParent(node: ts.Node): ts.Node {
   return parent;
 }
 
-/** Strips wrappers and string normalizers from a chain operand so the read node itself is compared. */
 function unwrapReadOperand(node: ts.Expression): ts.Expression {
   let current = unwrapExpression(node);
   while (
@@ -683,11 +645,6 @@ function isWrite(node: ts.Node): boolean {
   );
 }
 
-/**
- * Resolves `key` in `for (const key of NAMES)` and `NAMES.forEach((key) => …)` when `NAMES` is a
- * same-file constant array of strings, which is how several modules copy or clear a fixed set of
- * variables.
- */
 function resolveIteratedConstant(
   identifier: ts.Identifier,
   site: ts.Node,

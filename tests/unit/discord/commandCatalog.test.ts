@@ -6,17 +6,13 @@ import {
   type CommandExecutionMap,
 } from "@/utils/discord/commandLoader";
 
-/** No-op execute stub: getCommandCatalogEntries only reads the map keys, never calls these. */
 const noopExecute: CommandExecuteFunction = async () => {};
 
 describe("getCommandCatalogEntries", () => {
   it("maps root / flat / grouped commands to the space-joined stat_counters.metric_key format", () => {
     const executionMap: CommandExecutionMap = new Map([
-      // Root command: single sentinel key → path is just the command name.
       ["update", new Map([[ROOT_COMMAND_EXECUTION_KEY, noopExecute]])],
-      // Flat subcommand: key is the subcommand name.
       ["config", new Map([["humanizer", noopExecute]])],
-      // Grouped subcommand: key is "group.subcommand" (exactly one dot).
       ["server", new Map([["welcome-channel.set", noopExecute]])],
     ]);
 

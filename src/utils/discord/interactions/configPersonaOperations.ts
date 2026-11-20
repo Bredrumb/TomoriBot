@@ -61,20 +61,12 @@ import {
 
 const AVATAR_DOWNLOAD_TIMEOUT_MS = 15000;
 
-/**
- * Servers with a promotion running. The guild avatar PATCH is rate limited and can stall for a
- * minute, so without this a second click would start a concurrent sync that interleaves its
- * avatar uploads and deletes with the first one's.
- */
+// Servers with an active promotion are tracked here because Discord's guild avatar PATCH can stall for a minute and
+// concurrent clicks would interleave edits.
 const promotionsInFlight = new Set<string>();
 
 type ConfigAvatarAttachment = Attachment | APIAttachment;
 
-/**
- * The Discord-side effects identity operations need. Guild nickname and guild avatar are
- * REST writes rather than repository writes, so they arrive as a port: the operation stays testable
- * and the route layer owns the transport.
- */
 export interface GuildIdentityPort {
   setNickname(nickname: string): Promise<boolean>;
   setAvatar(avatarDataUri: string | null): Promise<{ ok: boolean; rateLimited: boolean; details?: string }>;
@@ -576,8 +568,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       return { status: "trigger-write-failed", oldNickname, newNickname: trimmed };
     }
 
-    // Only the main persona speaks through the bot account, so only its rename touches the guild
-    // nickname. The sync is non-fatal: a missing Change Nickname permission must not fail the write.
+    // Only the main persona speaks through the bot, so only its rename syncs the guild nickname non-fatally.
     let guildNicknameSynced = false;
     if (guildIdentity && persona.is_alter !== true) {
       guildNicknameSynced = await guildIdentity.setNickname(trimmed);
@@ -1114,9 +1105,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       const swap = await personaRepository.swapPersona(mainPersona.persona_id, alterPersona.persona_id);
       if (swap === "failed") return { status: "write-failed" };
 
-      // Evicted before the slow Discord calls below, not only at the end: a concurrent panel click
-      // reads this cache, and until it is evicted it still sees the pre-swap roles. The final
-      // eviction further down stays because the avatar rows change after this point.
+      // Invalidate before slow Discord calls so concurrent clicks see the swap; the later call covers avatars.
       invalidateTomoriStateCache(serverDiscId);
       if (swap === "roles-changed") return { status: "not-alter" };
 
@@ -1219,10 +1208,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       return { status: "success" };
     }
 
-    // Summary and clear update the cache synchronously and let their durable write float, while
-    // the categories writer is genuinely async. The panel repaints from that cache, so awaiting
-    // these two would buy nothing and would put the STM tool's hot path behind two database round
-    // trips, which is what the absorbed command already avoids.
+    // Summary and clear update the cache synchronously so panel repaints avoid awaiting extra database round trips.
     if (summary?.trim()) {
       shortTermMemoryRepository.updateSummary(
         userDiscId,

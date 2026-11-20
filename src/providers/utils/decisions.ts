@@ -23,7 +23,8 @@ import { currentProviderUsageContext, findProviderRequestDeniedError } from "@/u
 const DECISION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120_000, 10_000);
 const MAX_DECISION_RESPONSE_BYTES = 1024 * 1024;
 const probabilitySchema = z.number().finite().min(0).max(1);
-/** OpenRouter rounds probabilities, so a tie can come back a hair below the maximum. */
+// OpenRouter rounds probabilities, so a tied option can score slightly below the maximum and needs this 0.005 argmax
+// tolerance.
 const CHOICE_ARGMAX_TOLERANCE = 0.005;
 const decisionIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
 const instructionsSchema = z.string().min(1).max(8_000);
@@ -56,7 +57,6 @@ export function validDecisionInput(input: DecisionInput): boolean {
   );
 }
 
-/** Named styles (OpenRouter, System One) key questions by ID; a choice lists its options as `criteria`. */
 export function encodeNamedDecisionQuestions(request: DecisionInput) {
   return Object.fromEntries(
     request.questions.map((question) => [
@@ -85,10 +85,8 @@ export function encodeOrderedDecisionQuestions(request: DecisionInput) {
   );
 }
 
-/**
- * A choice answer must name one of the offered options, give a probability for each of them, and
- * name the most likely one, because callers act on the choice alone.
- */
+// Choice must match the argmax probability because callers act on the choice alone rather than rechecking
+// probabilities.
 function validChoiceAnswer(
   question: DecisionInput["questions"][number],
   choice: string,
@@ -221,7 +219,7 @@ export function parseOrderedDecisionAnswers(payload: unknown, request: DecisionI
 
 function parseDecisionJson(raw: string): unknown {
   const parsed: unknown = JSON.parse(raw);
-  // JSON.parse overwrites duplicate named answers. Inspect decoded keys before admitting that map.
+  // Inspect raw keys before admitting the map because JSON.parse silently overwrites duplicate keys.
   const tokens = raw.match(/"(?:[^"\\]|\\.)*"|[{}[\]:]/g) ?? [];
   const objects: Array<Set<string> | null> = [];
   for (let index = 0; index < tokens.length; index++) {
@@ -325,8 +323,8 @@ export async function executeDecisionTransport(
   if (request.abortSignal?.aborted) return cancelled();
   if (!validDecisionInput(request)) return { status: "invalid-input", correlationId, errorLogged: false };
   const body = JSON.stringify(transport.body);
-  // A UTF-8 byte ceiling is conservative across tokenizers. Use the model's tokenizer once callers
-  // need packets that this ceiling refuses; never truncate evidence to make a request fit.
+  // Use a UTF-8 byte ceiling conservatively across tokenizers, and never truncate evidence if callers later need exact
+  // counts.
   if (Buffer.byteLength(body, "utf8") > request.inputTokenLimit) {
     return { status: "invalid-input", correlationId, errorLogged: false };
   }

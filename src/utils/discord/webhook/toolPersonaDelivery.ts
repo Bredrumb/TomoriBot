@@ -8,12 +8,6 @@ import {
   sendPersonaPost,
 } from "@/utils/discord/webhook/personaPost";
 
-/**
- * Builds the shared delivery context for a tool post.
- *
- * @param destination - Channel to post into when it differs from the tool's context channel, such
- *   as the thread a tool has just created.
- */
 export function buildToolPersonaPostContext(
   context: ToolContext,
   persona: TomoriState,
@@ -42,7 +36,6 @@ export function buildToolPersonaPostContext(
   };
 }
 
-/** Delivers a tool payload through the shared persona author, appearance, and receipt path. */
 export function sendToolPersonaPost(
   context: ToolContext,
   persona: TomoriState,

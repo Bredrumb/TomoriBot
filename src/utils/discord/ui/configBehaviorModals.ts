@@ -53,12 +53,8 @@ export const BEHAVIOR_COOLDOWN_TYPE_FIELD = "behavior_cooldown_type";
 export const BEHAVIOR_COOLDOWN_LENGTH_FIELD = "behavior_cooldown_length";
 export const BEHAVIOR_PRESET_FIELD = "behavior_preset";
 
-/**
- * Submitted value of the synthetic "built-in default" option in the preset modal.
- *
- * The default prompt is not a catalog row, and it must be stored as NULL so `DEFAULT_SYSTEM_PROMPT`
- * keeps evolving at read time. Offering it as a sentinel avoids writing a frozen copy of its text.
- */
+// This sentinel maps to NULL in storage rather than copying DEFAULT_SYSTEM_PROMPT so the built-in prompt keeps
+// evolving at read time.
 export const BEHAVIOR_PRESET_BUILT_IN = "built-in-default";
 export const BEHAVIOR_RANDOM_CHANNEL_FIELD = "behavior_random_channel";
 export const BEHAVIOR_RANDOM_PERSONA_FIELD = "behavior_random_persona";
@@ -85,10 +81,7 @@ export const BEHAVIOR_STM_UPDATE_NUDGE_FIELD = "behavior_stm_update_nudge";
 export const CONFIG_PERMISSIONS_CHECKBOX_GROUP_PREFIX = "permissions_capabilities_group";
 export const CONFIG_PERMISSIONS_CHECKBOX_GROUP_SIZE = 10;
 
-/**
- * Personas one Random Trigger Add modal page carries. Its Random entry is repeated on every page,
- * so it spends one of Discord's 25 option slots and the roster gets the rest.
- */
+// One of Discord's 25 select slots is reserved because the Random persona entry is repeated on every modal page.
 export const RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE = SELECT_OPTION_LIMIT - 1;
 
 const LABEL = 18 as const;
@@ -395,12 +388,8 @@ export function buildBehaviorSendLimitModal(locale: string, nonce: string, curre
   };
 }
 
-/**
- * Builds the tool-notice visibility modal, chunking the catalog into Checkbox Groups.
- *
- * `definitions` is injectable so the modal-limit suite can drive the chunking boundaries without
- * growing the real catalog; production callers use the shipped list.
- */
+// The definitions parameter stays injectable so modal-limit tests can drive chunking boundaries without modifying the
+// production catalog.
 export function buildBehaviorNoticeVisibilityModal(
   locale: string,
   nonce: string,
@@ -690,7 +679,7 @@ export function buildBehaviorPresetModal(
   };
 }
 
-/** An empty submit clears the prefill, matching the Context Note modal. */
+// The text field stays optional because an empty submit clears the prefill, matching the Context Note modal.
 export function buildBehaviorPrefillModal(
   locale: string,
   nonce: string,

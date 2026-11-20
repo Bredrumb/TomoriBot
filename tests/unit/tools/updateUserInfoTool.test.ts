@@ -173,13 +173,11 @@ describe("UpdateUserInfoTool", () => {
       addressTerms: {},
     };
     try {
-      // A pronoun edit leaves the rendered name untouched.
       stored = { ...row };
       const pronounsOnly = await new UpdateUserInfoTool().execute({ pronouns: "he/him" }, makeContext(true, nerine));
       expect(pronounsOnly.success).toBe(true);
       expect(pronounsOnly.message).not.toContain("now calls");
 
-      // An addressing-style switch moves the affix with no naming field present.
       stored = { ...row };
       const styleChange = await new UpdateUserInfoTool().execute(
         { addressing_style: "feminine" },
@@ -293,9 +291,8 @@ describe("user info capability mapping", () => {
     expect(configToFeatureFlags({ ...baseConfig, user_info_updates_enabled: false }).user_info_updates).toBe(false);
   });
 
-  // Guards the gap that shipped: every provider assembles this config by hand, so a
-  // correct column, mapper, and registry entry still advertised the tool because the
-  // assembled state dropped the field on the way through.
+  // Every provider assembles ToolStateForContext by hand, so this guards against dropping user_info_updates_enabled
+  // on the way through.
   it("withholds the tool from the assembled context state when the capability is disabled", () => {
     const stateFor = (enabled: boolean): ToolStateForContext => ({
       server_id: "1",

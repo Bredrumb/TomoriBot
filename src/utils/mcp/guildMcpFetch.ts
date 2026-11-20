@@ -5,10 +5,9 @@ import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const MAX_MCP_RESPONSE_BYTES = 8 * 1024 * 1024;
 
-/** A signed-in registration's bearer token, resolved per request because access tokens expire mid-connection. */
+// Bearer authorization is resolved per request via token() because OAuth access tokens can expire mid-connection.
 export interface GuildMcpFetchAuthorization {
   token(): Promise<string>;
-  /** Returns one replacement for a token the server rejected, or null when none can be issued. */
   replace(rejected: string): Promise<string | null>;
   reauthorize(challengedScope?: string): Promise<void>;
 }
@@ -19,11 +18,8 @@ function withBearer(headers: HeadersInit | undefined, token: string): Headers {
   return merged;
 }
 
-/**
- * The SDK parses JSON and SSE after this byte counter, including discovery and internal checks.
- *
- * @param onUnauthorized - Sees each final 401 before the SDK turns it into an error that drops its headers
- */
+// onUnauthorized receives each final 401 before the MCP SDK converts it into an error that drops response headers,
+// and all SDK traffic passes this byte limit.
 export function createGuildMcpFetch(
   endpoint: string,
   onUnauthorized?: (response: Response) => void,

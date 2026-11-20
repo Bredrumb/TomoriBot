@@ -1,11 +1,3 @@
-/**
- * Rewrites stored public asset URL prefixes during object-storage cutovers.
- *
- * Usage:
- *   bun run scripts/devtools/migrateAssetUrls.ts --from https://old.example --to https://assets.example --dry-run
- *   bun run scripts/devtools/migrateAssetUrls.ts --from https://old.example --to https://assets.example
- */
-
 import { sql } from "bun";
 import { config } from "dotenv";
 

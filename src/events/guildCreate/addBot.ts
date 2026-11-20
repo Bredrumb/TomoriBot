@@ -6,11 +6,6 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
-/**
- * Sends welcome message when bot joins a new guild.
- * Shows setup instructions or welcome back message based on existing data.
- * @param guild - The guild the bot joined
- */
 const handler = async (client: Client, guild: Guild): Promise<void> => {
   try {
     log.info(`Bot joined new server: ${guild.name} (${guild.id})`);

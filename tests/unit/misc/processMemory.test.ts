@@ -3,9 +3,8 @@ import { collectProcessMemorySnapshot, runForcedGc } from "@/utils/misc/processM
 
 describe("runForcedGc", () => {
   it("finds a collector under the Bun runtime", () => {
-    // Guards the whole point of the emergency clear's post-clear measurement: if this ever
-    // returns "unavailable" in production, every `*_delta_clear` field silently reads zero
-    // again and the clear's effectiveness becomes unmeasurable rather than visibly broken.
+    // Must not return "unavailable" under Bun: otherwise every `*_delta_clear` metric silently reads zero in
+    // production.
     expect(runForcedGc()).toBe("bun");
   });
 

@@ -2,17 +2,12 @@ import { ComponentType, type MessageCreateOptions, MessageFlags } from "discord.
 import { danbooruPostUrl, type PostableImage } from "@/tools/restAPIs/danbooru/posts";
 import { localizer } from "@/utils/text/localizer";
 
-/** `flags` is narrowed so the payload also fits an interaction reply edit, which rejects notification flags. */
+// Type narrows flags to IsComponentsV2 because interaction reply edits reject notification flags permitted on
+// MessageCreateOptions.
 export type DanbooruGalleryPayload = Required<Pick<MessageCreateOptions, "components" | "allowedMentions">> & {
   flags: MessageFlags.IsComponentsV2;
 };
 
-/**
- * Danbooru images as one gallery, with a footer naming the searched tags (NovelAI form) and linking
- * each post. Questionable and explicit images are spoilered.
- *
- * @param typedTags - What the user typed for each of `tags`, shown beside a tag that resolution changed
- */
 export function buildDanbooruGalleryPayload(
   locale: string,
   tags: readonly string[],

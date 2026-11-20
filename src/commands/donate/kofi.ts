@@ -5,22 +5,15 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 
-/**
- * Configure the kofi subcommand for donate category
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("kofi").setDescription(localizer("en-US", "commands.donate.kofi.description"));
 
-/**
- * Execute the donate kofi command - show Ko-fi donation link and information
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Defer the interaction before async file I/O to prevent timeout
   await interaction.deferReply();
 
   const bannerFile = Bun.file("assets/img/kofibanner.png");

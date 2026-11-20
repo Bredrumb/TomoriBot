@@ -37,7 +37,6 @@ afterAll(() => {
   else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
 });
 
-/** Runs one test under timing other than the production defaults it would otherwise wait out. */
 async function withTiming(
   timing: { lookupTimeoutMs?: number; proxyWaitMs?: number },
   body: () => Promise<void>,
@@ -55,7 +54,6 @@ async function withTiming(
   }
 }
 
-/** A valid PluralKit lookup payload whose original and sender match the standard expectation. */
 function pluralKitPayload(): Record<string, unknown> {
   return {
     original: "123456789012345678",
@@ -428,8 +426,8 @@ describe("message-proxy attestation router", () => {
         ),
       ).toEqual({ status: "timeout_or_error" });
 
-      // The lookup pauses this channel's wait timers. A failed lookup must resume them,
-      // or every original in the channel is held until its TTL expires.
+      // Lookups pause the channel's wait timers, so a failed lookup must resume them rather than holding messages
+      // until their TTL expires.
       const waitResult = await Promise.race([
         originalWait,
         new Promise<"stuck">((resolve) => setTimeout(() => resolve("stuck"), 1000)),

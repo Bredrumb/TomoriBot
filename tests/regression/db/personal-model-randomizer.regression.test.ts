@@ -35,7 +35,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Personal fallback chain and randomizer dat
   beforeAll(async () => {
     await setupTestDb();
 
-    // Clean up any stale fixtures from prior interrupted runs.
     await testSql`DELETE FROM users WHERE user_disc_id = ANY(${testSql.array(ALL_USER_DISCS, "TEXT")})`;
     await testSql`DELETE FROM servers WHERE server_disc_id = ${SERVER_DISC}`;
 
@@ -260,7 +259,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Personal fallback chain and randomizer dat
     expect(nonTextResult.activeConfigs.text).toBeUndefined();
     expect(nonTextResult.tomoriState.config.model_randomizer_enabled).toBe(false);
 
-    // Text is enabled but the row has no model, so personal text is still not active.
     await llmProviderRepo.upsertUserSavedProviderConfig(userAId, {
       ...nonTextConfig,
       llm_id: null,

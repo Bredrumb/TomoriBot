@@ -34,7 +34,7 @@ describe("/setup registration", () => {
     expect(setupCommand).toBeDefined();
     if (!setupCommand) return;
 
-    expect(setupCommand.contexts).toBeUndefined(); // DM-capable
+    expect(setupCommand.contexts).toBeUndefined();
     expect(setupCommand.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
     const languageOption = setupCommand.options?.find((option) => option.name === "language");
     expect(languageOption?.required).toBe(true);
@@ -80,11 +80,6 @@ describe("/setup registration", () => {
 });
 
 describe("/setup execution authorization", () => {
-  /**
-   * The command is now only an entry point: it resolves the workspace key and delegates to
-   * `startSetupWizard`, which owns the permission check and the workspace-health guard. These
-   * assertions therefore read the wizard's own surface, which is the deferred ephemeral reply.
-   */
   function makeCommandInteraction(options: {
     guildId: string | null;
     canManageGuild: boolean;

@@ -1,7 +1,4 @@
-/**
- * The Supporter env surface: `src/init/secrets.ts` registers these names with the secret loader and
- * `.env.optional.example` documents them, so keep it free of parser imports for early startup.
- */
+// Keep these keys free of parser imports because the secret loader registers them during early startup.
 export const SUPPORTER_SECRET_ENV_KEYS = [
   "TOMORI_SUPPORTER_BILLING_ENABLED",
   "TOMORI_SUPPORTER_CONFIG_JSON",

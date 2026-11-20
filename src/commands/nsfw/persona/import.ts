@@ -8,7 +8,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     subcommand.setName("import").setDescription(localizer("en-US", "commands.nsfw.persona.import.description")),
   );
 
-/** `/persona import` that also accepts NSFW personas; the `/nsfw` age restriction is the only gate. */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

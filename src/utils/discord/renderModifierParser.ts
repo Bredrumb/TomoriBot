@@ -9,11 +9,8 @@ const MODIFIER_SEGMENT = `[^()（）\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}}`;
 // One nested level carries a copied persona's sprite: "Locke (Tomori (shocked)):".
 const LABEL_MODIFIER_PATTERN = `${MODIFIER_SEGMENT}(?:[（(]${MODIFIER_SEGMENT}[）)])?`;
 
-/**
- * Modifier in the decorated "Persona (neutral)" webhook name an alter uses when it reverts from a
- * sprite to its base appearance and would otherwise share the sprite's clean username, which makes
- * Discord group the reverted message under the sprite's avatar.
- */
+// A distinct "Persona (neutral)" webhook name is forced on revert because Discord groups consecutive same-username
+// messages under the prior sprite avatar.
 export const NEUTRAL_APPEARANCE_MODIFIER = "neutral";
 
 export type RenderModifierName = {
@@ -28,7 +25,6 @@ export type LeadingRenderModifierMatch = RenderModifierName & {
 
 export type LeadingGenericSpeakerLabelMatch = {
   sourceName: string;
-  /** Present for the decorated "Name (modifier):" shape; absent for a plain "Name:" label. */
   modifier?: string;
   body: string;
   matchedPrefix: string;
@@ -105,8 +101,8 @@ export function parseLeadingRenderModifier(
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  // Models sometimes copy the prompt's code-span example or emphasize the label. Consume only a
-  // balanced wrapper around the label, so ordinary Markdown at the start stays in the message.
+  // Consume only a balanced emphasis or code-span wrapper around the label so ordinary leading Markdown stays
+  // intact.
   const opening = /^(\s*)(`|\*\*|\*|__|_)/u.exec(text);
   const wrapper = opening?.[2] ?? "";
   const prefixLength = wrapper ? (opening?.[0].length ?? 0) : 0;
@@ -144,14 +140,8 @@ export function parseLeadingRenderModifier(
   return null;
 }
 
-/**
- * Reports whether `text` opens with a plain, undecorated label naming one of `sourceNames`, in the
- * same forms stripLeakedOwnNameLabels removes ("Locke:", "**Locke:**", "**Locke**:"). The stream
- * treats it as the model returning to its base appearance after a sprite.
- *
- * Accepts only the ASCII colon: a label this reports must also be one the output cleaner strips,
- * or the reset would ship with its label still visible.
- */
+// Only ASCII colons are matched because stripLeakedOwnNameLabels only strips ASCII colons and full-width colons would
+// leak into output.
 export function hasLeadingPlainOwnNameLabel(text: string, sourceNames: readonly string[]): boolean {
   if (!text.trim() || text.trimStart().startsWith("```")) return false;
 
@@ -164,20 +154,14 @@ export function hasLeadingPlainOwnNameLabel(text: string, sourceNames: readonly 
   return new RegExp(`^\\s*(?:${labelForms.join("|")})`, "iu").test(text);
 }
 
-/** Matches the shortened bare label a model writes instead of the decorated `Name (label):` form. */
 const BARE_SPRITE_LABEL_PATTERN_SOURCE = `^\\s*[(（]([^()（）\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})[)）]\\s*[:：][ \\t]*`;
 
 export type BareSpriteLabelMatch = {
   modifier: string;
   body: string;
-  /** True when the persona's own plain label chain preceded the tag. */
   afterOwnLabelChain: boolean;
 };
 
-/**
- * Parses the shortened bare "(label):" a model writes instead of the decorated form, optionally
- * after its own plain label chain, leaving sprite resolution to the caller so prose stays untouched.
- */
 export function parseLeadingBareSpriteModifier(
   text: string,
   sourceNames: readonly string[],
@@ -203,14 +187,6 @@ export function parseLeadingBareSpriteModifier(
   };
 }
 
-/**
- * Parses a leading sprite modifier for `/impersonate persona`, where the persona is already
- * fixed by the command's autocomplete option: unlike {@link parseLeadingRenderModifier}, the source
- * name is optional. Accepts both "PersonaName (modifier): body" (delegated to the named parser)
- * and the bare "(modifier): body" shape, since repeating the already-selected persona's name is
- * redundant in this context. Callers still gate on an actual sprite match before treating the
- * text as decorated; text that fails that lookup falls through to plain, unmodified content.
- */
 export function parseLeadingImpersonationSpriteModifier(
   text: string,
   personaName: string,
@@ -232,24 +208,9 @@ export function parseLeadingImpersonationSpriteModifier(
   };
 }
 
-// Rejects label candidates that are really markdown structure: list items ("- Name", "1. Name"),
-// blockquotes ("> Name"), and headings ("# Name"). Mirrors parseLeadingRenderModifier, which never
-// matches these because its pattern is anchored directly after leading whitespace.
+// Reject markdown list, blockquote, and heading prefixes because parseLeadingRenderModifier never matches them.
 const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 
-/**
- * Parses a leading speaker label of ANY name at the start of `text`, in either the decorated
- * "Name (modifier): body" or plain "Name: body" shape. Unlike {@link parseLeadingRenderModifier},
- * the name is not restricted to the active persona, so callers use this to detect *leaked* labels
- * (e.g. "Chris (smug): ...") that the allowlisted parser intentionally refuses to match.
- *
- * Shapes that are really prose or markdown are rejected: code-fence openings, list items,
- * blockquotes/headings, names without a word character, and names opening with "[" or "<"
- * (links, mentions, timestamps: mirrors isGenericSpeakerStopLabel).
- *
- * @param text - Segment text to inspect (leading whitespace tolerated)
- * @returns The parsed label and remaining body, or null when no label shape is present
- */
 export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpeakerLabelMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
@@ -267,7 +228,6 @@ export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpe
     return null;
   }
 
-  // Plain shape ("Name:").
   const plain = new RegExp(`^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*[:：][ \\t]*`, "u").exec(text);
   const plainName = plain?.[1]?.trim();
   if (plain && plainName && isPlausibleSpeakerLabelName(plainName)) {
@@ -283,11 +243,6 @@ function isPlausibleSpeakerLabelName(name: string): boolean {
   return !MARKDOWN_MARKER_NAME_RE.test(name);
 }
 
-/**
- * Returns true when `name` matches any of `names` after render-modifier normalization
- * (the same comparison used by isAllowedRenderModifierSpeakerLabel).
- * @param names - Names to compare against (not yet normalized)
- */
 export function matchesRenderModifierName(name: string, names: readonly string[]): boolean {
   const normalized = normalizeRenderModifierName(name);
   if (!normalized) return false;
@@ -308,27 +263,8 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
   );
 }
 
-/**
- * Resolves the source persona behind a decorated webhook name, accepting both
- * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
- * label:
- *
- * - Flipped copied-identity format (current): "impersonated (SourcePersona)":
- *    Discord shows the impersonated name first so the disguise reads naturally,
- *    while the model-facing label keeps the source persona first.
- * - Legacy format: "SourcePersona (modifier)": pre-flip copied identities and
- *    pre-clean-name sprite messages still in fetched history windows.
- *
- * When BOTH parts match personas (persona impersonating another persona) the
- * flipped interpretation wins, since all newly sent messages use it; legacy
- * persona-on-persona messages in the transition window are misattributed until
- * they age out of the history fetch window.
- *
- * A legacy-shaped "Persona (neutral)" name resolves to the plain persona name with
- * `isNeutralAppearance` set: it is usually an alter's group-break revert to its base
- * appearance, but a real sprite named "neutral" produces the same name, so callers
- * check the sprite message mapping before settling on the plain name.
- */
+// Flipped "impersonated (Source)" beats legacy "Source (mod)" because new webhooks use it; callers check sprite
+// mappings since a sprite can be named "neutral".
 export function resolveRenderModifierSourcePersona(
   webhookName: string,
   personaByNickname: Map<string, TomoriState>,

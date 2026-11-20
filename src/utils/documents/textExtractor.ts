@@ -1,27 +1,13 @@
-/**
- * Shared Text Extraction Utility
- * Provides reusable text extraction from document buffers (PDF, TXT, MD)
- * Used by both /teach document and the read_file tool
- */
-
 import type { PdfParseReply } from "@/utils/documents/pdfParseWorker";
 import { log } from "@/utils/misc/logger";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { normalizeDocumentText } from "@/utils/documents/documentService";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 
-/**
- * Known-binary MIME type prefixes: any file whose content-type starts with one
- * of these is treated as non-readable binary and rejected outright.
- * `application/pdf` is intentionally absent; it is handled as a special case below.
- */
 const BINARY_MIME_PREFIXES = ["image/", "video/", "audio/"] as const;
 
-/**
- * Known-binary file extensions: files with these extensions are rejected even
- * when Discord reports an ambiguous MIME type (e.g. `application/octet-stream`).
- * Source-code and markup extensions are intentionally absent so they pass through.
- */
+// Blocklisted extensions reject binary files when Discord sends ambiguous MIME types such as
+// application/octet-stream, so code and markup pass.
 const BINARY_EXTENSIONS = new Set([
   ".jpg",
   ".jpeg",
@@ -90,18 +76,6 @@ const BINARY_EXTENSIONS = new Set([
   ".odp",
 ]);
 
-/**
- * Check if a file is readable as text (and therefore extractable).
- *
- * Strategy: blocklist-based rather than allowlist-based.
- * PDF is handled as a named special case (requires `pdf-parse` for binary parsing).
- * Any other file that is not a known binary format is accepted and read as UTF-8 text:
- * this naturally covers .txt, .md, .py, .ts, .c, .cpp, .java, .rs, .go, .json, .yaml, etc.
- * without needing to enumerate every possible code or markup extension.
- *
- * @param contentType - MIME type of the file (may be null)
- * @param filename - Filename used to check the extension
- */
 export function isExtractableDocument(contentType: string | null, filename: string): boolean {
   const lowerName = filename.toLowerCase();
 
@@ -116,19 +90,9 @@ export function isExtractableDocument(contentType: string | null, filename: stri
     return false;
   }
 
-  // Accept everything else: any text-based MIME type (text/*) or unknown
-  //    extension falls through here and will be decoded as UTF-8.
   return true;
 }
 
-/**
- * Extract text from a raw buffer based on file type
- * Supports PDF (via pdf-parse), TXT, and MD files
- *
- * @param buffer - Raw file buffer
- * @param filename - Filename used to determine file type
- * @param contentType - Optional MIME type for additional type detection
- */
 export async function extractTextFromBuffer(
   buffer: Buffer,
   filename: string,
@@ -142,21 +106,16 @@ export async function extractTextFromBuffer(
   return buffer.toString("utf8");
 }
 
-// The size cap bounds bytes, not parse time: a crafted PDF under the cap can loop in pdf.js. An
-// ordinary document parses in a few seconds, so this only stops pathological files.
+// Bounds pdf.js parse time against pathological PDFs under the byte cap because size alone does not cap parse loops.
 const PDF_PARSE_TIMEOUT_MS = 20_000;
 
 export class PdfParseTimeoutError extends Error {}
 
-/**
- * Parses in a worker so a stalled parse cannot block the event loop, and terminates it at the
- * deadline because `pdf-parse` offers no way to abort.
- */
+// Worker termination enforces the deadline instead of an in-process timeout because pdf-parse has no abort and would
+// otherwise stall the event loop.
 export function parsePdfWithDeadline(buffer: Buffer, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Resolved beside this source file. Tools and commands are imported from `src/` at runtime even
-    // under `dist/index.js`, so this module never lands in the bundle; a static import from the
-    // entry point would make this URL point into `dist/`, where no worker file is emitted.
+    // This worker path resolves beside src/, so entry-point code must not statically bundle this module into dist/.
     const worker = new Worker(new URL("./pdfParseWorker.ts", import.meta.url));
     const finish = (settle: () => void) => {
       clearTimeout(timer);
@@ -176,28 +135,14 @@ export function parsePdfWithDeadline(buffer: Buffer, timeoutMs: number): Promise
   });
 }
 
-/**
- * Result of a full text extraction pipeline
- */
 export interface ExtractTextResult {
-  /** Whether extraction succeeded */
   success: boolean;
-  /** Extracted and normalized text (only if success) */
   text?: string;
-  /** Whether the text was truncated to fit maxTextLength */
   truncated: boolean;
-  /** Original text length before truncation (only if truncated) */
   originalLength?: number;
-  /** Error category if extraction failed */
   error?: "size_exceeded" | "extraction_failed" | "memory_pressure" | "timeout" | "download_failed" | "empty_document";
 }
 
-/**
- * Full extraction pipeline: download -> extract -> normalize -> truncate
- * Handles memory guard checks, safe download, text extraction, and truncation
- *
- * @returns Extraction result with text or error details
- */
 export async function extractTextFromUrl(
   url: string,
   filename: string,
@@ -215,7 +160,6 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: "memory_pressure" };
   }
 
-  // Download the file with size and timeout protections
   const maxSizeMB = options.maxSizeBytes / (1024 * 1024);
   const downloadResult = await safeDownload(url, {
     maxSizeMB,

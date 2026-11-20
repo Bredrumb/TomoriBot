@@ -6,22 +6,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { personaSpriteSchema } from "@/types/db/schema";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
-/**
- * The tool's source-selection ladder.
- *
- * This is the layer that had no test across two rounds of review, and both regressions lived here
- * rather than in the dispatcher below it. The ladder answers "which voice does this persona use,
- * and is it usable against this endpoint", and its two failure modes so far were:
- *
- *   - a design prompt unconditionally outranking a perfectly good clone sample, and
- *   - a shape capability asked of the fallback *list* instead of its members, which made the list
- *     unusable on exactly the servers where ElevenLabs is the only voice (an ElevenLabs endpoint,
- *     or no endpoint at all).
- *
- * Every collaborator below is stubbed, including delivery, so that `execute()` runs all the way to
- * a success result: a stub that fails would replace the tool's own refusal message with its own and
- * silently make every refusal assertion vacuous, which is the trap this file walked into once.
- */
+// Downstream collaborators (including delivery) are stubbed to succeed so a failing stub never masks the tool's own
+// refusal error.
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
 import type { ToolContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
@@ -60,7 +46,6 @@ function hostedTarget(mode: "design" | "clone"): realSpeechEndpointResolver.Spee
     }),
   };
 }
-/** Sources the tool handed to the dispatcher, most recent last. */
 const dispatchedSources: ResolvedVoiceSource[] = [];
 const dispatchedSignals: Array<AbortSignal | undefined> = [];
 let deliveryCount = 0;
@@ -121,9 +106,8 @@ scopedMock.module("@/utils/speech/voiceMessageSynthesis", () => ({
   synthesizeVoiceMessage: synthesizeMock,
 }));
 
-// A null waveform metadata result is the tool's own supported path: it falls back to a plain
-// attachment. Stubbing it at null keeps delivery out of the picture without pretending the tool
-// took a branch it did not.
+// Returning null exercises the tool's supported plain-attachment fallback without coupling the test to waveform
+// generation.
 scopedMock.module("@/utils/audio/voiceMessageMetadata", () => ({
   ...realVoiceMessageMetadata,
   generateVoiceMessageMetadata: async () => null,
@@ -175,7 +159,6 @@ function makeContext(fields: PersonaVoiceFields): ToolContext {
   } as unknown as ToolContext;
 }
 
-/** Runs execute() and reports either the dispatched source or the refusal message. */
 async function runTool(
   fields: PersonaVoiceFields,
   endpoint: CustomEndpointRow | null,
@@ -383,8 +366,8 @@ describe("GenerateVoiceMessageTool source ladder", () => {
   });
 
   it("falls past a sample to the ElevenLabs voice on an ElevenLabs endpoint", async () => {
-    // The union-guard regression: the sample is preferred and then discarded, and the voice id has
-    // to remain reachable afterwards. A list-wide capability check stranded this persona.
+    // A list-wide capability check stranded this persona when the preferred sample was discarded, so voiceId must
+    // stay reachable.
     const { source, error } = await runTool({ ...SAMPLE, ...ELEVENLABS_VOICE }, ELEVENLABS_ENDPOINT);
 
     expect(error).toBeNull();
@@ -399,8 +382,7 @@ describe("GenerateVoiceMessageTool source ladder", () => {
   });
 
   it("uses Clone priority even when both sources exist", async () => {
-    // A design prompt is present too, but the sentinel is what selects the design branch. Without
-    // it the sample must stay in play.
+    // Even when a design prompt exists, the sample must stay selected unless the design-branch sentinel is set.
     const { source, error } = await runTool(
       { ...SAMPLE, ...DESIGN_PROMPT, speech_voice_name: "VoiceDesign", voice_source_priority: "clone" },
       makeEndpoint("auto"),

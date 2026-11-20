@@ -26,11 +26,6 @@ function hextetsToIpv4(high: number, low: number): string {
   return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
 }
 
-/**
- * Extracts the IPv4 carried by an IPv4-mapped, IPv4-compatible, NAT64 (`64:ff9b::/96`), or 6to4 address.
- *
- * @returns Null when the input is not an IPv6 address with one of those embeddings.
- */
 export function getEmbeddedIpv4(address: string): string | null {
   const hextets = parseIpv6Hextets(address);
   if (!hextets) return null;

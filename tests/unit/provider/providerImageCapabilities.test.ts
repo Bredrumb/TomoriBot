@@ -43,7 +43,6 @@ describe("curated provider image capabilities", () => {
       }),
     ).toEqual({ txt2img: true, img2img: true, inpaint: true, negative_prompt: false });
 
-    // An explicit false must survive, not fall back to the provider default.
     expect(
       resolveCuratedImageSupports("google", {
         supports_img2img: false,
@@ -68,7 +67,6 @@ describe("curated provider image capabilities", () => {
       inpaint: true,
       negative_prompt: false,
     });
-    // Selecting no generation mode still leaves text-to-image usable.
     expect(curatedImageSupportsFromSubmittedValues(["negative_prompt"], "google")).toEqual({
       txt2img: true,
       img2img: false,

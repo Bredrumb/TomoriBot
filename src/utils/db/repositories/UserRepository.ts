@@ -1,9 +1,3 @@
-/**
- * UserRepository: manages the `users` and `personalization_blacklist` tables.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import type { SQL } from "bun";
 import type { ErrorContext, PrivacyLevel, UserPersonalizationConfigsRow, UserRow } from "@/types/db/schema";
 import { PrivacyLevel as PrivacyLevelValue, userSchema } from "@/types/db/schema";
@@ -17,7 +11,6 @@ import { log } from "@/utils/misc/logger";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import type { IRepository } from "./IRepository";
 
-/** Export shape for a single user's portable settings. */
 type UserExportShape = PersonalSettingsExportData;
 
 const USER_PERSONALIZATION_FIELD_NAMES = [
@@ -65,12 +58,8 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
-/**
- * Every flag is scoped to the server being built for. An unscoped flag would admit
- * a silent lurker who personalized the bot elsewhere, and each extra owner of a
- * common name makes that name permanently unresolvable: the alias resolver drops
- * a name outright once two participants answer to it.
- */
+// Every flag must stay server-scoped because an unscoped match admits cross-server lurkers and makes shared names
+// unresolvable.
 export type ContextReferenceEligibilityEvidence = {
   hasServerActivity: boolean;
   hasPersonalMemories: boolean;
@@ -82,7 +71,6 @@ export interface ContextReferenceCandidate {
   evidence: ContextReferenceEligibilityEvidence;
 }
 
-/** Auto-created identity/default rows are not enough to load a user by alias. */
 export function isEligibleContextReferenceUserV1(
   user: UserRow,
   evidence: ContextReferenceEligibilityEvidence,
@@ -103,10 +91,6 @@ export function isEligibleContextReferenceUserV1(
 }
 
 class UserRepository implements IRepository<UserExportShape> {
-  /**
-   *
-   * @returns UserRow or null if not found
-   */
   async loadByDiscordId(userDiscId: string): Promise<UserRow | null> {
     try {
       return await withTransientDbRetry(async () => {
@@ -154,12 +138,6 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Finds users whose stored nickname matches the normalized form of the given string.
-   *
-   * @param normalizedNickname - Pre-normalized (lowercased, trimmed) nickname
-   * @returns Array of matching UserRow objects
-   */
   async findByNormalizedNickname(normalizedNickname: string): Promise<UserRow[]> {
     try {
       return await withTransientDbRetry(async () => {
@@ -213,11 +191,8 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Loads bounded reference candidates plus the evidence needed by eligibility
-   * policy v1. The participant pipeline owns the policy decision so injected
-   * sources and repository results follow the same pure contract.
-   */
+  // Eligibility filtering stays in the participant pipeline rather than SQL so injected sources and repository
+  // results share one pure contract.
   async loadContextReferenceCandidates(params: {
     serverDiscId: string;
     candidateDiscordIds: string[];
@@ -335,11 +310,6 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Returns the user's privacy level (0 = MINIMAL, 1 = PARTIAL, 2 = FULL).
-   * Defaults to MINIMAL if user not found.
-   *
-   */
   async getPrivacyLevel(userDiscId: string): Promise<PrivacyLevel> {
     try {
       const result = await withTransientDbRetry(
@@ -353,9 +323,7 @@ class UserRepository implements IRepository<UserExportShape> {
         "get privacy level",
       );
 
-      // A user with no row is genuinely new, and MINIMAL is the right default for them. This
-      // branch must not be merged with the failure path below: an absent row and an unreadable
-      // database are different facts, and only one of them permits a permissive answer.
+      // Missing rows represent new users (MINIMAL default), which must stay separate from DB errors that throw below.
       if (!result.length) {
         return PrivacyLevelValue.MINIMAL;
       }
@@ -369,28 +337,18 @@ class UserRepository implements IRepository<UserExportShape> {
 
       return level as PrivacyLevel;
     } catch (error) {
-      // Returning MINIMAL here treated a user who chose FULL (completely invisible) as fully
-      // personalizable for the duration of every pool cascade, because this catch cannot tell
-      // an unreadable database from a new user. Callers that cannot propagate must pick FULL.
+      // Throw on DB failures instead of returning MINIMAL so opt-out (FULL) users stay invisible during outages (callers
+      // that cannot propagate must default to FULL).
       log.error(`Error checking privacy level for user ${userDiscId}:`, error);
       throw new DatabaseUnavailableError(`Failed to read the privacy level for user ${userDiscId}`);
     }
   }
 
-  /**
-   * Returns true if the user has opted out of all personalization (privacy level FULL).
-   *
-   * @deprecated Use getPrivacyLevel() for granular checks.
-   */
   async isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
     const level = await this.getPrivacyLevel(userDiscId);
     return level === PrivacyLevelValue.FULL;
   }
 
-  /**
-   * Returns the user's cross-server short-term memory sharing preference.
-   *
-   */
   async getCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
     try {
       const cached = await getCachedUserRow(userDiscId);
@@ -412,10 +370,6 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Returns true if the user is blacklisted from a specific server.
-   *
-   */
   async isBlacklisted(serverDiscId: string, userDiscId: string): Promise<boolean> {
     try {
       const result = await withTransientDbRetry(
@@ -435,17 +389,12 @@ class UserRepository implements IRepository<UserExportShape> {
       // biome-ignore lint/style/noNonNullAssertion: Query guarantees result[0] exists.
       return result[0]!.exists;
     } catch (error) {
-      // Returning false meant a moderation control that evaporated whenever the database
-      // hiccuped. Callers that cannot propagate must treat the restriction as still in force.
+      // Throw on DB errors instead of returning false so blacklist restrictions fail closed during outages.
       log.error(`Error checking blacklist for user ${userDiscId} in server ${serverDiscId}:`, error);
       throw new DatabaseUnavailableError(`Failed to read the blacklist entry for user ${userDiscId}`);
     }
   }
 
-  /**
-   * Returns the list of blacklisted user Discord IDs for a server.
-   *
-   */
   async getBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
       const result = await sql`
@@ -467,47 +416,25 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Registers a user while preserving existing preferences on conflict.
-   * The observed Discord display name is diagnostic only. A null saved nickname
-   * keeps the user's name linked to their live Discord profile until they opt in
-   * to a custom name.
-   * Invalidates the user cache after write.
-   *
-   * @param language - Registration locale
-   * @returns UserRow on success, null on failure
-   */
+  // Observed displayName stays diagnostic rather than saving as user_nickname so null keeps the user's name linked to
+  // their live Discord profile.
   async register(userDiscId: string, displayName: string, language = "en"): Promise<UserRow | null> {
     const user = await this.registerUserRow(userDiscId, displayName, language);
     if (user) invalidateUserCache(userDiscId);
     return user;
   }
 
-  /**
-   * Invalidates the user cache after write.
-   *
-   * @returns Updated UserRow or null on failure
-   */
   async setPrivacyLevel(userDiscId: string, level: PrivacyLevel): Promise<UserRow | null> {
     const user = await this.setPrivacyLevelRow(userDiscId, level);
     if (user) invalidateUserCache(userDiscId);
     return user;
   }
 
-  /**
-   * @deprecated Use setPrivacyLevel() directly.
-   */
   async setPrivacyOptOut(userDiscId: string, optedOut: boolean): Promise<UserRow | null> {
     const level = optedOut ? PrivacyLevelValue.FULL : PrivacyLevelValue.MINIMAL;
     return this.setPrivacyLevel(userDiscId, level);
   }
 
-  /**
-   * Toggles cross-server short-term memory opt-in for a user.
-   * Invalidates the user cache after write.
-   *
-   * @returns New opt-in state
-   */
   async toggleCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
     try {
       const [updated] = await sql`
@@ -534,18 +461,12 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Updates arbitrary user fields. Validates against the user schema before writing.
-   * Invalidates the user cache after write.
-   *
-   */
   async update(userId: number, userData: Partial<UserRow>): Promise<UserRow | null> {
     const user = await this.updateUserRow(userId, userData);
     if (user) invalidateUserCache(user.user_disc_id);
     return user;
   }
 
-  /** Invalidates only the per-server blacklist cache slot. */
   async removeBlacklistEntry(serverId: number, userDiscId: string, serverDiscId: string): Promise<boolean> {
     try {
       await sql`
@@ -599,14 +520,6 @@ class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  /**
-   * Upserts a personal spotlight for a user in a channel, replacing all persona
-   * associations atomically.
-   *
-   * @param personaIds          - Tomori IDs to allow in the spotlight
-   * @param autoTriggerPersonaId - Tomori ID to auto-trigger, or null
-   * @param expiresAt           - Expiry timestamp, or null for permanent
-   */
   async replacePersonalSpotlight(
     serverId: number,
     userId: number,
@@ -676,11 +589,6 @@ class UserRepository implements IRepository<UserExportShape> {
     });
   }
 
-  /**
-   * Deletes a personal spotlight entry for a user in a specific channel.
-   *
-   * @returns true if a row was deleted
-   */
   async removePersonalSpotlight(serverId: number, userId: number, channelDiscId: string): Promise<boolean> {
     const result = await sql`
       DELETE FROM personal_spotlights
@@ -692,12 +600,8 @@ class UserRepository implements IRepository<UserExportShape> {
     return result.count > 0;
   }
 
-  /**
-   * Reports whether a server has any personal spotlight rows.
-   *
-   * Lets the cache layer skip {@link getPersonalSpotlightStatus}, which issues a DELETE before its
-   * SELECT and is keyed per user per channel, when the answer is the same server-wide.
-   */
+  // Cache layer calls this first so servers without spotlights skip getPersonalSpotlightStatus and its per-user
+  // DELETE before SELECT.
   async serverHasPersonalSpotlights(serverId: number): Promise<boolean> {
     const [row] = await sql<{ exists: boolean }[]>`
       SELECT EXISTS (
@@ -708,12 +612,6 @@ class UserRepository implements IRepository<UserExportShape> {
     return row?.exists ?? false;
   }
 
-  /**
-   * Loads the current personal spotlight status for a user in a channel, pruning
-   * expired entries and orphaned spotlights (no remaining personas) first.
-   *
-   * @returns PersonalSpotlightStatus or null if none active
-   */
   async getPersonalSpotlightStatus(
     serverId: number,
     userId: number,
@@ -761,17 +659,11 @@ class UserRepository implements IRepository<UserExportShape> {
       return status;
     }
 
-    // Orphaned spotlight: remove it so it doesn't accumulate
+    // Zero-persona rows are orphaned after persona deletion, so prune them to avoid stale buildup.
     await this.removePersonalSpotlight(serverId, userId, channelDiscId);
     return null;
   }
 
-  /**
-   * Returns all active personal spotlights for a user in a server, pruning expired
-   * and orphaned entries first.
-   *
-   * @returns Sorted array of active PersonalSpotlightStatus entries
-   */
   async getActivePersonalSpotlightsForUser(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]> {
     await this.deleteExpiredPersonalSpotlights(serverId, userId);
 
@@ -832,12 +724,6 @@ class UserRepository implements IRepository<UserExportShape> {
     return spotlights;
   }
 
-  /**
-   * Returns true if the given personaId is permitted by the spotlight status.
-   * A null spotlight means no restriction: all personas are allowed.
-   *
-   * @param spotlightStatus - Current spotlight, or null/undefined if none
-   */
   isPersonaAllowedByPersonalSpotlight(
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
     personaId: number | null | undefined,
@@ -853,12 +739,6 @@ class UserRepository implements IRepository<UserExportShape> {
     return spotlightStatus.personaIds.includes(personaId);
   }
 
-  /**
-   * Filters a persona array to only those allowed by the given spotlight status.
-   * Returns all personas unchanged when spotlightStatus is null/undefined.
-   *
-   * @param spotlightStatus - Current spotlight filter, or null/undefined
-   */
   filterPersonasByPersonalSpotlight<T extends { persona_id?: number | null | undefined }>(
     personas: readonly T[],
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
@@ -988,12 +868,6 @@ class UserRepository implements IRepository<UserExportShape> {
     `;
   }
 
-  /**
-   * Exports a user's portable settings for data portability (GDPR etc.).
-   * The ownerId is the Discord snowflake of the user.
-   *
-   * @returns UserExportShape or null if the user has no data
-   */
   async toExportShape(ownerId: string | number): Promise<UserExportShape | null> {
     const userDiscId = String(ownerId);
     const user = await this.loadByDiscordId(userDiscId);
@@ -1036,13 +910,6 @@ class UserRepository implements IRepository<UserExportShape> {
     };
   }
 
-  /**
-   * Imports a previously exported user settings shape, merging into the existing row.
-   * Account identity stays on users; durable user settings write to user_personalization_configs.
-   * Creates the user row first if it doesn't exist.
-   *
-   * @returns true on success, false on validation or write failure
-   */
   async fromExportShape(ownerId: string | number, data: UserExportShape): Promise<boolean> {
     const userDiscId = String(ownerId);
     const validated = personalSettingsExportDataSchema.safeParse(data);
@@ -1212,9 +1079,8 @@ class UserRepository implements IRepository<UserExportShape> {
     try {
       log.info(`Ensuring user ${userDiscId} exists (${displayName})`);
 
-      // Wrapped where the raw driver error can still reach the helper: a `try/catch` inside the
-      // thunk would hand it a resolved value and the retry would never fire. Replay-safe because
-      // both writes are `ON CONFLICT DO NOTHING`.
+      // Replay-safe (both writes are ON CONFLICT DO NOTHING); wrapped outside any catch so raw driver errors reach the
+      // retry helper.
       await withTransientDbRetry(async () => {
         await sql.begin(async (tx) => {
           const [row] = await tx`
@@ -1449,19 +1315,8 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /**
-   * Erases a user's own record, cascading every personal table.
-   *
-   * `users` is the cascade root for the personal tables (memories, personalization config,
-   * persona naming preferences, spotlights, saved provider configs, custom endpoint connections,
-   * scoped model registrations, conditioning history, stat counters). The four remaining
-   * references are ON DELETE SET NULL, so server memories, reminders, uploaded documents, and
-   * error logs survive with the authorship link severed rather than deleting content a server
-   * owns. The Privacy Policy describes exactly this split.
-   *
-   * Spotlight server ids are read inside the same transaction before the delete because the
-   * cascade destroys the rows that post-commit cache invalidation needs to target.
-   */
+  // Deleting the user cascades personal rows while anonymizing server-owned ones, so spotlight server IDs must be
+  // read before the delete for cache invalidation.
   async nukeUser(userId: number): Promise<PersonalNukeResult | null> {
     try {
       return await sql.begin(async (tx: SQL) => {
@@ -1476,10 +1331,8 @@ class UserRepository implements IRepository<UserExportShape> {
           SELECT DISTINCT server_id FROM personal_spotlights WHERE user_id = ${userId}
         `;
 
-        // Reminders are ON DELETE SET NULL, so the cascade alone would leave both halves behind:
-        // one the user authored (their own prose and schedule, firing forever with a null creator
-        // nobody can claim) and one aimed at them (their Discord id and nickname, held by a row
-        // somebody else created). An erasure has to reach both.
+        // Delete reminders explicitly before erasing the user because ON DELETE SET NULL would leave authored schedules
+        // and Discord-ID targets intact.
         const reminders = await tx`
           DELETE FROM reminders
           WHERE created_by_user_id = ${userId} OR user_discord_id = ${user.user_disc_id}
@@ -1500,7 +1353,6 @@ class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  /** Whether migration 131 or the purge script left `webhook_user_cleanup` rows to merge. */
   async hasPendingWebhookUserCleanup(): Promise<boolean> {
     // Checked first because clean installs record migration 131 without running it, so the table may not exist.
     const [table] = await sql<Array<{ present: boolean }>>`
@@ -1513,13 +1365,8 @@ class UserRepository implements IRepository<UserExportShape> {
     return queue?.pending === true;
   }
 
-  /**
-   * Moves the stat counters of the users rows queued in `webhook_user_cleanup` (shared persona webhooks,
-   * queued by migration 131 or `scripts/maintenance/purge-webhook-users.ts`) onto the bot account's row,
-   * deletes those rows, and empties the queue, so server and persona spend totals survive.
-   *
-   * @returns The deleted rows' Discord IDs for cache invalidation, or null when no cleanup is pending.
-   */
+  // Stat counters are rolled onto the bot user before deleting queued webhook user rows so server and persona spend
+  // totals survive.
   async mergeWebhookUsersIntoBot(botUserId: number): Promise<string[] | null> {
     return sql.begin(async (tx: SQL) => {
       const [table] = await tx<Array<{ present: boolean }>>`
@@ -1571,12 +1418,10 @@ class UserRepository implements IRepository<UserExportShape> {
   }
 }
 
-/** Outcome of a successful personal erasure, carrying the keys post-commit invalidation needs. */
 interface PersonalNukeResult {
   userDiscId: string;
   affectedServerIds: number[];
   remindersDeleted: number;
 }
 
-/** Singleton instance: import this in callers. */
 export const userRepository = new UserRepository();

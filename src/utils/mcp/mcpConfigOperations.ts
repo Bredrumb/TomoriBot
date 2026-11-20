@@ -27,14 +27,16 @@ interface McpConnectionTestResult {
   unauthorized?: McpAuthorizationChallenge;
 }
 
-/** A validated registration waiting on sign-in; nothing about it is stored until the grant arrives. */
+// Nothing about this draft is persisted until the OAuth grant arrives, so abandoned sign-ins leave no stored
+// registration.
 export interface McpSignInDraft {
   serverId: number;
   serverDiscId: string;
   name: string;
   url: string;
   serverType: McpServerType;
-  /** Set by Reconnect, whose grant replaces this registration's instead of adding one. */
+  // Reconnect sets this ID so completeSignIn replaces the existing registration's grant instead of creating a new
+  // one.
   guildMcpId?: number;
 }
 
@@ -79,7 +81,6 @@ export type AddMcpResult =
   | { status: "sign-in-required"; draft: McpSignInDraft; challenge: McpAuthorizationChallenge }
   | { status: "duplicate-or-write-failed"; name: string };
 
-/** Why a 401 on add did not become a sign-in: the bot has no callback address, or the workspace is a DM. */
 export type McpSignInHint = "unconfigured" | "dm";
 
 export type CompleteMcpSignInResult = Exclude<AddMcpResult, { status: "sign-in-required" }>;
@@ -154,7 +155,8 @@ export class McpConfigOperations {
     url: string;
     authToken?: string;
     serverType?: string | null;
-    /** Guild workspaces only, because a sign-in acts as one external account for every member. */
+    // This option is for guild workspaces only because OAuth sign-in binds one external account shared by every guild
+    // member.
     allowSignIn?: boolean;
   }): Promise<AddMcpResult> {
     const name = normalizeMcpName(input.name);
@@ -243,7 +245,7 @@ export class McpConfigOperations {
     };
   }
 
-  /** Admission runs again because other changes may have landed while the admin was signing in. */
+  // Admission runs again here because concurrent config changes may have landed while the admin was signing in.
   public async completeSignIn(draft: McpSignInDraft, grant: GuildMcpOAuthGrant): Promise<CompleteMcpSignInResult> {
     if (draft.guildMcpId === undefined) {
       const refusal = await this.admit(draft.serverId, draft.serverType);

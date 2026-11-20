@@ -1,8 +1,3 @@
-/**
- * Google Tool Adapter
- * Converts generic tools to Google's function declaration format and back
- */
-
 import { Type } from "@google/genai";
 import { log } from "../../utils/misc/logger";
 import type {
@@ -42,9 +37,6 @@ interface GoogleObjectSchema extends GoogleParameterSchema {
   required: string[];
 }
 
-/**
- * Google tool adapter implementation with MCP capabilities
- */
 export class GoogleToolAdapter implements MCPCapableToolAdapter {
   private static instance: GoogleToolAdapter;
 
@@ -59,10 +51,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     return "google";
   }
 
-  /**
-   * Convert a generic tool to Google's function declaration format
-   * @param tool - The generic tool to convert
-   */
   convertTool(tool: Tool): Record<string, unknown> {
     try {
       const googleFunction: GoogleFunctionDeclaration = {
@@ -82,14 +70,8 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert tool result back to Google-specific format
-   * This is used when the tool execution result needs to be fed back to Gemini
-   * @param result - The generic tool result
-   */
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
-      // Google expects a Part object with text content
       if (result.success) {
         let resultText = result.message || "Tool executed successfully";
 
@@ -132,9 +114,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert multiple tools to Google's tools array format
-   */
   convertToolsArray(tools: Tool[]): Array<Record<string, unknown>> {
     if (tools.length === 0) {
       return [];
@@ -143,7 +122,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     try {
       const functionDeclarations = tools.map((tool) => this.convertTool(tool));
 
-      // Google expects tools in this specific format
       return [
         {
           functionDeclarations: functionDeclarations,
@@ -158,12 +136,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Get all available tools (built-in + MCP) in provider-specific format
-   * Implementation of MCPCapableToolAdapter interface
-   * @param serverId - Optional Discord server ID for server-specific tool selection
-   * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
     serverId?: number,
@@ -172,13 +144,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     return this.getAllToolsInGoogleFormat(builtInTools, serverId, allowedMCPFunctions);
   }
 
-  /**
-   * Get all available tools (built-in + MCP) in Google tools format
-   * This provides a unified interface for the provider to get all tools
-   * @param serverId - Optional Discord server ID for server-specific tool selection
-   * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined Google tools configuration with conditional search tool filtering
-   */
   async getAllToolsInGoogleFormat(
     builtInTools: Tool[],
     serverId?: number,
@@ -187,9 +152,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     try {
       const allFunctionDeclarations: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed: the unified `web_search` tool is gated centrally
-      // in `availability.ts` via `requiresFeatureFlag = "web_search"`, and the
-      // engine chain inside the tool decides Brave-vs-SearXNG-vs-DuckDuckGo at call time.
       if (builtInTools.length > 0) {
         const builtInDeclarations = builtInTools.map((tool) => this.convertTool(tool));
         allFunctionDeclarations.push(...builtInDeclarations);
@@ -239,9 +201,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Convert generic parameter type to Google Type enum
-   */
   private convertParameterType(genericType: ToolParameterType): GoogleTypeValue {
     switch (genericType) {
       case "string":
@@ -303,9 +262,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     };
   }
 
-  /**
-   * Extract relevant data from tool result for Google response
-   */
   private extractRelevantData(data: Record<string, unknown>): string | null {
     try {
       if (Object.keys(data).length === 0) {
@@ -319,9 +275,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
   }
 
-  /**
-   * Validate that a tool can be converted to Google format
-   */
   validateToolCompatibility(tool: Tool): boolean {
     try {
       if (!tool.name || !tool.description || !tool.parameters) {

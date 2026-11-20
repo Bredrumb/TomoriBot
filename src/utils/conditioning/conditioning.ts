@@ -248,7 +248,8 @@ const CONTEXT_PAST_PARTICIPLES: Record<ConditioningType, Record<ConditioningActi
   },
 };
 
-/** Reasons are shown in the conditioning panel, so they are capped rather than free-form. */
+// Capped at 250 characters rather than free-form because conditioning reasons are displayed in the conditioning
+// panel.
 export const CONDITIONING_REASON_MAX_LENGTH = 250;
 export const CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE = 10;
 

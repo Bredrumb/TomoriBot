@@ -1,10 +1,8 @@
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Agendas the given persona owns among the history messages. A failed read only loses the
- * reminder, so it never blocks the turn.
- */
+// Swallows read failures and returns an empty map because losing the reminder is acceptable and must never block the
+// turn.
 export async function loadPersonaAgendas(
   personaId: number | null | undefined,
   messageIds: readonly string[],
@@ -26,5 +24,6 @@ export function agendaNoticeId(messageId: string): string {
   return `synthetic-nudge-agenda-${messageId}`;
 }
 
-/** Synthetic author for agenda notices, distinct from every real author so the opener never merges into it. */
+// Synthetic author ID distinct from all real authors so message-merging logic never merges the opener into an agenda
+// notice.
 export const AGENDA_NOTICE_AUTHOR_ID = "synthetic-nudge-agenda";

@@ -5,19 +5,14 @@ import {
   validateComponentsV2MessageLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
 
-/**
- * Fence lengths that stress the fence-escaping path: 3 opens a fence, and 4-8 cover the runs a
- * naive escaper would let terminate or extend it.
- */
+// Backtick lengths 3 and 4-8 are tested because 3 opens a markdown fence while 4-8 cover runs a naive escaper would
+// let close or extend it.
 export const BACKTICK_RUNS: readonly number[] = [3, 4, 5, 6, 8];
 
 export const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
 
 const MARKDOWN_FENCE_OPEN = "```markdown\n";
 
-/**
- * Collect the content of every Text Display in a payload, in walk order.
- */
 export function collectTextDisplays(value: unknown): string[] {
   const contents: string[] = [];
   const visit = (current: unknown): void => {
@@ -36,10 +31,6 @@ export function collectTextDisplays(value: unknown): string[] {
   return contents;
 }
 
-/**
- * Assert a panel payload fits Discord's Components V2 limits, carries no lone surrogate, and keeps
- * user text inside a markdown fence from forming an adjacent backtick pair that could close it.
- */
 export function expectSafePanelPayload(payload: ComponentsV2MessagePayload, label: string): void {
   const result = validateComponentsV2MessageLimits(payload);
   expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);

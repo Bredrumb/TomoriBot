@@ -25,7 +25,6 @@ const UNSUPPORTED_FLAGS = [
 
 const UNSUPPORTED_TIMING = ["sticky", "cooldown", "delay"] as const;
 
-/** True when the entry carries activation settings this destination cannot store. */
 function hasUnsupportedWorldInfoFields(entry: Record<string, unknown>): boolean {
   if ((getSillyTavernString(entry, "group") ?? "") !== "") return true;
   if ((getSillyTavernString(entry, "outletName") ?? "") !== "") return true;
@@ -37,7 +36,8 @@ function hasUnsupportedWorldInfoFields(entry: Record<string, unknown>): boolean 
   return Array.isArray(entry.triggers) && entry.triggers.length > 0;
 }
 
-/** SillyTavern positions 2 to 7 have no destination here, so those entries collapse to before the persona and are counted. */
+// SillyTavern positions 2 to 7 have no destination here, so those entries collapse to before the persona and are
+// counted.
 export function convertWorldInfoFile(root: unknown): LorebookConversion | null {
   const file = asSillyTavernObject(root);
   const keyedEntries = asSillyTavernObject(file?.entries);

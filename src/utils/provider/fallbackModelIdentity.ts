@@ -6,7 +6,6 @@ export function getFallbackModelRefKey(ref: FallbackModelRef): string {
   return `${ref.type}:${ref.id}${ref.type === "llm" && ref.credentialProvider === "supporter" ? ":supporter" : ""}`;
 }
 
-/** Returns every stored ref key that resolves to the active synthetic or catalog LLM. */
 export function getPrimaryFallbackRefKeys(
   primaryLlmId: number | null | undefined,
   endpoints: Iterable<FallbackIdentityEndpoint> = [],

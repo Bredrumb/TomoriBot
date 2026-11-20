@@ -26,12 +26,6 @@ export const configureCommand = (command: SlashCommandBuilder) =>
 
 export const autocomplete = handleServerPersonaAutocomplete;
 
-/**
- * Shows how much of the model's context window a persona's prompt fills in this channel. Token
- * counts are open to every member; the full-prompt buttons follow the prompt snapshot setting.
- *
- * @param userData - Invoker's user row, passed to buildContext so STM loads correctly
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,

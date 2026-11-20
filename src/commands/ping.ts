@@ -15,7 +15,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Defer reply for timing measurement
   await interaction.deferReply();
 
   const reply = await interaction.fetchReply();

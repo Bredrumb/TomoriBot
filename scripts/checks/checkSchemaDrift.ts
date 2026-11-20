@@ -8,10 +8,8 @@ interface Issue {
 
 const issueList: Issue[] = [];
 
-// Intentional export exclusions: these tables hold resettable telemetry/counters,
-// not portable server/persona configuration. stat_counters is the same class of
-// high-frequency runtime telemetry (it omits the `_runtime_state` suffix only
-// because it is a per-day counter table, not a single-row state row).
+// Exclude resettable runtime telemetry tables from portable export; stat_counters omits `_runtime_state` as a per-day
+// counter table.
 const RUNTIME_STATE_EXPORT_EXCLUDED_TABLES = new Set([
   "api_key_rotation_runtime_state",
   "persona_autoch_runtime_state",
@@ -529,11 +527,8 @@ function checkInsertCounts(dbWrite: string, tableName: string): void {
   });
 }
 
-// Export keys that are produced as nested objects/arrays by a dedicated repository
-// (ShortTermMemoryRepository.toExportShape) rather than flat SQL column SELECTs and a
-// per-table column export schema. They are still emitted by ExportRepository and
-// restored by ImportRepository (both verified below), so only the flat-column SELECT
-// alias and per-table composition rules are exempted for them.
+// Exempt nested repository-sourced exports from flat-column SELECT alias and per-table schema checks; emit and restore
+// still run below.
 const REPOSITORY_SOURCED_EXPORT_KEYS = new Set(["stm_config", "stm_categories"]);
 
 // Legacy degrees are import-only input, so only the import-restore rule applies.
@@ -1167,20 +1162,8 @@ function checkRuntimeStateExportExclusions(schemaSql: string): void {
   }
 }
 
-/**
- * Soft-warning (console.warn only, no CI failure) that fires when any
- * `*_configs` table created in a migration file exceeds the 15-column
- * fission threshold.  Tables on the exemption list are structural exceptions
- * where column growth is justified by their access pattern.
- *
- * Exemptions:
- *   server_capabilities_configs: uniform boolean cluster iterated by
- *     PERMISSION_DEFINITIONS array; growth is structurally uniform.
- *   saved_provider_configs: atomic snapshot table; all columns are written
- *     together as a unit by /server save-provider.
- *   server_chat_configs: aggregate /config + /model parameter surface;
- *     each column maps to exactly one command option knob.
- */
+// EXEMPT_TABLES stays limited to tables justified by access pattern (uniform flags, atomic snapshots, or 1:1 command
+// knobs) because others should split.
 async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void> {
   const EXEMPT_TABLES = new Set(["server_capabilities_configs", "saved_provider_configs", "server_chat_configs"]);
   const COLUMN_THRESHOLD = 15;

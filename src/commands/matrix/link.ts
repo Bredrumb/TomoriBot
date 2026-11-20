@@ -1,12 +1,3 @@
-/**
- * /matrix link
- * Links a Discord channel to a Matrix room for bidirectional message relay.
- * Uses upsert semantics so re-linking replaces any existing mapping.
- *
- * Interaction pattern: Pattern 2 (defer before async work)
- * Permission required: ManageGuild
- */
-
 import {
   ChannelType,
   MessageFlags,
@@ -30,9 +21,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
-/**
- * Configure the /matrix link subcommand builder.
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("link")
@@ -51,11 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(true),
     );
 
-/**
- * Execute the /matrix link command.
- * Links the chosen Discord channel to the given Matrix room ID.
- *
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -87,7 +70,6 @@ export async function execute(
       return;
     }
 
-    // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (!isMatrixConfigured()) {
@@ -115,7 +97,6 @@ export async function execute(
     const channel = interaction.options.getChannel("channel", true);
     const roomId = interaction.options.getString("room", true).trim();
 
-    // Validate Matrix room ID format: must start with "!" and contain ":"
     if (!roomId.startsWith("!") || !roomId.includes(":")) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,

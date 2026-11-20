@@ -166,14 +166,6 @@ interface PersonaMemoryScopeRow extends PersonaLabelProjectionRow {
   persona_id: DatabaseId;
 }
 
-/**
- * ExportRepository: owns all data export operations.
- *
- * Handles personal and server data export, per-domain slice exports
- * (memories, settings, config, personality), JSON sanitization, and
- * schema validation. Export operations are read-only; no cache
- * invalidation is performed here.
- */
 export class ExportRepository {
   private readonly database: typeof sql;
 
@@ -181,13 +173,7 @@ export class ExportRepository {
     this.database = database;
   }
 
-  /**
-   * Sanitizes a string for safe JSON serialization.
-   * Removes control characters (except newlines and tabs) that could break JSON.
-   * @returns Object with sanitized content and flag indicating if sanitization occurred
-   */
   private sanitizeForJson(content: string): { sanitized: string; wasSanitized: boolean } {
-    // Remove null bytes and control characters except \n (0x0A) and \t (0x09)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
     const cleaned = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "");
     return { sanitized: cleaned, wasSanitized: cleaned !== content };
@@ -224,13 +210,6 @@ export class ExportRepository {
     );
   }
 
-  /**
-   * Exports personal user data (nickname, language preference, impersonation prompt, memories).
-   * @param userDiscId - Discord user ID to export data for
-   * @param personaLineageId - Persona lineage namespace to export memories from
-   * @param includeGlobalMemories - Include lineage-0 memories when exporting a non-zero lineage
-   * @returns ExportResult containing the exported data or error
-   */
   async exportPersonalData(
     userDiscId: string,
     personaLineageId = 0,
@@ -282,7 +261,6 @@ export class ExportRepository {
         tags: row.tags ?? [],
       }));
 
-      // Sanitize memories for safe JSON export
       const sanitizedMemories = this.sanitizeMemoryItems(rawPersonalMemories, "personal memories");
 
       const exportData: PersonalExport = {
@@ -310,12 +288,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports server data (configuration and server memories).
-   * @param serverDiscId - Discord server ID to export data for
-   * @param personaId - Optional persona ID to export persona-scoped server memories from
-   * @returns ExportResult containing the exported data or error
-   */
   async exportServerData(serverDiscId: string, personaId?: number): Promise<ExportResult> {
     try {
       const serverRows = await sql`
@@ -331,8 +303,7 @@ export class ExportRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // Get tomori configuration: 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
-      //    COALESCE defaults are belt-and-suspenders for the migration window (servers without a split row).
+      // COALESCE defaults apply when a server is missing a secondary split-config row.
       const configRows = await sql`
         SELECT
           COALESCE(smc.llm_temperature, 1.0)                        AS llm_temperature,
@@ -523,7 +494,6 @@ export class ExportRepository {
         legacy_channel_tags: row.legacy_channel_tags ?? [],
       }));
 
-      // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
       const lore = await lorebookRepository.listScope(serverId, targetPersonaLineageId);
@@ -532,9 +502,7 @@ export class ExportRepository {
         return { success: false, error: "commands.data.export.error_export_failed" };
       }
 
-      // Per-channel STM state is intentionally excluded from the export: only the
-      // reusable customization (cadence, render mode, prompt overrides, categories)
-      // is portable across servers.
+      // Exclude per-channel STM state because only cadence, render mode, prompt overrides, and categories are portable.
       const stmExport = await shortTermMemoryRepository.toExportShape(serverDiscId);
 
       const exportData: ServerExport = {
@@ -631,7 +599,6 @@ export class ExportRepository {
             memory_tagging_enabled: configData.memory_tagging_enabled,
             channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
-            // STM customization (nested config object + ordered categories array).
             stm_config: stmExport?.stm_config ?? null,
             stm_categories: stmExport?.stm_categories ?? [],
           },
@@ -654,10 +621,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports personal settings only (nickname, language, impersonation prompt, image appearance data).
-   * @param userDiscId - Discord user ID to export data for
-   */
   async exportPersonalSettings(userDiscId: string): Promise<ExportResult> {
     try {
       const rows = await sql`
@@ -751,10 +714,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports the portable workspace configuration in the v2 sectioned format.
-   * The read is scoped to configuration tables so memory rows are never loaded.
-   */
   async exportWorkspaceConfig(serverDiscId: string): Promise<ExportResult> {
     try {
       const configRows = await this.database<Array<WorkspaceConfigProjectionRow>>`
@@ -1042,10 +1001,7 @@ export class ExportRepository {
     };
   }
 
-  /**
-   * Exports the portable personal configuration in the v2 sectioned format.
-   * The query omits naming lineage data because it cannot be rebound safely.
-   */
+  // Naming lineage data is intentionally omitted because it cannot be rebound safely on import.
   async exportPersonalConfig(userDiscId: string): Promise<ExportResult> {
     try {
       const rows = await this.database<Array<PersonalConfigProjectionRow>>`
@@ -1408,12 +1364,6 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports personality data as a human-readable text file.
-   * @param serverDiscId - Discord server ID to export personality for
-   * @param personaId - Optional persona ID to export personality for
-   * @returns PersonalityExportResult containing formatted text or error
-   */
   async exportPersonalityData(serverDiscId: string, personaId?: number): Promise<PersonalityExportResult> {
     try {
       const rows =
@@ -1503,16 +1453,10 @@ export class ExportRepository {
     }
   }
 
-  /**
-   * Exports a user's full personal data bundle (IRepository contract).
-   * The ownerId is the Discord snowflake of the user.
-   * @param ownerId - Discord user snowflake
-   */
   async toExportShape(ownerId: string | number): Promise<ExportResult | null> {
     const result = await this.exportPersonalData(String(ownerId));
     return result.success ? result : null;
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const exportRepository = new ExportRepository();

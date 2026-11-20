@@ -35,7 +35,6 @@ function makeMember(params: {
   } as unknown as GuildMember;
 }
 
-/** Yields long enough for the onboarding lookup inside `waitForWelcomeGate` to settle. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe("isWelcomeGateOpen", () => {

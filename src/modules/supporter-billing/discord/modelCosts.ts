@@ -16,10 +16,7 @@ import { localizer } from "@/utils/text/localizer";
 // Measured from 274 subscription text replies (4.53M input, 178K output tokens); remeasure when the default text model changes.
 const TEXT_INPUT_TOKENS_PER_OUTPUT_TOKEN = 25;
 
-/**
- * Output-image tokens per image at each model's 1K default, since requests send no size; token-priced
- * models absent here show no ratio (GPT Image's "auto" quality spans roughly 270-23,700 tokens).
- */
+// Requests omit image size, so these image token estimates use each model's 1K default.
 const IMAGE_TOKENS_PER_IMAGE: Readonly<Record<string, number>> = {
   "google/gemini-2.5-flash-image": GEMINI_2_5_IMAGE_TOKENS,
   "google/gemini-3-pro-image": 1_120,
@@ -99,7 +96,7 @@ function toSupporterCapability(capability: ProviderOptionCapability): SupporterC
   }
 }
 
-/** Reduces a price to one comparable unit; mixed or unconvertible units resolve null, so no ratio is shown. */
+// Mixed or unconvertible units return null so incomparable prices never produce a ratio.
 export function unitCost(codename: string, pricing: ChoicePricing | null | undefined): UnitCost | null {
   if (!pricing) return null;
   if (!isMediaRates(pricing)) {

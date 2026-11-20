@@ -34,9 +34,7 @@ export async function validateElevenLabsApiKey(apiKey: string): Promise<ElevenLa
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Use /v1/voices for validation , so accessible with TTS permissions alone,
-    // unlike /v1/user/subscription which requires account:read scope and
-    // returns 401 (not 403) for fine-grained STT/TTS-only keys.
+    // /v1/voices works with TTS-only keys, whereas /v1/user/subscription requires account:read and returns 401.
     const response = await fetch(`${ELEVENLABS_API_BASE_URL}/v1/voices`, {
       method: "GET",
       headers: {
@@ -55,9 +53,7 @@ export async function validateElevenLabsApiKey(apiKey: string): Promise<ElevenLa
       responseJson = null;
     }
 
-    // Only 401 means the key itself is invalid or revoked. Any other status
-    // (including 403) means the key authenticated but lacks this specific scope,
-    // which is still a valid key.
+    // Only 401 means an invalid or revoked key because 403 and other statuses mean the key lacks this scope.
     if (response.status === 401) {
       const detail = typeof responseJson?.detail === "string" ? responseJson.detail : `HTTP 401`;
       return {

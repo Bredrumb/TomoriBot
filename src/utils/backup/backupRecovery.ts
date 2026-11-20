@@ -8,10 +8,8 @@ import {
   verifyCiphertext,
 } from "@/utils/security/encryptedColumns";
 
-/**
- * Validates pg_dump's default COPY format before destructive restore. Credential INSERT dumps
- * need a separate parser before they can be admitted; the backup command never produces them.
- */
+// Only pg_dump COPY format is parsed because backups never emit credential INSERT dumps, which need a separate parser
+// before admission.
 async function* scanBackupCredentials(dumpPath: string): AsyncGenerator<{ ciphertext: Buffer; version: number }> {
   const input = createReadStream(dumpPath, { encoding: "utf8" });
   const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
@@ -60,14 +58,13 @@ async function* scanBackupCredentials(dumpPath: string): AsyncGenerator<{ cipher
   }
 }
 
-/** Capture the dump's actual version tags without making data preservation depend on decryption. */
 export async function inspectBackupKeyVersions(dumpPath: string): Promise<number[]> {
   const versions = new Set<number>();
   for await (const credential of scanBackupCredentials(dumpPath)) versions.add(credential.version);
   return [...versions].sort((a, b) => a - b);
 }
 
-/** Prove that separately provisioned keys recover every credential before destructive SQL runs. */
+// Credential recovery verification runs before destructive restore SQL so invalid keys abort without data loss.
 export async function verifyBackupRecovery(client: SQL, dumpPath: string): Promise<number[]> {
   // Fresh targets need decryption before the dump can install its own extensions.
   try {

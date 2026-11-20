@@ -5,25 +5,13 @@ import { log } from "@/utils/misc/logger";
 import { isVerboseOutput } from "./lib/gateOutput";
 
 const DISCORD_LIMITS = {
-  /**
-   * Upper bound for `.setMaxLength()` on modal text inputs.
-   *
-   * Discord allows a modal text input `max_length` of 1-4000 (a slash-command
-   * string option allows up to 6000). Patterns 2 and 4 below share a single
-   * `.setMaxLength()` regex and cannot tell the two builders apart, so this
-   * uses the stricter of the two limits.
-   *
-   * Previously 256, which is not a Discord limit for either builder and
-   * produced five false positives on correct, shipped code.
-   */
+  // Discord caps modal inputs at 4000 (slash options at 6000), so shared `.setMaxLength()` checks use the stricter
+  // 4000 bound.
   MAX_TEXT_INPUT_LENGTH: 4000,
   MAX_CHOICE_COUNT: 25,
   MAX_SELECT_OPTIONS: 25,
 } as const;
 
-/**
- * Interface for tracking violations
- */
 interface Violation {
   file: string;
   line: number;
@@ -32,9 +20,6 @@ interface Violation {
   value?: string | number;
 }
 
-/**
- * Types of violations that can be detected
- */
 type ViolationType = "missing_max_length" | "exceeds_max_length" | "exceeds_choice_limit" | "exceeds_select_limit";
 
 interface AnalysisResult {
@@ -43,22 +28,14 @@ interface AnalysisResult {
   violationsByType: Map<ViolationType, number>;
 }
 
-/**
- * Extracts line number for a given match index in content
- */
 function getLineNumber(content: string, matchIndex: number): number {
   const beforeMatch = content.substring(0, matchIndex);
   return beforeMatch.split("\n").length;
 }
 
-/**
- * Checks if a TextInputBuilder or SlashCommandStringOption has proper maxLength
- */
 function checkStringLengthLimits(content: string, file: string): Violation[] {
   const violations: Violation[] = [];
 
-  // Pattern 1: TextInputBuilder - find the complete builder chain
-  // Match from 'new TextInputBuilder()' to the statement terminator (semicolon or ActionRowBuilder)
   const textInputPattern =
     /new\s+TextInputBuilder\s*\(\s*\)([\s\S]*?)(?=;|new\s+ActionRowBuilder|\.addComponents\(textInput\)|\.addComponents\(fallbackInput\))/g;
 
@@ -99,7 +76,6 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
   while (match !== null) {
     const optionBlock = match[0];
     if (!optionBlock.includes("setMaxLength") && !optionBlock.includes("setAutocomplete(true)")) {
-      // Only flag if it's not just an autocomplete field
       if (optionBlock.includes("setRequired(true)") || optionBlock.includes("setDescription")) {
         violations.push({
           file,
@@ -112,15 +88,9 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
     match = stringOptionPattern.exec(content);
   }
 
-  // Pattern 4: SlashCommandStringOption with maxLength > 256
-  // (reuse textInputExcessPattern since it's the same method name)
-
   return violations;
 }
 
-/**
- * Checks if choice arrays exceed Discord's 25-choice limit
- */
 function checkChoiceLimits(content: string, file: string): Violation[] {
   const violations: Violation[] = [];
 
@@ -147,9 +117,6 @@ function checkChoiceLimits(content: string, file: string): Violation[] {
   return violations;
 }
 
-/**
- * Checks if select menus exceed Discord's 25-option limit
- */
 function checkSelectMenuLimits(content: string, file: string): Violation[] {
   const violations: Violation[] = [];
 
@@ -185,9 +152,6 @@ function checkSelectMenuLimits(content: string, file: string): Violation[] {
   return violations;
 }
 
-/**
- * Main analysis function that scans all TypeScript files
- */
 async function analyzeDiscordLimits(): Promise<AnalysisResult> {
   log.info("🔍 Starting Discord API limits analysis...");
 
@@ -233,9 +197,6 @@ async function analyzeDiscordLimits(): Promise<AnalysisResult> {
   };
 }
 
-/**
- * Formats violation type into a human-readable category
- */
 function formatViolationType(type: ViolationType): string {
   const typeLabels: Record<ViolationType, string> = {
     missing_max_length: "Missing Max Length",
@@ -246,22 +207,16 @@ function formatViolationType(type: ViolationType): string {
   return typeLabels[type];
 }
 
-/**
- * Displays analysis results in a formatted way
- */
 function displayResults(results: AnalysisResult): void {
   const verboseOutput = isVerboseOutput();
   const violations = results.violations;
 
-  // A clean run gets one line. The banner, the summary block, and the closing
-  // encouragement are all scaffolding around "no violations", which is the whole report.
   if (violations.length === 0) {
     console.log(`✅ Discord API limits OK (${results.filesScanned} files scanned, 0 violations)`);
     return;
   }
 
-  // This gate runs in CI, where nobody can add a flag after the fact, so everything a
-  // failing run needs prints unconditionally. Only the banner framing it is optional.
+  // Print violation details unconditionally because CI cannot re-run with --verbose; only the banner is optional.
   if (verboseOutput) {
     console.log(`\n${"=".repeat(80)}`);
     console.log("🔍 DISCORD API LIMITS ANALYSIS RESULTS");
@@ -298,9 +253,6 @@ function displayResults(results: AnalysisResult): void {
   }
 }
 
-/**
- * Main execution function
- */
 async function main(): Promise<void> {
   try {
     const results = await analyzeDiscordLimits();

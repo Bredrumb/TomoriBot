@@ -88,8 +88,8 @@ describe("persona workflow boundary scanner, synthetic cases", () => {
   });
 
   it("permits in-place work and acknowledgement outside the selection callback", () => {
-    // The workflow's own acknowledgement lives in the message controller, and a command may
-    // legitimately defer before it ever calls the workflow. Neither may be flagged.
+    // Permit beginInPlaceWork and pre-workflow deferReply because neither bypasses the message controller's
+    // acknowledgement.
     const inPlaceWork = `
       await runPersonaPickerWorkflow(interaction, locale, {
         personas,
@@ -155,10 +155,8 @@ describe("persona workflow boundary scanner, synthetic cases", () => {
 
 describe("persona workflow boundary, real source tree", () => {
   it("scans the real tree rather than passing on an empty workload", async () => {
-    // Without this floor the audit passes vacuously: a moved solver directory, a changed audit root,
-    // or a relocated repo root empties `candidates`, so `violations` is trivially [] and the boundary
-    // reads as guarded while nothing was scanned. Deliberately well under the real count so ordinary
-    // churn is free and only a structural break trips it.
+    // Floor stays well below the live file count so ordinary churn passes while an empty scan still fails
+    // loudly.
     const { scannedFiles } = await auditPersonaWorkflowBoundary();
 
     expect(scannedFiles).toBeGreaterThan(300);

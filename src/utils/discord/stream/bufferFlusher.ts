@@ -26,9 +26,6 @@ type StreamBufferFlusherDependencies = {
   segmentProcessor: StreamSegmentProcessor;
 };
 
-/**
- * Owns streaming text buffer mutation and final/pending flush behavior.
- */
 export class StreamBufferFlusher {
   public constructor(private readonly deps: StreamBufferFlusherDependencies) {}
 
@@ -118,8 +115,7 @@ export class StreamBufferFlusher {
         DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
       );
 
-      // A zero index means every candidate breakpoint would split a markdown table. Hold the
-      // buffer instead, so the table stays whole and the final flush renders it as one image.
+      // A zero index means every breakpoint would split a markdown table, so hold the buffer until the final flush.
       if (flushIndex <= 0) {
         log.info("Stream Seg: Deferring oversized buffer flush to keep a markdown table intact");
         break;

@@ -1,19 +1,3 @@
-/**
- * Vertex AI streaming adapter
- *
- * Fork of GoogleStreamAdapter with one key difference: client construction
- * uses Vertex AI (ADC) instead of an API key.
- *
- * Everything else: context assembly, chunk normalisation, function-call
- * extraction, speaker guard, thought signatures, so is identical because
- * Vertex exposes the same Gemini wire format.
- *
- * Key changes from GoogleStreamAdapter:
- *   - startStream() constructs GoogleGenAI with vertexai:true via createVertexClient()
- *   - Provider name is "vertex" instead of "google"
- *   - buildTokenCountPayload() is not supported in v1 (throws)
- */
-
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
@@ -65,9 +49,6 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   Number.parseInt(process.env.VIDEO_CONTEXT_MAX_INLINE_MB ?? "20", 10) || 20,
 );
 
-/**
- * Vertex-specific stream configuration extending the base StreamConfig
- */
 export interface VertexStreamConfig extends StreamConfig {
   safetySettings?: Array<Record<string, unknown>>;
   generationConfig?: Record<string, unknown>;
@@ -80,9 +61,6 @@ export interface VertexStreamAdapterOptions {
   clientFactory?: (apiKey: string) => GoogleGenAI;
 }
 
-/**
- * Raw chunk from Google/Vertex streaming API (same wire format)
- */
 interface VertexStreamChunk {
   text?: string;
   functionCalls?: GoogleFunctionCall[];
@@ -98,12 +76,6 @@ interface VertexStreamChunk {
   error?: unknown;
 }
 
-/**
- * Vertex AI streaming adapter implementation
- *
- * Shares the same speaker-guard, deduplication, and thought-signature
- * logic as GoogleStreamAdapter because the response format is identical.
- */
 export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
@@ -112,10 +84,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
-  /**
-   * Latest `usageMetadata` seen on a raw Gemini stream chunk (native shape; the
-   * orchestrator normalizes it). Latest-wins matches Gemini's cumulative usage.
-   */
+  // Overwritten per chunk rather than summed because Gemini emits cumulative usageMetadata on stream chunks before
+  // the orchestrator normalizes it.
   private pendingUsage: Record<string, unknown> | undefined;
   protected readonly providerName: string;
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
@@ -136,14 +106,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       });
   }
 
-  /**
-   * Build a Gemini payload for token counting (or other non-stream requests)
-   * using the exact same context transformation and system-instruction fallback
-   * logic as streaming.
-   *
-   * NOTE: v1 does not support live token counting. This method is provided for
-   * future v2 compatibility and for the validation test call.
-   */
   public async buildTokenCountPayload(
     contextItems: StructuredContextItem[],
     model?: string,
@@ -178,12 +140,10 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info(`VertexStreamAdapter: Initializing ${this.providerName} streaming`);
 
-    // Build the provider client (ADC for Vertex, API key for Vertex Express)
     let genAI: GoogleGenAI;
     try {
       genAI = this.clientFactory(config.apiKey);
     } catch (parseError) {
-      // Surface provider-specific configuration/auth errors immediately
       const providerError = this.handleProviderError(parseError);
       yield {
         data: { error: providerError },
@@ -200,7 +160,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       safetySettings: vertexConfig_.safetySettings,
     };
 
-    // Speaker guard setup (same as Google)
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.pendingUsage = undefined;
@@ -223,13 +182,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       requestConfig.stopSequences = mergedStopSequences;
     }
 
-    // Thinking configuration (same as Google)
     if (vertexConfig_.thinkingConfig) {
       requestConfig.thinkingConfig = vertexConfig_.thinkingConfig;
       log.info("VertexStreamAdapter: Thinking mode enabled");
     }
 
-    // Assemble context (shared logic)
     const payload = await this.buildTokenCountPayload(
       context.contextItems,
       config.model,
@@ -283,11 +240,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           parts: modelParts,
         });
 
-        // Vertex classifies a turn carrying a functionResponse as a function-response turn and
-        // rejects it if it also carries inlineData or text. The turn then fails to count at all
-        // and the request reads as ending on the model's functionCall turn, surfacing as
-        // "Requests ending with a model turn are not supported". Tool media therefore rides in
-        // its own user turn, matching the OpenRouter adapter.
+        // Keep tool media in its own user turn because Vertex rejects inlineData or text inside a functionResponse turn.
         finalContents.push({
           role: "user",
           parts: [item.functionResponse as Part],
@@ -309,14 +262,12 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Ensure model is provided
     if (!config.model) {
       throw new Error("Model must be specified in config. Use VertexProvider.getDefaultModel() if needed.");
     }
 
     log.info(`Generating content with Vertex AI model ${config.model}`);
 
-    // Log sanitized request
     if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
@@ -691,9 +642,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Process a raw Vertex chunk into normalised format
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const vertexChunk = chunk.data as VertexStreamChunk;
     const thoughts: ThoughtLogEntry[] = [];
@@ -734,7 +682,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     }
 
     const metadata: Record<string, unknown> = {};
-    // Attach the latest captured token usage so the orchestrator can record it.
+    // Re-attach pendingUsage on every chunk because the orchestrator records usage from any chunk.
     if (this.pendingUsage) {
       metadata.usage = this.pendingUsage;
     }
@@ -802,7 +750,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     if (interruption) return interruption;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Check for composite-key parse errors first (Vertex-specific)
     if (
       errorMessage.includes("composite key") ||
       errorMessage.includes("project ID") ||
@@ -850,7 +797,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.warn("VertexStreamAdapter: Failed to parse API error structure", parseError);
     }
 
-    // Check for ADC / authentication errors (Vertex-specific)
     if (
       errorMessage.includes("Application Default Credentials") ||
       errorMessage.includes("Could not load the default credentials") ||
@@ -868,7 +814,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Map Google/Vertex API error codes (same as Google)
     const errorCode = googleApiError?.code;
     let errorType: ProviderError["type"];
     let retryable: boolean;
@@ -993,18 +938,14 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
           } else if (part.type === "image" && !seesImages) {
-            // Defense-in-depth: an image part reached the adapter but the routed
-            // model cannot process it (context built with images for a
-            // vision-capable fallback model, then the image-blind primary runs).
-            // Emit a text placeholder instead of silently dropping it, so mirrors
-            // the Google, OpenRouter, and OpenAI-compatible message builders.
+            // Keep a text placeholder when !seesImages leaks here (fallback context) so unsupported images are not
+            // silently dropped.
             geminiParts.push({
               text: "[System: An image is attached to this message that this model cannot process.]",
             });
           } else if (part.type === "image" && part.uri && part.mimeType) {
             try {
               if (part.mimeType === "image/gif") {
-                // GIF handling: same environment-based logic as Google
                 if (process.env.RUN_ENV === "production") {
                   geminiParts.push({ text: buildGifUrlPlaceholder(part.uri) });
                 } else {
@@ -1053,7 +994,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
                 if (process.env.RUN_ENV === "production") {
                   geminiParts.push({ text: buildInlineGifPlaceholder() });
                 } else {
-                  // Dev mode: skip GIF processing to keep code manageable
                   geminiParts.push({
                     text: "[System: This context contains inline GIF data.]",
                   });

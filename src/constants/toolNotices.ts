@@ -22,7 +22,6 @@ export const TOOL_NOTICE_KEYS = [
   "user_block",
 ] as const;
 
-/** The one footer line every hideable notice shares, pointing at the toggle that hides it. */
 export const NOTICE_CONFIG_HINT_KEY = "tools.tool_notice.configure_hint";
 
 export type ToolNoticeKey = (typeof TOOL_NOTICE_KEYS)[number];
@@ -31,11 +30,8 @@ export const NOTICE_VERBOSITY_LEVELS = ["minimal", "verbose"] as const;
 
 export type NoticeVerbosity = (typeof NOTICE_VERBOSITY_LEVELS)[number];
 
-/**
- * Notices that keep their full card at every verbosity. The fallback notice reports a degraded
- * reply and the impersonation notice discloses who wrote one, so a bare title would drop the detail
- * these notices exist to show; the `/respond` card acknowledges a command rather than a tool call.
- */
+// Exempt from minimal verbosity because fallback and impersonation cards exist for their disclosure details, and
+// /respond acknowledges a command.
 export const VERBOSITY_EXEMPT_NOTICE_KEYS: ReadonlySet<ToolNoticeKey> = new Set<ToolNoticeKey>([
   "respond_embed",
   "impersonation_notice",

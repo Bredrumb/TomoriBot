@@ -1,4 +1,3 @@
-/** Unit tests for the portrait Persona Affinity infographic. */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 import type { PersonaCardData } from "@/utils/stats/statsInfographic";

@@ -34,19 +34,16 @@ export type NativeBuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
-  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
   nudgeItem?: StructuredContextItem;
-  /** Saved dialogue-item depth preserves spacer and directive counting (0 = tail). */
+  // Dialogue-item depth counts spacers and directives as well as messages, with 0 targeting the tail, so positional
+  // nudge placement matches native layout.
   nudgeInjectionDepth?: number;
-  /** Fresh STM and saved non-negative depths bypass preset buckets for downstream positional insertion. */
+  // Returned separately from contextItems because fresh STM and non-negative depths must bypass preset buckets for
+  // downstream positional insertion.
   memoryInjectionItems?: StructuredContextItem[];
-  /** Saved dialogue-item depth is compared with the tail slot after history assembly. */
   memoryInjectionDepth?: number;
 };
 
-/**
- * Native fixed-order context assembly used directly, or as the input to preset reassembly.
- */
 export async function buildContextNative(params: BuildContextParams): Promise<NativeBuildContextResult> {
   const {
     guildId,
@@ -350,12 +347,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   try {
     const actualTriggeringUserId =
       impersonatedUserId ?? shortTermMemoryUserId ?? snapshot?.triggererUserRow?.user_disc_id;
-    // Per-server master switch (migration 054): when STM is disabled we no longer skip the
-    // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
-    // cadence nudge are suppressed): but existing STM content STILL surfaces so admins can
-    // curate it by hand via `/persona stm edit` and crude messages remain visible. The
-    // nudge suppression now lives inside buildShortTermMemoryContext (gated on the same
-    // switch), and the write tool gates itself in updateShortTermMemoryTool.
+    // Run even when short_term_memory_enabled is false so curated STM still renders while auto-nudges stay suppressed.
     if (actualTriggeringUserId) {
       const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,

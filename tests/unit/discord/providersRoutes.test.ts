@@ -2042,7 +2042,6 @@ describe("providers routes", () => {
       recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
     };
 
-    // Add provider (server scope)
     const addCustomId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
       action: "add-submit",
       locale: "en-US",
@@ -2071,7 +2070,6 @@ describe("providers routes", () => {
     await addRoute.execute({} as Client, addInteraction as never, parsed(addCustomId));
     expect(recorded).toContain("providers.workspace.provider.add:42:user-456");
 
-    // Remove provider (personal scope)
     const personalScope: LoadedProviderPanelScope = {
       ...scope,
       scopeKind: "personal",
@@ -2113,7 +2111,6 @@ describe("providers routes", () => {
     await removeRoute.execute({} as Client, removeInteraction as never, parsed(removeCustomId));
     expect(recorded).toContain("providers.personal.entry.remove:42:user-456");
 
-    // Endpoint add (server scope)
     const endpointAddCustomId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
       action: "endpoint-submit",
       locale: "en-US",
@@ -2144,7 +2141,6 @@ describe("providers routes", () => {
     await endpointAddRoute.execute({} as Client, endpointAddInteraction as never, parsed(endpointAddCustomId));
     expect(recorded).toContain("providers.workspace.endpoint.add:42:user-456");
 
-    // Model save (personal scope)
     const modelSaveCustomId = buildProvidersRouteId(PERSONAL_PROVIDERS_ROUTE_NAMESPACE, {
       action: "model-submit",
       locale: "en-US",

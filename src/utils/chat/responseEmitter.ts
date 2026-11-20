@@ -114,9 +114,8 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
     },
     async emitStreamResult(result) {
       if (result.status !== "error") return;
-      // ProviderErrors are already surfaced by the state machine's handleProviderError.
-      // Calling emitGenerationError here would send a second, generic embed on top of the
-      // specific one (e.g. "🔴️ Provider Content Filter" + "Generation Error"). Skip it.
+      // Skip ProviderErrors because the state machine already surfaces them via handleProviderError, so emitting
+      // here would send a duplicate generic embed.
       if (isProviderError(result.data)) return;
       await emitGenerationError(context, result.data);
     },
@@ -220,9 +219,8 @@ function isProviderError(value: unknown): value is ProviderError {
 
 async function emitGenerationError(context: ChatTurnContext, error: unknown): Promise<void> {
   if (context.streamingContext?.generationErrorReported) {
-    // The same failed turn reports through the stream result and again from the turn's catch
-    // block. Logging both turns one failure into two `Generation failed` rows for one message id
-    // and sends the user a second error embed.
+    // Suppress repeat error reports because a failed turn arrives through both stream results and the catch
+    // block.
     log.warn(`Suppressing repeat generation error report for message ${context.message.id}`, error);
     return;
   }
@@ -267,10 +265,8 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
     },
     buildChatPersonaPostContext(context),
   ).catch((embedError: unknown) => {
-    // Reporting a failure must not itself fail. The two causes worth naming are a channel the
-    // send cannot reach (deleted, or the bot lost access), where the retry this would trigger
-    // reports the same failure again and turns one error into a burst, and the same refusal
-    // the original send already reported.
+    // Swallow embed send failures here so an unreachable channel or duplicate refusal does not trigger a second
+    // failure loop.
     log.warn(`Failed to send the generation error embed for message ${context.message.id}`, embedError);
   });
 }

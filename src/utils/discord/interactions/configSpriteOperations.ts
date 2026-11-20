@@ -120,14 +120,8 @@ export interface ConfigSpriteOperations {
   exportSprites(input: { persona: TomoriState; maxArchiveBytes: number }): Promise<ConfigSpriteExportResult>;
 }
 
-/**
- * Materializes a preset-pointer persona so a sprite write lands on rows it owns.
- *
- * A pointer persona resolves the shared preset sprite set and owns no `persona_sprites` rows, so a
- * write issued before the fork would match nothing. The extra TomoriState invalidation runs only
- * when a fork actually happened, because that changes the persona row itself rather than its
- * sprites, which `personaSpriteRepository` already invalidates on every mutation.
- */
+// Preset pointers own no sprite rows and must fork before writes, invalidating TomoriState cache only when forked
+// because only then does the persona row change.
 async function materializeForSpriteWrite(persona: TomoriState, serverDiscId: string): Promise<boolean> {
   const wasPointer = persona.is_pointer === true;
   if (!(await forkPointerForAvatarChange(persona))) return false;
@@ -330,8 +324,7 @@ export const configSpriteOperations: ConfigSpriteOperations = {
     });
     if (!archive.ok) return { status: "invalid-archive", reason: archive.reason };
 
-    // Every name and image is validated before any storage or database write, so a bad entry aborts
-    // the whole import cleanly. Two entries can normalize to one key, and the map keeps the last.
+    // Every name and image is validated before any storage write so a bad entry aborts the import cleanly.
     const preparedByKey = new Map<
       string,
       { displayName: string; spriteKey: string; usageInstructions: string; isIdentity: boolean; pngBuffer: Buffer }
@@ -476,12 +469,8 @@ export const configSpriteOperations: ConfigSpriteOperations = {
   },
 };
 
-/**
- * The sprite list the panel renders and every sprite route resolves its position against.
- *
- * `listForPersona` orders by `sprite_key` and resolves a preset pointer to the shared set, so this
- * ordering is what makes a route's list position mean the same sprite on the next interaction.
- */
+// Both panel rendering and positional sprite routes depend on listForPersona's deterministic sprite_key ordering so
+// list positions match across interactions.
 export async function loadPersonaSpriteList(personaId: number): Promise<PersonaSpriteRow[]> {
   return await personaSpriteRepository.listForPersona(personaId);
 }

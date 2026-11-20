@@ -2,11 +2,6 @@ import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 import { findZipEntryByBasename, getDeclaredUncompressedSize, resolveZipEntryFile } from "@/utils/zip/zipEntryGuards";
 
-/**
- * These guards are shared by both persona archive readers, so they are pinned
- * directly: a regression here would silently loosen a zip-bomb defense that
- * only shows up as a missing or oversized entry much further downstream.
- */
 describe("zip entry guards", () => {
   it("resolves a declared path exactly when it is present", async () => {
     const zip = new JSZip();

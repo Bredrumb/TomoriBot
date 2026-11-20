@@ -64,7 +64,7 @@ describe("reviewed requests at real dispatch owners", () => {
     for (const spy of [guildRoute, configRead]) spy.mockRestore();
   });
 
-  // These spies replace discovery only. The registry and guild MCP manager invoke real fake transports.
+  // Spies replace discovery only, so the registry and guild MCP manager still invoke the fake transports below.
   const transport = (name: string, interruptOnDiscovery = false): CallableTool => ({
     tool: async () => {
       if (interruptOnDiscovery) cancelled = true;

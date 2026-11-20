@@ -660,9 +660,7 @@ export function createModerationInteractionRoute(
       }
 
       if (route.action === "model-access-set") {
-        // Acknowledge before any read or write: Discord drops an unacknowledged interaction after
-        // three seconds, and under a slow database the write would land while the user is told the
-        // application did not respond, inviting a second click on a policy that already changed.
+        // Defer before reading or writing so a slow database never trips Discord's 3-second interaction timeout.
         await interaction.deferUpdate();
 
         if (!isAuthorized(interaction)) {
@@ -1380,10 +1378,8 @@ export function createModerationInteractionRoute(
             userDiscId: interaction.user?.id ?? "",
           });
         }
-        // A batch that removed some entries and refused others reads as a failure to the actor
-        // while the counter above still counts the removals that did land. A batch where nothing
-        // landed is the more serious outcome. Both are named on the receipt below, which is what
-        // reports them, so counting stays on the chokepoint and only the counts land here.
+        // Distinguish partial from zero-success removals on the receipt because the chokepoint counter tracks only
+        // applied writes.
         const channelRemovalReason =
           successCount > 0 ? "whitelist_channel_remove_partial" : "whitelist_channel_remove_total";
         if (failed) {
@@ -2318,8 +2314,7 @@ export function createModerationInteractionRoute(
             }),
           };
         } else {
-          // The operation carries the caught error out in its result, and the receipt has no room
-          // for it. Without this the only record of a failed quota write is the user's screenshot.
+          // Emit an error log here because the operation returns the failure and receipts omit raw error text.
           log.error(
             "Failed to update moderation quota settings",
             result.status === "failed" ? result.error : undefined,
@@ -2396,7 +2391,6 @@ export type ModerationPanelPayloadOrTerminal =
   | ReturnType<typeof buildModerationPanelPayload>
   | InteractionEditReplyOptions;
 
-/** Destinations for `/moderation page:`; the command is manager-only, so every one is open to its invoker. */
 export function listModerationPageDestinations(
   locale: string,
 ): PanelPageDestination<ModerationCategory, WhitelistPage | null>[] {

@@ -38,11 +38,8 @@ import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { notifyProviderToolFailure } from "@/utils/provider/providerUsage";
 
-/**
- * Per-endpoint description variants for the voice message tool.
- * The registry proxies the tool with the matching variant based on the server's active
- * speech endpoint's script_markup setting. Defaults to bracket-tags (ElevenLabs / no endpoint).
- */
+// Keys match the speech endpoint's script_markup setting so the tool registry can proxy variants, defaulting to
+// "bracket-tags" for ElevenLabs or unset endpoints.
 export const VOICE_TOOL_VARIANTS = {
   "bracket-tags": {
     toolDescription:
@@ -329,7 +326,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const isElevenLabs = synthesisResult.backendKey === "elevenlabs";
     const attachmentName = this.buildAttachmentName(title, synthesisResult.extension ?? (isElevenLabs ? "mp3" : "wav"));
     const captionText = synthesisResult.cleanedCaptionText ?? "";
-    // Strip MIME parameters, so Discord rejects waveform/duration_secs for non-bare types.
+    // Strip MIME parameters because Discord rejects waveform/duration_secs for non-bare types.
     const mimeType = (synthesisResult.contentType ?? (isElevenLabs ? "audio/mpeg" : "audio/wav")).split(";")[0].trim();
     const voiceMeta = await generateVoiceMessageMetadata(synthesisResult.audioBuffer, mimeType);
 
@@ -383,9 +380,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
       await postVoiceTranscriptCaption(target, captionText);
     }
 
-    // Canonical audio-generation telemetry, keyed by TTS backend so the read
-    // layer can break voice usage down by engine (the total stays SUM over keys).
-    // tool_used already counts the call; this adds the un-backfillable backend dimension.
+    // Keyed by TTS backend for engine breakdowns (total sums across keys) because tool_used lacks that dimension.
     if (context.internalUserId) {
       statRepository.recordStat({
         serverId: context.tomoriState.server_id,

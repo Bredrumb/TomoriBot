@@ -19,7 +19,7 @@ export const MAX_SUMMARY_CHARS = 300;
 const MAX_ALTERNATIVES = 3;
 const AUTOCOMPLETE_LIMIT = 10;
 const OUTFIT_AUTOCOMPLETE_LIMIT = 20;
-/** Fetched beyond MAX_SIGNATURE_TAGS so dropping `_(cosplay)` tags still leaves a full list. */
+// Request limit exceeds MAX_SIGNATURE_TAGS (25) because shapeSignatureTags drops _(cosplay) tags before slicing.
 const RELATED_TAG_LIMIT = 40;
 const SUGGESTION_LIMIT = 20;
 const SUGGESTION_CACHE_TTL_MS = 10 * 60_000;
@@ -36,7 +36,8 @@ const TAG_CATEGORIES: Readonly<Record<number, TagCategory>> = {
   5: "meta",
 };
 
-/** One query's resolution. Every tag is in spaced NovelAI form. */
+// Tag strings (including query) are returned in spaced NovelAI form rather than underscored Danbooru form so prompts
+// can use them directly.
 export interface TagResolution {
   query: string;
   status: TagStatus;
@@ -67,13 +68,13 @@ interface TagEntry {
   antecedent?: string | null;
 }
 
-/** Normalizes model-supplied queries to Danbooru form, dropping blanks and duplicates. */
 export function normalizeTagQueries(queries: readonly string[]): string[] {
   const normalized = queries.map(toDanbooruTag).filter((query) => query.length > 0);
   return [...new Set(normalized)].slice(0, MAX_TAG_QUERIES);
 }
 
-/** Metatag and static suggestions carry no category or post count, so they never resolve a query. */
+// Danbooru metatag and static autocomplete entries omit category and post_count, so entries without both are dropped
+// here.
 function toTagEntries(entries: readonly DanbooruAutocompleteEntry[]): TagEntry[] {
   return entries.flatMap((entry) => {
     const category = entry.category === undefined ? undefined : TAG_CATEGORIES[entry.category];
@@ -92,7 +93,6 @@ function statusFor(query: string, hit: TagEntry): TagStatus {
   return hit.value === query ? "exact" : "partial";
 }
 
-/** Maps a query's autocomplete hits to its resolution, using the first hit as the answer. */
 export function resolveAutocomplete(query: string, entries: readonly DanbooruAutocompleteEntry[]): TagResolution {
   const [hit, ...rest] = toTagEntries(entries);
   if (!hit) return { query: toNaiTag(query), status: "not_found" };
@@ -111,7 +111,6 @@ export function resolveAutocomplete(query: string, entries: readonly DanbooruAut
   };
 }
 
-/** One Danbooru-form query's resolution, without the character description lookupDanbooruTags adds. */
 export async function resolveDanbooruTag(query: string, signal?: AbortSignal): Promise<DanbooruResult<TagResolution>> {
   const result = await fetchTagAutocomplete(query, AUTOCOMPLETE_LIMIT, signal);
   return result.ok ? { ok: true, data: resolveAutocomplete(query, result.data) } : result;
@@ -122,13 +121,10 @@ export interface TagSuggestion {
   post_count: number;
 }
 
-/**
- * Ceiling: the cache lives in one process, so every process warms its own copy. Move it to a shared
- * store when the bot runs as several processes or a measured hit rate shows it missing.
- */
+// Process-local cache warms independently per worker; move to a shared store when multi-process runs or hit-rate
+// metrics warrant it.
 const suggestionCache = new Map<string, { expiresAt: number; suggestions: TagSuggestion[] }>();
 
-/** Tags matching a typed prefix (aliases and typo corrections included) in spaced form, cached by prefix. */
 export async function suggestDanbooruTags(
   prefix: string,
   signal?: AbortSignal,
@@ -157,7 +153,8 @@ export async function suggestDanbooruTags(
   return { ok: true, data: suggestions };
 }
 
-/** Related tags in Danbooru's order, minus cosplay tags, which describe other characters' wearers. */
+// Cosplay tags are stripped from signature tags because _(cosplay) tags describe other characters wearing the outfit,
+// not the character.
 export function shapeSignatureTags(relatedTags: readonly string[]): string[] {
   return relatedTags
     .filter((tag) => !tag.endsWith("_(cosplay)"))
@@ -165,7 +162,6 @@ export function shapeSignatureTags(relatedTags: readonly string[]): string[] {
     .map(toNaiTag);
 }
 
-/** Named costume tags for a character, most used first. */
 export function shapeOutfits(
   characterTag: string,
   entries: readonly DanbooruAutocompleteEntry[],
@@ -180,11 +176,8 @@ export function shapeOutfits(
     .map((entry) => ({ tag: toNaiTag(entry.value), post_count: entry.post_count }));
 }
 
-/**
- * The character's `_(cosplay)` tag, for drawing someone else dressed as them.
- * Ceiling: the prefix response holds the top 20 tags by post count, so a lower-ranked cosplay tag is
- * missed; widen the request if a popular character lacks one in a live test.
- */
+// Ceiling: prefix autocomplete returns only the top 20 tags by post count, so widen OUTFIT_AUTOCOMPLETE_LIMIT if
+// popular characters miss cosplay.
 export function findCosplayTag(
   characterTag: string,
   entries: readonly DanbooruAutocompleteEntry[],
@@ -193,10 +186,8 @@ export function findCosplayTag(
   return cosplay ? { tag: toNaiTag(cosplay.value), post_count: cosplay.post_count } : undefined;
 }
 
-/**
- * The wiki's opening prose: text before the first `h4.`-`h6.` header (appearance sections and post
- * embeds follow it), with DText links reduced to their labels and cut at a sentence end.
- */
+// Wiki intro cuts before the first h4 through h6 DText header because Danbooru places appearance lists and post
+// embeds beneath them.
 export function summarizeWikiBody(body: string): string | undefined {
   const intro = body.split(/^h[4-6]\./m)[0] ?? "";
   const text = intro
@@ -210,10 +201,6 @@ export function summarizeWikiBody(body: string): string | undefined {
   return sentenceEnd > 0 ? cut.slice(0, sentenceEnd + 1) : `${cut.trimEnd()}…`;
 }
 
-/**
- * Resolves every query, then describes up to MAX_DESCRIBED_TAGS character tags (costume tags are
- * character tags too). The first failed request stops the requests not yet started.
- */
 export async function lookupDanbooruTags(
   queries: readonly string[],
   signal?: AbortSignal,

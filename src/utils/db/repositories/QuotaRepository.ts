@@ -1,17 +1,3 @@
-/**
- * QuotaRepository: manages all quota tables for text, image, and video generation.
- *
- * Owns tables:
- *   text_quota_configs, text_quotas, text_serverwide_quotas
- *   image_quota_configs, image_quotas, image_serverwide_quotas
- *   video_quota_configs, video_quotas, video_serverwide_quotas
- *
- * This repository is not exportable (quota counters are transient; configs are
- * server-specific operational settings, not portable persona state).
- *
- * Export contract: toExportShape returns null: IRepository is implemented as a
- * no-op stub to satisfy the interface and future pipeline composition.
- */
 import type { SQL } from "bun";
 import type {
   ImageQuotaConfigRow,
@@ -50,7 +36,7 @@ export type VideoQuotaConfigReadResult =
 export type QuotaReservation = {
   quotaDate: string;
   userCounted: boolean;
-  /** Exact text because a JS Date drops the microseconds the release must match. */
+  // Exact text rather than Date because a JS Date drops the microseconds that the release query must match.
   serverwidePeriodStart: string | null;
 };
 
@@ -71,10 +57,6 @@ class QuotaCapReached extends Error {
   }
 }
 
-/**
- * Read-only text quota config query with read provenance.
- * Does not insert default rows and does not fallback to synthetic rows on error.
- */
 export async function getTextConfigResult(serverId: number): Promise<TextQuotaConfigReadResult> {
   try {
     const [existing] = await withTransientDbRetry(
@@ -93,10 +75,6 @@ export async function getTextConfigResult(serverId: number): Promise<TextQuotaCo
   }
 }
 
-/**
- * Read-only image quota config query with read provenance.
- * Does not insert default rows and does not fallback to synthetic rows on error.
- */
 export async function getImageConfigResult(serverId: number): Promise<ImageQuotaConfigReadResult> {
   try {
     const [existing] = await withTransientDbRetry(
@@ -115,10 +93,6 @@ export async function getImageConfigResult(serverId: number): Promise<ImageQuota
   }
 }
 
-/**
- * Read-only video quota config query with read provenance.
- * Does not insert default rows and does not fallback to synthetic rows on error.
- */
 export async function getVideoConfigResult(serverId: number): Promise<VideoQuotaConfigReadResult> {
   try {
     const [existing] = await withTransientDbRetry(
@@ -137,13 +111,6 @@ export async function getVideoConfigResult(serverId: number): Promise<VideoQuota
   }
 }
 
-/**
- * Fetch or create the text quota config for a server.
- * Creates a default (disabled, unlimited) row if none exists.
- *
- * @param serverId - Internal server DB ID
- * @returns Parsed TextQuotaConfigRow (safe fallback defaults on error)
- */
 export async function getOrCreateTextConfig(serverId: number): Promise<TextQuotaConfigRow> {
   try {
     const [existing] = await sql<TextQuotaConfigRow[]>`
@@ -169,7 +136,7 @@ export async function getOrCreateTextConfig(serverId: number): Promise<TextQuota
   }
 }
 
-/** Claim one text generation on both counters or neither; database errors propagate so callers refuse. */
+// Text quota counters commit atomically so callers fail closed on DB errors.
 export async function reserveTextQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -243,7 +210,7 @@ export async function reserveTextQuotaUnits(
   }
 }
 
-/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+// Failed text quota release logs instead of throwing so it fails safe by over-counting.
 export async function releaseTextQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -271,26 +238,12 @@ export async function releaseTextQuotaUnits(
   }
 }
 
-/**
- * Update the daily-per-user text quota limit in text_quota_configs.
- * Callers must ensure the config row exists first (call getOrCreateTextConfig).
- *
- * @param serverId - Internal server DB ID
- * @param limit    - New limit (0 = unlimited)
- */
+// Callers must ensure the config row exists via getOrCreateTextConfig since UPDATE will not insert it, and limit 0
+// means unlimited.
 export async function updateTextDailyUserQuota(serverId: number, limit: number): Promise<void> {
   await sql`UPDATE text_quota_configs SET daily_user_quota = ${limit} WHERE server_id = ${serverId}`;
 }
 
-/**
- * Update the server-wide text quota limit and, when first enabling it
- * (transitioning from unlimited 0 to a real limit), initialize the quota period row.
- *
- * @param serverId           - Internal server DB ID
- * @param limit              - New serverwide limit (0 = unlimited)
- * @param currentResetDays   - Current reset-days value from text_quota_configs
- * @param previousLimit      - Previous serverwide limit (used to detect 0→N transition)
- */
 export async function updateTextServerwideQuota(
   serverId: number,
   limit: number,
@@ -315,14 +268,6 @@ export async function updateTextServerwideQuota(
   }
 }
 
-/**
- * Update the serverwide text quota reset period and adjust the active period end
- * date if a serverwide limit is currently in effect.
- *
- * @param serverId          - Internal server DB ID
- * @param days              - New reset period in days
- * @param serverwideActive  - True when serverwide_quota > 0 (period end needs updating)
- */
 export async function updateTextServerwideResetDays(
   serverId: number,
   days: number,
@@ -338,12 +283,6 @@ export async function updateTextServerwideResetDays(
   }
 }
 
-/**
- * Admin reset: zero out a specific user's text quota for today.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
 export async function resetUserDailyTextQuota(serverId: number, userDiscId: string): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
   await sql`
@@ -354,12 +293,6 @@ export async function resetUserDailyTextQuota(serverId: number, userDiscId: stri
   `;
 }
 
-/**
- * Admin reset: reset the server-wide text quota pool, starting a fresh period now.
- * Looks up the configured reset-days value internally.
- *
- * @param serverId - Internal server DB ID
- */
 export async function resetServerwideTextQuotaPool(serverId: number): Promise<void> {
   const config = await getOrCreateTextConfig(serverId);
   await sql`
@@ -377,13 +310,6 @@ export async function resetServerwideTextQuotaPool(serverId: number): Promise<vo
   `;
 }
 
-/**
- * Fetch or create the image quota config for a server.
- * Creates a default (disabled, unlimited) row if none exists.
- *
- * @param serverId - Internal server DB ID
- * @returns Parsed ImageQuotaConfigRow (safe fallback defaults on error)
- */
 export async function getOrCreateImageConfig(serverId: number): Promise<ImageQuotaConfigRow> {
   try {
     const [existing] = await sql<ImageQuotaConfigRow[]>`
@@ -409,14 +335,6 @@ export async function getOrCreateImageConfig(serverId: number): Promise<ImageQuo
   }
 }
 
-/**
- * Touch (get-or-init) a user's daily image quota record for today.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- * @param today      - Date string in YYYY-MM-DD format
- * @returns Parsed ImageQuotaRow
- */
 export async function touchUserImageQuota(serverId: number, userDiscId: string, today: string): Promise<ImageQuotaRow> {
   const [row] = await sql<ImageQuotaRow[]>`
     INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
@@ -428,13 +346,6 @@ export async function touchUserImageQuota(serverId: number, userDiscId: string, 
   return imageQuotaSchema.parse(row);
 }
 
-/**
- * Touch (get-or-init) the server-wide image quota record.
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - Period length in days (from image_quota_configs)
- * @returns Parsed ServerwideQuotaRow
- */
 export async function touchServerwideImageQuota(serverId: number, resetDays: number): Promise<ServerwideQuotaRow> {
   const [row] = await sql<ServerwideQuotaRow[]>`
     INSERT INTO image_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
@@ -451,13 +362,6 @@ export async function touchServerwideImageQuota(serverId: number, resetDays: num
   return serverwideQuotaSchema.parse(row);
 }
 
-/**
- * Reset the server-wide image quota period.
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - New period length in days
- * @returns Parsed ServerwideQuotaRow after reset
- */
 export async function resetServerwideImagePeriod(serverId: number, resetDays: number): Promise<ServerwideQuotaRow> {
   const [row] = await sql<ServerwideQuotaRow[]>`
     UPDATE image_serverwide_quotas
@@ -471,7 +375,7 @@ export async function resetServerwideImagePeriod(serverId: number, resetDays: nu
   return serverwideQuotaSchema.parse(row);
 }
 
-/** Claim one image generation on both counters or neither; database errors propagate so callers refuse. */
+// Image quota counters commit atomically so callers fail closed on DB errors.
 export async function reserveImageQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -545,7 +449,7 @@ export async function reserveImageQuotaUnits(
   }
 }
 
-/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+// Failed image quota release logs instead of throwing so it fails safe by over-counting.
 export async function releaseImageQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -573,24 +477,11 @@ export async function releaseImageQuotaUnits(
   }
 }
 
-/**
- *
- * @param serverId - Internal server DB ID
- * @param limit    - New limit (0 = unlimited)
- */
+// Limit 0 means unlimited rather than zero allowed: only positive values enforce a daily image cap.
 export async function updateImageDailyUserQuota(serverId: number, limit: number): Promise<void> {
   await sql`UPDATE image_quota_configs SET daily_user_quota = ${limit} WHERE server_id = ${serverId}`;
 }
 
-/**
- * Update the server-wide image quota limit, initializing the period row when
- * first enabling it (0 → N transition).
- *
- * @param serverId           - Internal server DB ID
- * @param limit              - New serverwide limit (0 = unlimited)
- * @param currentResetDays   - Current reset-days value from image_quota_configs
- * @param previousLimit      - Previous serverwide limit
- */
 export async function updateImageServerwideQuota(
   serverId: number,
   limit: number,
@@ -615,13 +506,6 @@ export async function updateImageServerwideQuota(
   }
 }
 
-/**
- * Update the serverwide image quota reset period.
- *
- * @param serverId         - Internal server DB ID
- * @param days             - New reset period in days
- * @param serverwideActive - True when serverwide_quota > 0
- */
 export async function updateImageServerwideResetDays(
   serverId: number,
   days: number,
@@ -637,12 +521,6 @@ export async function updateImageServerwideResetDays(
   }
 }
 
-/**
- * Admin reset: zero out a specific user's image quota for today.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
 export async function resetUserDailyImageQuota(serverId: number, userDiscId: string): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
   await sql`
@@ -653,11 +531,6 @@ export async function resetUserDailyImageQuota(serverId: number, userDiscId: str
   `;
 }
 
-/**
- * Admin reset: reset the server-wide image quota pool.
- *
- * @param serverId - Internal server DB ID
- */
 export async function resetServerwideImageQuotaPool(serverId: number): Promise<void> {
   const config = await getOrCreateImageConfig(serverId);
   await sql`
@@ -675,13 +548,6 @@ export async function resetServerwideImageQuotaPool(serverId: number): Promise<v
   `;
 }
 
-/**
- * Fetch or create the video quota config for a server.
- * Creates a default (disabled, unlimited) row if none exists.
- *
- * @param serverId - Internal server DB ID
- * @returns Parsed VideoQuotaConfigRow (safe fallback defaults on error)
- */
 export async function getOrCreateVideoConfig(serverId: number): Promise<VideoQuotaConfigRow> {
   try {
     const [existing] = await sql<VideoQuotaConfigRow[]>`
@@ -707,14 +573,6 @@ export async function getOrCreateVideoConfig(serverId: number): Promise<VideoQuo
   }
 }
 
-/**
- * Touch (get-or-init) a user's daily video quota record for today.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- * @param today      - Date string in YYYY-MM-DD format
- * @returns Parsed VideoQuotaRow
- */
 export async function touchUserVideoQuota(serverId: number, userDiscId: string, today: string): Promise<VideoQuotaRow> {
   const [row] = await sql<VideoQuotaRow[]>`
     INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
@@ -726,13 +584,6 @@ export async function touchUserVideoQuota(serverId: number, userDiscId: string, 
   return videoQuotaSchema.parse(row);
 }
 
-/**
- * Touch (get-or-init) the server-wide video quota record.
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - Period length in days (from video_quota_configs)
- * @returns Parsed VideoServerwideQuotaRow
- */
 export async function touchServerwideVideoQuota(serverId: number, resetDays: number): Promise<VideoServerwideQuotaRow> {
   const [row] = await sql<VideoServerwideQuotaRow[]>`
     INSERT INTO video_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
@@ -749,13 +600,6 @@ export async function touchServerwideVideoQuota(serverId: number, resetDays: num
   return videoServerwideQuotaSchema.parse(row);
 }
 
-/**
- * Reset the server-wide video quota period.
- *
- * @param serverId  - Internal server DB ID
- * @param resetDays - New period length in days
- * @returns Parsed VideoServerwideQuotaRow after reset
- */
 export async function resetServerwideVideoPeriod(
   serverId: number,
   resetDays: number,
@@ -772,7 +616,7 @@ export async function resetServerwideVideoPeriod(
   return videoServerwideQuotaSchema.parse(row);
 }
 
-/** Claim one video generation on both counters or neither; database errors propagate so callers refuse. */
+// Video quota counters commit atomically so callers fail closed on DB errors.
 export async function reserveVideoQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -846,7 +690,7 @@ export async function reserveVideoQuotaUnits(
   }
 }
 
-/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+// Failed video quota release logs instead of throwing so it fails safe by over-counting.
 export async function releaseVideoQuotaUnits(
   serverId: number,
   userDiscId: string,
@@ -874,24 +718,11 @@ export async function releaseVideoQuotaUnits(
   }
 }
 
-/**
- *
- * @param serverId - Internal server DB ID
- * @param limit    - New limit (0 = unlimited)
- */
+// Limit 0 means unlimited rather than zero allowed: only positive values enforce a daily video cap.
 export async function updateVideoDailyUserQuota(serverId: number, limit: number): Promise<void> {
   await sql`UPDATE video_quota_configs SET daily_user_quota = ${limit} WHERE server_id = ${serverId}`;
 }
 
-/**
- * Update the server-wide video quota limit, initializing the period row when
- * first enabling it (0 → N transition).
- *
- * @param serverId           - Internal server DB ID
- * @param limit              - New serverwide limit (0 = unlimited)
- * @param currentResetDays   - Current reset-days value from video_quota_configs
- * @param previousLimit      - Previous serverwide limit
- */
 export async function updateVideoServerwideQuota(
   serverId: number,
   limit: number,
@@ -916,13 +747,6 @@ export async function updateVideoServerwideQuota(
   }
 }
 
-/**
- * Update the serverwide video quota reset period.
- *
- * @param serverId         - Internal server DB ID
- * @param days             - New reset period in days
- * @param serverwideActive - True when serverwide_quota > 0
- */
 export async function updateVideoServerwideResetDays(
   serverId: number,
   days: number,
@@ -938,12 +762,6 @@ export async function updateVideoServerwideResetDays(
   }
 }
 
-/**
- * Admin reset: zero out a specific user's video quota for today.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
 export async function resetUserDailyVideoQuota(serverId: number, userDiscId: string): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
   await sql`
@@ -954,11 +772,6 @@ export async function resetUserDailyVideoQuota(serverId: number, userDiscId: str
   `;
 }
 
-/**
- * Admin reset: reset the server-wide video quota pool.
- *
- * @param serverId - Internal server DB ID
- */
 export async function resetServerwideVideoQuotaPool(serverId: number): Promise<void> {
   const config = await getOrCreateVideoConfig(serverId);
   await sql`

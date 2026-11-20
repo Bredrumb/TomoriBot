@@ -12,7 +12,7 @@ import {
 } from "@/timers/scheduledWorkContext";
 
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
-import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { resolvePersonaForMessage } from "@/utils/chat/webhookIdentity";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
@@ -185,7 +185,6 @@ export class RandomTriggerProcessor {
         return;
       }
 
-      suppressNextSelfReply(rawChannel.id);
       consecutiveFailures = 0;
 
       log.info(
@@ -207,6 +206,7 @@ export class RandomTriggerProcessor {
         shouldSurfaceUserErrors: false,
         manualSystemPrompt: trigger.custom_prompt ?? undefined,
         borrowsTriggerMessage: true,
+        suppressSelfReply: true,
         onGenerationResult: async (result) => {
           delivered = isDeliveredTurnResult(result);
         },

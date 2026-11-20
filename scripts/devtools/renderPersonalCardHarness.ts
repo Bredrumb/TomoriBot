@@ -1,7 +1,3 @@
-/**
- * Renders representative EN and JA stats cards without a database or
- * Discord connection. Usage: bun run scripts/devtools/renderPersonalCardHarness.ts [outputDir]
- */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
@@ -26,7 +22,6 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 
 const TOMORICON_DATA_URI = await loadTomoriconDataUri(DEFAULT_PERSONAL_CARD_PALETTE.ink);
 
-/** Distinct user palette so the Persona Affinity harness makes palette ownership visible. */
 const USER_CARD_PALETTE: PersonalCardPalette = {
   background: "#f7f3f0",
   surface: "#eee3dc",

@@ -1,34 +1,4 @@
 #!/usr/bin/env bun
-/**
- * checkPendingMigrations.ts: pre-deploy destructive-migration gate.
- *
- * Scans the migrations directory, queries the target database's
- * `schema_migrations` table to determine which migrations are pending,
- * then inspects each pending up-migration for destructive SQL patterns
- * (DROP, RENAME, TRUNCATE, unfiltered DELETE, ALTER COLUMN ... TYPE).
- *
- * Exit codes:
- *   0: no destructive migration, or required recovery point and downtime were authorized
- *   1: a destructive migration lacks its required recovery point or downtime opt-in
- *   2: script error (DB connection failed, migrations dir missing, etc.)
- *
- * When `GITHUB_OUTPUT` is set, a migration that needs downtime also writes
- * `downtime_required=true` there, so a deploy that passes --allow-downtime can stop
- * the old bot only on the releases that need it.
- *
- * Usage:
- *   bun run scripts/checks/checkPendingMigrations.ts                       (DB-aware: pending only)
- *   bun run scripts/checks/checkPendingMigrations.ts --all                 (no DB: scan every up-migration)
- *   bun run scripts/checks/checkPendingMigrations.ts --changed-since REF --deployed-ref REF
- *
- * The CI deploy gate uses --changed-since because GitHub-hosted runners don't
- * hold production DB credentials at the pre-Terraform stage. Local pre-push
- * hooks can use --all for a no-DB sanity check.
- *
- * A recovery point opt-in is required only for statements that can lose row data. A
- * separate downtime opt-in is required when the deployed source may still depend on
- * an object a migration removes or reshapes.
- */
 
 import { appendFile, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -36,22 +6,8 @@ import path from "node:path";
 const MIGRATIONS_DIR = path.join(import.meta.dir, "..", "..", "src", "db", "migrations");
 const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
 
-/**
- * Conservative regex matchers for destructive SQL patterns.
- * Case-insensitive; multiline. Each entry maps a label to its pattern.
- *
- * Notes on the choices:
- * - `DELETE FROM` is flagged only when no `WHERE` appears in the same statement.
- *   We approximate "same statement" as "before the next semicolon".
- * - `ALTER COLUMN ... TYPE` is flagged because changing a column type can
- *   silently truncate or fail to cast. A rename removes the old object name.
- * - `DROP CONSTRAINT IF EXISTS` is flagged because even idempotent drops change
- *   schema shape and may invalidate dependent code.
- * - `losesData` marks statements whose effect a later migration cannot rebuild from
- *   DDL alone. `DROP TYPE` and `DROP SEQUENCE` count because CASCADE removes dependent
- *   columns and a sequence holds its position. Unknown drops count conservatively.
- * - `DROP NOT NULL` and `DROP DEFAULT` only loosen a column, so they are not flagged.
- */
+// losesData flags drops DDL cannot rebuild because TYPE cascades and SEQUENCE holds state, while DROP NOT NULL and
+// DEFAULT stay excluded as loosening only.
 const DESTRUCTIVE_PATTERNS: Array<{ label: string; pattern: RegExp; losesData: boolean }> = [
   { label: "DROP TABLE", pattern: /\bDROP\s+TABLE\b/i, losesData: true },
   { label: "DROP COLUMN", pattern: /\bDROP\s+COLUMN\b/i, losesData: true },
@@ -86,13 +42,8 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Removes drops of objects the same file recreates under the same name, the idempotent
- * rerun idiom (`DROP TRIGGER IF EXISTS x ...; CREATE TRIGGER x ...`). The runner applies
- * statements without a wrapping transaction, so the object is briefly absent between
- * the two statements; a recreated unique index or constraint fails the migration rather
- * than losing data if a conflicting row lands in that window.
- */
+// Migration statements run without a wrapping transaction, so recreated drops leave a brief gap that fails unique
+// constraints rather than losing data.
 function withoutRecreatedDrops(sql: string): string {
   return sql.replace(RECREATABLE_DROP, (drop: string, kind: string, rawName: string, offset: number) => {
     const name = `"?${escapeRegExp(rawName.replaceAll('"', ""))}"?(?![\\w$])`;
@@ -106,21 +57,10 @@ function withoutRecreatedDrops(sql: string): string {
   });
 }
 
-/**
- * Strips SQL comments before pattern matching so a `-- DROP TABLE foo` line
- * in a doc comment doesn't trip the gate.
- */
 function stripComments(sql: string): string {
-  return sql
-    .replace(/--[^\n]*/g, "") // line comments
-    .replace(/\/\*[\s\S]*?\*\//g, ""); // block comments
+  return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-/**
- * Detects unfiltered `DELETE FROM` (no WHERE clause before the next `;`).
- * Run separately from the regex map because the WHERE-presence check is
- * statement-scoped rather than a single pattern.
- */
 function findUnfilteredDeletes(sql: string): string[] {
   const matches: string[] = [];
   const deleteRegex = /\bDELETE\s+FROM\s+([\w."]+)/gi;
@@ -142,10 +82,6 @@ interface PendingFile {
   filePath: string;
 }
 
-/**
- * Lists all up-migration files in the migrations dir, sorted by version.
- * Excludes `.down.sql` rollbacks and any file not matching the version-prefixed naming.
- */
 async function listAllUpMigrations(): Promise<PendingFile[]> {
   const files = await readdir(MIGRATIONS_DIR);
   return files
@@ -154,11 +90,7 @@ async function listAllUpMigrations(): Promise<PendingFile[]> {
     .map((name) => ({ name: name.replace(/\.sql$/, ""), filePath: path.join(MIGRATIONS_DIR, name) }));
 }
 
-/**
- * Queries the target DB for the set of already-applied migration names,
- * then filters the up-migration list down to pending entries only.
- * Imported lazily so `--all` mode never opens a DB connection.
- */
+// @/utils/db/client is imported lazily here so --all and --changed-since modes never initialize a DB connection.
 async function listPendingMigrationsViaDb(allUp: PendingFile[]): Promise<PendingFile[]> {
   const { sql } = await import("@/utils/db/client");
   try {
@@ -166,8 +98,6 @@ async function listPendingMigrationsViaDb(allUp: PendingFile[]): Promise<Pending
     const applied = new Set(rows.map((r) => r.name));
     return allUp.filter((m) => !applied.has(m.name));
   } catch (err) {
-    // If the schema_migrations table doesn't exist yet, every up-migration is pending.
-    // We surface the error so the operator knows the DB was untracked, but proceed.
     const msg = err instanceof Error ? err.message : String(err);
     if (/schema_migrations.*does not exist/i.test(msg)) {
       console.warn("schema_migrations table not found; treating ALL up-migrations as pending.");
@@ -252,10 +182,8 @@ async function scanForDestructive(files: PendingFile[], deployedRef?: string): P
   return results;
 }
 
-/**
- * Includes edits and renames so a migration changed after a failed deploy
- * remains visible to the gate.
- */
+// --diff-filter=ACMR includes edits and renames rather than additions alone, so a migration revised after a failed
+// deploy stays gated.
 async function listMigrationsAddedSince(ref: string, allUp: PendingFile[]): Promise<PendingFile[]> {
   const proc = Bun.spawn(
     ["git", "diff", "--diff-filter=ACMR", "--name-only", `${ref}...HEAD`, "--", "src/db/migrations/"],

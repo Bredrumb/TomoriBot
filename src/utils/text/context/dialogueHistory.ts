@@ -28,11 +28,8 @@ import type { MentionConverter } from "./templates";
 import type { SimplifiedMessageForContext } from "./types";
 import { buildDateSpacer } from "./timeAwareness";
 
-/**
- * Expanded by the caller's tool macro resolver before use, so the `read_file` instruction appears only
- * when the turn actually exposes `read_file`. `{filename}` and `{media_id}` are filled afterwards
- * because a filename is user-controlled and must never be parsed as a conditional or macro.
- */
+// Tool macros must expand before filling {filename} and {media_id}, because filenames are user-controlled and must
+// never be parsed as conditionals or macros.
 export const DOCUMENT_HINT_TEMPLATE =
   "[System: A file named `{filename}` is attached (message ID: {media_id}).{{if tool:read_file}} Use {document_tool} with this message ID to read its contents, only if needed.{{else}} Its contents are not available to you right now, so do not guess them.{{/if}}]";
 
@@ -47,7 +44,6 @@ export async function appendDialogueHistoryContext(params: {
   channelContextNote?: { note: string; depth: number } | null;
   reunionNote?: string | null;
   dateSpacerTemplate?: string | null;
-  /** `DOCUMENT_HINT_TEMPLATE` after tool macro expansion. */
   documentHintTemplate: string;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
@@ -74,8 +70,7 @@ export async function appendDialogueHistoryContext(params: {
     mediaWindowCutoff,
   );
 
-  // Persona and channel notes are additive (both injected when set).
-  // Global note is a fallback used only when neither persona nor channel has one.
+  // Persona and channel notes are additive when both are set, whereas the global note runs only as a fallback.
   const personaNoteText = params.tomoriState?.context_note?.trim() || null;
   const channelNoteText = params.channelContextNote?.note?.trim() || null;
 
@@ -111,9 +106,7 @@ export async function appendDialogueHistoryContext(params: {
   if (shouldInjectVerbatimToolCallingNudge(params.tomoriState)) {
     activeNotes.push(noteInsert("verbatim_nudge", VERBATIM_TOOL_CALLING_NUDGE));
   }
-  // The reunion note sits above the newest messages rather than directly against
-  // the triggering prompt, so it reads as background awareness instead of an
-  // instruction that outranks whatever the user actually asked for.
+  // Sits above the newest messages instead of at the triggering prompt so it reads as background, not an override.
   const reunionNoteText = params.reunionNote?.trim();
   if (reunionNoteText) {
     activeNotes.push(noteInsert("reunion_note", reunionNoteText));
@@ -381,12 +374,6 @@ function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors
   }
 }
 
-/**
- * Register the fetchable Discord message that owns one media attachment.
- *
- * Copied reply media carries the referenced source message. Local media and
- * forwarded snapshots fall back to the current wrapper message.
- */
 function registerAttachmentMediaId(
   params: Parameters<typeof appendMediaDescriptors>[0],
   sourceMessageId?: string,
@@ -428,9 +415,7 @@ async function buildMediaAttributionHint(
   const thisOrThese = totalMediaCount === 1 ? "This" : "These";
   const wasSent = totalMediaCount === 1 ? "was" : "were";
 
-  // Forwarded media registers the wrapper message's own id (so tools can resolve
-  // it in the current channel), so it would pass the includes() check below.
-  // branch on the source kind first to keep the forwarded attribution wording.
+  // Branch on source kind first because forwarded media registers the wrapper ID and would pass includes() below.
   if (params.msg.remoteMediaSourceKind === "forwarded") {
     return `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} attached to the forwarded message described above]`;
   }
@@ -481,9 +466,7 @@ async function appendTextParts(
       });
     }
 
-    // The author label is text WE author, so identity macros in it must still resolve: it is
-    //    what tells the model which name owns the turn. Resolved BEFORE the join so the body,
-    //    which is raw prose, can opt out of macro expansion in step 3.
+    // Resolve identity macros on the authored speaker label before joining so raw message bodies can preserve macros.
     const resolvedAuthorLabel = await params.convertMentions(
       authorLabel,
       params.client,
@@ -507,17 +490,10 @@ async function appendTextParts(
     }
 
     if (params.role === "model") {
-      // content is already real, previously-delivered text, so re-rolling the same randomized
-      // comma/emphasis noise on every context build would just re-randomize already-final output
-      // and, since it never lands on the same result twice, defeat provider prompt-prefix caching
-      // for every turn after this one. The stable humanizer keeps only the deterministic
-      // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
+      // Stable humanizer avoids re-rolling random noise on delivered turns so rebuilt history prefixes stay cacheable.
       processedContent = applyStableHumanizer(processedContent, params.tomoriConfig);
     }
-    // Mentions, channel links, and roles still resolve here. Only the identity macros stay
-    //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
-    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user).
-    //    On a model-role line it would also collapse both macros onto the persona's own name.
+    // Preserve identity macros while resolving mentions so message bodies containing "{bot}" or "{char}" stay literal.
     processedContent = await params.convertMentions(
       processedContent,
       params.client,

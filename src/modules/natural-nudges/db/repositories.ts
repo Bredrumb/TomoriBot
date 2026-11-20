@@ -168,7 +168,7 @@ class NaturalNudgeRepository {
     return parseRows(enabledIdleNudgeServerSchema, rows, "enabled server");
   }
 
-  /** Channels with a turn since `since`, minus roleplay channels, where in-character talk is not a lull to fill. */
+  // Roleplay channels are excluded because in-character talk there is not an idle lull to fill.
   async loadAutomaticChannelIds(serverId: number, since: Date): Promise<string[]> {
     const rows = await withTransientDbRetry(
       () => sql<{ metric_key: string }[]>`
@@ -197,7 +197,6 @@ class NaturalNudgeRepository {
     return parseRows(customIdleNudgeRowSchema, rows, "custom idle nudge");
   }
 
-  /** Returns the new row's ID, `"limit"` when the server already holds `limit` rows, or `"failed"` on a database error. */
   async insertCustomIdleNudge(
     serverId: number,
     input: CustomIdleNudgeInput,
@@ -238,7 +237,6 @@ class NaturalNudgeRepository {
     }
   }
 
-  /** Returns how many rows were removed, or null when the delete failed. */
   async deleteCustomIdleNudges(serverId: number, idleNudgeIds: readonly number[]): Promise<number | null> {
     try {
       return await sql.transaction(async (tx) => {
@@ -261,10 +259,8 @@ class NaturalNudgeRepository {
     }
   }
 
-  /**
-   * The on/off switch and the persona scope change together, so one modal submit cannot half-apply.
-   * Turning an idle nudge off also drops its scope, so turning it back on starts from the personas checked then.
-   */
+  // Disabling an idle nudge drops its persona scope in the same transaction, so re-enabling it starts from the
+  // personas checked then rather than stale ones.
   async saveIdleNudgeAvailability(
     serverId: number,
     idleNudgeKey: string,
@@ -318,10 +314,8 @@ class NaturalNudgeRepository {
     );
   }
 
-  /**
-   * Workspace import replaces the whole collection inside the caller's transaction. The new rows get new
-   * IDs, so every custom scope is dropped rather than left pointing at a different idle nudge later.
-   */
+  // Custom scopes are deleted because replaced rows receive new IDs and old keys would point at wrong or missing idle
+  // nudges.
   async replaceCustomIdleNudges(serverId: number, idleNudges: CustomIdleNudgeInput[], client: SQL): Promise<void> {
     await client`DELETE FROM server_natural_nudge_custom_idle_nudges WHERE server_id = ${serverId}`;
     await client`
@@ -339,7 +333,6 @@ class NaturalNudgeRepository {
     }
   }
 
-  /** Effective persona settings: a stored row wins, then the live preset for a pointer, then the defaults. */
   async loadPersonaConfigs(
     personaIds: readonly number[],
     client: SQL = sql,
@@ -393,7 +386,6 @@ class NaturalNudgeRepository {
     }
   }
 
-  /** Freezes the preset's current defaults, including its authored list, into a materializing pointer's row. */
   async copyPresetDefaults(
     client: SQL,
     personaId: number,
@@ -500,7 +492,8 @@ class NaturalNudgeRepository {
     });
   }
 
-  /** Local availability stays out of the authored list, so a toggle never snapshots an inherited preset list. */
+  // Toggling availability writes disabled_idle_nudge_ids without setting authored_idle_nudges, so a pointer still
+  // inherits preset list updates.
   async setPersonaIdleNudgeAvailability(
     personaId: number,
     idleNudgeId: string,
@@ -522,7 +515,6 @@ class NaturalNudgeRepository {
     });
   }
 
-  /** Clears only the list override, keeping interests, talkativeness, and availability that still names a preset entry. */
   async restorePersonaIdleNudgeList(
     personaId: number,
     expectedFingerprint: string,
@@ -607,7 +599,6 @@ class NaturalNudgeRepository {
     `;
   }
 
-  /** Re-pointing a persona at a preset drops its own row so it reads the preset's defaults live again. */
   async clearPersonaConfig(client: SQL, personaId: number): Promise<void> {
     await client`DELETE FROM persona_natural_nudge_configs WHERE persona_id = ${personaId}`;
   }
@@ -662,7 +653,7 @@ class NaturalNudgeRepository {
     `;
   }
 
-  /** The SMALLINT failure counter stays at the threshold because outages can now retry indefinitely. */
+  // The SMALLINT failure counter is clamped at the threshold because outages can retry indefinitely.
   async recordFailure(serverId: number): Promise<NaturalNudgeRuntimeState | null> {
     const rows = await sql`
       INSERT INTO server_natural_nudge_runtime_state (server_id, consecutive_failures, stopped_at)
@@ -690,7 +681,8 @@ class NaturalNudgeRepository {
     `;
   }
 
-  /** Latest idle fires preserve cadence and pending verdicts, while latest invitations establish the streak across scenes. */
+  // Both latest_idle and latest_invitations are unioned so play_scene fires cannot crowd out invitation streaks or
+  // pending verdicts.
   async loadFireHistory(
     serverId: number,
     since: Date,
@@ -737,10 +729,8 @@ class NaturalNudgeRepository {
     };
   }
 
-  /**
-   * Latest fire of each idle nudge this persona ran on one target since `since`. Kept apart from
-   * `loadFireHistory` so its longer window loads one target's rows rather than the whole server's.
-   */
+  // This query stays separate from loadFireHistory because its longer window loads one target user rather than the
+  // whole server.
   async loadTargetIdleNudgeFires(
     serverId: number,
     personaId: number,
@@ -778,10 +768,6 @@ class NaturalNudgeRepository {
     await sql`UPDATE natural_nudge_fires SET answered = ${answered} WHERE fire_id = ${fireId} AND answered IS NULL`;
   }
 
-  /**
-   * The fire row and its agendas land together, so a persona never pursues an agenda that has no fire.
-   * A Play Scene passes one agenda per speaker, all anchored to the opener.
-   */
   async recordIdleNudgeFire(
     fire: NewFireRow,
     agendas: ReadonlyArray<{ personaId: number; agenda: string }>,
@@ -842,7 +828,8 @@ class NaturalNudgeRepository {
     }
   }
 
-  /** Read fresh, never through `userCache`, so an opt-out made a moment ago already excludes the user. */
+  // User opt-out state is queried directly rather than through userCache so a recent opt-out immediately excludes the
+  // user.
   async listPingUserCandidates(args: {
     serverId: number;
     personaId: number;
@@ -892,7 +879,6 @@ class NaturalNudgeRepository {
     return parseRows(pingUserCandidateSchema, rows, "Ping User nudge candidate");
   }
 
-  /** Agendas owned by one persona among the given messages, keyed by message ID. */
   async loadAgendas(personaId: number, messageDiscIds: readonly string[]): Promise<Map<string, string>> {
     const agendas = new Map<string, string>();
     if (messageDiscIds.length === 0) return agendas;

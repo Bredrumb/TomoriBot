@@ -36,9 +36,8 @@ describe("stats server id resolution", () => {
     expect(interaction.calls).toHaveLength(1);
     expect(interaction.calls[0]?.method).toBe("reply");
     const payload = interaction.calls[0]?.args[0] as { embeds: Array<{ data: { title?: string } }> } | undefined;
-    // Either title is the setup refusal: `replyInfoEmbed` swaps in the "currently updating"
-    // variant when the database failed recently or the process is still in its startup grace
-    // period, and that state is not this test's to control.
+    // Either title is valid because `replyInfoEmbed` swaps in "currently updating" during recent DB errors
+    // or startup grace.
     expect<Array<string | undefined>>([
       localizedStatusTitle(LOCALE, "general.errors.tomori_not_setup_title", ColorCode.ERROR),
       localizedStatusTitle(LOCALE, "general.errors.tomori_updating_title", ColorCode.WARN),

@@ -62,8 +62,6 @@ describe("ReasoningContentSpillGuard", () => {
     guard.reset();
     guard.observeReasoning("Length should stay moderate so it shouldn't run excessive paragraph");
 
-    // "must do" hits neither the old meta nor continuation lists; the glued period is
-    // the only signal, and it is sufficient on its own.
     expect(guard.filterContent("s either.Yes indeed I have!")).toEqual({
       content: "Yes indeed I have!",
       spilledThought: "s either.",
@@ -112,7 +110,6 @@ describe("ReasoningContentSpillGuard", () => {
     guard.reset();
     guard.observeReasoning("hidden reasoning");
 
-    // The period sits inside backticks, so it is intentional code, not a spill seam.
     expect(guard.filterContent("use the `obj.Method` helper")).toEqual({
       content: "use the `obj.Method` helper",
       changed: false,
@@ -161,8 +158,6 @@ describe("ReasoningContentSpillGuard", () => {
     guard.reset();
     guard.observeReasoning("hidden reasoning");
 
-    // Spaced boundary = genuine prose shape. The old meta-word list would have stripped
-    // "the playful answer." here; the glued-only rule correctly emits it untouched.
     expect(guard.filterContent("the playful answer. Hello there.")).toEqual({
       content: "the playful answer. Hello there.",
       changed: false,

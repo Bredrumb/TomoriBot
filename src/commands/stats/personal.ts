@@ -15,10 +15,6 @@ import {
   TIMEFRAME_VALUES,
 } from "@/utils/stats/statsDashboard";
 
-/**
- * Configures the /stats personal subcommand: the invoking user's own usage stats,
- * with a required timeframe and a scope toggle (this server vs. across all servers).
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("personal")
@@ -44,9 +40,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Renders the personal stats dashboard for the invoking user.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

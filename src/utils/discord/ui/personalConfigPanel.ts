@@ -64,7 +64,7 @@ import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
-/** Discord rejects a String Select carrying more than 25 options. */
+// Capped at 25 because Discord rejects any String Select carrying more than 25 options.
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 
 export interface PersonalConfigPanelPayload {
@@ -131,7 +131,6 @@ export interface PersonalConfigModelDisplayInfo {
   parametersProviders: string[];
   selectedParametersConfig?: UserSavedProviderConfigRow | null;
   fallbacksProviders: string[];
-  /** The provider whose models the Fallbacks select expands; the slots themselves span providers. */
   fallbacksProvider: string | null;
   fallbackSlots: PersonalConfigFallbackDisplaySlot[];
   randomizerEnabled: boolean;
@@ -173,7 +172,6 @@ export interface PersonalConfigPanelRenderInput {
   modelDisplayInfo?: PersonalConfigModelDisplayInfo;
   spotlightDisplayInfo?: PersonalConfigSpotlightDisplayInfo;
   serverTriggerBehavior?: { deliberate_trigger_mode: boolean; deliberate_tool_mode: boolean } | null;
-  /** Whether the current server lends its own models to member-triggered turns. */
   serverModelAccess?: { userByokMode: boolean } | null;
   view?: PersonalConfigPanelView;
 }
@@ -765,7 +763,6 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
     return buildPayload(components, receipt);
   }
 
-  // Render subview or body based on active category and page
   if (input.view && input.view.kind !== "main") {
     components.push(...renderPanelView(input, input.view));
   } else if (category === "profile") {
@@ -900,9 +897,8 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
       } else {
         const currentLineage = selectedLineageId ?? personas[0]?.persona_lineage_id ?? 0;
 
-        // Naming preferences are keyed by lineage, not by persona, and two personas in one server can
-        // share a lineage. Emitting one option per persona then repeats an option value, which Discord
-        // rejects outright with COMPONENT_OPTION_VALUE_DUPLICATED.
+        // Deduplicate options by lineage rather than persona because Discord rejects shared lineages with
+        // COMPONENT_OPTION_VALUE_DUPLICATED.
         const personasByLineage = new Map<number, TomoriState[]>();
         for (const p of personas) {
           const lineage = p.persona_lineage_id;
@@ -1437,9 +1433,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
           fallbackRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT + PERSONAL_PROVIDER_DIRECT_LIMIT,
         );
 
-        // The select is the only way into the fallback modal, so it renders even for a single
-        // provider. The primary model is chosen on Switch Models, and repeating it here would give
-        // it a second, non-authoritative home.
+        // Render the select even for one provider because it is the sole entry into the fallback modal.
         components.push(
           {
             type: ComponentType.TextDisplay,
@@ -1499,9 +1493,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
         components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
 
         const canEnableRandomizer = Boolean(input.modelDisplayInfo?.canEnableRandomizer);
-        // Clearing every fallback slot leaves the stored flag on, so the selection tracks the stored
-        // value while the behavior sentence below tracks the effective one. Collapsing the two here
-        // would show Off for a user whose randomizer resumes the moment they add a fallback back.
+        // Track the stored randomizer flag here so clearing fallback chains does not hide a user's saved opt-in.
         const isRandomizerOn = Boolean(input.modelDisplayInfo?.randomizerEnabled);
         const isRandomizerActive = isRandomizerOn && canEnableRandomizer;
 
@@ -1550,11 +1542,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
         );
       }
 
-      // Account-wide rather than provider-scoped, so it renders with or without a saved personal
-      // text provider: the fallback notice names this page as the place to turn it off, and a
-      // pointer to a control that is not on screen is worse than one reporting nothing to act on.
-      // Only an explicit opt-out reads as Off: the column defaults to true and the projection
-      // reports that default for an account with no personalization row yet.
+      // Render unconditionally and treat unset rows as enabled because notices point here and the DB defaults true.
       const isServerFallbackOn = user.personal_server_fallback_enabled !== false;
 
       components.push(

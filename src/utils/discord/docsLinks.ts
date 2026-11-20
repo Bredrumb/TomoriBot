@@ -9,12 +9,8 @@ export type { DocsRoute as DocsPath } from "@/constants/docsLocales";
 
 export const SUPPORT_SERVER_URL = "https://discord.gg/bjCfHm9QsB";
 
-/**
- * Absolute docs URL for a locale-less route from `DOCS_PATHS`.
- *
- * The locale prefix comes from the shared docs locale configuration, so a language whose docs tree
- * does not exist yet links English rather than a route that would 404.
- */
+// Missing docs locales fall back to the English prefix via the shared docs locale config, so generated URLs never
+// point to a 404 tree.
 export function buildDocsUrl(locale: string, path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;

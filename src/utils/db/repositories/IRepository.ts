@@ -1,28 +1,7 @@
-/**
- * Base contract every repository must satisfy.
- *
- * TExport: the shape returned by toExportShape() and expected by fromExportShape()
- *
- * All repositories must implement both export methods from day one.
- * Phase 6 (#16.7) replaces the old god-table export pipeline by composing
- * per-repository toExportShape() calls, so any repository that ships without
- * them requires a second touch during that phase.
- */
 export interface IRepository<TExport = unknown> {
-  /**
-   * Serializes this repository's portion of a data export for a given owner.
-   * Returns null when the owner has no data in this repository (not an error).
-   *
-   * @param ownerId - Discord snowflake or internal DB ID identifying the export subject
-   */
+  // Empty repository slices return null rather than an error, so callers treat null as absent data.
   toExportShape(ownerId: string | number): Promise<TExport | null>;
 
-  /**
-   * Deserializes and writes back a previously exported shape.
-   * Must be idempotent, so re-importing the same shape must not create duplicates.
-   *
-   * @param ownerId - Discord snowflake or internal DB ID of the import target
-   * @returns true on success, false on validation or write failure
-   */
+  // Implementations must be idempotent because re-importing the same export shape must not create duplicates.
   fromExportShape(ownerId: string | number, data: TExport): Promise<boolean>;
 }

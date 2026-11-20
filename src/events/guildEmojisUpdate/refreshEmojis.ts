@@ -4,10 +4,6 @@ import type { EventArg, EventFunction } from "../../types/discord/global";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { createGuildExpressionRefresh } from "../shared/guildExpressionRefresh";
 
-/**
- * Refreshes the guild's emoji rows for emoji create, delete, and update events.
- * @param args - Event arguments (expected: GuildEmoji or [GuildEmoji, GuildEmoji])
- */
 const handleGuildEmojisUpdate: EventFunction = createGuildExpressionRefresh({
   resolvePayload: (args: EventArg[]) => {
     const emoji = args[0];

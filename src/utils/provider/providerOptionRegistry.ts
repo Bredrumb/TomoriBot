@@ -43,7 +43,7 @@ interface ProviderOptionAvailability {
 
 /** @public Release-only `src/modules/supporter-billing/discord/providerOption.ts` imports this. */
 export interface ProviderOptionStoredSelection {
-  /** Handed back to this option's own panel callbacks, so the registry stays unaware of its shape. */
+  // Opaque payload passed back to this option's panel callbacks, so the registry stays unaware of its shape.
   data?: unknown;
   savedAt: Date | null;
 }
@@ -80,9 +80,10 @@ export interface ProviderOptionActionContext {
 export interface ProviderOptionSetupContext {
   locale: string;
   draft: SetupDraftRecord;
-  /** Present when a live interaction triggered the render; absent during commit revalidation. */
+  // Omitted during commit revalidation (present only on live renders), so components must not assume an interaction
+  // exists.
   interaction?: GlobalRoutableInteraction | ChatInputCommandInteraction;
-  /** Routes a control back to `handleAction`; the route has no sub-action segment, so add one before a second control. */
+  // Callback route to handleAction without a sub-action segment, so add a segment before wiring a second control.
   actionRouteId?: string;
 }
 
@@ -126,7 +127,8 @@ export interface ProviderOptionSpeechSelectionInput {
 export interface ProviderOptionCredentials {
   apiKey: string;
   usageContext?: ProviderUsageContext;
-  /** The saved provider row whose settings the call mirrors; absent means the persona's own settings. */
+  // Omitted when the persona's own settings apply, because setting it mirrors that saved provider row's
+  // configuration.
   savedProvider?: string;
 }
 
@@ -144,14 +146,14 @@ export interface ProviderOptionDefinition {
     setSpeech?(input: ProviderOptionSpeechSelectionInput): Promise<boolean>;
     release?(scope: ProviderOptionScope, capability: ProviderOptionCapability): Promise<boolean>;
     remove(scope: ProviderOptionScope): Promise<ProviderOptionRemovalStatus>;
-    /** Synchronous ownership check for surfaces that render from an already-loaded state. */
     owns?(scope: ProviderOptionScope, capability: ProviderOptionCapability): boolean;
     validateModel?(input: {
       scope: ProviderOptionScope;
       capability: ProviderPanelCapability;
       modelCodename: string;
     }): Promise<boolean>;
-    /** Resolves only the chosen scope and model; throws `ProviderRequestDeniedError` to refuse without changing the payer. */
+    // Scoped strictly to the chosen scope and model, throwing ProviderRequestDeniedError to refuse without changing
+    // the payer.
     resolveCredentials?(
       input:
         | {
@@ -163,10 +165,7 @@ export interface ProviderOptionDefinition {
         | { usageContext: ProviderUsageContext },
     ): Promise<ProviderOptionCredentials | null>;
   };
-  /**
-   * Replaces catalog prices and default markers in this option's model pickers. Receives the whole
-   * catalog rather than one page, so a comparison can find its baseline model off-page.
-   */
+  // Whole-catalog input rather than a single page, so a comparison can locate its baseline model off-page.
   describeModelChoices?(input: ProviderOptionModelChoicesInput): Promise<ReadonlyMap<number, ProviderOptionModelCost>>;
   panel?: {
     entryComponents?(context: ProviderOptionEntryContext): readonly ComponentInContainerData[];
@@ -185,10 +184,8 @@ export interface ProviderOptionModelChoicesInput {
   choices: ReadonlyArray<{ id: number; name: string; pricing?: ChoicePricing | null }>;
 }
 
-/**
- * A null `priceLabel` hides the price; choices missing from the map keep their catalog price.
- * @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this.
- */
+// Null `priceLabel` hides the price, so choices missing from the map keep their catalog price.
+/** @public Release-only `src/modules/supporter-billing/discord/modelCosts.ts` imports this. */
 export interface ProviderOptionModelCost {
   priceLabel: string | null;
   isDefault: boolean;

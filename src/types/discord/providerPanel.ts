@@ -33,8 +33,8 @@ export interface ProviderPanelCapabilitySection {
   capability: ProviderPanelCapability;
   availability: "available" | "unavailable";
   models: ProviderPanelModel[];
-  // Curated providers have no endpoint behind a capability, so this stays undefined for them. The
-  // image modal reads it to decide whether inpainting is offerable at all.
+  // Undefined for curated providers (which have no backing endpoint), so the image modal checks this before
+  // offering inpainting.
   apiStyle?: CustomEndpointApiStyle;
 }
 

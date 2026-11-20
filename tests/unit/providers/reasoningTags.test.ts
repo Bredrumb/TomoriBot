@@ -30,7 +30,6 @@ describe("reasoningTags", () => {
     it("does not match look-alikes", () => {
       expect(findReasoningTagOpen("<thinker>")).toBeNull();
       expect(findReasoningTagOpen("<mm:thinking>")).toBeNull();
-      // An open matcher must not match a closing tag.
       expect(findReasoningTagOpen("</think>")).toBeNull();
     });
   });
@@ -49,7 +48,6 @@ describe("reasoningTags", () => {
     it("detects namespaced partials", () => {
       expect(findTrailingReasoningTagPrefix("text<mm:")?.kind).toBe("open");
       expect(findTrailingReasoningTagPrefix("text</mm:thi")?.kind).toBe("close");
-      // Namespace still forming, before the colon arrives.
       expect(findTrailingReasoningTagPrefix("text<mm")?.kind).toBe("open");
     });
 

@@ -61,7 +61,8 @@ export interface DecisionExecutionRequest extends DecisionInput {
   credentials?: ProviderOptionCredentials;
 }
 
-/** The Decision models `callDecisionsForProvider` accepts for a scope, so pickers offer exactly what it will call. */
+// Must match the Decision models callDecisionsForProvider accepts for a scope so UI pickers offer the exact set that
+// will run.
 export async function loadDecisionModelsForScope(
   scope: OpenRouterModelScope,
   providerOption?: string,
@@ -374,18 +375,10 @@ export async function callExpressionInitializationForProvider(
   );
 }
 
-/**
- * Outcome of a single history-extraction window.
- *
- * Distinguishes a genuine empty result (`ok: true` with zero entries) from a real
- * failure, so callers can tell "this window held nothing worth extracting" apart from
- * "the model/provider could not produce structured output". Collapsing both into an
- * empty array is what previously surfaced provider errors as "No Facts Extracted".
- */
+// Empty extraction results stay distinct from failures because collapsing them surfaces provider errors to users as
+// no facts extracted.
 export type HistoryExtractionOutcome =
-  /** `discarded` counts entries the model returned that could not be validated. */
   | { ok: true; entries: HistoryMemoryEntry[]; discarded: number }
-  /** `unsupported`: provider exposes no structured-output capability at all. `failed`: the call itself errored. */
   | { ok: false; reason: "unsupported" | "failed"; error: string; cause?: Error };
 
 export async function extractHistoryWindowForProvider(

@@ -17,12 +17,8 @@ import { validateOpenRouterTranscriptionModel } from "@/utils/cache/openrouterTr
 import { log } from "@/utils/misc/logger";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 
-/**
- * Selects the provider's default model for each voice mode it seeds.
- *
- * OpenRouter's Design default only fills an empty Design slot, so adding or re-keying OpenRouter
- * never replaces a Gemini or Vertex design the owner already chose.
- */
+// OpenRouter's design default only fills an empty slot so adding or re-keying OpenRouter never overwrites an existing
+// Gemini or Vertex design.
 export async function activateProviderSpeechDefaults(scope: OpenRouterModelScope, provider: string): Promise<boolean> {
   const models = await llmModelRepo.loadAvailableSpeechModels(provider, scope);
   for (const mode of ["clone", "design"] as const) {
@@ -35,12 +31,8 @@ export async function activateProviderSpeechDefaults(scope: OpenRouterModelScope
   return true;
 }
 
-/**
- * Fills an empty transcription slot with the provider's default model.
- *
- * An owner who already transcribes through any target keeps it, so adding or re-keying a provider
- * never replaces a transcription choice.
- */
+// Existing transcription selections are preserved so adding or re-keying another provider never overwrites the
+// owner's current target.
 export async function activateProviderTranscriptionDefault(
   scope: OpenRouterModelScope,
   provider: string,
@@ -93,8 +85,7 @@ export async function activateServerTextModelFromSavedConfig(params: {
   const customEndpoints = isCustomProvider(normalizedProvider)
     ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
     : [];
-  // The live chain is server-wide and may intentionally span providers. Switching the primary
-  // only removes entries that resolve to the promoted model.
+  // Keep cross-provider fallback entries intact and prune only entries resolving to the promoted primary model.
   const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
     params.tomoriState.config.fallback_model_refs ?? [],
     promotedLlmId,

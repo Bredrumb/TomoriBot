@@ -51,11 +51,8 @@ function makeResolveArgs(userId: number, userDiscId = HOST_DISC_ID) {
   };
 }
 
-/**
- * One shared Discord account, several internal users rows: the host plus one synthetic row
- * per proxied identity, as identity persistence leaves them. The clock a caller observes is
- * therefore whichever row the resolver scoped the turn to.
- */
+// One Discord account maps to multiple users rows (host plus synthetic proxy rows), so observed presence depends on
+// which row the resolver scoped.
 function makePresenceStore(overrides: Partial<ReunionPresenceStore> = {}) {
   const rowsByDiscId = new Map<string, UserRow>([
     [HOST_DISC_ID, { user_id: HOST_USER_ID, timezone_offset: 0 } as UserRow],
@@ -74,11 +71,6 @@ function makePresenceStore(overrides: Partial<ReunionPresenceStore> = {}) {
   return { store };
 }
 
-/**
- * Per-user clock state, shaped like `StatRepository.recordPresenceSeen`, so a test can prove
- * which member's timeline advanced and that the host's did not. `writtenUserIds` records
- * every commit this clock received, which is also the proof that no other clock moved.
- */
 function makePerUserClockState() {
   const lastSeenByUserId = new Map<number, { lastPreviousDayAt: Date | null; seenToday: boolean }>();
   const writtenUserIds: number[] = [];
@@ -91,7 +83,6 @@ function makePerUserClockState() {
       return true;
     },
     writtenUserIds,
-    /** A day already on record, as a previously successful turn would leave it. */
     seedHistory(userId: number, lastPreviousDayAt: Date) {
       lastSeenByUserId.set(userId, { lastPreviousDayAt, seenToday: false });
     },
@@ -277,7 +268,6 @@ describe("resolveReunionNote — proxied identity clocks", () => {
     expect(sameDay.presence?.mode).toBe("record");
     await recordReunionPresence(sameDay.presence, completedResult, presence.store);
 
-    // Switching members same-day is still that member's first meeting.
     const sibling = await resolveReunionNote(makeProxiedArgs(ren), presence.store);
     expect(sibling.note).toContain("very first time");
     expect(sibling.presence?.userId).toBe(REN_USER_ID);
@@ -288,7 +278,6 @@ describe("resolveReunionNote — proxied identity clocks", () => {
     const clock = makePerUserClockState();
     const presence = makePresenceStore({ getUserPersonaReunionInfo: clock.read, recordPresenceSeen: clock.write });
 
-    // Locke met Tomori eight days ago; the sibling has spoken from the host account since.
     clock.seedHistory(LOCKE_USER_ID, new Date(Date.now() - 8 * 24 * 60 * 60 * 1000));
     clock.seedHistory(HOST_USER_ID, new Date(Date.now() - 60 * 60 * 1000));
     clock.seedHistory(REN_USER_ID, new Date(Date.now() - 60 * 60 * 1000));
@@ -296,16 +285,13 @@ describe("resolveReunionNote — proxied identity clocks", () => {
     const reunion = await resolveReunionNote(makeProxiedArgs(locke), presence.store);
     expect(reunion.note).toContain("Locke hasn't interacted with you specifically since");
     expect(reunion.note).toContain("(8 days ago)");
-    // Never an account-level absence: the sibling was talking from that account in between.
     expect(reunion.note).not.toContain("the account they share");
     expect(reunion.note).not.toContain("has not been around");
     expect(reunion.presence?.userId).toBe(LOCKE_USER_ID);
     await recordReunionPresence(reunion.presence, completedResult, presence.store);
 
-    // The sibling that spoke an hour ago has no reunion pending.
     expect((await resolveReunionNote(makeProxiedArgs(ren), presence.store)).note).toBeNull();
 
-    // Nor does the host account, whose own clock member turns never advanced.
     expect((await resolveReunionNote(makeResolveArgs(HOST_USER_ID), presence.store)).note).toBeNull();
     expect(clock.writtenUserIds).toEqual([LOCKE_USER_ID]);
   });
@@ -364,7 +350,6 @@ describe("resolveReunionNote — proxied identity clocks", () => {
     expect(hostTurn.presence?.userId).toBe(HOST_USER_ID);
     await recordReunionPresence(hostTurn.presence, completedResult, presence.store);
 
-    // A member's first meeting is independent of the host's, in both directions.
     const memberTurn = await resolveReunionNote(makeProxiedArgs(locke), presence.store);
     expect(memberTurn.note).toContain("Locke is talking to you for the very first time");
     expect(memberTurn.presence?.userId).toBe(LOCKE_USER_ID);

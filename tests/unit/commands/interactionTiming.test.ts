@@ -1,44 +1,15 @@
-/**
- * Interaction Timing Contract Tests
- *
- * Verifies that command execute() functions follow the Discord acknowledgement
- * rules documented in docs/subsystems/command-system.md:
- *
- *   Contract 1: Modal commands: showModal() fires without a preceding deferReply().
- *   Contract 2: Async commands: deferReply() is the first call; editReply() follows.
- *   Contract 3: Guard paths: a single reply() is the only acknowledgement;
- *                no interaction is acknowledged twice.
- *
- * All tests use the fake interaction harness from tests/helpers/fakeInteraction.ts
- * and do not connect to Discord or a database.
- */
-
 import { describe, expect, it, mock } from "bun:test";
 import type { Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
-// Real namespaces captured at link time, before any `mock.module` below runs.
-// Spreading them keeps each factory full-surface: `mock.module` is process-global
-// and never restored, so an omitted export breaks files loaded later.
+// Capture real namespaces before mock.module runs so process-global mocks keep full exports.
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import * as realLocalizer from "@/utils/text/localizer";
 
-// All mock.module() calls are hoisted by bun before static imports are resolved.
-// They must appear before the first dynamic import() of any command module.
-//
-// Key design choice: mock @/utils/discord/ui/interactionCore rather than the
-// individual barrel re-exports (ui/modals, ui/embeds, etc.).
-// The barrels just re-export from interactionCore, so mocking the source once
-// keeps all import paths consistent and avoids "ambiguous multiple bindings"
-// errors that arise when two barrels independently re-export the same name
-// (e.g. safeSelectOptionText) while one of them is replaced with a mock.
-
-// The real `ColorCode` enum passes through the spread, keeping its hex STRING
-// values for modules that call string methods on them at load time (e.g.
-// contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
+// Spreading realInteractionCore keeps ColorCode hex strings intact, so load-time string calls succeed.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/text/localizer": realLocalizer,
   "@/utils/discord/ui/interactionCore": realInteractionCore,
@@ -56,11 +27,8 @@ stubLogMembers({
 
 scopedMock.module("@/utils/text/localizer", () => ({
   ...realLocalizer,
-  /**
-   * Returns the key so assertions don't depend on locale file content.
-   * Image-footer keys are rendered because generated image payload tests can run
-   * after this global module mock in the same Bun process.
-   */
+  // Image-footer keys stay rendered in this localizer stub because generated-image payload tests can run later in the
+  // same Bun process under this global mock.
   localizer: (_locale: string, key: string, vars?: Record<string, string>) => {
     if (key === "tools.image.generated_after_seconds_line") {
       return `Generated after ${vars?.seconds ?? ""} seconds`;
@@ -73,19 +41,10 @@ scopedMock.module("@/utils/text/localizer", () => ({
   initializeLocalizer: async () => undefined,
 }));
 
-/**
- * interactionCore mock: the single source that all UI barrels re-export from.
- * Mocking here ensures ui/modals, ui/embeds, etc. all see the same
- * stub without creating duplicate-binding conflicts in the barrel chain.
- *
- * replyInfoEmbed faithfully replicates state-based routing so reply() / editReply()
- * calls still show up in the fake interaction's calls array.
- * promptWithRawModal and promptWithPaginatedModal call showModal() then return
- * "timeout" so commands exit cleanly without a real awaitModalSubmit loop.
- */
+// Mocking interactionCore rather than ui/modals or ui/embeds ensures all UI barrels share one stub without
+// duplicate-binding conflicts in the barrel chain.
 scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   ...realInteractionCore,
-  // Used directly by commands under test.
   replyInfoEmbed: async (
     interaction: {
       deferred: boolean;
@@ -130,7 +89,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   replyPaginatedPersonaChoicesV2: async () => ({ outcome: "timeout", reason: "timeout" }),
 }));
 
-/** Fake Tomori state returned by cache lookups: has the fields /nsfw jailbreaks reads. */
 const fakeTomoriState = {
   server_id: 1,
   persona_id: 1,
@@ -150,17 +108,8 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
   getLastDbError: () => null,
 }));
 
-/**
- * Repositories mock. Bun's mock registry is global across files and the last
- * mock.module call for a path wins, so this must not rely on another file's
- * factory. It spreads the real barrel and delegates through each repository
- * instance's prototype, overriding only the methods these commands drive.
- *
- * Commands under test:
- *   /nsfw jailbreaks : imports configRepository (never calls it in our paths)
- *   /ping            : no repository imports
- *   /comment         : no repository imports
- */
+// Bun's mock registry is global and last-wins across files, so this spreads realRepositories rather than relying on
+// another file's factory.
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
   configRepository: overrideMembers(realRepositories.configRepository, {
@@ -184,7 +133,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
   }),
 }));
 
-/** Minimal UserRow that satisfies the execute() signature. */
 function makeUserData(): UserRow {
   return {
     user_id: 1,
@@ -193,29 +141,21 @@ function makeUserData(): UserRow {
   } as unknown as UserRow;
 }
 
-/** Empty Client stub: commands that don't use the client still receive one. */
 function makeClient(): Client {
   return {} as unknown as Client;
 }
 
-/**
- * Fake guild channel whose `type` value passes isGuildMessageCommandChannel()
- * (ChannelType.GuildText = 0) without requiring a mock of that module.
- */
+// Channel type 0 (GuildText) is set so isGuildMessageCommandChannel passes without mocking its module.
 function makeFakeGuildChannel(): object {
   return {
-    type: 0, // ChannelType.GuildText
+    type: 0,
     id: "fake_channel_id",
     send: async () => ({ id: "sent_msg_id" }),
   };
 }
 
-// Pattern 3 (command-system.md): the first interaction acknowledgement must be
-// showModal(). No deferReply() should appear before or instead of the modal.
-
 describe("Contract 1: modal command /nsfw jailbreaks", () => {
   it("calls showModal() as the only interaction acknowledgement", async () => {
-    // Arrange: channel present so the command reaches the modal call
     const { interaction, calls } = makeFakeInteraction({
       guild: { id: "guild_1" },
       channel: makeFakeGuildChannel(),
@@ -232,7 +172,6 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
     const { execute } = await import("@/commands/nsfw/jailbreaks");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
-    // Assert: the only acknowledgement call is showModal
     expect(callMethods(calls)).toEqual(["showModal"]);
   });
 
@@ -257,7 +196,6 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
     const deferIndex = methods.indexOf("deferReply");
     const modalIndex = methods.indexOf("showModal");
 
-    // showModal must appear; deferReply must NOT appear before it (or at all)
     expect(modalIndex).toBeGreaterThanOrEqual(0);
     expect(deferIndex).toBe(-1);
   });
@@ -279,15 +217,10 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
     const { execute } = await import("@/commands/nsfw/jailbreaks");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
-    // reply() and deferReply() are mutually exclusive only showModal() is expected
     expect(callMethods(calls)).not.toContain("reply");
     expect(callMethods(calls)).not.toContain("deferReply");
   });
 });
-
-// Pattern 2 (command-system.md): deferReply() must be the very first call.
-// All async work (fetchReply, latency measurement) happens after the deferral.
-// The final response goes through editReply(), not reply().
 
 describe("Contract 2: async defer command /ping", () => {
   it("calls deferReply() as the first acknowledgement", async () => {
@@ -306,10 +239,8 @@ describe("Contract 2: async defer command /ping", () => {
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
-    // deferReply first, editReply second
     expect(methods[0]).toBe("deferReply");
     expect(methods[1]).toBe("editReply");
-    // reply() must never appear alongside deferReply()
     expect(methods).not.toContain("reply");
   });
 
@@ -323,15 +254,8 @@ describe("Contract 2: async defer command /ping", () => {
   });
 });
 
-// ─── Contract 3: Guard-path no-double-ack: /comment ─────────────────────
-//
-// Pattern 1 / Pattern 5 (command-system.md): fast validation paths that exit
-// early must use a single reply(). The normal async path must defer first and
-// never double-acknowledge the same interaction.
-
 describe("Contract 3: /comment acknowledgement ordering", () => {
   it("non-guild early-exit: sends exactly one reply() with no prior deferReply()", async () => {
-    // Arrange: no guild → command hits the guild-only guard and returns after replyInfoEmbed
     const { interaction, calls } = makeFakeInteraction({
       guild: null,
       channel: null,
@@ -341,9 +265,7 @@ describe("Contract 3: /comment acknowledgement ordering", () => {
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
-    // Exactly one acknowledgement: reply() from replyInfoEmbed
     expect(methods).toEqual(["reply"]);
-    // Never deferred: the guard fires before any async work
     expect(methods).not.toContain("deferReply");
   });
 
@@ -357,14 +279,12 @@ describe("Contract 3: /comment acknowledgement ordering", () => {
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
-    // reply() and deferReply() must not both appear (double-ack)
     const hasReply = methods.includes("reply");
     const hasDefer = methods.includes("deferReply");
     expect(hasReply && hasDefer).toBe(false);
   });
 
   it("normal path: deferReply() is first; editReply() follows; no reply() present", async () => {
-    // Arrange: guild + valid channel so the command reaches deferReply
     const fakeChannel = makeFakeGuildChannel();
     const { interaction, calls } = makeFakeInteraction({
       guild: { id: "guild_1" },
@@ -391,13 +311,8 @@ describe("Contract 3: /comment acknowledgement ordering", () => {
 
     const methods = callMethods(calls);
 
-    // Defer is first (before any async work like channel.send)
     expect(methods[0]).toBe("deferReply");
-
-    // editReply appears as the final acknowledgement (via replyInfoEmbed after defer)
     expect(methods).toContain("editReply");
-
-    // reply() must not appear: using editReply after deferReply is the correct pattern
     expect(methods).not.toContain("reply");
   });
 
@@ -427,7 +342,6 @@ describe("Contract 3: /comment acknowledgement ordering", () => {
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
-    // reply() and deferReply() must never both appear on the same interaction
     expect(methods.filter((m) => m === "reply").length).toBe(0);
     expect(methods.filter((m) => m === "deferReply").length).toBeLessThanOrEqual(1);
   });

@@ -41,13 +41,8 @@ import { createRouteInteraction, type RouteInteraction } from "../../helpers/rou
 
 type InteractionKind = "button" | "string" | "modal";
 
-/**
- * The fake the routes are handed: the dispatcher's contract plus the component-interaction surface
- * (`update` and friends) the transfer routes call, so a spy can name either one.
- */
 type MockRouteInteraction = GlobalRoutableInteraction & RouteInteraction;
 
-/** The minimum a `chat` section must state literally, because these three fields carry no default. */
 const CHAT_SECTION_VALUES = {
   llm_temperature: 1,
   humanizer_degree: 1,
@@ -61,7 +56,6 @@ type MockInteractionOptions = {
   actorDiscId?: string;
   guildId?: string | null;
   canManageGuild?: boolean;
-  /** Reproduces discord.js resolving `guild` from the client cache while `guildId` comes from the payload. */
   guildCached?: boolean;
   values?: string[];
 };
@@ -150,13 +144,9 @@ const PERSONAL_DESTINATIONS: MemoryTransferDestination[] = [
   { ownership: "personal", lineageId: 55, label: "Mirri" },
 ];
 
-/** W7e-1's marker for a surface a later slice still owed. No control a user can press may still reach it. */
 const PLACEHOLDER_TEXT_KEY = "commands.transfer.unavailable_title";
 
-/**
- * Resolved per call, never at module load: the localizer is initialized in `beforeAll`, so a module-level
- * `localizer(...)` returns the key itself and every comparison against it silently passes.
- */
+// Must resolve per call because the localizer initializes in beforeAll; a module-level call returns the raw key.
 function placeholderText(): string {
   return localizer("en-US", PLACEHOLDER_TEXT_KEY);
 }
@@ -194,7 +184,6 @@ function makeRouteId(route: TransferPanelRoute): string {
   return buildTransferRouteId(route);
 }
 
-/** Every TextDisplay body in a payload, joined: the terminal notice is a Components V2 panel, not an embed. */
 function collectText(payload: unknown): string {
   const parts: string[] = [];
   const walk = (node: unknown): void => {
@@ -211,11 +200,8 @@ function collectText(payload: unknown): string {
   return parts.join("\n");
 }
 
-/**
- * Every rendered string in a payload, whether it travels as a Components V2 `content` or as a legacy embed title or
- * description. A check for "this text was not shown" has to read both, because a refusal replies with an embed while
- * a surface render edits a V2 panel, so a `content`-only walk silently sees nothing at all for every refusal.
- */
+// Must inspect embed title and description alongside V2 content because refusals reply with embeds, so a content-only
+// walk silently passes negative checks.
 function collectRenderedText(payload: unknown): string {
   const parts: string[] = [];
   const walk = (node: unknown): void => {
@@ -234,10 +220,6 @@ function collectRenderedText(payload: unknown): string {
   return parts.join("\n");
 }
 
-/**
- * Every rendered control, parsed back into a route. A test that dispatches one of these drives the exact custom ID
- * the panel emitted, which is what makes the panel-to-route seam observable rather than assumed.
- */
 function renderedTransferRoutes(payload: unknown): TransferPanelRoute[] {
   const routes: TransferPanelRoute[] = [];
   const walk = (node: unknown): void => {
@@ -259,10 +241,7 @@ function renderedTransferRoutes(payload: unknown): TransferPanelRoute[] {
   return routes;
 }
 
-/**
- * Spies restored by `afterEach`. `mockRestore` also clears a mock's recorded calls, so a repository spy must
- * outlive its assertions rather than being restored inside the test that made them.
- */
+// Restored in afterEach instead of helper finally blocks because Bun's mockRestore clears recorded calls.
 const activeSpies: Array<{ mockRestore(): void }> = [];
 
 beforeAll(async () => initializeLocalizer());
@@ -1063,8 +1042,8 @@ describe("transfer interaction routes", () => {
     const route = createTransferInteractionRoute({
       applyWorkspaceMemoryImport: async (input) => {
         applied.push(input);
-        // One duplicate click lands while this write is still awaiting its transaction. The nested dispatch is not
-        // repeated further, so a missing guard shows up as a second write rather than as unbounded recursion.
+        // Dispatches one nested duplicate click mid-write so an unguarded path records a second write
+        // without recursing forever.
         if (nestedDispatchStarted) return { success: true, itemsImported: { memoriesInserted: 2 } };
         nestedDispatchStarted = true;
         const duplicate = makeInteraction({
@@ -1742,8 +1721,7 @@ describe("transfer interaction routes", () => {
 
       await createTransferInteractionRoute().execute({} as Client, interaction, parsed);
 
-      // The placeholder is the marker for a surface a later slice still owed. Every control the preview renders has
-      // to reach a real destination, whether by replying with a refusal or by rendering the next surface.
+      // Rejects placeholder stubs so every rendered preview control reaches either a refusal or a real next surface.
       const reachedText = `${collectRenderedText(replySpy.mock.calls[0]?.[0])}\n${collectRenderedText(updateSpy.mock.calls[0]?.[0])}`;
       expect({ route: renderedRoute, placeholder: reachedText.includes(placeholderText()) }).toEqual({
         route: renderedRoute,

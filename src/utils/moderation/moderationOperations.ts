@@ -76,15 +76,8 @@ type ModerationWriteFailureOperation =
   | "removeWhitelistRole"
   | "replacePersonaChannelWhitelist";
 
-/**
- * Records why a moderation write failed.
- *
- * The route reports only that the write failed, so the cause has to be recorded here or it is
- * discarded. The level is error on purpose: the production level filters warn out, and a warning
- * here would erase the only copy of the cause.
- *
- * @param metadata - Identifiers for the row the failed write targeted
- */
+// Must log at error level because the route discards the cause and production filters warn out, which would lose the
+// failure reason.
 function logModerationWriteFailure(
   operation: ModerationWriteFailureOperation,
   error: unknown,
@@ -126,12 +119,8 @@ interface ModerationWhitelistData {
   personaNames: Map<number, string>;
 }
 
-/**
- * Deliberately a sibling of `memberAccess` rather than a field inside it. The member-access
- * checkboxes write `server_member_permissions_configs` in one submit; this writes
- * `server_byok_configs`. Folding it in would invite a single interaction that writes two tables with
- * no transaction around them.
- */
+// Kept separate from memberAccess because it writes server_byok_configs rather than member permissions, avoiding
+// two-table writes without a transaction.
 interface ModerationServerModelAccessData {
   allowServerModels: boolean;
 }
@@ -909,10 +898,6 @@ function planWhitelistChannelWrite(
   return { channelId, cooldownType: plannedCooldownType, cooldownLength: plannedCooldownLength };
 }
 
-/**
- * Applies one cooldown request to every selected channel, writing only the channels whose stored
- * override differs, in a single transaction.
- */
 export async function upsertWhitelistChannels(
   input: UpsertWhitelistChannelsInput,
   deps: WhitelistChannelOperationsDependencies = defaultWhitelistChannelOperationsDependencies,

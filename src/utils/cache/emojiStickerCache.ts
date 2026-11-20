@@ -7,52 +7,22 @@ import { log } from "../misc/logger";
 import { lazySyncGuildEmojis } from "./emojiLazySync";
 import { lazySyncGuildStickers } from "./stickerLazySync";
 
-/**
- * Cache entry structure for emoji/sticker data per server
- * Includes timestamp for TTL (Time To Live) expiration tracking
- */
 interface EmojiStickerCacheEntry {
   emojis: ServerEmojiRow[];
   stickers: ServerStickerRow[];
   customs: CustomExpressionRow[];
   emojisLoaded: boolean;
   stickersLoaded: boolean;
-  cachedAt: number; // Timestamp in milliseconds
+  cachedAt: number;
 }
 
-/**
- * In-memory cache map: server_id → cache entry
- * Reduces database queries from 4 per message to 0 (cache hit)
- */
 const cache = new Map<number, EmojiStickerCacheEntry>();
 
-// 10 minutes balances freshness against performance: 99% of messages should hit cache.
 const MEMORY_CACHE_DURATION_MS = 10 * 60 * 1000;
 
-/**
- * Cache statistics for monitoring
- */
 let cacheHits = 0;
 let cacheMisses = 0;
 
-/**
- * Loads emoji/sticker data with configurable in-memory cache (default 10 min)
- * Falls back to DB query and lazy sync if cache miss or stale
- *
- * Cache flow:
- * 1. Check in-memory cache
- *    - HIT & FRESH (within TTL) → Return immediately (0 DB queries)
- *    - MISS or STALE → Continue to step 2
- * 2. Lazy sync from Discord if needed (24hr cache check)
- * 3. Load from DB
- * 4. Cache in memory for next requests
- *
- * @param serverId - Internal database server ID
- * @param guild - Discord Guild object (for lazy sync if needed)
- * @param emojiUsageEnabled - Whether emoji usage is enabled for this server
- * @param stickerUsageEnabled - Whether sticker usage is enabled for this server
- * @returns Object containing emojis and stickers arrays (or null if disabled/error)
- */
 export async function loadEmojiStickerCache(
   serverId: number,
   guild: Guild,
@@ -71,7 +41,6 @@ export async function loadEmojiStickerCache(
   const cachedEntry = cache.get(serverId);
 
   if (cachedEntry) {
-    // Check if cache is still fresh (< 5 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
     if (
       cacheAge < MEMORY_CACHE_DURATION_MS &&
@@ -85,15 +54,11 @@ export async function loadEmojiStickerCache(
         customs: stickerUsageEnabled ? cachedEntry.customs : null,
       };
     }
-
-    // Cache stale - fall through to refresh
   }
 
-  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
-    // Lazy sync from Discord if needed (24hr check)
     if (emojiUsageEnabled) {
       await lazySyncGuildEmojis(guild, serverId);
     }
@@ -127,7 +92,6 @@ export async function loadEmojiStickerCache(
   } catch (error) {
     log.error(`[Emoji/Sticker Cache] Error loading data for server ${serverId}:`, error);
 
-    // Return stale cache if available (fallback)
     if (cachedEntry) {
       log.warn(`[Emoji/Sticker Cache] Returning stale cache for server ${serverId} due to error`);
       return {
@@ -142,32 +106,17 @@ export async function loadEmojiStickerCache(
   }
 }
 
-/**
- * Invalidates in-memory cache for a specific server
- * Called by event handlers when Discord emojis/stickers change
- *
- * @param serverId - Internal database server ID to invalidate
- */
 export function invalidateEmojiStickerCache(serverId: number): void {
   cache.delete(serverId);
   broadcastInvalidation("emojiSticker", [[String(serverId)]]);
 }
 
-/**
- * Clears entire in-memory cache
- * Useful for testing or manual refresh operations
- */
 export function clearEmojiStickerCache(): void {
   cache.clear();
   cacheHits = 0;
   cacheMisses = 0;
 }
 
-/**
- * Gets cache statistics for monitoring and debugging
- *
- * @returns Object with cache hits, misses, and hit rate percentage
- */
 export function getEmojiStickerCacheStats(): {
   hits: number;
   misses: number;

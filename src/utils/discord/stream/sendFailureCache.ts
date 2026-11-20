@@ -1,28 +1,10 @@
-/**
- * Negative cache for channels whose last message send was rejected for a reason that cannot
- * resolve on its own.
- *
- * The chat pipeline already gates on `SendMessages` before generating, but that check reads the
- * permission bitfield and Discord rejects sends for reasons the bitfield does not express. A
- * moderator timeout is the clearest example: the member keeps every permission, so the gate
- * passes, and every send still returns 50013. One production guild produced 397 such failures
- * across two days, each one a completed LLM call discarded at the last step.
- *
- * This is the backstop for that whole class: whatever the cause, once a send has actually been
- * refused, stop paying for responses to that channel until the situation might have changed.
- *
- * Distinct from the webhook failure cache in `webhookCore`, which suppresses the webhook lookup
- * rather than the send, and covers a different set of codes.
- */
-
-/** Discord rejects a send from a timed-out member with 50013, indistinguishable from a real
- * permission gap at the API level, so both share one reason. */
+// Discord rejects sends from timed-out members with 50013, indistinguishable from a real permission gap at the API
+// level, so both share one reason.
 export type SendFailureReason = "missing_permissions" | "missing_access" | "channel_gone";
 
 interface SendFailureEntry {
   reason: SendFailureReason;
   expiresAt: number;
-  /** Suppresses repeat error-level logging without hiding the first occurrence of an episode. */
   reported: boolean;
 }
 
@@ -30,13 +12,8 @@ const sendFailureCache = new Map<string, SendFailureEntry>();
 
 const SEND_FAILURE_RETRY_MS = 15 * 60_000;
 
-/**
- * Maps a Discord API error to a reason worth caching, or null when the failure could plausibly
- * succeed on the next attempt.
- *
- * Deliberately narrow. Caching a transient failure would silence a channel that is merely having
- * a bad minute, which is worse than the wasted call this exists to prevent.
- */
+// Error classification stays narrow because caching transient failures silences a recovering channel, which is worse
+// than a wasted LLM call.
 export function classifySendFailure(error: unknown): SendFailureReason | null {
   const candidate =
     error && typeof error === "object" && "code" in error
@@ -54,12 +31,8 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
     return "missing_access";
   }
 
-  // 10003 is the REST answer that the channel no longer exists, which Discord never reverses for
-  // that id, so there is no recovery to wait for. The client-side `ChannelNotCached` is
-  // deliberately excluded: it only means the channel was absent from the local cache, which an
-  // uncached thread or an evicted DM entry also produces, so caching it would blacklist a live
-  // channel for the whole TTL over a local eviction. The send path resolves that case with a REST
-  // fetch instead.
+  // Cache 10003 (permanent deletion) and exclude ChannelNotCached because local cache eviction resolves via REST
+  // fetch.
   if (code === 10003 || code === "10003") {
     return "channel_gone";
   }
@@ -67,10 +40,6 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
   return null;
 }
 
-/**
- * Records a refused send and reports whether this opens a new episode, so the caller can log the
- * first occurrence loudly and count the rest.
- */
 export function noteSendFailure(channelId: string, reason: SendFailureReason): { isFirstOfEpisode: boolean } {
   const existing = sendFailureCache.get(channelId);
   const isFirstOfEpisode = !existing || existing.expiresAt <= Date.now() || !existing.reported;
@@ -86,22 +55,17 @@ export function noteSendFailure(channelId: string, reason: SendFailureReason): {
 
 const loggedSendFailures = new WeakSet<object>();
 
-/**
- * Marks a failure the send site has already logged with its delivery metadata. The same error then
- * propagates through the stream orchestrator and the generation emitter, and each would otherwise
- * log it again at error level, turning one failed reply into three incident rows.
- */
+// Send errors propagate through the orchestrator and emitter, so marking them here prevents later layers from logging
+// duplicate error-level rows.
 export function markSendFailureLogged<T extends object>(error: T): T {
   loggedSendFailures.add(error);
   return error;
 }
 
-/** Whether a send site already logged this failure, so a later layer should log it at warn. */
 export function wasSendFailureLogged(error: unknown): boolean {
   return typeof error === "object" && error !== null && loggedSendFailures.has(error);
 }
 
-/** The cached reason when sends to this channel are still known to fail, otherwise null. */
 export function getBlockedSendReason(channelId: string): SendFailureReason | null {
   const entry = sendFailureCache.get(channelId);
   if (!entry) return null;
@@ -114,17 +78,12 @@ export function getBlockedSendReason(channelId: string): SendFailureReason | nul
   return entry.reason;
 }
 
-/**
- * Clears the entry after a send lands.
- *
- * Without this, granting the permission or lifting the timeout would take up to a full TTL to
- * take effect, and the first thing a confused admin does is send another message.
- */
+// Successful sends clear the cached block immediately because waiting out the full TTL delays recovery after an admin
+// restores permissions or lifts a timeout.
 export function clearSendFailure(channelId: string): void {
   sendFailureCache.delete(channelId);
 }
 
-/** Test seam. */
 export function resetSendFailureCacheForTesting(): void {
   sendFailureCache.clear();
 }

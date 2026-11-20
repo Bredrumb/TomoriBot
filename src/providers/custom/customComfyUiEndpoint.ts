@@ -452,9 +452,7 @@ function isComfyUiZoomOutPrompt(prompt: string): boolean {
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
-    // The current Anima workflow exposes LanPaint full-canvas stages for every
-    // direction. Keep accepting older strategy names from the tool API, but route
-    // them through the maintained branch instead of the old CropAndStitch path.
+    // Anima exposes LanPaint full-canvas stages for all directions, so older strategy names route to full_canvas.
     return explicitStrategy === "edge_extend" || explicitStrategy === "zoom_out" ? "full_canvas" : explicitStrategy;
   }
 
@@ -891,8 +889,7 @@ function buildComfyUiOutpaintStagePositivePrompt(
   direction: "horizontal" | "top" | "bottom",
 ): string {
   const stagePrompt = resolveComfyUiOutpaintStagePrompt(options, direction);
-  // Directional LanPaint stages get their own prompt. Keep this compact so the
-  // user prompt and optional edge prompt stay more important than our guardrails.
+  // Keep shared directional guardrails compact so the user and optional edge prompts stay primary.
   const shared = [
     stagePrompt,
     "continue visible edge content into the new canvas",
@@ -1409,9 +1406,6 @@ function resolveComfyUiVideoDurationSeconds(durationSeconds: number | undefined)
 }
 
 function resolveComfyUiVideoFps(requestedFps: number | undefined): number {
-  // Honor a user-supplied FPS (from the /generate video modal) when valid,
-  //    mirroring how resolveComfyUiVideoDurationSeconds() prioritizes the request.
-  // Otherwise fall back through the operator env overrides to the built-in default.
   const requested =
     typeof requestedFps === "number" && Number.isFinite(requestedFps) && requestedFps > 0
       ? requestedFps
@@ -2701,10 +2695,8 @@ function describeComfyUiHistoryOutputs(outputs: Record<string, unknown> | undefi
   };
 }
 
-/**
- * Summarizes `/prompt` `node_errors`, which ComfyUI returns beside a `prompt_id` when it drops the
- * outputs that depend on an invalid node and still runs the rest.
- */
+// ComfyUI returns /prompt node_errors beside a prompt_id because it drops invalid-node outputs and still runs the
+// rest.
 function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
   if (!isRecord(nodeErrors)) {
     return [];
@@ -2715,7 +2707,7 @@ function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
     const errors = isRecord(nodeError) && Array.isArray(nodeError.errors) ? nodeError.errors : [];
     const reasons = errors.filter(isRecord).map((error) => {
       const rejected = describeRejectedComfyUiInput(error);
-      // ComfyUI's `details` for a rejected value lists every installed file, so naming the input and value keeps the cause from being buried.
+      // ComfyUI's details for a rejected value list every installed file, so surface inputName and value directly.
       const details = rejected ? `${rejected.inputName} '${rejected.value}'` : error.details;
       return [error.message, details].filter((part) => typeof part === "string" && part).join(": ");
     });
@@ -2740,10 +2732,8 @@ function describeRejectedComfyUiInput(error: Record<string, unknown>): { inputNa
   return { inputName: extra.input_name, value: extra.received_value };
 }
 
-/**
- * Model files a rejected prompt could not find, kept only when the workflow sent that exact value to
- * that node input, so a tool result never repeats a string the endpoint supplied.
- */
+// Missing files are matched against the workflow's sent node inputs so a tool result never echoes a string the
+// endpoint supplied.
 function findMissingComfyUiModelFiles(nodeErrors: unknown, workflow: ComfyUiWorkflow): string[] {
   if (!isRecord(nodeErrors)) {
     return [];
@@ -2791,8 +2781,7 @@ async function generateWithComfyUi(
     throw new Error("ComfyUI generation was cancelled.");
   }
   const workflowPath = resolveComfyUiRuntimeWorkflowPath(endpoint);
-  // A workflow uploaded with the endpoint is its configuration of record. Static paths remain
-  // available for legacy endpoints that have no uploaded workflow.
+  // Uploaded workflows are the configuration of record, while static paths remain only for legacy endpoints.
   const savedWorkflow =
     endpoint.extra_config.workflow ?? (workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : null);
   if (!savedWorkflow || typeof savedWorkflow !== "object") {
@@ -3065,19 +3054,11 @@ async function generateWithComfyUi(
   }
 }
 
-/** Bounds each best-effort cancel request, because the ComfyUI being cancelled may be the thing that stalled. */
+// Cancel requests use a short timeout because the ComfyUI instance being cancelled may be the thing that stalled.
 const COMFYUI_CANCEL_REQUEST_TIMEOUT_MS = 5_000;
 
-/**
- * Cancels one ComfyUI prompt without touching other prompts on a shared instance.
- *
- * Prefers the ID-scoped `/api/jobs/{id}/cancel` route. On servers that predate it, deletes the
- * prompt from the queue and interrupts only when this exact prompt is the one executing, because
- * a bodiless or legacy `/interrupt` aborts whatever is running, including another user's job.
- * Never rejects.
- *
- * @internal Exported for focused cancellation regression tests.
- */
+// Legacy /interrupt aborts whatever is running on a shared instance, so older servers delete from the queue and
+// interrupt only this executing prompt.
 export async function cancelComfyUiPrompt(
   endpoint: CustomEndpointRow,
   apiKey: string,

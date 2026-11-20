@@ -10,7 +10,6 @@ import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 
 const FLUX_STEPS = 30;
 
-/** Guidance scale used when the caller supplies none; `request.cfg` takes precedence. */
 const FLUX_CFG_SCALE = 3.5;
 
 interface ImageDimensions {
@@ -18,11 +17,8 @@ interface ImageDimensions {
   height: number;
 }
 
-/**
- * Every ratio maps onto one of the five resolutions FLUX.1-dev's model card publishes, because
- * an arbitrary width/height pair outside that set is rejected with a 400. Ratios without an exact
- * bucket (3:4, 4:5, 5:4, 21:9) resolve to the nearest published one rather than failing.
- */
+// Ratios map to the nearest of FLUX.1-dev's five published resolutions because NVIDIA rejects arbitrary dimensions
+// with HTTP 400.
 const FLUX_DIMENSIONS: Record<string, ImageDimensions> = {
   "1:1": { width: 1024, height: 1024 },
   "2:3": { width: 832, height: 1216 },
@@ -37,19 +33,13 @@ const FLUX_DIMENSIONS: Record<string, ImageDimensions> = {
 };
 
 interface NvidiaImageModelSpec {
-  /** Path segment appended to {@link NVIDIA_IMAGE_GENERATION_BASE_URL}. */
   path: string;
-  /** False when the endpoint has no negative-prompt field, so callers can be told it was dropped. */
   supportsNegativePrompt: boolean;
   buildBody: (request: ProviderNativeImageGenerationRequest) => Record<string, unknown>;
 }
 
-/**
- * NVIDIA wraps each image model with its upstream repository's native request signature and never
- * normalized them, so a shared body literal cannot serve more than one model: FLUX takes
- * `width`/`height`, SDXL takes `text_prompts[]`, and the retired SD3 line took `aspect_ratio`.
- * Adding a model means adding a spec here, not editing the request path.
- */
+// Each NVIDIA image model keeps its own spec because NVIDIA never normalized upstream request schemas across models,
+// so a shared body cannot serve new models.
 const NVIDIA_IMAGE_MODEL_SPECS: Record<string, NvidiaImageModelSpec> = {
   "black-forest-labs/flux.1-dev": {
     path: "black-forest-labs/flux.1-dev",
@@ -69,7 +59,6 @@ const NVIDIA_IMAGE_MODEL_SPECS: Record<string, NvidiaImageModelSpec> = {
   },
 };
 
-/** Raised when the selected codename has no spec, which happens once NVIDIA retires a model. */
 export class NvidiaImageModelUnavailableError extends Error {
   constructor(readonly model: string) {
     super(
@@ -80,13 +69,7 @@ export class NvidiaImageModelUnavailableError extends Error {
   }
 }
 
-/**
- * Resolve the endpoint URL and request body for one image request.
- *
- * Pure and exported so the per-model body shapes can be unit-tested without issuing HTTP calls.
- * @returns The target URL, the JSON body, and whether the model dropped a supplied negative prompt
- * @throws {NvidiaImageModelUnavailableError} When the codename has no registered spec
- */
+// Kept pure and exported so tests can verify per-model request bodies without issuing HTTP calls.
 export function resolveNvidiaImageRequest(request: ProviderNativeImageGenerationRequest): {
   url: string;
   body: Record<string, unknown>;

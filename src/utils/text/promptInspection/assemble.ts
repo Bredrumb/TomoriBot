@@ -257,12 +257,6 @@ async function resolveSnapshotAnsweringState(params: {
   }
 }
 
-/**
- * Resolves the tool adapter matching the given provider. Non-OpenAI providers
- * (google/vertex/vertexexpress/anthropic) have dedicated adapters; OpenAI-compatible providers
- * share the openrouter-style adapter via subclasses.
- * Unknown providers fall back to the OpenRouter adapter for OpenAI-compat shape.
- */
 function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
   const adapterFactories: Record<string, () => MCPCapableToolAdapter> = {
     google: getGoogleToolAdapter,
@@ -280,13 +274,6 @@ function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
   return (adapterFactories[providerKey] ?? getOpenrouterToolAdapter)();
 }
 
-/**
- * Mirrors the tool-list assembly that `<Provider>Provider.getTools` does at
- * runtime, including the deliberate-mode per-turn allowlist when it can be
- * reconstructed from the latest visible user message. Returns the provider's
- * native tool JSON (OpenAI function spec for OpenAI-compat, Gemini schema for
- * Google, etc.).
- */
 async function fetchProviderTools(
   persona: TomoriState,
   providerName: string,
@@ -366,10 +353,6 @@ async function fetchProviderTools(
   return adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
 }
 
-/**
- * Picks the persona a prompt inspection targets: the autocomplete choice when one was given, else
- * the main persona. Returns null when a given choice no longer resolves on this server.
- */
 export function resolveInspectedPersona(
   personas: readonly TomoriState[],
   rawPersonaOption: string | null,
@@ -385,12 +368,11 @@ export interface PromptInspectionRequest {
   guild: Guild;
   channel: TextBasedChannel;
   user: User;
-  /** The invoker's row, which unlocks their short-term memory in the built context. */
   userData: UserRow;
   tomoriState: TomoriState;
   personas: TomoriState[];
   selectedPersona: TomoriState;
-  /** Tool schemas are fetched only on request because building them reaches MCP servers. */
+  // Tool schemas are fetched only on request because building them reaches MCP servers.
   includeTools: boolean;
 }
 
@@ -403,7 +385,6 @@ export interface PromptInspection {
   channelName: string;
   presetName: string | null;
   capturedAt: string;
-  /** Media-resolved and truncated to the provider budget, as the provider would receive them. */
   contextItems: StructuredContextItem[];
   toolsData: Array<Record<string, unknown>> | null;
   budget: ContextBudget | null;
@@ -411,20 +392,12 @@ export interface PromptInspection {
   historyPairsDropped: number;
 }
 
-/**
- * Rebuilds the prompt the live pipeline would send for a persona in this channel right now.
- *
- * Mirrors `tomoriChat.ts` and `generationTurn.ts` step for step (model routing, history slicing,
- * participant preparation, tail directives, media resolution, provider truncation), so every
- * consumer reports what the model actually sees. Returns null when the channel has no history.
- */
 export async function assemblePromptInspection(request: PromptInspectionRequest): Promise<PromptInspection | null> {
   const { client, guild, channel: textChannel, user, userData, tomoriState, personas, selectedPersona } = request;
 
   if (!("messages" in textChannel)) return null;
 
-  // Resolve effective LLM (persona override > channel override > global) and swap in the override
-  // provider's saved key and samplers when it crosses providers. Mirrors generationTurn.ts.
+  // Mirrors generationTurn.ts override precedence so cross-provider overrides swap in saved keys and samplers.
   const channelLlmOverride = await getCachedChannelLlm(
     selectedPersona.server_id,
     textChannel.id,
@@ -490,7 +463,6 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   );
 
   for (const message of messagesArray) {
-    // Skip fully-private and server-blacklisted users (same gates as real context building)
     if (!message.webhookId) {
       const privacyLevel = await getCachedPrivacyLevel(message.author.id);
       if (privacyLevel === PrivacyLevel.FULL) continue;
@@ -555,13 +527,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       }
     }
 
-    // Process embeds to match tomoriChat.ts conversion rules:
-    //   a) System-produced embeds (memory_learning, reminder_set, system_injection,
-    //      compact_summary/refresh, reward, punish) are wrapped as `[System: ...]`
-    //      blocks and appended to message content, so this applies to ALL messages.
-    //   b) Link-preview embeds (Twitter/YouTube/articles) are extracted as
-    //      `[System: Link preview embed content: ...]` and their images are added
-    //      to imageAttachments, so ONLY for non-Tomori-authored messages.
+    // Mirrors tomoriChat.ts: target system embeds apply to all messages while link previews skip bot-authored ones.
     const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
     const isTomoriAuthored = message.author.id === client.user?.id;
     const embedTextSegments: string[] = [];
@@ -650,10 +616,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       });
     }
 
-    // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapse only when both sides are pure text if
-    // either side carries media, keep separate turns so per-message media IDs stay
-    // unambiguous.
+    // Mirrors buildSimplifiedHistory so media-bearing turns stay separate and per-message media IDs remain distinct.
     const prevMsg = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 ||
@@ -796,12 +759,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       : contextBuild.contextItems),
   ];
 
-  // Apply tail directives in the same order as the live chat pipeline so the
-  //      snapshot reflects the full prompt the LLM would actually see:
-  //        Lower-priority tails (STM "create" prompt, emoji penalty) inserted
-  //           before the latest dialogue pair so they don't displace recent turns.
-  //        Normal tails (e.g. impersonation directive) appended to the end.
-  //        Uncensor directive appended last (isolated, strongest recency signal).
+  // Mirrors live pipeline tail ordering (lower-priority before latest pair, normal tails, uncensor last).
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
   const emojiPenaltyDirective = getEmojiPenaltyDirective(
     contextItems,

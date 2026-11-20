@@ -35,7 +35,7 @@ import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/compo
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
@@ -44,14 +44,6 @@ import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
 export const MAX_PERSONAL_MEMORY_PAGE_SIZE = 24;
 const PERSONA_SELECT_MAX_OPTIONS = 25;
 
-/**
- * Renders one memory as a fenced block so it reads as content rather than panel prose.
- *
- * Stored content is guarded via {@link neutralizeFenceRuns} so runs of backticks cannot close the
- * markdown fence early. Rendered text is bounded to `availableBudget` (including fence syntax overhead
- * and the footer line) using {@link buildTextPreview}, appending an honest hidden-character notice
- * when truncation occurs. The footer reserve is measured dynamically from the preview.
- */
 function renderMemoryBlock(locale: string, content: string, availableBudget: number): string {
   const fenceOverhead = getDiscordTextLength("```markdown\n\n```");
   const rawBudget = Math.max(0, availableBudget - fenceOverhead);
@@ -71,13 +63,8 @@ function renderMemoryBlock(locale: string, content: string, availableBudget: num
   return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
 }
 
-/**
- * Option description for one persona lineage in the memories selector.
- *
- * Counts exclude global memories, matching what selecting that persona actually lists. The four
- * variants stay literal rather than composed: `check-locales` only sees literal keys, so a
- * fragment-built string can go missing with every gate green.
- */
+// The four locale keys stay literal rather than dynamically composed because check-locales only scans literal keys
+// and would pass with missing variants.
 function describeLineageMemories(locale: string, memoryCount: number, personaCount: number): string {
   const singular = memoryCount === 1;
   if (personaCount > 1) {
@@ -168,8 +155,7 @@ export function buildAddPersonalMemoryModal(
             100,
           ),
           max_length: memoryLimits.maxMemoryLength,
-          // Optional because the file field below can supply the memories instead. The submit
-          // handler rejects the case where both arrive empty.
+          // Optional because the file upload field below can supply memories instead.
           required: false,
         },
       },
@@ -178,8 +164,7 @@ export function buildAddPersonalMemoryModal(
         label: safeSelectOptionText(localizer(locale, "commands.personal.memories.modal_file_label"), 45),
         description: safeSelectOptionText(localizer(locale, "commands.personal.memories.modal_file_description"), 100),
         component: {
-          // 19 is FileUpload. 22 is CheckboxGroup and 3 is StringSelect, and Discord accepts any of
-          // them in a modal without complaint, so the number is load-bearing.
+          // 19 is FileUpload; Discord accepts CheckboxGroup (22) or StringSelect (3) here too without rejecting.
           type: 19,
           custom_id: buildPersonalMemoryModalFieldId("file", nonce),
           min_values: 0,
@@ -619,7 +604,6 @@ ${localizer(locale, "commands.personal.memories.selector_guidance")}`,
         },
       );
   } else {
-    // Persona category
     const personaHeading: TextDisplayComponentData = {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.personal.memories.persona_title")}
@@ -640,9 +624,8 @@ ${localizer(locale, "commands.personal.memories.persona_scope_description")}`,
         content: localizer(locale, "commands.personal.memories.no_personas"),
       });
     } else {
-      // Personal memories are keyed by lineage, not by persona, and two personas in one server can
-      // share a lineage: a preset-derived persona keeps its ancestor's. One option per persona then
-      // repeats an option value, which Discord rejects with COMPONENT_OPTION_VALUE_DUPLICATED.
+      // Group by lineage rather than persona so preset-derived personas sharing an ancestor do not trigger
+      // Discord's duplicate-option-value rejection.
       const personasByLineage = new Map<number, TomoriState[]>();
       for (const p of personas) {
         const lineage = p.persona_lineage_id;

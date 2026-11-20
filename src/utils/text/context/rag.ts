@@ -24,10 +24,8 @@ type RagRetrievalOutcome =
   | "injected"
   | "error";
 
-/**
- * Emits one aggregate-only sample. Query text, document text, names, vectors, keys, and server,
- * channel, or user identifiers must never reach a metric field.
- */
+// Metric fields must remain aggregate-only: never record query text, document text, names, vectors, keys, or server,
+// channel, and user identifiers.
 function recordRetrievalMetric(params: {
   outcome: RagRetrievalOutcome;
   startedAt: number;
@@ -50,7 +48,8 @@ function recordRetrievalMetric(params: {
   void metricSampleRepository.recordSample(RAG_RETRIEVAL_METRIC, fields);
 }
 
-/** Records one skip sample and returns null, so every exit path emits exactly one metric. */
+// Every exit path must emit exactly one retrieval metric, so skipped paths call this helper rather than returning
+// null directly.
 function skipRetrieval(
   outcome: RagRetrievalOutcome,
   startedAt: number,

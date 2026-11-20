@@ -13,7 +13,6 @@ const KEYS = {
 const ORIGINAL = "synthetic_original_credential";
 const REPLACEMENT = "synthetic_replacement_credential";
 
-/** Waits until another session's UPDATE is queued behind the row lock the test transaction holds. */
 async function waitForBlockedUpdate(table: string): Promise<void> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {

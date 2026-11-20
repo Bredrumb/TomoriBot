@@ -25,7 +25,8 @@ function routeKey(method: string, path: string): string {
   return `${method.toUpperCase()} ${path}`;
 }
 
-/** Optional modules register routes here even when the base installation has no extra HTTP routes. */
+// Route registry stays exported because optional modules register HTTP routes here even when the base installation
+// adds none.
 export function registerHealthServerRoute(route: HealthServerRoute): void {
   registeredRoutes.set(routeKey(route.method, route.path), {
     ...route,
@@ -41,16 +42,8 @@ export function clearHealthServerRoutesForTests(): void {
   registeredRoutes.clear();
 }
 
-/**
- * Binds the health check HTTP server on the given port.
- * Called before any other init so Cloud Run's startup probe can bind the port
- * before the rest of initialization completes.
- *
- * Returns 503 during startup (before Discord connects), so expected and safe.
- * Returns 200 only when the Discord client is ready and the WebSocket is healthy.
- *
- * @param port - Port to bind (defaults to PORT env var, fallback 8080)
- */
+// Health server must bind before other init steps so Cloud Run's startup probe finds the port open while returning
+// 503 until Discord is ready.
 export function startHealthServer(port: number): void {
   // Started here rather than with the post-ready timers so the series covers startup, which is when
   // the working set is established and when a stall would otherwise look like slow boot.
@@ -61,9 +54,7 @@ export function startHealthServer(port: number): void {
       const healthStatus = healthTracker.getHealthStatus();
       const statusCode = healthStatus.healthy ? 200 : 503;
 
-      // `eventLoop` is reported but deliberately excluded from the verdict: the Compose healthcheck
-      // runs `curl -f`, so letting staleness produce a 503 would mark the container unhealthy on a
-      // threshold nobody has calibrated yet.
+      // Exclude eventLoop from the 503 verdict because Compose curl -f healthchecks lack a calibrated lag threshold.
       res.writeHead(statusCode, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({

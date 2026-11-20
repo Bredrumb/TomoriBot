@@ -23,7 +23,6 @@ const BASE_FUNDING = {
   renewalAt: null,
 } as const;
 
-// Keep request ownership and failure shapes here so guard assertions survive provider hook changes.
 type FundingOverrides = Partial<
   Omit<SupporterFundingContext, "fundingScope" | "sponsorshipId" | "serverId" | "personalUserId">
 > &

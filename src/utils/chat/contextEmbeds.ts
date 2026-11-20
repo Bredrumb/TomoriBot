@@ -19,14 +19,9 @@ const ERROR_EMBED_COLOR_DECIMAL = Number.parseInt(ColorCode.ERROR.replace("#", "
 
 export function processEmbedsFromMessage(args: {
   embeds: readonly Embed[];
-  /**
-   * The message's Components V2 tree. Required so system notices sent as CV2
-   * containers (memory-learning, scheduled-task) stay visible to the LLM , so
-   * those messages have an empty `embeds` array, so the embed loop alone would
-   * drop them entirely and Tomori would re-run tools she already ran.
-   */
+  // Components V2 system notices have an empty embeds array, so omitting components hides them from the LLM and
+  // causes duplicate tool runs.
   components?: readonly unknown[];
-  /** Body restored from `resolveMinimalNoticeBodies` for a Minimal notice that rendered its title alone. */
   minimalNoticeBody?: string;
   content: string;
   completionContent?: string;
@@ -80,10 +75,8 @@ export function processEmbedsFromMessage(args: {
     }
   }
 
-  // Components V2 pass: a CV2 notice carries no embeds at all, so its text has
-  // to be reconstructed from the component tree before it can be classified.
-  // This runs after the embed loop and is mutually exclusive with it, because
-  // Discord rejects messages that mix `embeds` with the IsComponentsV2 flag.
+  // Components V2 notices carry no embeds because Discord forbids mixing them, so reconstruct their text from
+  // components separately.
   const notice = extractNoticeTextFromComponents(args.components);
   if (args.isTomoriAuthoredMessage && !notice?.title && (hasMediaGallery(args.components) || args.minimalNoticeBody)) {
     const footer = notice?.footer ?? "";
@@ -130,15 +123,8 @@ export function formatTargetEmbedForCompletion(
   }
 }
 
-/**
- * Formats a classified system notice into the `[System: ...]` form the LLM sees.
- *
- * Takes a transport-agnostic {title, description} pair rather than an `Embed`
- * so real embeds and reconstructed Components V2 notices produce byte-identical
- * context strings.
- *
- * @param tomoriNickname - Used to strip a leading "Nickname:" prefix from the body.
- */
+// Input uses {title, description} rather than a Discord Embed so embeds and Components V2 notices produce
+// byte-identical context.
 export function formatTargetEmbedForContext(
   source: { title: string | null; description: string },
   embedType: ReturnType<typeof checkTargetEmbedTitle>["type"],

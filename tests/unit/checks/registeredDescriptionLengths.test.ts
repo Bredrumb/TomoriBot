@@ -1,12 +1,5 @@
-/**
- * Regression net for the defect class where an overlong translated command description aborts
- * command registration: `setDescriptionLocalizations` throws `Invalid string length`, which fails
- * the whole module load rather than dropping one locale, so the command never reaches Discord.
- *
- * The tracer is asserted by property rather than by a roster of known keys. A roster is a sample
- * of whatever happened to be too long in one locale, and it goes stale the moment a command is
- * renamed; these assertions re-derive their expectations from source on every run.
- */
+// Assertions derive from source rather than a key roster that stales on renames because overlong locales make
+// setDescriptionLocalizations abort module load.
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
@@ -22,7 +15,6 @@ const COMMANDS_PATH = join(process.cwd(), "src", "commands");
 
 type DescriptionShape = "root" | "subcommand" | "groupSubcommand" | "option" | "other";
 
-/** Classifies a traced key by the registration slot `commandLoader` puts it in. */
 function classifyShape(key: string): DescriptionShape {
   const segments = key.split(".");
   const leaf = segments[segments.length - 1];
@@ -82,9 +74,8 @@ describe("extractRegisteredDescriptionKeys", () => {
   it("skips embed descriptions, which take the runtime locale and cap at 4096 rather than 100", async () => {
     const traced = await extractRegisteredDescriptionKeys();
 
-    // Re-derives the false-positive class instead of naming examples of it: any key a command
-    // file only ever passes with a runtime `locale` variable is embed prose, not registered
-    // metadata, and must not be measured against the 100-character command cap.
+    // Keys passed only with a runtime locale variable are embed prose (4096 cap), so re-derive that class
+    // instead of hardcoding examples.
     const runtimeLocaleKeys = new Set<string>();
     const glob = new Glob("**/*.ts");
     for await (const file of glob.scan(COMMANDS_PATH)) {

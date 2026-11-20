@@ -248,8 +248,8 @@ describe("status Components V2 limits and redaction", () => {
       channels: { fetch: async (id: string) => ({ id }) },
     } as unknown as Client;
 
-    // Status receives API presence and counts, not secret values. The Matrix query in
-    // serverConfigPages.ts selects only channel_disc_id, so room IDs cannot reach this formatter.
+    // Status receives API presence and counts rather than secrets, and serverConfigPages.ts selects only
+    // channel_disc_id so Matrix room IDs cannot reach this formatter.
     const optionalApiKeysValue = formatOptionalApiKeys(["brave-search"], locale);
     const rotationPoolValue = formatRotationPoolValue(
       [{ api_key: Buffer.from(apiKeySecret), is_main_key_pointer: false, is_enabled: true }] as Parameters<

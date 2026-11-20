@@ -1,10 +1,3 @@
-/**
- * Regression harness: SillyTavern preset repository scoping and persistence.
- *
- * Verifies that PresetRepository SQL operations enforce server scoping boundaries,
- * prevent cross-scope writes, and correctly propagate transaction results against
- * a real PostgreSQL database.
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";

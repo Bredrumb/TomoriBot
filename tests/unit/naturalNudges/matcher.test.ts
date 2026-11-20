@@ -212,7 +212,6 @@ describe("Active Nudge Checker resolution", () => {
     reference: { provider, modelId: id, registrationId: null, customEndpointId: null },
   });
 
-  /** Text models in `usable` resolve against the server's keys under their codename; every other ID cannot. */
   function stubCatalog(decisionOptions: DecisionModelOption[], usable: Record<number, string>) {
     spies.push(
       spyOn(llmProviderRepo, "loadSavedProviderConfig").mockImplementation(async (_serverId, provider) =>

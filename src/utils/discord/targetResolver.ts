@@ -120,7 +120,6 @@ type AmbiguousChannelTarget = {
     channelName: string;
     channelId: string;
   }>;
-  /** Total matches found before capping candidates at 3 */
   totalCount: number;
 };
 
@@ -158,7 +157,7 @@ function unwrapInlineCodeDelimiters(value: string): string {
 
 function stripEmoji(text: string): string {
   return text
-    .replace(/[\p{Emoji}]/gu, "") // Unicode emoji
+    .replace(/[\p{Emoji}]/gu, "")
     .replace(/\uFE0E|\uFE0F|\u200D|\u200C/g, "") // Variation selectors and zero-width joiners
     .trim();
 }
@@ -282,11 +281,6 @@ function dedupeChannelCandidates(
   return deduped;
 }
 
-/**
- * Scan conversation context items for inline-code channel references that include a Discord ID.
- * Matches patterns like: the channel named `name (ID: 12345)` or `name (ID: 12345)`
- * Returns all IDs whose normalized channel name matches the given input.
- */
 function extractContextChannelIds(normalizedInput: string, contextItems: StructuredContextItem[]): string[] {
   const pattern = /`([^`]+?)\s*\(ID:\s*(\d{17,20})\)`/g;
   const ids = new Set<string>();
@@ -385,12 +379,8 @@ function resolveConversationUserMatch(
     return null;
   }
 
-  // Identify targets the input matched on their PRIMARY/display name (e.g. the
-  //    rendered "Misuzu"/"Zallya" label) rather than only on a secondary alias
-  //    (server nickname, global name, username). The conversation stage flattens
-  //    all alias types into one set, so without this distinction a user's
-  //    secondary alias can collide with another user's actual name and force a
-  //    needless clarify round-trip.
+  // Track primary-name matches separately because flattened conversation aliases otherwise collide with
+  // secondary nicknames and trigger unnecessary clarification.
   const primaryNameTargetIds = new Set(
     matches
       .filter((match) => normalizeUserTargetInput(match.displayLabel) === normalizedInput)
@@ -405,10 +395,8 @@ function resolveConversationUserMatch(
     })),
   );
 
-  // Precedence tie-break: when exactly one candidate matched on its primary
-  //    name, prefer it over candidates that only matched a secondary alias.
-  //    Otherwise (zero or several primary matches) fall back to the full set so a
-  //    genuine same-name collision still surfaces as ambiguous.
+  // Prefer a unique primary-name match over secondary aliases so alias collisions resolve without masking real
+  // same-name ambiguity.
   const primaryNameMatches = dedupedMatches.filter((candidate) => primaryNameTargetIds.has(candidate.targetId));
   const effectiveMatches = primaryNameMatches.length === 1 ? primaryNameMatches : dedupedMatches;
 
@@ -466,16 +454,8 @@ function resolveGuildMemberStage(
   };
 }
 
-/**
- * The Discord id of whoever caused this turn, for tools keying a write or a
- * permission check on the triggerer rather than on a named target.
- *
- * `context.userId` is the identity admission already resolved through the
- * Message-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
- * it outranks the message author. The author is a fallback for tool contexts
- * built outside a chat turn, and never used for a webhook message: a proxied
- * turn authors as the webhook, whose snowflake matches no user row.
- */
+// context.userId outranks message.author because it holds resolved proxy or relay identities, while a webhook author
+// id matches no user row.
 export function resolveTriggererDiscordId(context: ToolContext): string | undefined {
   if (context.userId) return context.userId;
   return context.message?.webhookId ? undefined : context.message?.author?.id;
@@ -536,11 +516,6 @@ function affixVariants(values: Partial<Record<AddressingStyle, string>>): string
   return [...unique].sort((left, right) => right.length - left.length);
 }
 
-/**
- * Peels one persona-configured prefix and suffix off a requested name. Every
- * addressing variant is tried because the target's own style is known only once the
- * account resolves, which is what this strip exists to make possible.
- */
 function stripNamingAffixes(rawInput: string, namingConfig: PersonaNamingConfig | undefined): string | null {
   if (!namingConfig) {
     return null;
@@ -738,9 +713,8 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     return ladderMatch;
   }
 
-  // A composed label only exists as an alias while its owner sits in the participant
-  // context. Outside it every stage above compares against bare names, so the affix
-  // has to come off before the ladder can match anything.
+  // Strip persona naming affixes before re-querying the ladder because composed labels only exist inside
+  // participant context.
   const strippedInput = stripNamingAffixes(rawInput, namingConfig);
   if (strippedInput) {
     const strippedMatch = await resolveByNameLadder(
@@ -754,8 +728,8 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     }
   }
 
-  // Affixes a user set for themselves are invisible to the strip above, which only
-  // knows the persona's own. Rebuilding each candidate's composed name covers those.
+  // Rebuild each candidate's composed name because user-set affixes are absent from the persona's own strip
+  // config above.
   if (personaLineageId !== undefined) {
     const composedMatch = await resolveComposedNameStage(
       guild,
@@ -777,9 +751,8 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
 
 function formatChannelCandidateLabel(channel: GuildTextBasedChannel): string {
   if (isThreadLike(channel)) {
-    // Parent name is intentionally omitted: threads are referenced by name only.
-    // The resolver still accepts qualified "name in #parent" input; we just don't surface
-    // parent info in labels to avoid confusing the LLM with decorated channel slugs.
+    // Omit the parent channel from thread labels so decorated slugs do not confuse the LLM (qualified input
+    // still resolves).
     return channel.name;
   }
 
@@ -820,11 +793,9 @@ export async function formatChannelReferenceLabel(channel: GuildTextBasedChannel
     .map((candidate) => candidate as GuildTextBasedChannel);
 
   if (isThreadLike(channel)) {
-    // Count other threads that share the same normalized name (including self → threshold > 1)
     const duplicateCount = activeThreads.filter(
       (thread) => normalizeChannelTargetInput(thread.name) === normalizeChannelTargetInput(channel.name),
     ).length;
-    // Also flag collision when a text channel has the same name as this thread
     const hasTextChannelCollision = textChannels.some(
       (tc) => normalizeChannelTargetInput(tc.name) === normalizeChannelTargetInput(channel.name),
     );
@@ -905,8 +876,6 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
     };
   }
 
-  /** Resolve a raw channel ID. Tries client cache, guild fetch, then active threads:
-   *  because guild.channels.fetch() does not return threads. */
   const resolveById = async (id: string): Promise<GuildTextBasedChannel | null> => {
     const fromClient = await context.client.channels.fetch(id).catch(() => null);
     const fromGuild = fromClient ?? (await guild.channels.fetch(id).catch(() => null));
@@ -942,9 +911,8 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
     }
   }
 
-  // Before running ambiguous name search, check if the conversation already showed this channel
-  // with an ID (e.g. "the channel named `name (ID: 12345)`"). A unique context match bypasses
-  // the ambiguity round-trip entirely.
+  // Check context for a uniquely shown channel ID before searching by name so prior disambiguation skips
+  // duplicate clarify prompts.
   if (normalizedInput) {
     const contextIds = extractContextChannelIds(normalizedInput, context.contextItems ?? []);
     if (contextIds.length === 1) {
@@ -1096,7 +1064,6 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
       };
     }
 
-    // Nothing found in cache, so fetch all guild channels once and retry
     if (fetchFallback) {
       await guild.channels.fetch().catch(() => null);
       return searchChannels(false);

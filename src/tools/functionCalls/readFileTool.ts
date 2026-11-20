@@ -1,28 +1,13 @@
-/**
- * Read File Tool
- * Allows the AI to read and extract text content from file attachments shared in Discord messages.
- * Supports PDF and any plain-text format (source code, markdown, JSON, YAML, etc.).
- * Uses a tool-call approach so the bot selectively reads files only when needed,
- * avoiding automatic context flooding.
- */
-
 import { log, ColorCode } from "@/utils/misc/logger";
 import { isExtractableDocument, extractTextFromUrl } from "@/utils/documents/textExtractor";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "@/types/tool/interfaces";
 
-/** Max file size for inline document reading (in bytes) */
 const CHAT_DOCUMENT_MAX_SIZE_BYTES = Number.parseInt(process.env.CHAT_DOCUMENT_MAX_SIZE_MB || "8", 10) * 1024 * 1024;
 
-/** Max extracted text length per document (characters) */
+// Unit is characters rather than bytes or tokens: caps the extracted text length per document.
 const CHAT_DOCUMENT_MAX_TEXT_LENGTH = Number.parseInt(process.env.CHAT_DOCUMENT_MAX_TEXT_LENGTH || "200000", 10);
 
-/**
- * Tool for reading text-based file attachments from Discord messages.
- * Supports PDF and any plain-text format (source code, markdown, JSON, YAML, etc.).
- * Returns extracted text directly in the tool result, so no context restart needed.
- * Available for all LLM providers since the output is text-only.
- */
 export class ReadFileTool extends BaseTool {
   name = "read_file";
   description =
@@ -46,32 +31,10 @@ export class ReadFileTool extends BaseTool {
     required: ["media_id"],
   };
 
-  /**
-   * Read document tool is available for all providers (text-only output).
-   * Not gated by sees_images since this returns plain text.
-   * @param _provider - LLM provider name (unused: always available)
-   * @returns Always true
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Execute document reading
-   *
-   * Algorithm:
-   * 1. Validate parameters (media_id is required)
-   * 2. Fetch recent messages from channel (last 100)
-   * 3. Find target message by media_id
-   * 4. Find document attachment by extension/MIME type (filter by filename if provided)
-   * 5. Send "Reading document..." embed indicator
-   * 6. Download and extract text via extractTextFromUrl()
-   * 7. Return extracted text in tool result
-   *
-   * @param args - Arguments containing media_id and optional filename
-   * @param context - Tool execution context with Discord client access
-   * @returns Promise resolving to tool result with extracted text
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const messageId = args.media_id as string;
     const filenameFilter = args.filename as string | undefined;
@@ -91,7 +54,6 @@ export class ReadFileTool extends BaseTool {
     );
 
     try {
-      // Fetch recent messages from the channel (last 100)
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
       });
@@ -108,7 +70,6 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Find document attachment by extension/MIME type
       let docAttachment: {
         url: string;
         name: string;
@@ -200,10 +161,6 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is serialized into
-      // the functionResponse the LLM sees; `toolResult.message` is used by provider adapter
-      // convertResult() but not the main streaming path. The document text must therefore go
-      // in `data`, matching Brave search's `data.results` pattern.
       const truncationNote = result.truncated
         ? ` (truncated from ${result.originalLength?.toLocaleString()} to ${result.text?.length.toLocaleString()} characters)`
         : "";
@@ -240,6 +197,7 @@ export class ReadFileTool extends BaseTool {
         success: true,
         message: `Successfully read document "${docAttachment.name}" (${result.text?.length.toLocaleString()} characters)${truncationNote}`,
         data: {
+          // Streaming serializes only toolResult.data into functionResponse, so documentContent must live in data.
           summary: documentContent,
           filename: docAttachment.name,
           truncated: result.truncated,

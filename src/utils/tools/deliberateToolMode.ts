@@ -40,9 +40,8 @@ const MAX_TOOL_CONTEXT_TURNS = 10;
 
 const URL_PATTERN = /\bhttps?:\/\/\S+/i;
 const DICE_ROLL_REQUEST_PATTERN = /\b(?:roll(?:ing)?|dice|\d*d\d+)\b/i;
-/** The host must open the link or follow whitespace, so a lookalike subdomain does not match. */
+// Anchored to a scheme, start of string, or whitespace so a lookalike subdomain cannot spoof a Danbooru post link.
 const DANBOORU_POST_LINK_PATTERN = /(?:https?:\/\/|^|\s)danbooru\.donmai\.us\/posts\/\d+/i;
-/** A request to see existing art "of" or "from" something, such as "show me art of Ryza" or "send pics from Atelier". */
 const EXISTING_ART_REQUEST_PATTERN =
   /\b(?:show|send|post|find|share|get)\b.{0,40}\b(?:art|arts|fanarts?|pics?|pictures?|images?|illustrations?)\s+(?:of|from)\b/i;
 const DANBOORU_NAME_PATTERN = /\b(?:danbooru|booru)\b/i;
@@ -194,7 +193,8 @@ const URL_READING_TOOL_NAMES = ["fetch_url", "fetch", "fetch-url", "url-metadata
 const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
-/** The image tools plus the tag lookup, so a drawing of an existing character can check its tags first. */
+// Paired with danbooru_search_tags alongside image generators so drawings of existing characters can resolve
+// canonical tags first.
 const IMAGE_REQUEST_TOOL_NAMES = [...IMAGE_GENERATION_TOOL_NAMES, "danbooru_search_tags"];
 const DANBOORU_ART_TOOL_NAMES = ["danbooru_search_tags", "danbooru_search_posts"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
@@ -212,7 +212,7 @@ const CAPABILITY_TOOL_NAMES = ["review_capabilities"];
 const USER_BLOCKING_TOOL_NAMES = ["block_user", "unblock_user"];
 const USER_INFO_TOOL_NAMES = ["update_user_info"];
 
-/** Tools whose backend job can outlive a killed turn and still bill. */
+// Grouped here because their backend jobs can outlive a killed turn and still incur billing.
 export const MEDIA_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set([
   ...IMAGE_GENERATION_TOOL_NAMES,
   ...VIDEO_GENERATION_TOOL_NAMES,
@@ -346,11 +346,8 @@ export function normalizeDeliberateToolRegexTrigger(trigger: string | null | und
   return (trigger ?? "").trim();
 }
 
-/**
- * A trailing "*" makes the literal a word-start stem ("lembr*" matches "lembrete"). Han, kana, and
- * Hangul literals match as substrings, because a letter-boundary requirement rejects nearly every
- * real use in scripts without spaces or with attached particles.
- */
+// Han, kana, and Hangul literals match as substrings rather than at letter boundaries because unspaced scripts and
+// attached particles would fail.
 function literalTriggerMatches(text: string, trigger: string): boolean {
   const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
   const isStem = normalizedTrigger.length > 1 && normalizedTrigger.endsWith("*");
@@ -473,10 +470,8 @@ export function hasDeliberateToolIntent(
   return URL_PATTERN.test(text) && URL_TOOL_INTENT_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-/**
- * Locale keyword packs expressed as a trigger map, so they reuse the custom-trigger matcher. English
- * relies on the built-in patterns above and ships empty packs.
- */
+// English ships empty keyword packs intentionally because it relies on the built-in regex patterns above, while other
+// locales reuse this trigger map.
 function getLocalePackTriggerMap(): DeliberateToolTriggerMap {
   return Object.fromEntries(
     DELIBERATE_TOOL_TRIGGER_TARGETS.map((target) => [
@@ -486,7 +481,6 @@ function getLocalePackTriggerMap(): DeliberateToolTriggerMap {
   );
 }
 
-/** True when any authored locale's keyword pack for `targetValue` matches `text`. */
 export function matchesLocaleDeliberateToolPack(targetValue: DeliberateToolTriggerTarget, text: string): boolean {
   return getIntentPackUnion(DELIBERATE_TOOL_PACK_KEYS[targetValue]).some((entry) => literalTriggerMatches(text, entry));
 }
@@ -752,7 +746,6 @@ export function isToolAllowedByDeliberateMode(
   return !allowedToolNames?.length || allowedToolNames.includes(toolName);
 }
 
-/** Family intent follows the configured service's discovered names without changing its argument schema. */
 export function expandDeliberateToolAllowedNames(
   allowedToolNames: readonly string[] | null | undefined,
   families: Record<string, string> = {},
@@ -803,12 +796,6 @@ export function resolveDeliberateToolMode(
   return Boolean(serverDeliberateToolMode);
 }
 
-/**
- * Inspects the most recent messages in a channel to detect tools the model
- * recently invoked or was asked to invoke, so the deliberate-tool allowlist
- * can keep those tools exposed for short follow-up turns ("do it again", etc.).
- * Stops as soon as one message yields any tool names.
- */
 export function getRecentToolAffordanceNames(
   recentMessages: Message[],
   currentMessageId: string,
@@ -892,12 +879,8 @@ export function getRecentTriggeredToolIntentResult(
   };
 }
 
-/**
- * Media on the triggering message is itself the request to look at it, so each kind admits only the
- * tool that reads that kind. Media elsewhere in history admits nothing; otherwise one old GIF would
- * keep its tool exposed for every later turn. Each tool's own availability gate still decides whether
- * the model receives it (`analyze_image` only reaches a model that cannot see images).
- */
+// Only the triggering message admits media-reading tools because scanning history would let one old GIF keep those
+// tools exposed on every later turn.
 export function getAttachmentDeliberateToolIntentResult(
   message:
     | Pick<SimplifiedMessageForContext, "imageAttachments" | "videoAttachments" | "documentAttachments">
@@ -924,7 +907,6 @@ export function getAttachmentDeliberateToolIntentResult(
   return { allowedToolNames, matches };
 }
 
-/** Expression tools remain available without a task request; their feature toggles still apply. */
 export function getAutonomousDeliberateToolNames(state: TomoriState): string[] {
   const stickerTool = new StickerTool();
   if (!state.llm.has_tools || state.config.tool_use_enabled === false) return [];

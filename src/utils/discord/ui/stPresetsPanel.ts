@@ -155,9 +155,7 @@ export function buildStPresetsPanelComponents(input: StPresetsPanelRenderInput):
     return components;
   }
 
-  // A repaint that names a preset has to land on the selector page holding it. Defaulting to the
-  // first page instead drops the reader back to page 1 after every action taken further in, and
-  // leaves the selection off-screen so no option carries the default marker.
+  // Anchor pagination to the target preset so further edits stay on its page instead of snapping back to page 1.
   const anchorPresetId =
     page.kind === "delete" ? page.presetId : page.kind === "preset" ? (page.presetId ?? activePresetId) : null;
   const anchorIndex = anchorPresetId == null ? -1 : presets.findIndex((p) => p.preset_id === anchorPresetId);
@@ -232,7 +230,6 @@ export function buildStPresetsPanelComponents(input: StPresetsPanelRenderInput):
 
   components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
 
-  // Page body rendering
   if (page.kind === "none") {
     components.push(
       {
@@ -294,12 +291,9 @@ export function buildStPresetsPanelComponents(input: StPresetsPanelRenderInput):
       const nodeRangeCount = page.nodeRangeCount ?? 0;
       if (nodeRangeCount > 1) {
         const nodeTotalCount = page.nodeTotalCount ?? nodeRangeCount * MAX_NODES_PER_MODAL_PAGE;
-        // Every range is its own option because the modal is the only place nodes can be toggled:
-        // a prev/next row disables the position it sits on, so the range it is parked on could
-        // never be opened.
-        // nodeRangeIndex names a range that must stay visible, not the first option: snapping to its
-        // block keeps a full selector and lets a legacy node-page ID land on a complete list.
+        // List every range because prev/next controls disable their own slot and would block opening that node range.
         const visibleRange = Math.min(Math.max(0, page.nodeRangeIndex ?? 0), Math.max(0, nodeRangeCount - 1));
+        // Snap to the block containing visibleRange so legacy node-page links render a full selector list.
         const blockStart = Math.floor(visibleRange / NODE_RANGE_OPTIONS_PER_PAGE) * NODE_RANGE_OPTIONS_PER_PAGE;
         const visibleRanges = Math.min(NODE_RANGE_OPTIONS_PER_PAGE, nodeRangeCount - blockStart);
         components.push({

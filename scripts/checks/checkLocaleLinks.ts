@@ -31,38 +31,28 @@ export interface LinkValidationSummary {
   findings: LinkFinding[];
 }
 
-/**
- * Slugs a markdown heading to match Starlight / GitHub anchor generation.
- */
 export function slugifyHeading(heading: string): string {
   const clean = heading
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // markdown links [text](url) -> text
-    .replace(/[*_~`]/g, "") // formatting
-    .replace(/<[^>]+>/g, "") // html tags
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_~`]/g, "")
+    .replace(/<[^>]+>/g, "")
     .trim();
 
-  // Each space becomes its own hyphen and runs are not collapsed, because that is what
-  // github-slugger does: dropping `&` from "Web & URLs" leaves two spaces, so the real anchor is
-  // `web--urls`. Collapsing here reported every such heading as a broken fragment.
+  // Preserve consecutive hyphens per space to match github-slugger (e.g. dropping "&" in "Web & URLs" yields
+  // "web--urls").
   return clean
     .toLowerCase()
     .replace(/\s/g, "-")
     .replace(/[^\p{L}\p{N}\p{M}\-_]/gu, "");
 }
 
-/**
- * Extracts all valid anchors from a markdown document:
- * explicit `<a id="...">` or `<a name="...">`, `anchor:` comments, and slugified headings.
- */
 export function extractDocAnchors(content: string): Set<string> {
   const anchors = new Set<string>();
 
-  // Explicit anchor tags
   for (const match of content.matchAll(/<a\s+(?:[^>]*?\s+)?(?:id|name)=["']([^"']+)["']/gi)) {
     anchors.add(match[1]);
   }
 
-  // Heading lines: # Heading
   const lines = content.split(/\r?\n/);
   for (const [index, line] of lines.entries()) {
     const anchor = ANCHOR_COMMENT.exec(line);
@@ -83,18 +73,14 @@ export function extractDocAnchors(content: string): Set<string> {
   return anchors;
 }
 
-/**
- * Strips a published locale root from a docs URL pathname, so the file lookup sees the route the
- * locale trees share. Without this, `/ja/features/command-reference/` reads as a file named
- * `ja/features/...` and every prefixed link reports as broken.
- */
+// Published locale prefixes are stripped so `resolveDocPath` tests shared routes under each `localeRoot` instead of
+// `locale/locale/path`.
 export function stripLocaleRoot(urlPath: string): string {
   const [first, ...rest] = urlPath.replace(/^\//, "").split("/");
   if (!(PUBLISHED_DOCS_LOCALES as readonly string[]).includes(first)) return urlPath;
   return rest.length > 0 ? `/${rest.join("/")}` : "/";
 }
 
-/** Locale directory a source file documents, which decides which tree a route must resolve in. */
 export function sourceLocaleOf(sourceFile: string): string | undefined {
   const normalized = sourceFile.replaceAll("\\", "/");
   const readmeMatch = normalized.match(/(?:^|\/)README_([A-Za-z-]+)\.md$/);
@@ -106,13 +92,8 @@ export function sourceLocaleOf(sourceFile: string): string | undefined {
   return undefined;
 }
 
-/**
- * Resolves a doc URL pathname to a markdown file path under docs/.
- *
- * A route resolves in the source file's own locale tree first and then in the default locale,
- * because the site serves the default locale's content at a URL whose translation does not exist
- * yet. A route with no page in either tree is genuinely broken.
- */
+// Routes check the source locale tree before falling back to `en` because the site serves default-locale content for
+// untranslated pages.
 export function resolveDocPath(
   urlPath: string,
   docFiles: Set<string>,
@@ -121,12 +102,10 @@ export function resolveDocPath(
 ): string | null {
   const clean = stripLocaleRoot(urlPath).replace(/^\//, "").replace(/\/$/, "");
 
-  // Root path / or a locale landing root (e.g. /en, /ja)
   if (!clean || clean === "" || isDiscordLocaleCode(clean)) {
     return "ROOT";
   }
 
-  // Static files in apps/docs/public (e.g. /img/..., /llms.txt)
   if (clean === "llms.txt" || (publicFiles && (publicFiles.has(clean) || publicFiles.has(`public/${clean}`)))) {
     return "STATIC_ASSET";
   }
@@ -156,17 +135,12 @@ export function resolveDocPath(
   return null;
 }
 
-/**
- * Extracts project-owned documentation URLs from file content.
- * Matches `https://docs.tomoribot.app/{path}`. Third-party URLs are untouched and ignored.
- */
 export function extractProjectDocLinks(
   content: string,
   sourceFile: string,
 ): Array<{ sourceFile: string; url: string; pathname: string; fragment?: string }> {
   const links: Array<{ sourceFile: string; url: string; pathname: string; fragment?: string }> = [];
   const push = (rawPath: string) => {
-    // Strip trailing punctuation often adjacent to URLs in prose (e.g. ".", ")", "...")
     const trimmed = rawPath.replace(/[.,;:]+$/, "");
     const [pathname, fragment] = trimmed.split("#");
     links.push({
@@ -181,17 +155,15 @@ export function extractProjectDocLinks(
     push(match[1]);
   }
 
-  // Root-relative markdown links. Only a path whose first segment is a published locale root is
-  // ours: every other `](/...)` belongs to some other site or to a static asset the docs build
-  // owns, and matching those would report noise the author cannot act on.
+  // Only check root-relative markdown links whose first segment is a published locale because other paths belong to
+  // external sites or static assets.
   for (const match of content.matchAll(/\]\((\/[^)\s]*)\)/g)) {
     const [first] = match[1].replace(/^\//, "").split("/");
     if ((PUBLISHED_DOCS_LOCALES as readonly string[]).includes(first)) push(match[1]);
   }
 
-  // The route table stores bare, locale-less routes as string literals rather than links, so it
-  // needs its own pattern. Scoped to that file because a bare quoted path anywhere else is far
-  // more likely to be a filesystem path than a docs route.
+  // Match bare quoted route paths only in docsLocales.ts because bare quoted paths elsewhere are usually filesystem
+  // paths.
   if (sourceFile.replaceAll("\\", "/").endsWith("src/constants/docsLocales.ts")) {
     for (const match of content.matchAll(/"(\/[A-Za-z0-9\-_/]*\/#?[A-Za-z0-9\-_#]*)"/g)) {
       push(match[1]);
@@ -201,9 +173,6 @@ export function extractProjectDocLinks(
   return links;
 }
 
-/**
- * Scans documentation files, locale files, and READMEs for broken project-owned doc routes and fragments.
- */
 export async function validateLocaleLinks(options?: {
   locale?: string;
   rootDir?: string;
@@ -211,7 +180,6 @@ export async function validateLocaleLinks(options?: {
   const root = options?.rootDir ?? process.cwd();
   const docsDir = join(root, "docs");
 
-  // Index all doc files under docs/
   const docFiles = new Set<string>();
   const docContents = new Map<string, string>();
   const docGlob = new Glob("**/*.{md,mdx}");
@@ -221,7 +189,6 @@ export async function validateLocaleLinks(options?: {
     docContents.set(normalized, readFileSync(join(docsDir, file), "utf-8"));
   }
 
-  // Index static public files
   const publicFiles = new Set<string>();
   const publicDir = join(root, "apps", "docs", "public");
   if (existsSync(publicDir)) {
@@ -235,10 +202,8 @@ export async function validateLocaleLinks(options?: {
     throw new Error(`Invalid Discord locale code: ${options.locale}`);
   }
 
-  // Collect source files to scan
   const filesToScan: string[] = [];
 
-  // Locales
   const localesDir = join(root, "src", "locales");
   if (existsSync(localesDir)) {
     if (options?.locale) {
@@ -257,15 +222,12 @@ export async function validateLocaleLinks(options?: {
     }
   }
 
-  // The bot's own docs destinations. `DOCS_ROUTES` is locale-less, so a fragment there has to
-  // exist in every published tree, not just the English one: `buildDocsUrl` prefixes the reader's
-  // locale onto it, and an anchor that only English carries lands every other locale at page top.
+  // Check fragments in DOCS_ROUTES against every published locale because buildDocsUrl prepends the reader's locale.
   const routeTable = join("src", "constants", "docsLocales.ts");
   if (!options?.locale && existsSync(join(root, routeTable))) {
     filesToScan.push(routeTable);
   }
 
-  // Docs
   if (options?.locale) {
     const localeDocs = join(docsDir, options.locale);
     if (existsSync(localeDocs)) {
@@ -280,7 +242,6 @@ export async function validateLocaleLinks(options?: {
     }
   }
 
-  // READMEs: root README.md for en-US/global, and .github/README_${locale}.md for translated locales
   if (options?.locale) {
     if (options.locale === "en-US") {
       const enReadme = join(root, "README.md");
@@ -406,7 +367,6 @@ export async function validateLocaleLinks(options?: {
   };
 }
 
-/** Prints the link section of `check-locales` and returns whether every link resolved. */
 export async function reportLocaleLinks(): Promise<boolean> {
   log.info("Validating project-owned documentation links…");
   const summary = await validateLocaleLinks();

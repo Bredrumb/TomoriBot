@@ -9,19 +9,14 @@ import { reportProtocolMarkers } from "./checkLocaleMarkers";
 import { reportPlaceholderParity } from "./checkLocalePlaceholders";
 import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
-/**
- * Lightweight logger that doesn't require database connection
- * Avoids circular dependency issues with the main logger
- */
+// Local logger avoids importing the main logger because the main logger requires a database connection and causes
+// circular dependencies.
 const log = {
   info: (msg: string) => console.log(`ℹ️  ${msg}`),
   warn: (msg: string, error?: unknown) => console.warn(`⚠️  ${msg}`, error ? `| ${error}` : ""),
   error: (msg: string, error?: unknown) => console.error(`❌ ${msg}`, error ? `| ${error}` : ""),
 };
 
-/**
- * Interface for tracking key usage statistics
- */
 interface KeyUsage {
   key: string;
   files: Set<string>;
@@ -52,34 +47,24 @@ interface CommandDescriptionViolation {
   value: string;
   length: number;
   locale: string;
-  /** Call sites or directories that register this description; absent for suffix-matched keys. */
   files?: Set<string>;
 }
 
-/**
- * Discord enforces different length caps for each modal component slot. These are derived
- * from `src/utils/discord/ui/interactionCore.ts` (setLabel → 45, setPlaceholder → 100,
- * setTitle → 45); `descriptionKey` shares the placeholder cap because the code at
- * line 664 truncates it via `description.substring(0, 100)` when no explicit placeholder
- * is supplied.
- */
+// Caps follow `interactionCore.ts` (Discord modal limits), where `description` shares the 100-char `placeholder` cap
+// because it truncates as fallback placeholder.
 const MODAL_KIND_LIMITS = {
   title: 45,
   label: 45,
   description: 100,
   placeholder: 100,
-  // Discord string-select option fields (`StringSelectMenuOptionBuilder.setLabel`/`setDescription`)
-  // both cap at 100 chars. These flow through `label:`/`description:` props inside an `options:`
-  // array: objects shaped `{ value, label, description }` with no `customId`/`labelKey`, so the
-  // modal-component tracer below misses them. Discord silently truncates overruns in the picker UI.
+  // String-select options cap at 100 chars and flow through { value, label, description } without customId/labelKey,
+  // so modal-field tracing below misses them while Discord silently truncates overruns.
   optionLabel: 100,
   optionDescription: 100,
 } as const;
 type ModalKind = keyof typeof MODAL_KIND_LIMITS;
 
-/**
- * Message component slot length limits per Discord UI specification.
- */
+// Values are fixed because Discord's message component specification enforces these exact character caps.
 const MESSAGE_SLOT_LIMITS = {
   buttonLabel: 80,
   selectPlaceholder: 150,
@@ -88,18 +73,12 @@ const MESSAGE_SLOT_LIMITS = {
 } as const;
 type MessageSlotKind = keyof typeof MESSAGE_SLOT_LIMITS;
 
-/**
- * A locale key that flows into a message component slot at runtime, traced from source.
- */
 interface MessageSlotUsage {
   key: string;
   kind: MessageSlotKind;
   files: Set<string>;
 }
 
-/**
- * Length violation for a source-traced message component key.
- */
 interface MessageSlotViolation {
   key: string;
   kind: MessageSlotKind;
@@ -110,20 +89,12 @@ interface MessageSlotViolation {
   files: Set<string>;
 }
 
-/**
- * A locale key that flows into a modal component at runtime, traced from a source file.
- * Tracked per (kind, key) so the same key used as both label and placeholder is reported
- * with both context-specific caps.
- */
 interface ModalKeyUsage {
   key: string;
   kind: ModalKind;
   files: Set<string>;
 }
 
-/**
- * Length violation for a source-traced modal component key.
- */
 interface ModalUsageViolation {
   key: string;
   kind: ModalKind;
@@ -154,9 +125,6 @@ interface AnalysisResult {
   messageSlotViolations: MessageSlotViolation[];
 }
 
-/**
- * Recursively extracts all keys from a nested locale object
- */
 function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
   const keys = new Set<string>();
 
@@ -167,9 +135,7 @@ function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
     return keys;
   }
 
-  // Arrays are treated as opaque leaf values (e.g. base_trigger_words: ["tomori", "tomo"]).
-  // Recursing into them would generate spurious keys like "general.defaults.base_trigger_words.0"
-  // that can never be statically referenced, causing them to be flagged as unused.
+  // Treat arrays as opaque leaf values because recursing into array indices creates spurious unused keys.
   if (Array.isArray(obj)) {
     if (prefix) keys.add(prefix);
     return keys;
@@ -188,9 +154,6 @@ function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
   return keys;
 }
 
-/**
- * Loads all locale files and extracts available keys
- */
 export async function loadAvailableKeys(): Promise<{
   availableKeys: Set<string>;
   localeKeys: Map<string, Set<string>>;
@@ -205,7 +168,7 @@ export async function loadAvailableKeys(): Promise<{
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      const localeName = entry.name; // e.g., "en-US", "ja"
+      const localeName = entry.name;
       const localeDir = join(localesPath, localeName);
       const merged: Record<string, unknown> = {};
 
@@ -237,27 +200,15 @@ export async function loadAvailableKeys(): Promise<{
   return { availableKeys, localeKeys };
 }
 
-/**
- * Escapes a string for use in a regular expression
- */
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Validates if a string is likely a valid localization key
- */
 function isValidLocalizationKey(key: string): boolean {
   const segments = key.split(".");
   if (segments.length < 2) return false;
 
-  const templatePatterns = [
-    /^category\./i, // "category.group.subcommand"
-    /^example\./i, // "example.key.path"
-    /^placeholder\./i, // "placeholder.text"
-    /^template\./i, // "template.string"
-    /\.placeholder$/i, // "something.placeholder"
-  ];
+  const templatePatterns = [/^category\./i, /^example\./i, /^placeholder\./i, /^template\./i, /\.placeholder$/i];
 
   for (const pattern of templatePatterns) {
     if (pattern.test(key)) return false;
@@ -273,10 +224,8 @@ function isValidLocalizationKey(key: string): boolean {
     // Database/SQL patterns - require whole SQL keywords so locale keys like
     // "commands.data.delete.no_permission_title" are not rejected.
     /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[\s\S]*\b(?:FROM|WHERE|INTO|SET)\b/i,
-    // Panel action telemetry keys (<surface>.<scope>.<resource>.<verb>). The surface is anchored to the
-    // known panel list because "workspace|personal" alone also matches real keys such as
-    // "commands.personal.memories.description", which would exempt the whole commands.personal namespace from
-    // validation. A new panel surface that omits itself here fails loudly as a missing key.
+    // Anchor panel telemetry surfaces explicitly so "workspace|personal" never exempts real commands.personal.* keys;
+    // omitted new surfaces fail loudly as missing keys.
     /^(?:mcps|st-presets|providers|moderation|expressions|nudge-studio|personal-memories|personal-config|server-config|memories|setup)\.(?:workspace|personal)\.[a-z0-9-]+\.[a-z0-9-]+$/,
   ];
 
@@ -284,9 +233,7 @@ function isValidLocalizationKey(key: string): boolean {
     if (pattern.test(key)) return false;
   }
 
-  // Must start with a known top-level locale prefix
-  // This list is derived from the top-level keys in the locale files, so
-  // update it whenever a new top-level namespace is added to the locale object
+  // Top-level locale namespaces; update this list when adding a new top-level slice key.
   const validPrefixes = [
     "commands",
     "general",
@@ -311,29 +258,15 @@ function isValidLocalizationKey(key: string): boolean {
   return segments.length >= 3 && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstSegment);
 }
 
-/**
- * Checks if a localization key is used for a modal title
- */
 function isModalTitleKey(key: string): boolean {
   return key.endsWith(".modal_title") || key.endsWith(".modal.title");
 }
 
-/**
- * Checks if a localization key is used for a modal description
- */
 function isModalDescriptionKey(key: string): boolean {
-  // Pattern 1: *.modal_description (bare leaf)
-  // Pattern 2: *.{field}_modal_description (field-scoped leaf, e.g. prompt_modal_description)
-  // Pattern 3: *.modal.{field}_description (nested under a `modal` sub-object)
   return /(?:[._])modal_description$|\.modal\.[a-z_]+_description$/.test(key);
 }
 
-/**
- * Checks if a localization key is used for a command description
- */
 function isCommandDescriptionKey(key: string): boolean {
-  // Pattern: commands.*.*.command_description or commands.*.*.*.command_description
-  // Examples: commands.help.memory.command_description, commands.teach.memory.personal.command_description
   return /^commands\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+\.command_description$/.test(key);
 }
 
@@ -428,9 +361,6 @@ function resolveLocalizationKey(key: string, availableKeys: Set<string>): string
   return null;
 }
 
-/**
- * Recursively extracts string values from a nested locale object
- */
 function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
   const values = new Map<string, string>();
 
@@ -457,10 +387,6 @@ function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
   return values;
 }
 
-/**
- * Loads and merges all category slice files for a locale into one locale object.
- * Replaces direct imports of the old monolithic `{locale}.ts` files.
- */
 async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
   const localeDir = join(process.cwd(), "src", "locales", localeName);
   const merged: Record<string, unknown> = {};
@@ -475,7 +401,6 @@ async function loadMergedLocale(localeName: string): Promise<Record<string, unkn
 async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Promise<ModalTitleViolation[]> {
   const violations: ModalTitleViolation[] = [];
 
-  // Discord modal title constraints
   const MIN_LENGTH = 5;
   const MAX_LENGTH = 45;
 
@@ -516,9 +441,7 @@ async function checkModalDescriptionLengths(
 ): Promise<ModalDescriptionViolation[]> {
   const violations: ModalDescriptionViolation[] = [];
 
-  // Discord modal placeholder constraint: `setPlaceholder` accepts up to 100 chars.
-  // Anything beyond is silently truncated by `interactionCore.ts` via `substring(0, 100)`,
-  // so we treat >100 as a hard violation rather than allowing a smaller safety margin.
+  // Treat >100 characters as a hard violation because interactionCore.ts silently truncates modal descriptions at 100.
   const MAX_LENGTH = 100;
 
   for (const [localeName, keys] of localeKeys) {
@@ -536,7 +459,6 @@ async function checkModalDescriptionLengths(
 
         const length = getDiscordTextLength(value);
 
-        // Check if length violates Discord constraint (only max, no min)
         if (length > MAX_LENGTH) {
           violations.push({
             key,
@@ -554,16 +476,8 @@ async function checkModalDescriptionLengths(
   return violations;
 }
 
-/**
- * Walks backward from `idx` to find the nearest unmatched `{` and forward to its matching `}`.
- * Used to scope-confine modal-component property lookups so we don't accidentally pick up
- * sibling properties from adjacent object literals on the page.
- *
- * Caveat: a naive character-by-character brace counter doesn't strip braces inside strings,
- * template literals, or comments. In practice this is safe for modal field specs because
- * locale keys are short dot-separated identifiers (no embedded braces), and the surrounding
- * TS code in command files keeps each modal field on its own object literal block.
- */
+// Brace counting does not skip strings or comments, so it relies on modal field literals containing no embedded
+// braces.
 function findEnclosingObjectRange(content: string, idx: number): { start: number; end: number } | null {
   let depth = 0;
   let start = -1;
@@ -592,30 +506,6 @@ function findEnclosingObjectRange(content: string, idx: number): { start: number
   return null;
 }
 
-/**
- * Source-traces locale keys that flow into Discord modal components at runtime. Unlike
- * the name-pattern checks above (`isModalDescriptionKey`, etc.), this scanner identifies
- * keys by their *usage*, finding object literals that match the `ModalComponent` shape
- * from `src/types/discord/modal.ts`, and binds each key to its Discord cap based on the
- * prop it's assigned to.
- *
- * Detection rules:
- * 1. `modalTitleKey: "literal"` anywhere → title (cap 45). Prop name is unambiguous;
- *    no scope confinement needed.
- * 2. Object literal that contains both `customId:` and `labelKey:` props at the same
- *    scope level → it's a `ModalComponent` per the type union. Within that literal:
- *    - `labelKey: "literal"` → label (cap 45)
- *    - `descriptionKey: "literal"` → description (cap 100; truncated as placeholder)
- *    - `placeholder: "commands.*"` → placeholder (cap 100; only `commands.*` literals
- *      are treated as locale keys, matching the runtime check at interactionCore.ts:671-674)
- * 3. String-select option object: `label: localizer(locale, "literal")` whose enclosing
- *    literal also has a `value:` prop (the `{ value, label, description }` shape). These are
- *    the checkbox/select choices rendered inside modals and message components. Within it:
- *    - `label: localizer(…, "literal")` → optionLabel (cap 100)
- *    - `description: localizer(…, "literal")` → optionDescription (cap 100)
- *    The `value:` sibling requirement excludes button literals (`{ customId, label }`), whose
- *    `label` carries a different (80-char) cap.
- */
 async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>> {
   const usages = new Map<string, ModalKeyUsage>();
   const srcPath = join(process.cwd(), "src");
@@ -652,8 +542,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       titleMatch = titlePattern.exec(content);
     }
 
-    // Modal field components: discriminator is an object literal with both `customId:` and `labelKey:`.
-    // Iterate each customId occurrence, scope-confine to its enclosing object, then inspect siblings.
+    // Require both customId and labelKey in the same enclosing object literal so non-modal fields are ignored.
     const customIdPattern = /\bcustomId\s*:/g;
     let customIdMatch: RegExpExecArray | null = customIdPattern.exec(content);
     while (customIdMatch !== null) {
@@ -668,8 +557,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
           const descMatch = obj.match(/\bdescriptionKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/);
           if (descMatch) add(descMatch[1], "description", file);
 
-          // Only `commands.*` placeholders are locale keys per interactionCore.ts:671-674;
-          // anything else is a literal display string and out of scope for this check.
+          // Only `commands.*` placeholders are locale keys; other placeholders in interactionCore.ts are literals.
           const placeholderMatch = obj.match(/\bplaceholder\s*:\s*["'](commands\.[a-zA-Z0-9._-]+)["']/);
           if (placeholderMatch) add(placeholderMatch[1], "placeholder", file);
         }
@@ -677,9 +565,6 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       customIdMatch = customIdPattern.exec(content);
     }
 
-    // String-select option fields: anchor on `label: localizer(…, "key")`, then confirm the
-    // enclosing literal is an option (has a `value:` sibling) rather than a button. Both the
-    // option label and its `description: localizer(…)` cap at 100 chars in Discord's picker.
     const optionLabelPattern = /\blabel\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
     let optionLabelMatch: RegExpExecArray | null = optionLabelPattern.exec(content);
     while (optionLabelMatch !== null) {
@@ -703,11 +588,6 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
   return usages;
 }
 
-/**
- * Resolves each traced modal usage against the locale strings and flags any whose value
- * exceeds the Discord cap for its slot. Skips keys missing from a locale because the parity
- * check already covers those.
- */
 async function checkModalComponentUsageLengths(
   usages: Map<string, ModalKeyUsage>,
   localeKeys: Map<string, Set<string>>,
@@ -748,16 +628,10 @@ async function checkModalComponentUsageLengths(
   return violations;
 }
 
-/**
- * Matches the key argument of a `localizer` call: a quoted key, or a lookup into a SCREAMING_CASE
- * key map such as `API_STYLE_KEYS[style].description` or `CATEGORY_KEYS.whitelist`.
- */
 const KEY_EXPRESSION_SOURCE = String.raw`(["'][a-zA-Z0-9._-]+["']|[A-Z][A-Z0-9_]*(?:\[[^\]\n]+\]|\.[A-Za-z_$][\w$-]*)?(?:\.[A-Za-z_$][\w$]*)?)`;
 
 interface SourceConstants {
-  /** Object-literal body of every `const NAME = { ... }`, keyed by file then by name. */
   keyMapsByFile: Map<string, Map<string, string>>;
-  /** The same bodies by name alone, for maps imported from another module. */
   keyMaps: Map<string, string>;
   numbersByFile: Map<string, Map<string, number>>;
   numbers: Map<string, number>;
@@ -806,10 +680,7 @@ async function loadSourceConstants(): Promise<SourceConstants> {
   return sourceConstantsPromise;
 }
 
-/**
- * Resolves a `localizer` key argument to the locale keys it can produce; a dynamic map index
- * deliberately yields every key in the map, because missing the key a user hits costs more.
- */
+// Dynamic map indexes intentionally yield every key in the map because missing a key a user can hit costs more.
 function resolveKeyExpression(expression: string, file: string, constants: SourceConstants): string[] {
   const literal = expression.match(/^["']([a-zA-Z0-9._-]+)["']$/);
   if (literal) return [literal[1]];
@@ -843,12 +714,6 @@ function resolveKeyExpression(expression: string, file: string, constants: Sourc
   return [...scope.matchAll(valuePattern)].map((match) => match[1]);
 }
 
-/**
- * Source-traces direct single-key localized strings flowing into message components:
- * button labels, select placeholders, and select option labels and descriptions.
- *
- * Parameters, catalog properties, ternaries, and composed text are outside this tracer's scope.
- */
 export async function extractMessageComponentUsages(): Promise<Map<string, MessageSlotUsage>> {
   const usages = new Map<string, MessageSlotUsage>();
   const srcPath = join(process.cwd(), "src");
@@ -950,10 +815,6 @@ export async function extractMessageComponentUsages(): Promise<Map<string, Messa
   return usages;
 }
 
-/**
- * Validates each traced message component slot against the Discord ceiling for its kind.
- * Skips missing keys because locale parity already reports those.
- */
 export async function checkMessageComponentUsageLengths(
   usages: Map<string, MessageSlotUsage>,
   localeKeys: Map<string, Set<string>>,
@@ -994,19 +855,14 @@ export async function checkMessageComponentUsageLengths(
   return violations;
 }
 
-/**
- * A locale key that reaches Discord through a truncating wrapper, with the length it is cut to.
- */
 export interface TruncatedSlotUsage {
   key: string;
   limit: number;
   files: Set<string>;
 }
 
-/**
- * A locale string longer than the cap its wrapper truncates it to. Discord accepts the result, so
- * this is advisory: the reader sees a clipped string ending in "...".
- */
+// Advisory only because the wrapper truncates before sending, so Discord accepts the string and users see a clipped
+// ellipsis.
 interface TruncationWarning {
   key: string;
   limit: number;
@@ -1015,13 +871,8 @@ interface TruncationWarning {
   files: Set<string>;
 }
 
-/** `safeSelectOptionText` defaults its cap when the call omits one. */
 const SAFE_SELECT_OPTION_TEXT_DEFAULT_LIMIT = 100;
 
-/**
- * Splits the top-level arguments of the call whose opening parenthesis is at `openParen`.
- * Returns null when the call is unterminated.
- */
 function readCallArguments(content: string, openParen: number): string[] | null {
   const args: string[] = [];
   let depth = 0;
@@ -1068,10 +919,6 @@ function findTruncatedButtonLabels(content: string): { index: number; keyExpress
   return labels;
 }
 
-/**
- * Traces literal and SCREAMING_CASE map keys in wrappers and inline button-builder arguments;
- * parameters, catalog properties, ternaries, and separately declared builder arguments are skipped.
- */
 export async function extractTruncatedSlotUsages(): Promise<Map<string, TruncatedSlotUsage>> {
   const usages = new Map<string, TruncatedSlotUsage>();
   const srcPath = join(process.cwd(), "src");
@@ -1144,9 +991,6 @@ export async function extractTruncatedSlotUsages(): Promise<Map<string, Truncate
   return usages;
 }
 
-/**
- * Flags locale strings longer than the cap their wrapper truncates them to.
- */
 async function checkTruncatedSlotLengths(
   usages: Map<string, TruncatedSlotUsage>,
   localeKeys: Map<string, Set<string>>,
@@ -1192,27 +1036,12 @@ function displayTruncationWarnings(warnings: TruncationWarning[], verboseOutput:
   }
 }
 
-/**
- * Discord caps every command, subcommand, subcommand-group, and option description at 100
- * characters, and `setDescriptionLocalizations` throws `Invalid string length` past it. That
- * throw aborts the whole command module load instead of degrading, so one overlong translation
- * silently unregisters the command for every locale.
- */
+// Discord caps command descriptions at 100 chars, so setDescriptionLocalizations throws past it and aborts module
+// load for every locale.
 const REGISTERED_DESCRIPTION_MAX_LENGTH = 100;
 
-/**
- * Collects the description keys `commandLoader` hands to Discord, mapped to the source that
- * produces each one.
- *
- * Two origins, because the loader builds command metadata from two places. Command, subcommand,
- * and option descriptions come from `setDescription(localizer("en-US", key))` call sites inside
- * `src/commands/`. Category and subcommand-group descriptions have no call site at all: the
- * loader derives them from the directory layout, so they are re-derived here the same way.
- *
- * The literal `"en-US"` is the discriminator. A builder's base description must be English
- * whatever locale the caller is in, so embed prose in the same files passes the runtime `locale`
- * variable instead and is correctly skipped; embed descriptions cap at 4096, not 100.
- */
+// Embed prose uses runtime locale at a 4096-char cap, so matching literal "en-US" (plus directory-derived keys)
+// isolates 100-char registered command descriptions.
 export async function extractRegisteredDescriptionKeys(): Promise<Map<string, Set<string>>> {
   const keys = new Map<string, Set<string>>();
 
@@ -1267,13 +1096,8 @@ export async function extractRegisteredDescriptionKeys(): Promise<Map<string, Se
   return keys;
 }
 
-/**
- * The length rule for a single registered description, isolated from locale loading so the
- * boundary values stay directly assertable.
- *
- * Empty is a violation rather than a skip: `setDescription("")` on the en-US base fails the same
- * shapeshift assertion as an overlong string.
- */
+// Empty strings count as violations rather than skips because setDescription("") on the en-US base fails the same
+// shapeshift assertion as an overlong string.
 export function findRegisteredDescriptionViolation(
   key: string,
   value: string,
@@ -1285,14 +1109,8 @@ export function findRegisteredDescriptionViolation(
   return { key, value, length, locale, files };
 }
 
-/**
- * Validates every traced registered description in every locale.
- *
- * A key absent from a locale is skipped: the loader omits that locale from the localizations map
- * rather than throwing, and parity reporting already owns missing keys. An empty string is not
- * skipped, because `setDescription("")` on the en-US base fails the same shapeshift assertion as
- * an overlong one.
- */
+// Absent locale keys are skipped because commandLoader omits them from localizations instead of throwing, and parity
+// reporting already owns missing keys.
 export async function checkRegisteredDescriptionLengths(
   registeredKeys: Map<string, Set<string>>,
   localeKeys: Map<string, Set<string>>,
@@ -1335,7 +1153,6 @@ async function checkCommandDescriptionLengths(
 ): Promise<CommandDescriptionViolation[]> {
   const violations: CommandDescriptionViolation[] = [];
 
-  // Discord command description constraints
   const MIN_LENGTH = 1;
   const MAX_LENGTH = 100;
 
@@ -1371,25 +1188,21 @@ async function checkCommandDescriptionLengths(
   return violations;
 }
 
-/**
- * Checks if a string appears in a Set declaration context
- */
 function isInSetDeclaration(content: string, matchIndex: number): boolean {
   const lookbackDistance = 300;
   const beforeMatch = content.substring(Math.max(0, matchIndex - lookbackDistance), matchIndex);
 
   const setPatterns = [
-    /new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // new Set<T>([...
-    /new\s+Set\s*\(\s*\[[\s\S]*$/, // new Set([...
-    /Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // Set<T>([...
-    /Set\s*\(\s*\[[\s\S]*$/, // Set([...
-    /=\s*new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // = new Set<T>([...
-    /=\s*new\s+Set\s*\(\s*\[[\s\S]*$/, // = new Set([...
+    /new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/,
+    /new\s+Set\s*\(\s*\[[\s\S]*$/,
+    /Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/,
+    /Set\s*\(\s*\[[\s\S]*$/,
+    /=\s*new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/,
+    /=\s*new\s+Set\s*\(\s*\[[\s\S]*$/,
   ];
 
   for (const pattern of setPatterns) {
     if (pattern.test(beforeMatch)) {
-      // Additional check: make sure we're still inside the array (no closing ])
       const afterSetDecl = beforeMatch.match(pattern)?.[0] || "";
       const openBrackets = (afterSetDecl.match(/\[/g) || []).length;
       const closeBrackets = (afterSetDecl.match(/\]/g) || []).length;
@@ -1403,28 +1216,20 @@ function isInSetDeclaration(content: string, matchIndex: number): boolean {
   return false;
 }
 
-/**
- * Extracts dynamic template literal keys from file content
- */
 function extractDynamicTemplateKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
 
-  // Matches patterns like: `commands.server.avatar.${errorKey}`
   const templatePattern =
     /(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*`([a-zA-Z][a-zA-Z0-9._-]*)\$\{([^}]+)\}([a-zA-Z0-9._-]*)`/g;
 
   let match = templatePattern.exec(content);
   while (match !== null) {
-    const prefix = match[1]; // e.g., "commands.server.avatar."
-    const variable = match[2]; // e.g., "errorKey"
-    const suffix = match[3]; // e.g., "" (empty in most cases)
+    const prefix = match[1];
+    const variable = match[2];
+    const suffix = match[3];
 
-    // Extract the variable name (strip any property access, array indexing, or nullish coalesce)
-    // e.g. `userData.personal_dtm ?? "follow"` -> base variable is the whole expression's first ident
     const variableName = variable.split(/[.[\s?]/)[0];
 
-    // Look for literal values bound to this variable through any of: assignment, nullish coalesce,
-    // addChoices({ value: "literal" }) options on slash commands, or simple = / === comparisons.
     for (const assignedValue of resolveAssignedStringValues(content, variableName)) {
       const fullKey = `${prefix}${assignedValue}${suffix}`;
       if (availableKeys.has(fullKey)) matchedKeys.push(fullKey);
@@ -1441,8 +1246,7 @@ function extractDynamicTemplateKeys(content: string, availableKeys: Set<string>)
   return matchedKeys;
 }
 
-// Pulls "follow" out of expressions like `userData.personal_dtm ?? "follow"`.
-// Lets dynamic keys whose only literal source is the fallback survive pruning.
+// Extract ?? fallback literals so dynamic keys whose only literal source is a default survive pruning.
 function extractNullishFallbackLiterals(variableExpression: string): string[] {
   const literals: string[] = [];
   const pattern = /\?\?\s*["'`]([a-zA-Z0-9._-]+)["'`]/g;
@@ -1454,14 +1258,6 @@ function extractNullishFallbackLiterals(variableExpression: string): string[] {
   return literals;
 }
 
-/**
- * Resolves simple string assignments for a variable in the current file.
- * Supports both direct string literals and concatenated string literals like:
- *   const keyBase = "commands.config" + ".provider.switch";
- * This specifically protects dynamic locale namespaces used by commands like
- * /config provider switch, where `${keyBase}.restored_label` would otherwise
- * look unused and get pruned even though it is rendered at runtime.
- */
 function resolveAssignedStringValues(content: string, variableName: string): string[] {
   const resolvedValues = new Set<string>();
   const safeVar = escapeRegExp(variableName);
@@ -1484,10 +1280,8 @@ function resolveAssignedStringValues(content: string, variableName: string): str
     concatMatch = concatAssignmentPattern.exec(content);
   }
 
-  // Discord slash-command builders bind the value set via .addChoices({ name, value: "literal" }).
-  // When that value later flows into a template literal (e.g. `key.${selectedMode}_title`), the
-  // assignment search above misses it because the binding happens via interaction.options.getString.
-  // Collect every `value: "literal"` inside an addChoices(...) block.
+  // Scan .addChoices() blocks because slash-command option values arrive via interaction.options.getString without
+  // local assignments.
   const addChoicesPattern = /\.addChoices\s*\(([\s\S]*?)\)/g;
   let addChoicesMatch = addChoicesPattern.exec(content);
   while (addChoicesMatch !== null) {
@@ -1504,38 +1298,22 @@ function resolveAssignedStringValues(content: string, variableName: string): str
   return Array.from(resolvedValues);
 }
 
-/**
- * Extracts keys from localizer() / localizeWithAliases() calls with template literals
- * Handles patterns like: localizer(locale, `genai.google.${messageKey}`)
- * Also handles: localizeWithAliases(locale, `commands.${categoryName}.description`)
- * @param content - The file content to analyze
- * @param availableKeys - Set of all available locale keys to match against
- * @returns Array of matched keys
- */
 function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
 
-  // Pattern: localizer() or localizeWithAliases() with template literal as second argument
-  // Matches: localizer(locale, `genai.google.${messageKey}`)
-  //          localizeWithAliases(locale, `commands.${categoryName}.description`)
-  //          localizer(locale, `${keyBase}.restored_label`)
-  //          localizer(locale, `${keyBase}.restore_more_suffix`, { count: hiddenCount })
-  // Keep this pattern broad enough to allow extra args after the template key;
-  // provider-switch summary labels pass description vars as a third argument.
+  // Allow trailing arguments after the template key because callers pass interpolation objects as a third argument.
   const localizerTemplatePattern =
     /(?:localizer|localizeWithAliases)\s*\([^,]+,\s*`([a-zA-Z][a-zA-Z0-9._-]*)?\$\{([^}]+)\}([a-zA-Z0-9._-]*)`/g;
 
   let match = localizerTemplatePattern.exec(content);
   while (match !== null) {
-    const prefix = match[1]; // e.g., "genai.google."
-    const variable = match[2]; // e.g., "messageKey"
-    const suffix = match[3]; // e.g., "" (usually empty)
+    const prefix = match[1];
+    const variable = match[2];
+    const suffix = match[3];
 
     const variableName = variable.split(/[.[]/)[0];
     const safeVar = escapeRegExp(variableName);
 
-    // Look for string literal values for this variable via assignments AND strict equality comparisons
-    // Patterns like: messageKey = "429_default_message" OR conditioningType === "reward"
     const valuePattern = new RegExp(
       `(?:${safeVar}\\s*(?:=|===)\\s*["'\`]([a-zA-Z0-9._-]+)["'\`]|["'\`]([a-zA-Z0-9._-]+)["'\`]\\s*===\\s*${safeVar})`,
       "g",
@@ -1567,26 +1345,18 @@ function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string
   return matchedKeys;
 }
 
-/**
- * Extracts error code pattern keys from file content
- * Handles patterns like: messageKey = `${errorCode}_default_message`
- */
 function extractErrorCodeKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
 
-  // Pattern 1: Template literals with variable + suffix
-  // Matches: `${errorCode}_default_message` or `${statusCode}_error_title`
   const templateWithSuffixPattern = /`\$\{([^}]+)\}([a-zA-Z0-9._-]+)`/g;
 
   let match = templateWithSuffixPattern.exec(content);
   while (match !== null) {
-    const variable = match[1]; // e.g., "errorCode"
-    const suffix = match[2]; // e.g., "_default_message"
+    const variable = match[1];
+    const suffix = match[2];
 
     const variableName = variable.split(/[.[]/)[0];
 
-    // Look for all available keys that match this pattern
-    // Common error codes and status codes
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
 
     const safeVar = escapeRegExp(variableName);
@@ -1608,17 +1378,14 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
     match = templateWithSuffixPattern.exec(content);
   }
 
-  // Matches: `genai.google.${errorCode}_default_message`
   const templateWithPrefixPattern = /`([a-zA-Z][a-zA-Z0-9._-]*)\$\{([^}]+)\}([a-zA-Z0-9._-]*)`/g;
 
   let prefixMatch = templateWithPrefixPattern.exec(content);
   while (prefixMatch !== null) {
-    const prefix = prefixMatch[1]; // e.g., "genai.google."
-    const variable = prefixMatch[2]; // e.g., "errorCode"
-    const suffix = prefixMatch[3]; // e.g., "_default_message"
+    const prefix = prefixMatch[1];
+    const variable = prefixMatch[2];
+    const suffix = prefixMatch[3];
 
-    // Skip if this is already handled by extractDynamicTemplateKeys
-    // (those have titleKey/descriptionKey before the backtick)
     const variableName = variable.split(/[.[]/)[0];
 
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
@@ -1645,15 +1412,6 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
   return matchedKeys;
 }
 
-/**
- * Extracts locale keys that are embedded in pipe-delimited payload strings.
- * Handles patterns like:
- *   "commands.data.import.error_incompatible_version|1.0|unknown"
- *   `commands.data.import.error_incompatible_version|${expected}|${actual}`
- * @param content - The file content to analyze
- * @param availableKeys - Set of all available locale keys to match against
- * @returns Array of matched keys
- */
 function extractPipeEncodedLocaleKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
   const pipePattern = /[`"']([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z][a-zA-Z0-9_-]*){1,})\|/g;
@@ -1670,11 +1428,8 @@ function extractPipeEncodedLocaleKeys(content: string, availableKeys: Set<string
   return matchedKeys;
 }
 
-/**
- * Template-key consumers cannot be reduced to one literal key. These patterns mirror the
- * runtime namespaces cataloged in the dead-key sweep and are deliberately narrower than
- * their parent command roots so retired command surfaces remain visible in the report.
- */
+// Patterns stay narrower than parent command roots so retired command surfaces remain flagged as unused rather than
+// silently suppressed.
 const DYNAMIC_KEY_PATTERNS = [
   /^genai\.(?:anthropic|google|openrouter|custom|deepseek|nvidia|zai)\.[a-zA-Z0-9_]+_default_message$/,
   /^commands\.data\.import\.error_/,
@@ -1697,11 +1452,6 @@ function isRuntimeDerivedKey(key: string): boolean {
   return DYNAMIC_EXACT_KEYS.has(key) || DYNAMIC_KEY_PATTERNS.some((pattern) => pattern.test(key));
 }
 
-/**
- * Detects getLocaleSubKeys(locale, "prefix") calls and marks all available keys
- * under that prefix as referenced. This function enumerates locale sub-keys at
- * runtime so all child keys under the prefix are implicitly used.
- */
 async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise<string[]> {
   const matchedKeys: string[] = [];
   const srcPath = join(process.cwd(), "src");
@@ -1715,8 +1465,7 @@ async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise
       const content = await readFile(filePath, "utf-8");
       let match = getSubKeysPattern.exec(content);
       while (match !== null) {
-        const prefix = match[1]; // e.g., "commands.reward"
-        // All keys starting with "prefix." are dynamically enumerated
+        const prefix = match[1];
         for (const key of availableKeys) {
           if (key.startsWith(`${prefix}.`)) {
             matchedKeys.push(key);
@@ -1730,13 +1479,8 @@ async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise
   return matchedKeys;
 }
 
-/**
- * Marks commands.{category}.description and commands.{category}.{group}.description
- * keys as referenced, because commandLoader.ts dynamically builds these keys from the
- * src/commands/ directory structure (using path.basename) rather than string literals.
- * @param _availableKeys - Unused; retained for backwards-compatible call sites
- * @returns Array of matched description keys derived from the filesystem layout
- */
+// commandLoader builds category and group description keys from src/commands/ directory names rather than literals,
+// so these are derived from paths too.
 async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey[]> {
   const expectedKeys: ExpectedMetadataKey[] = [];
   const commandsPath = join(process.cwd(), "src", "commands");
@@ -1780,14 +1524,12 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
       if (!cat.isDirectory()) continue;
       const catName = cat.name;
 
-      // Top-level command description: commands.{category}.description
       expectedKeys.push({
         key: `commands.${catName}.description`,
         file: `src/commands/${catName}`,
         strict: false,
       });
 
-      // Subcommand group descriptions: commands.{category}.{group}.description
       const catPath = join(commandsPath, catName);
       const subEntries = await readdir(catPath, { withFileTypes: true });
       for (const sub of subEntries) {
@@ -1809,7 +1551,6 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
             const content = await readFile(filePath, "utf-8");
             const nameMatch = content.match(/setName\("([^"]+)"\)/);
 
-            // Skip non-command files (type/config mapping helpers with no setName call)
             if (!nameMatch) continue;
             const subcommandName = nameMatch[1];
 
@@ -1838,7 +1579,6 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
         const content = await readFile(subPath, "utf-8");
         const nameMatch = content.match(/setName\("([^"]+)"\)/);
 
-        // Skip non-command files (type/config mapping helpers with no setName call)
         if (!nameMatch) continue;
         const subcommandName = nameMatch[1];
 
@@ -1857,19 +1597,13 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
   return expectedKeys;
 }
 
-/**
- * Extracts localization keys referenced in TypeScript source files
- */
 async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<string, Set<string>>> {
   const referencedKeys = new Map<string, Set<string>>();
   const srcPath = join(process.cwd(), "src");
 
   const patterns = [
     /(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*["']([a-zA-Z0-9._-]+)["']/g,
-    // localizer() calls: first arg can be a string literal ("en-US") OR a variable (locale)
     /localizer\s*\(\s*(?:"[^"]*"|'[^']*'|\w+)\s*,\s*["']([a-zA-Z0-9._-]+)["']/g,
-    // Quoted strings that look like localization keys (dot-separated paths).
-    // Allow 2-segment keys like "general.cancel" in addition to deeper paths.
     /["']([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+){1,})["']/g,
     /[?:]\s*["']([a-zA-Z0-9._-]+)["']/g,
   ];
@@ -1877,7 +1611,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
   try {
     const glob = new Glob("**/*.{ts,tsx}");
     for await (const file of glob.scan(srcPath)) {
-      // Skip locale files; other source files may still contain valid locale keys.
       if (file.replaceAll("\\", "/").startsWith("locales/")) {
         continue;
       }
@@ -1888,7 +1621,7 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
 
         for (const [patternIndex, pattern] of patterns.entries()) {
           let match: RegExpExecArray | null;
-          pattern.lastIndex = 0; // Reset regex state
+          pattern.lastIndex = 0;
           match = pattern.exec(content);
           while (match !== null) {
             const key = match[1];
@@ -1899,10 +1632,8 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
               continue;
             }
 
-            // The generic catch-all patterns intentionally allow 2-segment keys so
-            // leaf keys like "general.cancel" are detected, but they also see parent
-            // prefixes like "commands.reward" in getLocaleSubKeys() calls. Keep those
-            // generic patterns limited to known leaf keys when only 2 segments exist.
+            // Require 2-segment catch-all matches to be in availableKeys so parent prefixes from getLocaleSubKeys do not
+            // register as missing keys.
             if (patternIndex >= 2 && key.split(".").length === 2 && !availableKeys.has(key)) {
               match = pattern.exec(content);
               continue;
@@ -1926,7 +1657,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
           referencedKeys.get(key)?.add(file);
         }
 
-        // Extract localizer template literal keys
         const localizerTemplateKeys = extractLocalizerTemplateKeys(content, availableKeys);
         for (const key of localizerTemplateKeys) {
           if (!referencedKeys.has(key)) {
@@ -1962,9 +1692,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
   return referencedKeys;
 }
 
-/**
- * Checks for key parity issues across all locales
- */
 function checkLocaleParity(localeKeys: Map<string, Set<string>>): LocaleParityIssue[] {
   const parityIssues: LocaleParityIssue[] = [];
   const allLocales = Array.from(localeKeys.keys());
@@ -1997,9 +1724,6 @@ function checkLocaleParity(localeKeys: Map<string, Set<string>>): LocaleParityIs
   return parityIssues;
 }
 
-/**
- * Main analysis function
- */
 export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const { availableKeys, localeKeys } = await loadAvailableKeys();
   const parityIssues = checkLocaleParity(localeKeys);
@@ -2017,7 +1741,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const referencedKeysMap = await extractReferencedKeys(availableKeys);
   const referencedKeys = new Set(referencedKeysMap.keys());
 
-  // Add keys discovered via getLocaleSubKeys() runtime enumeration
   const subKeyMatches = await extractGetLocaleSubKeysUsage(availableKeys);
   for (const key of subKeyMatches) referencedKeys.add(key);
 
@@ -2035,7 +1758,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
     }
   }
 
-  // Add keys that are provably used but cannot be detected statically
   for (const { key } of PROTOCOL_KEYS) referencedKeys.add(key);
   for (const key of availableKeys) {
     if (isRuntimeDerivedKey(key)) referencedKeys.add(key);
@@ -2070,13 +1792,8 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   };
 }
 
-/**
- * The blocking half of the analysis: anything here exits 1 and must print in full.
- *
- * Kept as its own predicate because the exit-code branch in main() and the display
- * branch in displayResults() have to agree on which categories are fatal. When they
- * drifted apart, a run could print "safe to push" while exiting 1.
- */
+// Shared predicate for main() and displayResults() so exit status and printed verdict never disagree on which
+// categories block.
 function hasFatalFindings(results: AnalysisResult): boolean {
   return (
     results.missingKeys.length > 0 ||
@@ -2088,7 +1805,6 @@ function hasFatalFindings(results: AnalysisResult): boolean {
   );
 }
 
-/** How much detail `displayResults` is allowed to print, and how to hint at more. */
 interface DisplayOptions {
   verboseOutput: boolean;
   rerunCommand: string;
@@ -2105,9 +1821,7 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
     return;
   }
 
-  // An advisory-only run is the common state while locale coverage is incomplete, and
-  // the per-key listing behind it is ~99% of the output. Collapse it to a count plus
-  // the flag that expands it; the full report stays for anything that blocks.
+  // Collapse advisory-only parity gaps to a count unless --verbose is set so missing translations do not flood output.
   if (!hasFatalFindings(results) && !verboseOutput) {
     console.log(
       `ℹ️  Localization keys advisory: ${results.parityIssues.length} keys missing in some locale ` +
@@ -2261,9 +1975,6 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
   console.log(`\n${"=".repeat(80)}`);
 }
 
-/**
- * Displays unused keys grouped by prefix for review
- */
 function displayUnusedKeys(unusedKeys: KeyUsage[]): void {
   const grouped = new Map<string, string[]>();
   for (const { key } of unusedKeys.sort((a, b) => a.key.localeCompare(b.key))) {
@@ -2286,14 +1997,8 @@ function displayUnusedKeys(unusedKeys: KeyUsage[]): void {
   console.log(`\n${"=".repeat(80)}`);
 }
 
-/**
- * Main execution
- */
-/**
- * Length-only fast path used by `bun run vl` so that Discord limit violations
- * (modal titles, modal descriptions, command descriptions) block the PR gate
- * without paying for the full unused/parity source scan.
- */
+// Fast path for bun run vl so Discord length violations block PRs without paying for the full unused-key and parity
+// scan.
 async function runStrictLengthsOnly(verboseOutput: boolean): Promise<void> {
   const { localeKeys } = await loadAvailableKeys();
   const modalTitleViolations = await checkModalTitleLengths(localeKeys);
@@ -2325,9 +2030,7 @@ async function runStrictLengthsOnly(verboseOutput: boolean): Promise<void> {
     return;
   }
 
-  // Reuse the same display formatting as the full report by funnelling violations
-  // through displayResults() with empty sets for the other categories. Length
-  // violations always block, so this path never takes the quiet advisory branch.
+  // Reuse displayResults() safely because length violations are fatal and bypass the quiet advisory branch.
   displayResults(
     {
       missingKeys: [],
@@ -2369,9 +2072,8 @@ async function main(): Promise<void> {
 
     displayResults(results, { verboseOutput, rerunCommand: "bun run check-locales" });
 
-    // Each section prints its own report, so all three run even after one fails. A lost
-    // placeholder, a protocol marker collision, or a dead docs link is a user-visible defect in
-    // every locale, which is why these are fatal while a parity gap stays advisory.
+    // Run all three content gates eagerly so every failure prints; unlike parity gaps, these break user-facing locales
+    // and must block.
     const contentChecks = [await reportPlaceholderParity(), await reportProtocolMarkers(), await reportLocaleLinks()];
 
     if (hasFatalFindings(results) || contentChecks.includes(false)) {

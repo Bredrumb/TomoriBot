@@ -290,7 +290,8 @@ type EditEndpointInput = ProviderPanelOwner & {
   label: string;
   endpointUrl: string;
   authToken: string;
-  /** Undefined when the modal did not offer the option, which leaves the stored value untouched. */
+  // Left undefined when the modal omits this option, so the stored value remains untouched instead of overwriting to
+  // false.
   unloadDuringComfyUi?: boolean;
 };
 
@@ -401,7 +402,8 @@ interface PanelModelContext {
   state: TomoriState | null;
   activeTextId: number | null;
   activeImageId: number | null;
-  /** NovelAI image models live in their own slot, so NovelAI rows are marked against this instead. */
+  // NovelAI image models live in their own slot, so NovelAI rows are marked against this instead of the shared image
+  // slot.
   activeNaiImageId: number | null;
   activeEmbeddingId: number | null;
   activeVideoId: number | null;
@@ -648,10 +650,7 @@ function buildEndpointCapabilities(
 
   return CAPABILITIES.map((capability) => {
     const capabilityConnections = connections.filter((connection) => connection.capability === capability);
-    // `addCustomEndpointConnection` creates a connection for every capability the chosen API style
-    // supports, so a missing one means this endpoint cannot host that capability at all:
-    // `registerEndpointModel` answers `not-found` for it. Reporting it unavailable keeps the panel
-    // from offering a model modal that can only fail.
+    // Missing capability connections cannot host models (registerEndpointModel rejects them), so mark unavailable.
     if (capabilityConnections.length === 0 || (context.scope.kind === "personal" && capability === "decision")) {
       return { capability, availability: "unavailable", models: [] };
     }
@@ -1088,8 +1087,7 @@ async function addCuratedProvider(
   try {
     providerInstance = await dependencies.getProvider(provider);
   } catch (error) {
-    // Reported to the actor as an unsupported provider, which is only true for the guard above.
-    // Reaching here means construction or loading failed, so the real cause has to be recorded.
+    // Log construction failures because the server actor receives unsupported-provider.
     log.error("Provider could not be constructed while adding a server provider", error as Error, {
       errorType: "ProviderPanelOperationFailed",
       metadata: { operation: "addCuratedProvider", provider },
@@ -1193,8 +1191,7 @@ async function addPersonalProvider(
   try {
     instance = await ProviderFactory.getProviderByName(provider);
   } catch (error) {
-    // Same confusion as the server path: the actor is told the provider is unsupported when the
-    // truth is that loading or constructing it threw.
+    // Log load failures here because personal callers only see unsupported-provider.
     log.error("Provider could not be constructed while adding a personal provider", error as Error, {
       errorType: "ProviderPanelOperationFailed",
       metadata: { operation: "addPersonalProvider", provider },
@@ -1326,9 +1323,7 @@ export async function addCustomEndpointConnection(
       if (!upserted) throw new Error("Custom endpoint credential snapshot could not be saved");
     }
   } catch (error) {
-    // The rollback below can succeed, so this return is the only surviving evidence that anything
-    // went wrong. Binding the error and recording it is what keeps a rolled-back endpoint addition
-    // distinguishable from an ordinary validation refusal.
+    // Log before rolling back connections so a failed write stays distinguishable from a validation refusal.
     log.error("Custom endpoint connection could not be saved; rolled back created connections", error, {
       errorType: "CustomEndpointWriteFailed",
       metadata: {
@@ -1626,11 +1621,8 @@ async function registerSharedProviderModel(
   return { status: "success", entryId: `provider:${provider}`, codeName };
 }
 
-/**
- * Rejects only a codename the provider's own catalog confirmed it does not serve, so a provider
- * without a lookup, a scope without a saved key, an unreachable catalog, or a failure while
- * preparing the lookup all leave registration unchecked.
- */
+// Fails open unless the provider catalog affirmatively rejects the codename, so missing lookups, missing keys, or
+// fetch errors pass.
 async function isModelRejectedByCatalog(
   input: SaveProviderModelInput,
   capability: "text" | "image",
@@ -2141,14 +2133,8 @@ const defaultActivateEndpointDependencies: ActivateWorkspaceEndpointDependencies
   refresh: (discordId) => invalidateTomoriStateCache(discordId),
 };
 
-/**
- * Activates one speech or transcription endpoint for the workspace.
- *
- * The submitted id is never trusted: `loadEndpoints` is already scoped to this server, so an id
- * belonging to another workspace or to a different capability simply is not in the list and answers
- * `not-found` rather than reaching the write. A changed `api_style` means voices stored against the
- * previous source no longer resolve, which is why the caller must say so in its receipt.
- */
+// Server-scoped loadEndpoints prevents foreign endpoint writes, and sourceChanged flags api_style shifts because
+// stored voices break.
 async function activateWorkspaceEndpoint(
   input: ActivateWorkspaceEndpointInput,
   dependencies: ActivateWorkspaceEndpointDependencies = defaultActivateEndpointDependencies,

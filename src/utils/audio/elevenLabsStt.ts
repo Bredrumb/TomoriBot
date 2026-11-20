@@ -23,7 +23,7 @@ export interface ElevenLabsSttResult {
   errorKind?: ElevenLabsSttErrorKind;
   statusCode?: number;
   details?: string;
-  /** ElevenLabs' status and response body, for the operator log. */
+  // Kept in operator logs so ElevenLabs STT details never leak to replies.
   providerDetail?: string;
 }
 

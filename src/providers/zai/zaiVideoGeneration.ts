@@ -9,16 +9,12 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { PROVIDER_VIDEO_DOWNLOAD_MAX_MB } from "@/providers/utils/providerVideoDownload";
 import { readProviderErrorBody, redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
-/** Z.ai video generation API endpoint */
 const ZAI_VIDEO_GENERATIONS_URL = "https://api.z.ai/api/paas/v4/videos/generations";
 
-/** Z.ai async video retrieval endpoint (uses task ID from generation response) */
 const ZAI_ASYNC_RESULT_URL = "https://api.z.ai/api/paas/v4/async-result";
 
-/** Polling interval for Z.ai video generation status checks (10 seconds) */
 const POLL_INTERVAL_MS = 10_000;
 
-/** Maximum poll attempts before timeout (~5 minutes at 10s intervals) */
 const MAX_POLL_ATTEMPTS = 30;
 
 function selectClosestSupportedDuration(
@@ -103,7 +99,6 @@ function normalizeZaiOptions(
   };
 }
 
-/** Shape of the Z.ai video generation response */
 interface ZaiVideoResponse {
   id?: string;
   request_id?: string;
@@ -115,18 +110,6 @@ interface ZaiVideoResponse {
   }>;
 }
 
-/**
- * Generate a video using Z.ai's CogVideoX-3 API.
- *
- * Flow:
- *   1. POST to /paas/v4/videos/generations with prompt and parameters
- *   2. Receive a task ID with PROCESSING status
- *   3. Poll /paas/v4/async-result/{taskId} until SUCCESS or FAIL
- *   4. Download the MP4 from the result URL
- *
- * @param request - Video generation request with apiKey, model, prompt, and optional parameters
- * @returns Raw MP4 video data as a Buffer, or null values on failure
- */
 export async function generateZaiNativeVideo(
   request: ProviderNativeVideoGenerationRequest,
 ): Promise<ProviderNativeVideoGenerationResult> {
@@ -198,7 +181,7 @@ export async function generateZaiNativeVideo(
       });
 
       if (!pollResponse.ok) {
-        await pollResponse.text(); // Drain body
+        await pollResponse.text();
         log.warn(`Z.ai video poll request failed (taskId: ${taskId}, status: ${pollResponse.status})`);
         return { done: false };
       }

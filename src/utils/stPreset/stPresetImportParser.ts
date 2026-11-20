@@ -1,10 +1,8 @@
 import type { StPresetNodeRow } from "@/types/db/schema";
 import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
 
-/** Maximum file size for preset JSON uploads in MB */
 export const MAX_PRESET_FILE_SIZE_MB = 2;
 
-/** Maximum allowed preset name length (derived from filename) */
 export const MAX_PRESET_NAME_LENGTH = 100;
 const LEGACY_POST_HISTORY_INJECTION_ORDER = 10_000;
 const INT32_MIN = -2_147_483_648;
@@ -12,15 +10,10 @@ const INT32_MAX = 2_147_483_647;
 const LEGACY_STORY_TRIM_REGEX = /\{\{trim\}\}/gi;
 const LEGACY_STORY_BLOCK_REGEX = /\{\{#if\s+([a-zA-Z_][\w]*)\}\}([\s\S]*?)\{\{\/if\}\}/gi;
 
-/**
- * Regex to detect comment-only content in SillyTavern nodes.
- * Matches content that is purely `{{// ... }}` blocks and `{{trim}}` macros
- * with optional whitespace: meaning the node produces no output after
- * template resolution.
- */
+// Matches SillyTavern nodes with only `{{// comment}}` blocks and `{{trim}}` macros, since both resolve to empty
+// output.
 const COMMENT_ONLY_REGEX = /^(\s*\{\{\/\/[^}]*\}\}\s*|\s*\{\{trim\}\}\s*)+$/;
 
-/** Raw prompt node from SillyTavern preset JSON */
 interface RawSTPromptNode {
   identifier: string;
   name: string;
@@ -35,13 +28,11 @@ interface RawSTPromptNode {
   forbid_overrides?: boolean;
 }
 
-/** Entry in the prompt_order array */
 interface RawSTPromptOrderEntry {
   identifier: string;
   enabled: boolean;
 }
 
-/** Top-level structure of a SillyTavern preset JSON */
 export interface RawSTPreset {
   prompts?: RawSTPromptNode[];
   prompt_order?: {
@@ -53,11 +44,8 @@ export interface RawSTPreset {
 
 export interface ParseResult {
   nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[];
-  /** Number of comment-only nodes included (stored but never injected into the prompt) */
   commentOnlyCount: number;
-  /** Number of non-marker nodes disabled by the preset's prompt_order */
   disabledByPreset: number;
-  /** Source format that was accepted by the importer */
   sourceKind: "modern" | "legacy_text_completion";
 }
 
@@ -92,9 +80,6 @@ function presetInteger(rawValue: unknown, fallback: number, prompt: RawSTPromptN
   return Math.min(INT32_MAX, Math.max(INT32_MIN, value));
 }
 
-/**
- * Validate that the attachment filename and optional content type indicate a JSON file.
- */
 export function validateAttachment(
   filename: string,
   contentType?: string | null,
@@ -108,7 +93,7 @@ export function validateAttachment(
     return { isValid: false, errorKey: "invalid_format" };
   }
 
-  // Check content type if provided (Discord may not always set this)
+  // Discord may omit attachment contentType, so skip the MIME check when absent.
   if (contentType && !contentType.includes("json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
@@ -116,17 +101,10 @@ export function validateAttachment(
   return { isValid: true };
 }
 
-/**
- * Determine whether a prompt node is comment-only (produces no output).
- * Comment-only nodes contain only `{{// ... }}` blocks and `{{trim}}` macros.
- */
 export function isCommentOnly(content: string): boolean {
   return COMMENT_ONLY_REGEX.test(content.trim());
 }
 
-/**
- * Strips the .json extension and truncates to MAX_PRESET_NAME_LENGTH.
- */
 export function derivePresetName(filename: string): string {
   const name = filename
     .trim()
@@ -359,11 +337,8 @@ export function normalizePresetShape(raw: RawSTPreset): NormalizedPresetShape | 
   return buildLegacyTextCompletionPreset(raw);
 }
 
-/**
- * Some modern ST preset exports still carry legacy post-history fields outside
- * the Prompt Manager `prompts` array. Import them as synthetic depth nodes so
- * the existing preset pipeline can handle them normally.
- */
+// Modern SillyTavern exports can still place legacy post-history fields outside `prompts`, so synthesize depth nodes
+// for the pipeline.
 function buildLegacyPromptNodes(raw: RawSTPreset, prompts: RawSTPromptNode[]): RawSTPromptNode[] {
   const root = asObject(raw);
   const sysprompt = asObject(root?.sysprompt);
@@ -426,16 +401,6 @@ function buildLegacyPromptNodes(raw: RawSTPreset, prompts: RawSTPromptNode[]): R
   return legacyNodes;
 }
 
-/**
- * Parse a raw SillyTavern preset JSON into storable nodes.
- *
- * Processing pipeline:
- * 1. Build a lookup map from the `prompts` array (identifier -> node data)
- * 2. Walk the `prompt_order` for character_id 100001 (user-prompt order)
- *    to determine sequence and default enabled states
- * 3. Flag comment-only nodes with `is_comment: true` (stored but never injected)
- * 4. Return ordered nodes ready for DB insertion, plus filtering stats
- */
 export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult | null {
   const basePrompts = normalizedPreset.preset.prompts;
   if (!Array.isArray(basePrompts) || basePrompts.length === 0) {
@@ -455,8 +420,7 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
     }
   }
 
-  // Find the user-prompt order (character_id 100001)
-  // Falls back to character_id 100000 (system prompt order) if 100001 is missing
+  // SillyTavern stores user-prompt order under character_id 100001 with system-prompt order 100000 as fallback.
   const promptOrders = normalizedPreset.preset.prompt_order;
   let orderEntries: RawSTPromptOrderEntry[] | null = null;
 
@@ -494,8 +458,7 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
     const content = prompt.content ?? "";
     const isMarker = prompt.marker === true;
 
-    // Flag comment-only nodes: stored in DB and visible in the toggle UI,
-    // but never injected into the prompt regardless of enabled state
+    // Comment-only nodes stay stored for the toggle UI so users see them, while never injecting even when enabled.
     const isComment = !isMarker && isCommentOnly(content);
     if (isComment) {
       commentOnlyCount++;

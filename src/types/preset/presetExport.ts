@@ -3,10 +3,6 @@ import {
   LOREBOOK_ENTRIES_PER_SCOPE_MAX,
   type LorebookEntryInput,
 } from "@/modules/lorebooks/db/types";
-/**
- * Type definitions and schemas for TomoriBot preset export/import system
- * Enables sharing personalities as PNG files with embedded metadata
- */
 
 import { z } from "zod";
 import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
@@ -23,23 +19,14 @@ import {
   type PersonaNamingConfig,
 } from "@/types/personaNaming";
 
-/**
- * Current version of the preset export format
- * Used for compatibility checking during import
- */
 export const PRESET_EXPORT_VERSION = "1.0.0";
 
 export type PresetImportMode = "card" | "bundle";
 
-/**
- * Internal marker used for model-only sample dialogues (no paired user turn).
- * Context builder detects this value and skips injecting a user example turn.
- */
+// Sentinel for model-only sample dialogues, so the context builder detects it and skips injecting a paired user
+// example turn.
 export const UNPAIRED_SAMPLE_DIALOGUE_SENTINEL = "__UNPAIRED_SAMPLE_DIALOGUE__";
 
-/**
- * Preset import/export schema limits.
- */
 export const PRESET_MAX_STRING_LENGTH = 5000;
 // Four 4000-character persona prompt fields can add three two-character separators.
 export const PRESET_MAX_PERSONA_PROMPT_LENGTH = 16_003;
@@ -48,10 +35,7 @@ const PRESET_MAX_SAMPLE_DIALOGUES = 100;
 const PRESET_MAX_TRIGGER_WORDS = 100;
 const PRESET_MAX_IMAGE_TAGS = 200;
 
-/**
- * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
- * Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks.
- */
+// Index 1 targets Appearance because generated presets follow the canonical 6-attribute layout in presetCommon.ts.
 const GENERATED_PRESET_APPEARANCE_ATTRIBUTE_INDEX = 1;
 
 export function buildPrivateAttributePublicFlags(attributeList: readonly string[]): boolean[] {
@@ -62,15 +46,12 @@ export function buildGeneratedPresetAttributePublicFlags(attributeList: readonly
   return attributeList.map((_attribute, index) => index === GENERATED_PRESET_APPEARANCE_ATTRIBUTE_INDEX);
 }
 
-/**
- * Preset personality data structure
- * Contains all personality-related fields from personas and persona-scoped config tables.
- */
 export interface PresetExportData {
   lorebook_entries?: LorebookEntryInput[];
   tomori_nickname: string;
   attribute_list: string[];
-  /** Visibility flags aligned to attribute_list; true exposes the attribute to other triggered personas */
+  // Parallel to attribute_list: each boolean aligns by index so true exposes that attribute to other triggered
+  // personas.
   attribute_public_flags?: boolean[];
   sample_dialogues_in: string[];
   sample_dialogues_out: string[];
@@ -80,39 +61,28 @@ export interface PresetExportData {
   voice_source_priority?: "design" | "clone";
   naming_config?: PersonaNamingConfig;
   persona_lineage_id?: number;
-  /** Official preset lineage, when this export was materialized from a preset pointer */
   preset_lineage_id?: number;
-  /** Public imageboard-style persona physical appearance tags for image generation */
   physical_appearance_tags?: string[];
-  /** Persona-specific character reference image URL */
   char_ref_url?: string | null;
-  /** ATTG: Story author name */
   nai_attg_author?: string | null;
-  /** ATTG: Story title */
   nai_attg_title?: string | null;
-  /** ATTG: Genre/style tags */
   nai_attg_tags?: string | null;
-  /** ATTG: Genre categories */
   nai_attg_genre?: string | null;
-  /** ATTG: Quality stars (Erato only, 1-5) */
+  // Optional because ATTG quality stars (1-5) apply only to NovelAI Erato.
   nai_attg_stars?: number | null;
-  /** Absent in exports that predate the flag, which were all SFW. */
+  // Optional because exports that predate this flag were all SFW, so absence means non-NSFW.
   is_nsfw?: boolean;
-  /** Natural Nudges topics; absent in exports that predate Natural Nudges. */
   natural_nudge_interests?: NaturalNudgeInterest[];
   natural_nudge_talkativeness?: number;
-  /** Persona-authored idle nudge definitions; absent in exports that predate them. */
   natural_nudge_idle_nudges?: PersonaAuthoredIdleNudge[];
 }
 
-/**
- * Complete preset export structure with metadata
- * This is what gets embedded in the PNG tEXt chunk
- */
+// Embedded directly in PNG tEXt chunks, so changing this envelope breaks persisted preset image exports.
 export interface PresetExport {
   version: string;
   type: "preset";
-  exported_at: string; // ISO 8601 timestamp
+  // Format: ISO 8601 timestamp.
+  exported_at: string;
   data: PresetExportData;
 }
 
@@ -123,7 +93,7 @@ export type ExportResult =
     }
   | {
       success: false;
-      error: string; // Locale key for error message
+      error: string;
     };
 
 export type ImportResult =
@@ -135,21 +105,19 @@ export type ImportResult =
         dialogueCount: number;
         triggerWordCount: number;
       };
-      /** Whether the imported main persona now resolves sprites from an official preset. */
       mainPersonaIsPointer: boolean;
     }
   | {
       success: false;
-      error: string; // Locale key or pipe-separated error with variables
+      // Format: locale key or pipe-separated error with variables.
+      error: string;
     };
 
-/**
- * Validation result for import file structure
- */
 export interface ValidationResult {
   valid: boolean;
   data?: PresetExportData;
-  error?: string; // Locale key or pipe-separated error
+  // Format: locale key or pipe-separated error.
+  error?: string;
 }
 
 export const presetExportDataSchema = z.object({
@@ -199,10 +167,8 @@ export const presetExportDataSchema = z.object({
   natural_nudge_idle_nudges: personaAuthoredIdleNudgesSchema.optional(),
 });
 
-/**
- * Files exported before the character reference became provider-neutral name it `nai_char_ref_url`;
- * those files are still in users' hands, so imports rename the key before validation.
- */
+// Legacy preset files still in users' hands use nai_char_ref_url, so imports must rename the key before schema
+// validation.
 export function renameLegacyCharRefKey(data: unknown): unknown {
   if (typeof data !== "object" || data === null || Array.isArray(data) || !("nai_char_ref_url" in data)) {
     return data;
@@ -211,12 +177,10 @@ export function renameLegacyCharRefKey(data: unknown): unknown {
   return "char_ref_url" in rest ? rest : { ...rest, char_ref_url: legacyCharRefUrl };
 }
 
-/**
- * Zod schema for complete preset export structure validation
- */
 export const presetExportSchema = z.object({
   version: z.string(),
   type: z.literal("preset"),
-  exported_at: z.string(), // ISO 8601 format
+  // Format: ISO 8601 timestamp.
+  exported_at: z.string(),
   data: z.preprocess(renameLegacyCharRefKey, presetExportDataSchema),
 });

@@ -6,7 +6,6 @@ import {
 import { handleSummaryEditClick, handleSummarySaveClick } from "@/utils/compaction/compact/summaryControls";
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 
-/** Handles the Edit Summary and Add to Document Store buttons on a `/compact` summary message. */
 export const compactInteractionRoute: GlobalInteractionRoute = {
   namespace: COMPACT_ROUTE_NAMESPACE,
   version: COMPACT_ROUTE_VERSION,

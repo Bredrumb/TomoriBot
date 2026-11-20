@@ -20,7 +20,6 @@ export interface SubscriptionAllowanceDependencies {
   observedSpend(hash: string): number;
 }
 
-/** @returns The locale key explaining why this allowance cannot fund a new sponsorship, or null when it can. */
 export function getSubscriptionAllowanceBlockKey(allowance: SubscriptionAllowance | null): string | null {
   if (!allowance) return "commands.subscription.incomplete";
   return allowance.remaining > 0 ? null : "commands.subscribe.sponsorship.errors.exhausted";

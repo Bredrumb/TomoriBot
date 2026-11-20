@@ -282,13 +282,11 @@ describe("setup draft store", () => {
         }),
       );
 
-      // Verify buffer holds original non-zero bytes before consume.
       expect(secretKeyBuffer.some((byte) => byte !== 0)).toBe(true);
 
       const result = store.consumeSetupDraft("nonce-1234", "actor-1", "workspace-1", "guild");
       expect(result.status).toBe("ok");
 
-      // Verify every byte in the referenced buffer is observably zeroed after consume.
       expect(secretKeyBuffer.every((byte) => byte === 0)).toBe(true);
     });
 
@@ -387,9 +385,7 @@ describe("setup draft store", () => {
       });
       expect(updateResult.status).toBe("ok");
 
-      // Displaced previous buffer must be wiped.
       expect(oldSecretBuffer.every((byte) => byte === 0)).toBe(true);
-      // Fresh new buffer must remain untouched.
       expect(newSecretBuffer.some((byte) => byte !== 0)).toBe(true);
     });
 
@@ -495,17 +491,14 @@ describe("setup draft store", () => {
         }),
       );
 
-      // Wrong actor read
       const readResult = store.readSetupDraft("nonce-1234", "actor-2", "workspace-1", "guild");
       expect(readResult.status).toBe("forbidden");
       expect(secretKeyBuffer.some((byte) => byte !== 0)).toBe(true);
 
-      // Wrong actor consume
       const consumeResult = store.consumeSetupDraft("nonce-1234", "actor-2", "workspace-1", "guild");
       expect(consumeResult.status).toBe("forbidden");
       expect(secretKeyBuffer.some((byte) => byte !== 0)).toBe(true);
 
-      // Wrong actor update
       const updateResult = store.updateSetupDraft("nonce-1234", "actor-2", "workspace-1", "guild", {
         policiesAccepted: true,
       });

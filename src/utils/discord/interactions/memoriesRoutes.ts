@@ -924,10 +924,6 @@ function receipt(locale: string, key: MemoryReceiptKey, variables?: Record<strin
   };
 }
 
-/**
- * Yellow interim receipt painted before an embedding call, because the deferred panel would
- * otherwise sit unchanged until the final receipt overwrites it.
- */
 const WORKING_RECEIPT_KEYS: Record<
   "document_working" | "document_reembed_working" | "vectorize_working",
   { heading: string; detail: string }
@@ -996,12 +992,8 @@ function terminalPayload(locale: string, key: string): InteractionEditReplyOptio
   );
 }
 
-/**
- * Reads a submitted channel scope. Outside a server the modal has no channel field, so the scope is empty.
- *
- * @returns `undefined` when the submission is missing or malformed, so the caller repaints instead of
- * clearing the stored scope; `[]` when the select was submitted empty
- */
+// Missing or malformed submissions yield undefined so callers repaint without clearing stored scope, distinguishing
+// them from an empty [] select.
 function takeChannelScope(
   dependencies: Pick<MemoriesRouteDependencies, "takeChannelSelectValues">,
   interaction: Pick<ModalSubmitInteraction, "id" | "guildId">,
@@ -1013,7 +1005,7 @@ function takeChannelScope(
   return [...new Set(channelIds)];
 }
 
-/** The panel's 0 sentinel means Serverwide, which the repository stores as a NULL lineage. */
+// Panel routes use sentinel 0 for Serverwide because the repository stores serverwide lorebooks with a null lineage.
 function lorebookLineageId(scopeLineageId: number): number | null {
   return scopeLineageId === 0 ? null : scopeLineageId;
 }
@@ -1022,7 +1014,6 @@ function isValidLorebookScope(scope: MemoriesScope, scopeLineageId: number): boo
   return scopeLineageId === 0 || scope.personas.some((persona) => persona.persona_lineage_id === scopeLineageId);
 }
 
-/** Keeps only channels that belong to this guild, so a forged select value cannot widen or invent scope. */
 async function filterGuildChannelScope(
   interaction: GlobalRoutableInteraction,
   channelIds: string[],
@@ -1045,7 +1036,6 @@ async function filterGuildChannelScope(
   return valid;
 }
 
-/** Returns null when the submission is missing, malformed, or names a channel outside this guild. */
 async function takeLorebookChannelScope(
   dependencies: Pick<MemoriesRouteDependencies, "takeChannelSelectValues" | "filterChannelScope">,
   interaction: ModalSubmitInteraction,
@@ -1057,13 +1047,8 @@ async function takeLorebookChannelScope(
   return valid.length === submitted.length ? valid : null;
 }
 
-/**
- * Receipt key for each non-success document operation status.
- *
- * Exported so a test can prove every value here is also in `MEMORIES_RECEIPT_KEYS`: a status
- * mapped to a key nobody registered renders the raw key to the user, and `check-locales` cannot
- * see it because the heading and detail suffixes are composed at call time.
- */
+// Exported for test coverage against MEMORIES_RECEIPT_KEYS because check-locales cannot see heading and detail keys
+// composed dynamically at call time.
 export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
   "rag-disabled": "document_rag_disabled",
   "memory-critical": "document_memory_critical",
@@ -1117,10 +1102,7 @@ async function resolveScope(
       ? ((await userRepository.isBlacklisted(interaction.guildId, userDiscId)) ?? false)
       : false;
 
-    // The state is required rather than optional. Reading the teaching flag as
-    // `tomoriState?.config.server_memteaching_enabled ?? false` turns a cache miss into a
-    // confident "teaching is disabled" on a server where it is enabled, and every legacy leaf
-    // instead dereferences a non-null state, so a missing one means unavailable, not restricted.
+    // Require a non-null state because a cache miss must read as unavailable rather than restricted.
     const tomoriState = await getCachedTomoriState(workspaceId);
     const internalServerId = tomoriState?.server_id ?? (await serverRepository.loadServerIdByDiscId(workspaceId));
     if (!internalServerId || !tomoriState) return null;
@@ -1230,14 +1212,8 @@ async function loadPanelMemories(
   return dependencies.loadMemories(scope.serverId, lineageId, scope.canManage ? undefined : scope.userId);
 }
 
-/**
- * Refuse a modal-opening branch by repainting the panel with an error receipt.
- *
- * These branches sit above `beginPanelInteraction` because a modal is its own acknowledgement, so
- * they arrive unacknowledged. A refusal is not going to open a modal, which frees it to
- * `deferUpdate` and edit the panel in place; replying ephemerally instead posts a second, stray
- * message that reads as an unrelated error rather than as this panel's answer.
- */
+// Modal-opening refusals arrive unacknowledged, so they must deferUpdate and repaint in place rather than replying
+// ephemerally with a stray second message.
 async function refuseInPlace(
   interaction: GlobalRoutableInteraction,
   locale: string,
@@ -1345,8 +1321,7 @@ async function repaint(
       ? await dependencies.getMemoryCountsByLineage(scope.serverId, ownerFilter)
       : undefined;
 
-  // Documents key on persona_id, so the face beside that heading is looked up directly rather
-  // than through the lineage representative the Memories page uses. Serverwide (0) has none.
+  // Look up directly by persona_id instead of lineage representative because documents key on persona_id.
   const representative =
     category === "memories"
       ? personaRepresentativeForLineage(scope.personas, selectedLineageId)
@@ -1396,10 +1371,6 @@ async function repaint(
   );
 }
 
-/**
- * The selection a category opens on. Documents key on `persona_id` while Memories and Lorebooks key on
- * the lineage, and without a persona every category but Memories opens serverwide on the sentinel 0.
- */
 function openingSelection(category: MemoriesCategory, scope: MemoriesScope, persona: TomoriState | null): number {
   if (category === "stm") return 0;
   if (persona) return category === "documents" ? (persona.persona_id ?? 0) : persona.persona_lineage_id;
@@ -1542,7 +1513,6 @@ function buildUnavailableMemoriesPanel(
   });
 }
 
-/** Destinations for `/memories page:`; every invoker sees all four category buttons, so none is filtered. */
 export function listMemoriesPageDestinations(locale: string): PanelPageDestination<MemoriesCategory, null>[] {
   return MEMORIES_CATEGORIES.map((category) => ({
     category,
@@ -1552,7 +1522,6 @@ export function listMemoriesPageDestinations(locale: string): PanelPageDestinati
   }));
 }
 
-/** Opens `/memories` on a deferred reply, on the requested category and persona when they resolve. */
 export async function openMemoriesPanel(
   interaction: ChatInputCommandInteraction,
   locale: string,
@@ -1628,11 +1597,6 @@ export async function buildInitialMemoriesPanel(
   );
 }
 
-/**
- * Receipt key for each non-success lorebook write status.
- *
- * Exported so a test can prove every value is registered, the same guarantee the document map carries.
- */
 export const LOREBOOK_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
   forbidden: "manager_only",
   limit: "lorebook_limit_reached",
@@ -1734,7 +1698,7 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
-      // Modals and modal-opening select choices handle their own acknowledgement
+      // Select choices precede deferUpdate so modal-opening actions can call showModal.
       if (route.action === "select") {
         if (!interaction.isStringSelectMenu()) {
           throw new Error("Memories select route requires StringSelectMenu interaction");

@@ -28,10 +28,11 @@ import { keyManager } from "@/utils/security/keyManager";
 
 export const MCP_OAUTH_FLOW = "mcp";
 export const MCP_OAUTH_CONFIRM_PATH = "/oauth/mcp/confirm";
-/** Discord caps button URLs at 512 characters and authorization URLs run longer, so the button opens this redirect. */
+// Discord caps button URLs at 512 characters and OAuth authorization URLs run longer, so the button opens this
+// redirect.
 export const MCP_OAUTH_START_PATH = "/oauth/mcp/start";
 
-/** Short enough that the callback usually lands inside Discord's 15-minute interaction token. */
+// TTL is 10 minutes so OAuth callbacks usually land before Discord's 15-minute interaction token expires.
 const MCP_SIGN_IN_TTL_SECONDS = 10 * 60;
 
 const MCP_STATE_SIGNER_INFO = "tomoribot oauth state signer: mcp";
@@ -46,7 +47,7 @@ export interface McpSignInRequest {
   draft: McpSignInDraft & { guildName: string };
   challenge: McpAuthorizationChallenge;
   locale: string;
-  /** Edits the admin's original Discord reply; a failure here never changes the sign-in result. */
+  // This callback edits the admin's original Discord reply, so failures here must never change the sign-in result.
   report(outcome: McpSignInOutcome): Promise<void>;
 }
 
@@ -81,14 +82,12 @@ interface McpSignInRuntime {
 
 let runtime: McpSignInRuntime | null = null;
 
-/**
- * In-flight sign-ins keyed by state nonce hash. They hold the PKCE verifier and the code for minutes
- * only, so a restart or a second bot instance loses them and the admin starts again; a
- * multi-instance deployment is the trigger to move them into shared storage.
- */
+// In-memory state loses short-lived PKCE sign-ins on restart or across instances, so multi-instance deployment
+// requires moving it to shared storage.
 const pendingSignIns = new Map<string, PendingMcpSignIn>();
 
-/** A public MCP client has no secret to sign state with; a key rotation only voids sign-ins in flight. */
+// State signing derives a secret from the encryption key because public MCP clients lack a client secret; key
+// rotation only voids in-flight sign-ins.
 export function deriveMcpStateSigner(key = keyManager.getCurrentKey()): string {
   return Buffer.from(hkdfSync("sha256", key, "", MCP_STATE_SIGNER_INFO, 32)).toString("base64url");
 }
@@ -111,7 +110,7 @@ export function configureMcpSignIn(options: {
   };
 }
 
-/** Sign-in exists only once its callback routes are registered, which needs a public base URL. */
+// Sign-in becomes available only after callback routes register, since registration requires a public base URL.
 export function isMcpSignInAvailable(): boolean {
   return runtime !== null;
 }
@@ -218,17 +217,16 @@ export async function startMcpSignIn(request: McpSignInRequest): Promise<McpSign
   }
 }
 
-/** Only a sign-in still waiting for its callback redirects, so a used or expired link shows the expired page. */
+// Authorization URLs resolve only while awaiting callback, so reusing a start link after callback shows the expired
+// page.
 export function findMcpAuthorizationUrl(nonceHash: string): string | null {
   if (!runtime) return null;
   const record = liveSignIn(nonceHash, runtime.dependencies.now());
   return record && !record.awaiting ? record.authorizationUrl : null;
 }
 
-/**
- * Holds the code instead of exchanging it: an attacker who sent this link would pass every state,
- * PKCE, and issuer check, so the confirmation page is the only point where the admin can notice.
- */
+// The callback holds the code for confirmation rather than exchanging it immediately because an attacker-sent link
+// passes state, PKCE, and issuer checks.
 export async function handleMcpOAuthCallback(url: URL): Promise<OAuthCallbackResponse> {
   if (!runtime) return renderMcpOAuthResultPage("en-US", "expired");
   const { signerSecret, dependencies } = runtime;

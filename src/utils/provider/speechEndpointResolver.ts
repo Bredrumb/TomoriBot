@@ -33,7 +33,7 @@ import {
 interface SpeechEndpointResult {
   usageContext?: ProviderUsageContext;
   endpoint: CustomEndpointRow;
-  /** Empty string when requires_auth = false (local endpoint with no auth). */
+  // Sentinel empty string when requires_auth is false, since local endpoints with no auth require no key.
   apiKey: string;
 }
 
@@ -99,12 +99,10 @@ async function resolveActiveEndpointByCapability(
       return null;
     }
 
-    // Endpoints that don't require auth (local servers) need no key lookup.
     if (!endpoint.requires_auth) {
       return { endpoint, apiKey: "" };
     }
 
-    // Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
     const providerName = buildCustomProviderName(endpoint.connection_id);
     const configRow = await loadEndpointCredentials(serverId, providerName);
 
@@ -134,10 +132,6 @@ async function resolveActiveEndpointByCapability(
   }
 }
 
-/**
- * Resolves the active speech (TTS) endpoint and credentials for a server.
- * Returns null when no speech endpoint is registered.
- */
 async function resolveActiveSpeechEndpoint(
   serverId: number,
   mode: VoiceSourceMode,
@@ -178,12 +172,6 @@ async function decryptTranscriptionSelection(
   }
 }
 
-/**
- * Lists the transcription targets to try in order for one message.
- *
- * The sender's enabled personal model comes first. The server's hosted model, or else its default
- * endpoint, follows unless BYOK mode forbids server keys or the sender turned off falling back to them.
- */
 export async function resolveTranscriptionTargets(serverId: number, userId?: number): Promise<TranscriptionTarget[]> {
   const [selections, policy] = await Promise.all([
     loadHostedTranscriptionSelections(serverId, userId),

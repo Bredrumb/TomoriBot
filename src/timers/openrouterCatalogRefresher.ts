@@ -1,9 +1,3 @@
-/**
- * OpenRouter Catalog Refresher
- * Keeps the OpenRouter model catalogs and media prices from serving a boot-time snapshot for the life
- * of a deployment.
- */
-
 import { refreshOpenRouterCapabilityCacheIfStale } from "@/utils/cache/openrouterCapabilityCache";
 import { getOpenRouterCatalogTtlMs } from "@/utils/cache/openrouterCatalog";
 import { refreshOpenRouterEmbeddingModelCacheIfStale } from "@/utils/cache/openrouterEmbeddingModelCache";
@@ -12,12 +6,8 @@ import { refreshOpenRouterVideoModelCacheIfStale } from "@/utils/cache/openroute
 import { log } from "@/utils/misc/logger";
 import { warmOpenRouterMediaPricing } from "@/utils/provider/openrouterMediaPricing";
 
-/**
- * Registration reaches the network on a cache miss, so it self-heals without this timer.
- * The synchronous readers cannot: pricing, context limits, tokenizer, and supported
- * parameters are consulted per turn and would keep answering from the boot snapshot for
- * weeks. This exists for them.
- */
+// This timer exists because synchronous per-turn readers (pricing, context limits, tokenizer) cannot fetch on cache
+// miss like registration does.
 class OpenRouterCatalogRefresher {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;

@@ -1,9 +1,3 @@
-/**
- * The voice-source table is what decides which voice a `/generate voice-message` invocation can
- * use, and in what order the modal pre-selects them. Two properties matter enough to pin here:
- * an option that the active endpoint cannot accept must never be offered, and the user's own
- * input must outrank stored persona configuration.
- */
 import { describe, expect, it } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
 import { createPersona } from "../../helpers/fixtures";
@@ -303,7 +297,6 @@ describe("formatVoiceSourceOptionDescription", () => {
 
     expect(formatted.length).toBeLessThanOrEqual(VOICE_SOURCE_OPTION_TEXT_LIMIT);
     expect(formatted.startsWith("Design | ")).toBe(true);
-    // The budget is the limit minus the prefix, and the tail is what gets dropped.
     expect(formatted.startsWith(`Design | ${longPrompt.slice(0, 60)}`)).toBe(true);
     expect(formatted.endsWith("...")).toBe(true);
   });

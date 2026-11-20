@@ -16,7 +16,7 @@ describe("collectStrictChatFlagViolations", () => {
       row({ provider: "deepseek", codename: "ds-x", supportsPrefixCompletion: true }),
       row({ provider: "zai", codename: "zai/glm", supportsPrefixCompletion: true }),
       row({ provider: "zaicoding", codename: "glm", supportsPrefixCompletion: true }),
-      row({ provider: "google", codename: "gemini" }), // no requirement
+      row({ provider: "google", codename: "gemini" }),
     ];
     expect(collectStrictChatFlagViolations(rows)).toEqual([]);
   });
@@ -38,7 +38,6 @@ describe("collectStrictChatFlagViolations", () => {
 
 describe("validateModels (real catalog)", () => {
   it("has no strict chat-completion invariant violations", () => {
-    // The full catalog must satisfy every invariant, including the new required flags.
     expect(validateModels()).toEqual([]);
   });
 });

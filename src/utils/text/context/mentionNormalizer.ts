@@ -12,18 +12,8 @@ const DISCORD_CHANNEL_LINK_TEST_PATTERN =
 const DISCORD_CHANNEL_LINK_REPLACE_PATTERN =
   /https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(?:@me|\d{17,19})\/(\d{17,19})(?:\/(\d{17,19}))?/gi;
 
-/**
- * Controls whether `convertMentions` expands identity macros.
- *
- * - `"resolve"`: expand them into names. Correct for text *we* author: system prompt sections,
- *   persona attributes, sample dialogues, stored memories, and tool/function-call output. These
- *   deliberately store a late-bound reference so one row renders correctly for any persona,
- *   nickname, or target user.
- * - `"preserve"`: leave them literal. Correct for raw prose we did not author: Discord message
- *   bodies, whether typed by a human or emitted by the model. Expanding those rewrites what was
- *   actually said, and for a model-role line collapses BOTH macros onto the persona name (the
- *   author label and the bot nickname are the same string there).
- */
+// "resolve" is for bot-authored templates; "preserve" is for raw messages because expanding model lines collapses
+// both macros onto the persona name.
 export type IdentityMacroMode = "resolve" | "preserve";
 
 function needsConversion(text: string, identityMacroMode: IdentityMacroMode): boolean {
@@ -61,14 +51,6 @@ export function splitLeadingSystemBlocks(content: string): {
   };
 }
 
-/**
- * Converts Discord mentions, channel links, roles, and `{user}`/`{bot}` placeholders into LLM-safe labels.
- *
- * Mention/channel/role resolution always runs. Identity-macro expansion is gated by
- * `identityMacroMode`: see {@link IdentityMacroMode} for which text belongs in which mode.
- *
- * @param identityMacroMode - Whether to expand `{bot}`/`{char}`/`{user}`. Defaults to `"resolve"`.
- */
 export async function convertMentions(
   text: string,
   client: Client,

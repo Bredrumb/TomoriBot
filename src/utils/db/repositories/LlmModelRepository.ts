@@ -23,7 +23,6 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import type { DecisionModelOption } from "@/types/provider/featureInterfaces";
 
-/** Canonical scope for OpenRouter model visibility filtering. */
 export type OpenRouterModelScope = { kind: "server"; ownerId: number } | { kind: "personal"; ownerId: number };
 
 const PROVIDER_NAME_PATTERN = /^[a-zA-Z0-9:_-]+$/;
@@ -48,12 +47,6 @@ function toPgNumericArrayLiteral(values: number[]): string {
   return `{${values.join(",")}}`;
 }
 
-/**
- * LlmModelRepository: global model catalog for all LLM modalities.
- *
- * Owns text, embedding, image, video, and decision catalogs, including scoped registrations.
- * Catalog rows are not exportable per-server state.
- */
 class LlmModelRepository {
   async loadAvailableSpeechModels(provider: string, scope: OpenRouterModelScope): Promise<SpeechModelRow[]> {
     const rows = await withTransientDbRetry(
@@ -108,12 +101,8 @@ class LlmModelRepository {
     return rows.length ? transcriptionModelSchema.parse(rows[0]) : null;
   }
 
-  /**
-   * Returns the catalogue row for a codename, creating a scoped row when none exists.
-   *
-   * A seeded row is returned as is, so registering a built-in codename never turns it into a
-   * scoped registration that a reseed would then leave behind.
-   */
+  // Conflicts leave is_scoped_registration untouched so registering a built-in codename never turns a seeded row into
+  // a scoped one left behind by reseeds.
   async ensureTranscriptionModel(provider: string, codename: string): Promise<TranscriptionModelRow> {
     const [row] = await sql`
       INSERT INTO transcription_models (provider, codename, is_scoped_registration)
@@ -279,11 +268,6 @@ class LlmModelRepository {
         )
     `;
   }
-  /**
-   * Returns all non-deprecated LLMs, or all LLMs when includeDeprecated is true.
-   *
-   * @param includeDeprecated - Include deprecated models in results
-   */
   async loadAvailableLlms(includeDeprecated = false): Promise<LlmRow[] | null> {
     try {
       const rows = await withTransientDbRetry(
@@ -312,11 +296,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns LLMs by their internal IDs, preserving input order.
-   *
-   * @param ids - Array of internal LLM IDs
-   */
   async getLlmsByIds(ids: number[]): Promise<LlmRow[]> {
     if (ids.length === 0) return [];
 
@@ -347,11 +326,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns a single LLM by its internal ID, cache-first.
-   *
-   * @param llmId - Internal LLM ID
-   */
   async loadById(llmId: number): Promise<LlmRow | null> {
     if (!Number.isInteger(llmId) || llmId <= 0) {
       log.error(`Invalid llm_id: ${llmId}`);
@@ -384,21 +358,10 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Compatibility alias for loadById.
-   *
-   * @param llmId - Internal LLM ID
-   */
   async loadLlmById(llmId: number): Promise<LlmRow | null> {
     return this.loadById(llmId);
   }
 
-  /**
-   * Returns the LLM matching a provider + codename pair, or null if not found.
-   *
-   * @param provider - Provider name (e.g. "google", "openrouter")
-   * @param codename - Model codename (e.g. "gemini-2.0-flash")
-   */
   async loadByProviderAndCodename(provider: string, codename: string): Promise<LlmRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
     const normalizedCodename = codename.trim();
@@ -432,13 +395,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns available LLMs for a provider. For the openrouter provider with a scope,
-   * delegates to LlmProviderRepository to filter by registration.
-   *
-   * @param includeDeprecated - Include deprecated models
-   * @param scope             - Optional OpenRouter scope filter
-   */
   async loadAvailableModelsForProvider(
     providerName: string,
     includeDeprecated = false,
@@ -490,10 +446,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the default LLM for a provider (is_default=true, or first available as fallback).
-   *
-   */
   async loadDefaultModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -534,11 +486,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the highest-capability (smartest) LLM for a provider.
-   *
-   * @param includeDeprecated - Include deprecated models
-   */
   async loadSmartestModel(providerName: string, includeDeprecated = false): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -578,10 +525,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the default vision-capable LLM for a provider.
-   *
-   */
   async loadDefaultVisionModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -618,11 +561,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns all distinct provider names that have at least one non-deprecated model.
-   *
-   * @param includeDeprecated - Include providers only present on deprecated models
-   */
   async loadUniqueProviders(includeDeprecated = false): Promise<string[] | null> {
     try {
       const rows = includeDeprecated
@@ -652,10 +590,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the set of provider names (lowercased) that have at least one
-   * non-deprecated free model, so callers can badge those providers in UI.
-   */
   async loadProvidersWithFreeModels(): Promise<Set<string>> {
     try {
       const rows = await sql`
@@ -669,12 +603,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns available embedding models for a provider and delegates owner filtering for shared providers.
-   *
-   * @param includeDeprecated - Include deprecated models
-   * @param scope             - Optional owner scope filter
-   */
   async loadAvailableEmbeddingModels(
     providerName: string,
     includeDeprecated = false,
@@ -726,10 +654,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the default embedding model for a provider.
-   *
-   */
   async loadDefaultEmbeddingModel(providerName: string): Promise<EmbeddingModelRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -770,11 +694,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns an embedding model by its internal ID.
-   *
-   * @param embeddingModelId - Internal embedding model ID
-   */
   async loadEmbeddingModelById(embeddingModelId: number): Promise<EmbeddingModelRow | null> {
     try {
       const rows = await sql`
@@ -801,10 +720,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns an embedding model by provider + codename, or null if not found.
-   *
-   */
   async loadEmbeddingModelByProviderAndCodename(provider: string, codename: string): Promise<EmbeddingModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
     const normalizedCodename = codename.trim();
@@ -835,13 +750,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns available image diffusion models for a provider. Delegates scoped
-   * OpenRouter filtering to LlmProviderRepository.
-   *
-   * @param includeDeprecated - Include deprecated models
-   * @param scope             - Optional OpenRouter scope filter
-   */
   async loadAvailableDiffusionModels(
     providerName: string,
     includeDeprecated = false,
@@ -893,10 +801,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the default image diffusion model for a provider.
-   *
-   */
   async loadDefaultDiffusionModel(providerName: string): Promise<DiffusionModelRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -931,10 +835,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns a diffusion model by provider + codename, or null if not found.
-   *
-   */
   async loadDiffusionModelByProviderAndCodename(provider: string, codename: string): Promise<DiffusionModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
     const normalizedCodename = codename.trim();
@@ -965,13 +865,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns available video generation models for a provider. Delegates scoped
-   * OpenRouter filtering to LlmProviderRepository.
-   *
-   * @param includeDeprecated - Include deprecated models
-   * @param scope             - Optional OpenRouter scope filter
-   */
   async loadAvailableVideoGenerationModels(
     providerName: string,
     includeDeprecated = false,
@@ -1023,10 +916,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns the default video generation model for a provider.
-   *
-   */
   async loadDefaultVideoGenerationModel(providerName: string): Promise<VideoGenerationModelRow | null> {
     const normalized = normalizeProviderName(providerName);
     if (!normalized) {
@@ -1064,10 +953,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns a video generation model by provider + codename, or null if not found.
-   *
-   */
   async loadVideoGenerationModelByProviderAndCodename(
     provider: string,
     codename: string,
@@ -1101,11 +986,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns a diffusion model by its internal ID, or null if not found.
-   *
-   * @param diffusionModelId - Internal diffusion model DB ID
-   */
   async loadDiffusionModelById(diffusionModelId: number): Promise<DiffusionModelRow | null> {
     if (!Number.isInteger(diffusionModelId) || diffusionModelId <= 0) {
       log.error(`Invalid diffusion_model_id: ${diffusionModelId}`);
@@ -1135,11 +1015,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns a video generation model by its internal ID, or null if not found.
-   *
-   * @param videoModelId - Internal video model DB ID
-   */
   async loadVideoGenerationModelById(videoModelId: number): Promise<VideoGenerationModelRow | null> {
     if (!Number.isInteger(videoModelId) || videoModelId <= 0) {
       log.error(`Invalid video_model_id: ${videoModelId}`);
@@ -1166,14 +1041,7 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Upserts a workspace-scoped model under a shared provider name.
-   * Catalog-backed callers supply verified flags while providers without a catalog use
-   * manager-declared flags. OpenRouter callers also persist catalog pricing because SQL-only
-   * stat surfaces cannot read the in-memory pricing cache.
-   *
-   * A missing rate does not overwrite a known one during re-registration.
-   */
+  // OpenRouter callers persist pricing here because SQL-only stat surfaces cannot read the in-memory pricing cache.
   async upsertScopedLlm(
     modelCodename: string,
     caps: {
@@ -1237,22 +1105,8 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Write live OpenRouter rates onto the matching llms rows, in one statement.
-   *
-   * OpenRouter models are not priced by the seed catalog (see METERED_FIRST_PARTY_PROVIDERS in
-   * src/db/seed/catalog/modelSeed.ts): their rates move on OpenRouter's schedule, so the live
-   * API is the source of truth. That leaves the DB columns null, and every cost figure computed
-   * in SQL (StatRepository's estimated cost, per-persona and per-model breakdowns) silently
-   * reports $0.00 for OpenRouter usage. Mirroring the live rates into the catalog closes that
-   * gap without moving pricing authority off the API.
-   *
-   * Only rows whose stored rate actually differs are touched, so an unchanged catalog leaves
-   * updated_at alone and the returned count reports real drift rather than row volume.
-   *
-   * @param prices - Live rates keyed by OpenRouter codename, USD per million tokens
-   * @returns Number of rows whose stored rate changed, or null on failure
-   */
+  // Live API rates are mirrored here because SQL cost stats would read null columns as $0, and unchanged rows are
+  // skipped so updated_at and counts track drift.
   async syncOpenrouterPrices(
     prices: ReadonlyMap<string, { inputPerMillion: number; outputPerMillion: number }>,
   ): Promise<number | null> {
@@ -1297,9 +1151,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * @returns The upserted embedding_model_id, or null on failure
-   */
   async upsertScopedEmbeddingModel(modelCodename: string, provider = "openrouter"): Promise<number | null> {
     const modelFamily = modelCodename.split("/").pop() ?? modelCodename;
     try {
@@ -1329,12 +1180,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Upserts a scoped diffusion model under a shared provider name.
-   *
-   * @param modelCodename - OpenRouter model codename
-   * @returns The upserted diffusion_model_id, or null on failure
-   */
   async upsertScopedDiffusionModel(
     modelCodename: string,
     provider = "openrouter",
@@ -1380,12 +1225,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Upserts a scoped video model under a shared provider name.
-   *
-   * @param modelCodename - OpenRouter model codename
-   * @returns The upserted video_model_id, or null on failure
-   */
   async upsertScopedVideoModel(modelCodename: string, provider = "openrouter"): Promise<number | null> {
     try {
       const rows = await sql`
@@ -1464,14 +1303,8 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Removes a legacy `custom/{serverId}` llms row when a server switches away from the
-   * custom provider.
-   *
-   * Deliberately has no write-side counterpart: the inline custom-provider setup flow that
-   * created these rows was retired, so nothing can produce a new one. Existing rows still
-   * exist in older databases, which is why the cleanup path stays.
-   */
+  // This delete has no write-side counterpart because inline custom/{serverId} creation was retired, so it stays only
+  // to clean up rows in older databases.
   async deleteLegacyCustomLlm(codename: string): Promise<boolean> {
     const result = await sql`
       DELETE FROM llms
@@ -1580,13 +1413,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Returns true when any config row (server_model_configs, persona_configs,
-   * channel_llm_overrides, saved_provider_configs, user_saved_provider_configs,
-   * user_personalization_configs) still references the given LLM ID.
-   *
-   * @param llmId - Internal LLM ID
-   */
   async isLlmStillReferenced(llmId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
@@ -1639,11 +1465,6 @@ class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  /**
-   * Returns true when any config row still references the given embedding model ID.
-   *
-   * @param embeddingModelId - Internal embedding model ID
-   */
   async isEmbeddingModelStillReferenced(embeddingModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
@@ -1657,11 +1478,6 @@ class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  /**
-   * Returns true when any config row still references the given diffusion model ID.
-   *
-   * @param diffusionModelId - Internal diffusion model ID
-   */
   async isDiffusionModelStillReferenced(diffusionModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
@@ -1681,11 +1497,6 @@ class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  /**
-   * Returns true when any config row still references the given video model ID.
-   *
-   * @param videoModelId - Internal video model ID
-   */
   async isVideoModelStillReferenced(videoModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
@@ -1699,7 +1510,6 @@ class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  /** Zero means the catalog row can be deleted if also unreferenced. */
   async countLlmRegistrations(llmId: number): Promise<number> {
     const [row] = await sql<Array<{ count: string | number }>>`
       SELECT COUNT(*) AS count FROM scoped_model_registrations WHERE llm_id = ${llmId}
@@ -1731,11 +1541,6 @@ class LlmModelRepository {
     return Number(row?.count ?? 0);
   }
 
-  /**
-   * Deletes an orphaned scoped LLM catalog row while preserving curated rows.
-   *
-   * @param llmId - Internal LLM ID
-   */
   async deleteOrphanedLlm(llmId: number): Promise<void> {
     await sql`
       DELETE FROM llms
@@ -1744,11 +1549,6 @@ class LlmModelRepository {
     `;
   }
 
-  /**
-   * Deletes an orphaned scoped embedding model catalog row.
-   *
-   * @param embeddingModelId - Internal embedding model ID
-   */
   async deleteOrphanedEmbeddingModel(embeddingModelId: number): Promise<void> {
     await sql`
       DELETE FROM embedding_models
@@ -1757,11 +1557,6 @@ class LlmModelRepository {
     `;
   }
 
-  /**
-   * Deletes an orphaned scoped diffusion model catalog row.
-   *
-   * @param diffusionModelId - Internal diffusion model ID
-   */
   async deleteOrphanedDiffusionModel(diffusionModelId: number): Promise<void> {
     await sql`
       DELETE FROM image_diffusion_models
@@ -1770,11 +1565,6 @@ class LlmModelRepository {
     `;
   }
 
-  /**
-   * Deletes an orphaned scoped video model catalog row.
-   *
-   * @param videoModelId - Internal video model ID
-   */
   async deleteOrphanedVideoModel(videoModelId: number): Promise<void> {
     await sql`
       DELETE FROM video_generation_models
@@ -1823,15 +1613,8 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Deletes a synthetic custom model row by its primary key in the capability-appropriate table.
-   *
-   * Preferred over the codename-based delete when removing one model among several under a label,
-   * since the id is unambiguous regardless of how the codename was derived.
-   *
-   * @param modelRefId - Primary key in llms / embedding_models / image_diffusion_models / video_generation_models
-   * @param capability - Selects the target table
-   */
+  // Deleting by id is preferred over codename deletion when removing one model under a label because the id is
+  // unambiguous regardless of codename derivation.
   async deleteSyntheticCustomCapabilityModelById(
     modelRefId: number,
     capability: CustomEndpointCapability,
@@ -1855,14 +1638,8 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Updates an existing synthetic custom model row in place by its primary key.
-   *
-   * Used on the edit path so a renamed model_name (which changes the derived codename) updates the
-   * same row rather than orphaning it, so config rows reference the model by id, so the id is stable.
-   *
-   * @param params - modelRefId + capability select the row/table; remaining fields are the new values
-   */
+  // Edits update in place by primary key because config rows reference the model by id while renaming changes the
+  // derived codename.
   async updateSyntheticCustomCapabilityModelById(params: {
     modelRefId: number;
     capability: CustomEndpointCapability;
@@ -1940,14 +1717,6 @@ class LlmModelRepository {
     }
   }
 
-  /**
-   * Deletes every synthetic model row owned by a custom provider across all capability tables.
-   *
-   * Used when tearing down a custom provider entirely, so a label+capability may now own several
-   * synthetic models, so codename-by-codename deletion is insufficient.
-   *
-   * @param provider - Internal custom provider name (for example, "custom:123")
-   */
   async deleteAllSyntheticModelsForProvider(provider: string): Promise<void> {
     await sql`DELETE FROM llms WHERE llm_provider = ${provider}`;
     await sql`DELETE FROM embedding_models WHERE provider = ${provider}`;
@@ -1957,5 +1726,4 @@ class LlmModelRepository {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const llmModelRepo = new LlmModelRepository();

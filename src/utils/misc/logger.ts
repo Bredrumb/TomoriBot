@@ -3,46 +3,31 @@ import { buildErrorLogPayload, errorLogRepository } from "@/utils/db/repositorie
 import { resolveErrorContext } from "@/utils/misc/errorContextStore";
 import pino from "pino";
 
-/**
- * Whether `log.error` also persists a structured row to the `error_logs` table.
- *
- * Read per call rather than captured at module load so tests and a running process can flip it
- * without a restart. Defaults on: the structured table is what makes errors queryable from
- * Grafana, and the write is cheap (roughly 1.6 kB per row, a few hundred rows on a normal day).
- * The storm case is handled by the repository's circuit breaker, not by this flag.
- */
+// Env flag is read per call rather than cached at module load so tests and a running process can flip DB error
+// logging without restarting.
 function isErrorDbLoggingEnabled(): boolean {
   const raw = process.env.ERROR_DB_LOGGING_ENABLED;
   if (raw === undefined) return true;
   return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
 }
 
-/**
- * Standard color scheme for both console logs and Discord embeds
- */
 export enum ColorCode {
-  INFO = "#3498DB", // Cyan color
-  SUCCESS = "#2ECC71", // Green color
-  MEMORY_UPDATE = "#25d4da", // Aqua color
-  WARN = "#F1C40F", // Yellow color
-  ERROR = "#E74C3C", // Red color
-  SECTION = "#E066FF", // Purple color
-  AFFECTION = "#ff10cb", // Pink color
-  RATE_LIMIT = "#FFA500", // Orange color
+  INFO = "#3498DB",
+  SUCCESS = "#2ECC71",
+  MEMORY_UPDATE = "#25d4da",
+  WARN = "#F1C40F",
+  ERROR = "#E74C3C",
+  SECTION = "#E066FF",
+  AFFECTION = "#ff10cb",
+  RATE_LIMIT = "#FFA500",
 }
 
-/**
- * Determines if non-essential logs should be shown based on environment
- * TEST_PRODUCTION mode: Show all logs even when RUN_ENV=production
- */
 const isProduction = process.env.RUN_ENV === "production";
 const isTestProduction = process.env.TEST_PRODUCTION === "true";
 const shouldHideLogs = isProduction && !isTestProduction;
 
-/**
- * Check if pino-pretty is available (it's a devDependency, absent in production Docker builds).
- * Wrapping in try/catch avoids crashing when the package isn't installed.
- */
+// Probed via try/catch because pino-pretty is a devDependency omitted from production Docker images and must not
+// crash startup.
 const hasPinoPretty = (() => {
   try {
     require.resolve("pino-pretty/package.json");
@@ -52,41 +37,24 @@ const hasPinoPretty = (() => {
   }
 })();
 
-/**
- * Whether the development pino-pretty transport is active.
- * Production (or a build without pino-pretty) falls back to raw JSON output.
- */
 const usePrettyTransport = !shouldHideLogs && hasPinoPretty;
 
 const LOG_LEVEL_NAMES = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 
-/**
- * Resolves `LOG_LEVEL`, defaulting to `error` in production and `info` elsewhere.
- *
- * Production defaults to `error` because `warn` is developer trace, too noisy for a hoster's
- * dashboards. A hoster diagnosing a user's report raises it to `warn` for the session instead of
- * call sites promoting trace detail to `metric` or `error` to survive the filter. An unknown value
- * falls back to the default so a typo cannot silence errors.
- */
+// Production defaults to error because warn is noisy trace, and unknown values fall back to default so typos never
+// silence errors.
 export function resolveLogLevel(raw: string | undefined, hideLogs: boolean): string {
   const requested = raw?.trim().toLowerCase();
   if (requested && (LOG_LEVEL_NAMES as readonly string[]).includes(requested)) return requested;
   return hideLogs ? "error" : "info";
 }
 
-/**
- * JSON output keeps metrics at any level because the host log copy is what incident queries read;
- * the pretty console follows the base level, so metric lines appear only at `debug` or `trace`.
- */
+// JSON mode keeps metrics at any LOG_LEVEL for host queries, while pretty mode uses baseLevel so samples show only at
+// debug or trace.
 export function resolveMetricLevel(prettyTransport: boolean, baseLevel: string): string {
   return prettyTransport ? baseLevel : "metric";
 }
 
-/**
- * Optional JSONL log file for host-side ingestion (e.g. Azure Monitor Agent
- * tailing a bind-mounted file). Only used in JSON output mode: the
- * development pino-pretty transport ignores it. See `.env.optional.example`.
- */
 const logFilePath = process.env.TOMORI_LOG_FILE?.trim() || undefined;
 
 const REDACTED = "[REDACTED]";
@@ -108,7 +76,6 @@ const SENSITIVE_LOG_KEYS = [
   "signedUrl",
 ] as const;
 
-/** Defense-in-depth redaction for direct structured Pino fields. */
 export const LOG_REDACTION_PATHS = SENSITIVE_LOG_KEYS.flatMap((key) => [
   key,
   `*.${key}`,
@@ -117,18 +84,8 @@ export const LOG_REDACTION_PATHS = SENSITIVE_LOG_KEYS.flatMap((key) => [
   `*.*.*.*.${key}`,
 ]);
 
-/**
- * Builds pino multistream entries that duplicate every JSON record to stdout
- * (preserved for Docker diagnostics) and an append-only JSONL file.
- *
- * Exported for tests: injecting in-memory streams lets tests verify that both
- * sinks receive identical newline-delimited JSON without touching the filesystem.
- *
- * @param filePath - Destination JSONL file path; `undefined` disables file output.
- * @param stdoutStream - Stream receiving the primary output (default `process.stdout`).
- * @param createFileStream - Factory for the file sink (default `pino.destination` in synchronous append mode so no lines are lost on a crash).
- * @returns Stream entries for `pino.multistream()`, or `undefined` when no file is configured.
- */
+// JSON logs duplicate to stdout for Docker diagnostics and write synchronously to the file sink so no lines are lost
+// on a crash.
 export const buildLogStreams = (
   filePath: string | undefined,
   stdoutStream: pino.DestinationStream = process.stdout,
@@ -138,34 +95,25 @@ export const buildLogStreams = (
   if (!filePath) return undefined;
 
   // "trace" lets every record through each sink; level filtering stays on the
-  //    logger itself so both outputs always carry identical lines
+  // logger itself so both outputs always carry identical lines
   return [
     { stream: stdoutStream, level: "trace" },
     { stream: createFileStream(filePath), level: "trace" },
   ];
 };
 
-/**
- * Multistream entries for JSON mode. `undefined` when pretty-printing is active
- * or no log file is configured (pino then defaults to stdout only). Pino forbids
- * combining `transport` with an explicit stream, so the pretty transport and the
- * multistream are mutually exclusive by construction.
- */
+// Left undefined when pretty-printing is active because Pino forbids combining a transport with an explicit stream.
 const jsonStreams = usePrettyTransport ? undefined : buildLogStreams(logFilePath);
 
-/**
- * Pino logger instance with custom levels and formatting
- */
 const pinoLogger = pino(
   {
     level: resolveLogLevel(process.env.LOG_LEVEL, shouldHideLogs),
     customLevels: {
-      success: 35, // Between info (30) and warn (40)
-      section: 31, // Just above info (30)
-      // Below info so a severity range query (`level >= 40`) never counts a sample as a problem.
-      // `metricLogger` sets its own level through `resolveMetricLevel`, which decides where samples print.
+      success: 35,
+      section: 31,
+      // Below Pino info (30) so severity queries (level >= 40) exclude samples, while metricLogger selects visibility.
       metric: 25,
-      rateLimit: 55, // Between error (50) and fatal (60)
+      rateLimit: 55,
     },
     redact: {
       paths: LOG_REDACTION_PATHS,
@@ -187,11 +135,8 @@ const pinoLogger = pino(
   jsonStreams ? pino.multistream(jsonStreams) : undefined,
 );
 
-/**
- * The custom level methods `customLevels` above registers. Pino attaches them to the logger
- * instance at runtime, so the base `Logger` type does not declare them. One cast names the whole
- * boundary here instead of an `any` at every call site, and the signatures stay enforced.
- */
+// Pino attaches custom level methods dynamically at runtime without base types, so this interface centralizes the
+// cast instead of using any at call sites.
 interface CustomLevelLogger extends pino.Logger {
   success(message: string): void;
   section(message: string): void;
@@ -209,9 +154,6 @@ const metricLogger = customLevels.child(
 
 const diagnosticLogger = pinoLogger.child({}, { level: usePrettyTransport ? pinoLogger.level : "warn" });
 
-/**
- * ANSI color codes for terminal output
- */
 const colors = {
   reset: "\x1b[0m",
   cyan: "\x1b[36m",
@@ -231,10 +173,7 @@ function normalizeSensitiveKey(key: string): string {
 
 const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
 
-// Base64 data URIs can reach over 100 KB (e.g. avatar uploads) and split Docker json-file
-// driver log lines past 16 KB. Collapsing base64 payloads keeps logs intact while avoiding
-// blunt truncation of normal prompts, memories, or stack traces.
-// LOG_MAX_STRING_LENGTH is optional; when unset, text strings are never truncated.
+// Optional cap on logged strings because base64 URIs are already collapsed in redactLogString without truncating prose.
 function getLogMaxStringLength(): number | undefined {
   const envVal = process.env.LOG_MAX_STRING_LENGTH;
   if (!envVal) return undefined;
@@ -262,7 +201,8 @@ function sanitizeLogString(value: string, redactValues: readonly string[] = []):
   return value.includes("\x1b[") ? `${truncatedText}${colors.reset}` : truncatedText;
 }
 
-/** Patterns whose match is a credential by its shape alone, so they are safe to apply to free prose. */
+// Patterns here match credentials by shape alone, so they stay safe to apply to free prose without structured-log
+// false positives.
 const CREDENTIAL_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/((?:https?|postgres(?:ql)?):\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED}@`],
   [/\b(Bearer\s+)[A-Za-z0-9._~+/-]{20,}=*/g, `$1${REDACTED}`],
@@ -276,11 +216,8 @@ const CREDENTIAL_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/(https:\/\/(?:canary\.)?discord(?:app)?\.com\/api\/webhooks\/[^/\s]+\/)[^/?\s]+/gi, `$1${REDACTED}`],
 ];
 
-/**
- * Detects credentials in prose without the log redactor's `key: value` and `Basic <word>`
- * heuristics, which exist for structured log fields and match ordinary sentences such as
- * "my secret: I never sleep" or "basic training".
- */
+// Key: value and Basic heuristics from redactLogString are omitted because they match ordinary prose such as basic
+// training.
 export function containsCredential(value: string): boolean {
   // `search` ignores and preserves `lastIndex`, so the shared global patterns stay stateless here.
   return CREDENTIAL_REDACTIONS.some(([pattern]) => value.search(pattern) !== -1);
@@ -319,10 +256,6 @@ export function sanitizeCredentialPayload(value: unknown, redactSensitiveKeys = 
   return output;
 }
 
-/**
- * Recursively removes structured credentials and common credential-bearing URL
- * forms before a value reaches either stdout or the JSONL sink.
- */
 export function sanitizeLogPayload(
   value: unknown,
   depth = 0,
@@ -347,10 +280,8 @@ export function sanitizeLogPayload(
   return output;
 }
 
-/**
- * Metric fields reach the production sinks at every log level, so string fields get the same
- * redaction as every other record. Numbers pass through unchanged, which keeps metric queries typed.
- */
+// Metric strings are redacted because metrics emit at every log level, while numbers pass through unchanged so host
+// queries stay numeric.
 export function buildMetricPayload(name: string, fields: Record<string, number | string>): Record<string, unknown> {
   return sanitizeLogPayload({ metric: name, ...fields }) as Record<string, unknown>;
 }
@@ -376,28 +307,19 @@ const toLoggableError = (err: unknown, redactValues: readonly string[] = []): Re
   return { message: sanitizeLogString(String(err), redactValues) };
 };
 
-/**
- * Logging utility for formatted info, success, error, warning, and section messages.
- * Uses Pino for structured logging with custom levels and pretty printing in development.
- */
 export const log = {
-  /**
-   * Logs informational messages (hidden at the production default level).
-   */
   info: (msg: string) => {
     const sanitizedMsg = sanitizeLogString(msg);
     pinoLogger.info(shouldHideLogs ? sanitizedMsg : `${colors.cyan}${sanitizedMsg}${colors.reset}`);
   },
 
-  /**
-   * Logs success messages (hidden at the production default level).
-   */
   success: (msg: string) => {
     const sanitizedMsg = sanitizeLogString(msg);
     customLevels.success(shouldHideLogs ? `✓ ${sanitizedMsg}` : `${colors.green}✓ ${sanitizedMsg}${colors.reset}`);
   },
 
-  /** Retained provider diagnostics bypass the JSON level filter so expected refusals remain diagnosable. */
+  // Retained diagnostics bypass the JSON level filter so expected provider refusals remain diagnosable even when
+  // production defaults to error.
   warn: (
     msg: string,
     err?: unknown,
@@ -417,11 +339,6 @@ export const log = {
     }
   },
 
-  /**
-   * Logs Discord API rate limit events.
-   * Always shown in production for monitoring purposes.
-   * @param metadata - Optional metadata object with rate limit details.
-   */
   rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
     const sanitizedMsg = sanitizeLogString(msg);
     const coloredMsg = shouldHideLogs ? sanitizedMsg : `${colors.brightYellow}${sanitizedMsg}${colors.reset}`;
@@ -432,30 +349,14 @@ export const log = {
     }
   },
 
-  /**
-   * Logs a sample that statistics are extracted from. JSON output emits it at every log level; the
-   * development console shows it only at `LOG_LEVEL=debug` or `trace`.
-   *
-   * Fields are numbers and string dimensions drawn from a fixed set (codes, reason keys, provider
-   * names), so a query can group and count on them. Free text such as an error message or a
-   * localized heading belongs in `log.warn`: it gives every record its own value and cannot be
-   * aggregated. A sample sits below `info` in severity, so it never reads as a problem.
-   *
-   * @param name - Short metric name (used as the `metric` field for filtering).
-   */
+  // Metric string fields must come from a fixed dimension set rather than free text so log queries can group and
+  // aggregate samples.
   metric: (name: string, fields: Record<string, number | string>) => {
     metricLogger.metric(buildMetricPayload(name, fields), `metric:${name}`);
   },
 
-  /**
-   * Logs a failure the hoster must act on, and persists it to `error_logs`. Expected refusals
-   * (bad input, an unreachable user endpoint) are not errors: count them with `log.metric` and
-   * explain them with `log.warn`.
-   * @param err - The actual Error object or unknown error data (optional).
-   * @param context - Optional context containing IDs and metadata for DB logging.
-   * @param options.persist - `false` when the failure is the database path itself, where an
-   *   `error_logs` insert would queue on the pool that just failed.
-   */
+  // Database-path failures must pass persist: false so logging avoids queueing onto the failing pool, and expected
+  // refusals belong in warn and metric.
   error: async (
     msg: string,
     err?: unknown,
@@ -482,9 +383,8 @@ export const log = {
 
     const dbPayload = buildErrorLogPayload(sanitizedPlainMsg, sanitizedError, sanitizedContext);
 
-    // insertErrorLog never throws and reports a skip separately from a failure. Neither is
-    // logged here: the record above already reached the durable host file, and emitting a
-    // second error line per failed insert is what turns a database outage into a log storm.
+    // Skips and DB insert failures stay unlogged because the host file already captured the error and extra logs
+    // cause storms during outages.
     try {
       await errorLogRepository.insertErrorLog(dbPayload);
     } catch (dbError) {
@@ -492,9 +392,6 @@ export const log = {
     }
   },
 
-  /**
-   * Logs section dividers for grouping related logs (hidden in production).
-   */
   section: (msg: string) => {
     if (!shouldHideLogs) {
       const sanitizedMsg = sanitizeLogString(msg);

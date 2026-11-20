@@ -38,10 +38,7 @@ describe("supporter subscribe command registration", () => {
   });
 
   beforeEach(() => {
-    // `loadCommandData()` memoizes its result behind a single-flight promise
-    // (TDZ-race guard). Each case here loads under a DIFFERENT billing-flag env,
-    // so the cache must be dropped or the second case would assert against the
-    // first case's command set.
+    // Drop the memoized command data between billing flag cases so each case sees its own environment.
     resetCommandDataCache();
   });
 

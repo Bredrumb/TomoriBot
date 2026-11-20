@@ -12,29 +12,23 @@ import {
 export { releaseTextQuotaUnits as releaseTextQuota } from "@/utils/db/repositories/QuotaRepository";
 
 export interface TextQuotaCheckResult {
-  allowed: boolean; // Whether user can trigger text generation
-  reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled"; // Reason if denied
-  userRemaining?: number; // User's remaining quota for the day
-  serverwideRemaining?: number; // Server's remaining quota for the period
-  resetTime?: Date; // When the quota resets (for error messages)
+  allowed: boolean;
+  reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled";
+  userRemaining?: number;
+  serverwideRemaining?: number;
+  resetTime?: Date;
 }
 
 export interface TextQuotaClaim extends TextQuotaCheckResult {
   reservation: QuotaReservation | null;
 }
 
-/**
- * Get or create server's text quota configuration
- * Creates default config if not exists (unlimited by default)
- */
 export async function getTextQuotaConfig(serverId: number): Promise<TextQuotaConfigRow> {
   return getOrCreateTextConfig(serverId);
 }
 
-/**
- * Claim one text generation on both counters or neither.
- * A database failure throws, so the caller refuses instead of spending an uncounted generation.
- */
+// Atomic reservation across both counters throws QuotaUnavailableError on DB failure, so callers fail closed instead
+// of spending uncounted text quota.
 export async function reserveTextQuota(serverId: number, userDiscId: string): Promise<TextQuotaClaim> {
   const read = await getTextConfigResult(serverId);
   if (read.status === "unavailable") throw new QuotaUnavailableError();
@@ -60,7 +54,7 @@ export async function reserveTextQuota(serverId: number, userDiscId: string): Pr
 
   if (outcome.status === "user_quota_exceeded") {
     const resetTime = new Date();
-    resetTime.setHours(24, 0, 0, 0); // Next midnight
+    resetTime.setHours(24, 0, 0, 0);
     return { allowed: false, reason: "user_quota_exceeded", userRemaining: 0, resetTime, reservation: null };
   }
 

@@ -45,10 +45,7 @@ const CYCLES_INPUT_ID = "generate_scene_cycles";
 const INSTRUCTIONS_INPUT_ID = "generate_scene_instructions";
 const MAX_PERSONA_SELECT_OPTIONS = 25;
 
-/**
- * Round-trip ceiling for `/generate scene`: each cycle replays every selected speaker once.
- * Kept low because a cycle costs one LLM turn per speaker and they all post to the channel.
- */
+// Kept low at 10 because each cycle runs one LLM turn per selected speaker and posts every turn to the channel.
 const GENERATE_SCENE_MAX_CYCLES = 10;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -58,10 +55,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   );
 export const autocomplete = createGenerationModelAutocomplete("text");
 
-/**
- * Discord rejects the whole modal past 25 options, which only installs raising `MAX_PERSONAS_PER_SERVER`
- * above 25 reach; personas past the cut then cannot be cast in a scene.
- */
+// Capped at 25 because Discord rejects modals past 25 select options, leaving personas beyond that limit uncastable
+// if MAX_PERSONAS_PER_SERVER exceeds 25.
 function getPersonaOptions(personas: TomoriState[], locale: string) {
   return personas
     .filter((persona) => typeof persona.persona_id === "number")
@@ -365,10 +360,8 @@ export async function execute(
         },
       ],
     },
-    // Do not auto-defer the modal submission: the success path replies with a
-    // *non-ephemeral* embed so it becomes a real channel message the context
-    // builder can re-read as a [System: ...] scene directive. All post-submit
-    // work below is synchronous, so we still acknowledge within the 3s window.
+    // Skips auto-defer so the non-ephemeral reply enters channel context, which stays safe because post-submit work
+    // is synchronous within Discord's 3s window.
   );
 
   if (modalResult.outcome !== "submit" || !modalResult.interaction) {
@@ -442,8 +435,6 @@ export async function execute(
     );
   }
 
-  // Footer shows who triggered the scene, mirroring the executor identity pattern
-  //    in /impersonate user (guild member avatar, falling back to the global user avatar).
   const executorAvatarUrl = invokingMember
     ? invokingMember.displayAvatarURL({ size: 64, extension: "png", forceStatic: true })
     : interaction.user.displayAvatarURL({ size: 64, extension: "png", forceStatic: true });

@@ -153,9 +153,8 @@ describe("conditioning removal modal builder", () => {
       createMockEntry(0, { conditioningType: "reward", actionKey: "headpat" }),
     ]);
 
-    // Discord component types are bare numbers, so nothing but this assertion distinguishes a
-    // CheckboxGroup from a FileUpload. A FileUpload submits no values, and removal treats an
-    // absent value as unchecked, so the wrong number here deletes every presented row.
+    // Discord component types are bare numbers, so this guards against FileUpload (19) submitting
+    // no values and causing unchecked-means-remove to delete every presented row.
     expect(modal.components).toHaveLength(1);
     const wrapper = modal.components[0] as { type: number; component: { type: number; options: unknown[] } };
     expect(wrapper.type).toBe(18);

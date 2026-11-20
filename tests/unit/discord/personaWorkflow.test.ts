@@ -15,9 +15,7 @@ import type {
   PersonaWorkflowModalResult,
   PersonaWorkflowUpdateError,
 } from "@/utils/discord/ui/personaWorkflow";
-// Real namespaces captured before any `mock.module` runs (static imports are
-// hoisted). Spreading them keeps each factory full-surface so a later test file
-// in the monolithic `bun test` never links against a missing export.
+// Captured before `mock.module` runs so spread factories keep all exports intact for later files in `bun test`.
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import * as realLocalizer from "@/utils/text/localizer";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
@@ -74,10 +72,7 @@ const calls: RecordedCall[] = [];
 const warnings: RecordedWarning[] = [];
 let rawModalAcknowledged = new WeakSet<object>();
 let acknowledgeRawModal = true;
-// Resolution-order + gate instrumentation for the collapse-at-open ordering tests.
-// `resolutionOrder` records when an edit actually completes (not when it is invoked),
-// so a terminal edit that awaits a gated collapse lands after it. `collapseGate` blocks
-// the collapse edit until released; `rejectCollapse` makes it throw.
+// Records edit completion order (not invocation) so terminal edits awaiting `collapseGate` appear after collapse.
 const resolutionOrder: string[] = [];
 let collapseGate: Promise<void> | null = null;
 let rejectCollapse = false;
@@ -135,10 +130,7 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
     },
   ],
   hasRawModalAcknowledgement: (interaction: object) => rawModalAcknowledged.has(interaction),
-  // Mirrors the real helper's two rejection shapes: the bare collector end-reason
-  // string used by this harness, and the InteractionCollectorError message form.
-  // `mock.module` replaces the whole module, so every export personaWorkflow.ts
-  // imports must be stubbed or module linking fails.
+  // Stubs both rejection shapes because `mock.module` replaces the module and leaves unstubbed exports undefined.
   isCollectorTimeoutError: (error: unknown) => {
     if (error === "time" || error === "idle") return true;
     if (!error || typeof error !== "object") return false;
@@ -162,11 +154,7 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
     if (!queued) throw new Error("Persona picker mock queue is empty.");
     return typeof queued === "function" ? queued(options) : queued;
   },
-  // ── shared paginated-modal helpers personaWorkflow.ts now imports from here ──
-  // `mock.module` replaces the whole module, so these must be stubbed with faithful
-  // behavior (the range-selector tests below click buttons from the rendered payload
-  // and assert the sliced option offsets). They mirror the real pure helpers in
-  // interactionCore.ts one-for-one.
+  // Paginated-modal helpers must be faithfully stubbed because `mock.module` replaces interactionCore wholesale.
   MODAL_OPTIONS_PER_PAGE: MOCK_OPTIONS_PER_PAGE,
   RANGES_PER_SELECTOR_PAGE: MOCK_RANGES_PER_SELECTOR_PAGE,
   getPaginatedModalComponent: (options: ModalOptions) =>
@@ -827,9 +815,7 @@ describe("workflow acknowledgment and modal phases", () => {
     queueSelection(selectedButton, 0);
     rawModalQueue.push({ outcome: "submit", interaction: modalSubmit });
 
-    // Gate the collapse edit so it resolves only after we release it. If the terminal
-    // edit did not settle the collapse first, modal.update would complete before the
-    // collapse, flipping the recorded resolution order.
+    // Gated so a terminal edit that fails to await the collapse completes first and flips `resolutionOrder`.
     let releaseCollapse!: () => void;
     collapseGate = new Promise<void>((resolve) => {
       releaseCollapse = resolve;
@@ -845,7 +831,7 @@ describe("workflow acknowledgment and modal phases", () => {
       },
     });
 
-    // Let the flow progress to where the terminal edit is blocked on the gated collapse.
+    // Flush microtasks so the terminal edit blocks on `collapseGate` before releasing it.
     await Promise.resolve();
     expect(resolutionOrder).not.toContain("modal.update");
     releaseCollapse();

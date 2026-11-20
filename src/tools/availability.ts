@@ -19,10 +19,6 @@ import { hasOptApiKey } from "@/utils/security/crypto";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 
-/**
- * Minimal state interface for context building operations.
- * Contains only what's needed for feature flag checking without full Discord context.
- */
 export type ToolStateForContext = ToolAssemblyState;
 
 export interface AvailableToolsWithMCP {
@@ -67,7 +63,7 @@ export async function refreshToolExecutionContext(context: ToolContext): Promise
   return context;
 }
 
-/** Dispatch uses the same policy as declarations; bot permissions do not authorize the invoking user. */
+// Shared policy for declaration and dispatch because bot permissions do not authorize the invoking user.
 export function isBuiltInToolAvailable(tool: Tool, provider: string, context: ToolContext): boolean {
   return (
     tool.isAvailableFor(provider) &&
@@ -100,16 +96,8 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
   return availableTools;
 }
 
-/**
- * Drops tools whose live-turn availability has lapsed (per-turn dedup flags,
- * active model capabilities) from the set a provider is about to declare to the
- * LLM, so a withdrawn tool is never advertised and then rejected at dispatch.
- *
- * Runs at declaration time, before any Discord interaction exists, so the
- * synthesized context carries placeholder `channel`/`client` values: an
- * `isAvailableForContext` implementation may read only `streamContext` and
- * `tomoriState`.
- */
+// Placeholder channel/client are passed at declaration time, so isAvailableForContext hooks may read only
+// streamContext and tomoriState.
 export function applyStreamContextAvailability(params: {
   providerLabel: string;
   provider: string;
@@ -248,8 +236,6 @@ export async function getAvailableToolsWithMCP(
             voice_source_priority: stateForContext.activePersonaVoiceSourcePriority,
           },
         }).length > 0;
-      // Read split-table model slots: diffusion_model_id/video_model_id live in
-      //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await withTransientDbRetry(
         () => sql<
           [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]

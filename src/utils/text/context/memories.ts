@@ -27,18 +27,11 @@ import { STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promp
 import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 
-// Default render depth for crude messages (Mode B additive blocks + no-summary
-// fallback listing). Also the fallback when a server has no crude_message_count set.
 const DEFAULT_CRUDE_MESSAGE_COUNT = 6;
 const MAX_OTHER_CHANNEL_MEMORIES = 3;
 
 // Each chat turn's crude write refreshes lastUpdated, so an hour distinguishes active same-channel memory from ambient recall.
 const STM_FRESH_WINDOW_MS = 60 * 60 * 1000;
-
-// The single unified nudge (migration 052) covers BOTH cases: "no STM yet, please
-// create one" and "STM exists, please refresh it": with one cadence-gated prompt.
-// Category-mode seeds reference {category_labels}, substituted before sanitization.
-// `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
 
 export const SEED_SUMMARY_UPDATE_HINT =
   "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation.{{if tool:create_long_term_memory}} Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool}{{if tool:update_long_term_memory}} or {memory_update_tool}{{/if}} instead.{{/if}}]";
@@ -56,29 +49,14 @@ function formatDiscordChannelReference(channelId: string | undefined, fallbackTe
   return channelId ? `<#${channelId}>` : fallbackText;
 }
 
-/**
- * Derives a human-readable display label from a slug for other-channel memories
- * where the originating server's category definitions are not loaded.
- * e.g. "my_goals" → "My Goals"
- */
 function slugToDisplayLabel(slug: string): string {
   return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/**
- * Formats a categories map as labeled lines for context injection.
- * When labelMap is provided (same-channel with full category row data), uses the
- * original labels in position order. Without labelMap (other-channel), uses
- * humanized slug names.
- *
- * @param categories - slug → value map from the cache entry
- * @param labelMap - Optional slug → display-label map (position-ordered)
- */
 function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<string, string>): string {
   const lines: string[] = [];
 
   if (labelMap) {
-    // Use ordered labels from the server's category definitions
     for (const [slug, label] of labelMap) {
       const value = categories[slug];
       if (value?.trim()) {
@@ -86,7 +64,6 @@ function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<
       }
     }
   } else {
-    // Humanize slugs for cross-server / other-channel rendering
     for (const [slug, value] of Object.entries(categories)) {
       if (value?.trim()) {
         lines.push(`${slugToDisplayLabel(slug)}: ${value.trim()}`);
@@ -97,17 +74,6 @@ function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<
   return lines.join("\n");
 }
 
-/**
- * Renders the most recent crude turns of one other-channel memory entry.
- *
- * The speaker falls back through the stored name, then the triggerer for user turns and the bot for
- * model turns, so a turn whose author was never recorded still renders with someone recognizable.
- *
- * @param messages - Turns held by the cache entry
- * @param depth - Configured number of most recent turns to keep
- * @param isSameServerSharedMemory - Whether the entry belongs to the current server
- * @returns The turn lines, each terminated by a newline
- */
 function renderCrudeTurns(
   messages: ShortTermMemoryEntry["messages"],
   depth: number,
@@ -115,7 +81,6 @@ function renderCrudeTurns(
   params: { triggererName: string; botName: string },
 ): string {
   let crudeText = "";
-  // Cap the rendered crude turns to the configured depth (most recent N).
   for (const msg of messages.slice(-depth)) {
     const speaker =
       msg.speakerName ||
@@ -125,9 +90,6 @@ function renderCrudeTurns(
   return crudeText;
 }
 
-/**
- * Builds persona-scoped server or DM long-term memory context.
- */
 export async function buildServerMemoryContextItem(params: {
   tomoriState: TomoriState | null;
   guildId: string;
@@ -157,9 +119,6 @@ export async function buildServerMemoryContextItem(params: {
   let serverMemoryLines: string[] = [];
   let memoryEntries: ContextMemoryEntry[] = [];
   try {
-    // Without a resolved server id + persona lineage there is nothing to scope
-    // to treat it as "no memories" (the previous raw query interpolated NULL,
-    // matching none).
     const serverId = params.tomoriState.server_id;
     const personaLineageId = params.tomoriState.persona_lineage_id;
     const serverMemoryRows =
@@ -260,7 +219,8 @@ export async function buildShortTermMemoryContext(params: {
   memoryItems: StructuredContextItem[];
   nudgeItem?: StructuredContextItem;
   nudgeInjectionDepth: number;
-  /** Saved dialogue-item depth, with -1 anchoring stale same-channel memory at the top and STM_TAIL_SLOT marking fresh content for downstream position comparison. */
+  // Sentinel depths: -1 anchors stale same-channel memory at the top, and STM_TAIL_SLOT marks fresh content so
+  // downstream builders can compare positions.
   memoryInjectionDepth: number;
 }> {
   const memoryItems: PromptLayoutItem[] = [];
@@ -278,7 +238,6 @@ export async function buildShortTermMemoryContext(params: {
         ])
       : [null, []];
 
-    // Resolved config values (fall back to sensible defaults)
     const refreshCadence = stmConfig?.refresh_cadence ?? 5;
     // Most servers have no server_stm_configs row at all (it is not seeded at setup),
     // so this fallback, not the column default, decides the render mode for them.
@@ -290,9 +249,7 @@ export async function buildShortTermMemoryContext(params: {
     const configuredMemoryInjectionDepth = stmConfig?.content_injection_depth ?? -1;
     let isStmFresh = false;
 
-    // Category mode: any configuration other than the single default "summary" category.
-    // An empty list (no rows resolved, e.g. no server) is NOT category mode: it must
-    // collapse to the backward-compatible summary path, not render empty labeled sections.
+    // Empty category rows collapse to summary mode so unconfigured scopes never render empty labeled sections.
     const isCategoryMode =
       stmCategoryRows.length > 0 &&
       !(stmCategoryRows.length === 1 && stmCategoryRows[0].label.toLowerCase() === "summary");
@@ -301,11 +258,7 @@ export async function buildShortTermMemoryContext(params: {
     const userRow = await getCachedUserRow(params.triggeringUserId);
     const crossServerOptIn = userRow?.shortterm_cache_crossserver_opt_in ?? false;
 
-    // Bulk-warm cross-channel STM from the DB BEFORE the synchronous reads below, so
-    // other-channel recall is available on the FIRST turn after a restart (cold cache)
-    // rather than the second. The same-channel pre-warm (section 3) only covers the
-    // current channel; cross-channel recall needs every channel's persisted row. Awaited
-    // and one-shot per scope per process, so it costs a single query once after a restart.
+    // Pre-warm every channel before the sync reads below so cross-channel recall works on the first post-restart turn.
     if (params.currentServerId === "DM") {
       await preWarmUserStmEntries(params.triggeringUserId);
     } else {
@@ -400,7 +353,6 @@ export async function buildShortTermMemoryContext(params: {
               )
             : "a channel in another server";
 
-        // Determine what content to render for this memory entry
         const hasCategories = memory.categories && Object.keys(memory.categories).length > 0;
         const categoryContent = hasCategories ? formatCategoryLines(memory.categories as Record<string, string>) : null;
 
@@ -420,10 +372,8 @@ export async function buildShortTermMemoryContext(params: {
             : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
 
         if (categoryContent) {
-          // Category content available: use it as the primary memory representation
           otherChannelText += `${memoryPrefix}${categoryContent}]\n\n`;
 
-          // Mode B (crude_summary): also show recent crude messages additively for other-channel
           if (renderMode === "crude_summary" && memory.messages.length > 0) {
             otherChannelText += `${crudeTurnPrefix}${renderCrudeTurns(
               memory.messages,
@@ -433,7 +383,6 @@ export async function buildShortTermMemoryContext(params: {
             )}]\n\n`;
           }
         } else if (memory.summary) {
-          // Single-blob summary (fallback / pre-category entries)
           otherChannelText += `${memoryPrefix}${memory.summary}]\n\n`;
 
           if (renderMode === "crude_summary" && memory.messages.length > 0) {
@@ -445,7 +394,6 @@ export async function buildShortTermMemoryContext(params: {
             )}]\n\n`;
           }
         } else {
-          // No summary or categories: fall back to crude turn listing (capped to depth).
           otherChannelText += `${memoryPrefix}${renderCrudeTurns(
             memory.messages,
             crudeMessageCount,
@@ -477,22 +425,14 @@ export async function buildShortTermMemoryContext(params: {
       }
     }
     if (params.tomoriState?.llm?.has_tools) {
-      // The cadence nudge prompts the bot to CALL the STM write tool, so it must track
-      // the same conditions that decide whether the tool is offered (see
-      // updateShortTermMemoryTool.isAvailableForContext). When the per-server master
-      // switch (migration 054) is off, the tool is suppressed: so we suppress the nudge
-      // too. Crucially this only gates the nudge: the memory content blocks above and
-      // below still render, so manually-curated STM (`/persona stm edit`) and crude
-      // messages keep surfacing even with STM "off".
+      // Gate only the nudge on updateShortTermMemoryTool availability so manual STM content still surfaces when
+      // disabled.
       const isStmToolAvailable =
         params.tomoriState.llm.llm_provider !== "novelai" &&
         !params.explicitLongTermMemoryIntent &&
         params.tomoriState.config?.short_term_memory_enabled !== false;
 
-      // Ensure the cache is warm before the synchronous read below.
-      // On the first turn after a bot restart the in-memory cache is cold; without
-      // this await the sync getter would return undefined and miss the persisted
-      // summary/categories for the entire turn.
+      // Pre-warm the single-channel cache before the sync getter below so post-restart turns see persisted STM.
       await (params.currentServerId === "DM"
         ? preWarmStmEntry("user", params.triggeringUserId, params.currentChannelId, params.tomoriState?.persona_id)
         : preWarmStmEntry("server", params.currentServerId, params.currentChannelId, params.tomoriState?.persona_id));
@@ -510,17 +450,12 @@ export async function buildShortTermMemoryContext(params: {
               params.tomoriState?.persona_id,
             );
 
-      // Unified cadence counter (migration 052). A channel with no prior STM starts
-      // at 0 and increments once per bot-participation turn, so the nudge first fires
-      // after exactly `refreshCadence` turns: for BOTH the create case (no STM yet)
-      // and each subsequent update case (existing STM refresh).
       const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? 0;
       const isNudgeDue = turnsSinceRefresh >= refreshCadence;
 
       const stmAgeMs = sameChannelMemory ? Date.now() - sameChannelMemory.lastUpdated : Number.POSITIVE_INFINITY;
       isStmFresh ||= stmAgeMs <= STM_FRESH_WINDOW_MS;
 
-      // Determine what content is in the same-channel memory
       const sameChannelCategories =
         sameChannelMemory?.categories && Object.keys(sameChannelMemory.categories).length > 0
           ? (sameChannelMemory.categories as Record<string, string>)
@@ -530,13 +465,10 @@ export async function buildShortTermMemoryContext(params: {
       if (hasMemoryContent) {
         let memoryBodyText: string;
         if (sameChannelCategories && slugMap) {
-          // Category mode: render labeled sections using the server's ordered category rows
           memoryBodyText = formatCategoryLines(sameChannelCategories, slugMap);
         } else if (sameChannelCategories) {
-          // Categories present but no slug map (shouldn't happen in normal flow)
           memoryBodyText = formatCategoryLines(sameChannelCategories);
         } else {
-          // Single-blob summary (fallback / pre-category)
           memoryBodyText = sameChannelMemory?.summary ?? "";
         }
 

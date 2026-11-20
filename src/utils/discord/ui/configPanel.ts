@@ -186,11 +186,8 @@ export type ConfigPanelView =
 
 const ADDRESSING_STYLES: readonly AddressingStyle[] = ["masculine", "feminine", "neutral"];
 
-/**
- * Literal locale key per page. Page identifiers repeat across categories (`general` names both a
- * Persona and a Behavior page), and `check-locales` only sees dot-notation string literals, so a
- * composed key would resolve to raw text with every gate green.
- */
+// Literal keys are kept per page because page names repeat across categories and check-locales only scans
+// dot-notation string literals.
 export const PAGE_LOCALE_KEYS: Record<ConfigCategory, Record<string, string>> = {
   persona: {
     general: "commands.config.panel.page_persona_general",
@@ -395,12 +392,6 @@ function formatTriggerWords(triggerWords: readonly string[]): string {
   return triggerWords.map((word) => `\`${normalizeTriggerWord(word, { lowercase: false })}\``).join(", ");
 }
 
-/**
- * Renders one addressing style's stored prefix, suffix, and term.
- *
- * A naming habit is three independent optional values, and an empty one means the persona uses the
- * bare name, so an omitted entry is rendered explicitly rather than left as a blank row.
- */
 function describeNamingStyle(locale: string, persona: TomoriState | null, style: AddressingStyle): string {
   const none = localizer(locale, "commands.config.panel.naming_none");
   const prefix = persona?.naming_config.prefixes[style];
@@ -413,10 +404,6 @@ function describeNamingStyle(locale: string, persona: TomoriState | null, style:
   ].join("\n");
 }
 
-/**
- * Page offset holding the current selection. A pagination button overrides it with an explicit
- * start; every other repaint wants the page the selected persona is actually on.
- */
 function resolvePersonaSelectStart(personas: readonly TomoriState[], selectedPersonaId: number | null): number {
   const index = personas.findIndex((persona) => persona.persona_id === selectedPersonaId);
   if (index < 0) return 0;
@@ -2065,7 +2052,6 @@ ${conditioningLines.join("\n")}`,
   return components;
 }
 
-/** Reward before punish, matching the order the two conditioning command families are listed in. */
 const CONDITIONING_TYPE_ORDER = ["reward", "punish"] as const;
 
 const CONDITIONING_SUMMARY_LOCALE_KEYS: Record<
@@ -2244,10 +2230,8 @@ function behaviorHeading(
   };
 }
 
-/**
- * Rides inside the page heading rather than its own TextDisplay, because one more component pushes a
- * fully paginated Channels Rules page past Discord's 40-component cap.
- */
+// Kept inside the page heading rather than its own TextDisplay because an extra component pushes a paginated Channels
+// Rules page past Discord's 40-component cap.
 function whitelistLocationHint(locale: string, actor: ConfigPanelRenderInput["actor"]): string {
   if (actor.workspaceKind !== "guild" || !actor.isManager) return "";
   const moderation = `${commandRegistry.getCommandMention("moderation", undefined, undefined, true)} > ${localizer(locale, "commands.moderation.category_whitelist")}`;
@@ -2510,11 +2494,6 @@ function cooldownLabel(locale: string, value: number): string {
   return localizer(locale, key);
 }
 
-/**
- * The explicit removal-range state: only this state offers the range selector and its window
- * navigation, so an overflow server keeps the ordinary Trigger page free of removal chrome until
- * Remove is pressed. Cancel returns to the ordinary page at the position this state was reached.
- */
 function buildRandomTriggerRemoveRangeComponents(
   locale: string,
   view: ConfigBehaviorTriggerView,
@@ -3380,19 +3359,10 @@ interface PersonaRangeEntryInput {
   buttonLabelKey: string;
   selectCustomId: string;
   selectPlaceholderKey: string;
-  /** Buttons sharing the entry point's row while it is a button, and their own row once it is not. */
   siblingButtons?: ButtonComponentData[];
-  /** Places the siblings ahead of the entry point rather than after it, in both layouts. */
   siblingsFirst?: boolean;
 }
 
-/**
- * Renders the entry point for a modal whose persona select cannot hold the whole roster.
- *
- * Within one page the plain button is kept, because a select carrying a single range would be the
- * inert one-option selector the shell already avoids. Past that the button becomes a range select,
- * so every persona is reachable through the page that holds it.
- */
 function buildPersonaRangeEntry(input: PersonaRangeEntryInput): ComponentInContainerData[] {
   const roster = selectablePersonas(input.personas);
   const siblings = input.siblingButtons ?? [];
@@ -4297,9 +4267,7 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     readStatus === "unavailable",
   );
 
-  // The shared helper takes one row-wide disabled flag, which no earlier panel needed to vary. A
-  // category inert for permission reasons is per-button, so it is re-applied over the row here;
-  // the helper preserves input order, which is what makes the index alignment safe.
+  // Re-apply per-button disabled flags here because the shared helper only supports one row-wide flag.
   categoryEntries.forEach((entry, index) => {
     if (entry.disabled) categoryRow.components[index].disabled = true;
   });
@@ -4617,8 +4585,6 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     return buildPayload(components, receipt);
   }
 
-  // Every other destination lands in a later Phase D slice. `/config` registers no slash command
-  // until that cutover, so this placeholder is unreachable rather than shipped.
   const fallbackPageKey = PAGE_LOCALE_KEYS[category]?.[page];
   if (!fallbackPageKey) {
     components.push({

@@ -6,7 +6,7 @@ import type { StructuredContextItem } from "@/types/misc/context";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
-import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
@@ -29,10 +29,6 @@ import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/gu
 import { type WelcomeHandoff, openWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
-/**
- * Provider-to-chat-completions-URL mapping for vision model routing.
- * Google uses its own SDK and is handled separately.
- */
 const VISION_PROVIDER_URLS: Record<string, string> = {
   openrouter: "https://openrouter.ai/api/v1/chat/completions",
   zai: ZAI_GENERAL_CHAT_COMPLETIONS_URL,
@@ -40,15 +36,9 @@ const VISION_PROVIDER_URLS: Record<string, string> = {
   deepseek: "https://api.deepseek.com/chat/completions",
 };
 
-/** Prompt sent to the vision model when analyzing a new member's avatar for the welcome message */
 const WELCOME_AVATAR_VISION_PROMPT =
   "Describe this user's profile picture in detail for a welcome greeting context. Include their appearance, style, and any notable elements visible in the avatar.";
 
-/**
- * Call the Google GenAI vision API with a single base64-encoded avatar image.
- * @param model - Model codename (e.g., "gemini-2.0-flash")
- * @param base64Image - Base64-encoded PNG image data
- */
 async function callGoogleVisionForAvatar(
   apiKey: string,
   model: string,
@@ -66,11 +56,6 @@ async function callGoogleVisionForAvatar(
   return text;
 }
 
-/**
- * Call an OpenAI-compatible vision API with a single base64-encoded avatar image.
- * @param endpointUrl - Chat completions endpoint URL
- * @param base64Image - Base64-encoded PNG image data
- */
 async function callOpenAICompatibleVisionForAvatar(
   apiKey: string,
   model: string,
@@ -119,13 +104,6 @@ async function callOpenAICompatibleVisionForAvatar(
   return content;
 }
 
-/**
- * Delegates avatar analysis to the persona's configured vision model.
- * Called when the greeting persona's primary LLM cannot see images but a vision_llm is set.
- * Downloads the avatar, calls the vision model API, and returns a plain-text description.
- * @param member - The guild member whose avatar will be analyzed
- * @returns Text description from the vision model, or null if analysis fails
- */
 async function getAvatarVisionDescription(member: GuildMember, persona: TomoriState): Promise<string | null> {
   const visionLlm = persona.vision_llm;
   if (!visionLlm || !persona.config.api_key) return null;
@@ -172,7 +150,6 @@ async function buildWelcomeContextItem(params: {
   member: GuildMember;
   additionalPrompt: string;
   includeAvatarContext: boolean;
-  /** Text description from vision model, so used when the primary model cannot see images */
   avatarDescription?: string;
 }): Promise<StructuredContextItem> {
   const { member, additionalPrompt, includeAvatarContext, avatarDescription } = params;
@@ -228,10 +205,8 @@ async function buildWelcomeContextItem(params: {
   };
 }
 
-/**
- * An unverified membership is logged at error level because it is an operational fault rather than
- * a departure, and `log.info` is dropped entirely under `RUN_ENV=production`.
- */
+// Unverified membership uses log.error because it is an operational fault rather than a departure, and
+// RUN_ENV=production drops log.info.
 function logSkippedWelcome(member: GuildMember, check: WelcomeMembershipCheck, stage: string): void {
   if (check.status === "unverified") {
     log.error(`Skipping welcome for ${member.user.tag}: could not verify membership ${stage}`, check.error);
@@ -380,7 +355,6 @@ async function sendWelcome(params: {
 
   const welcomeStartTime = Date.now();
 
-  suppressNextSelfReply(welcomeChannel.id);
   log.info(
     `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.persona_nickname}`,
   );
@@ -398,6 +372,7 @@ async function sendWelcome(params: {
     textQuotaSource: "system",
     textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
     borrowsTriggerMessage: true,
+    suppressSelfReply: true,
     injectedContextItems: [welcomeContextItem],
     forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
   });
@@ -413,11 +388,6 @@ async function sendWelcome(params: {
   });
 }
 
-/**
- * Handles registration of new users when they join a guild.
- * Creates user record if new, and logs the action.
- * @param member - The guild member who joined
- */
 const handler = async (_client: Client, member: GuildMember): Promise<void> => {
   try {
     const userLanguage = member.guild.preferredLocale;

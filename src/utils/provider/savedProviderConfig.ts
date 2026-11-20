@@ -47,17 +47,6 @@ interface ProviderDefaultSelectionIds {
   vision_llm_id: number | null;
 }
 
-/**
- * Decide whether a saved text-model selection must fall back to the provider default.
- *
- * Active selections are preserved across credential updates, including deliberate
- * non-default choices. Missing, deprecated, or cross-provider references are not
- * usable and should be replaced with the provider's current default.
- *
- * @param provider - Provider owning the saved configuration
- * @param model - Model currently referenced by the saved configuration
- * @returns Whether the caller should load and store the current provider default
- */
 export function shouldRefreshSavedTextModel(
   provider: string,
   model: Pick<LlmRow, "llm_provider" | "is_deprecated"> | null,
@@ -65,17 +54,6 @@ export function shouldRefreshSavedTextModel(
   return model === null || model.is_deprecated || model.llm_provider.toLowerCase() !== provider.toLowerCase();
 }
 
-/**
- * Decide whether a saved image-model selection must fall back to the provider default.
- *
- * Mirrors {@link shouldRefreshSavedTextModel} for `image_diffusion_models`, which backs both the
- * `diffusion_model_id` and `nai_diffusion_model_id` selections. Without this, a server stays
- * pointed at a codename the provider has retired and every generation fails.
- *
- * @param provider - Provider owning the saved configuration
- * @param model - Diffusion model currently referenced by the saved configuration
- * @returns Whether the caller should load and store the current provider default
- */
 export function shouldRefreshSavedDiffusionModel(
   provider: string,
   model: Pick<DiffusionModelRow, "provider" | "is_deprecated"> | null,
@@ -123,16 +101,6 @@ async function loadProviderDefaultSelectionIds(provider: string): Promise<Provid
   };
 }
 
-/**
- * Resolve which of the two saved image-model selections are unusable.
- *
- * Both `diffusion_model_id` and `nai_diffusion_model_id` index `image_diffusion_models`, so both
- * carry the same retirement exposure and are checked against their own provider default.
- *
- * @param provider - Normalized provider owning the saved configuration
- * @param existingConfig - Saved configuration being rebuilt, or null for a fresh one
- * @returns Whether each selection should be replaced with the provider default
- */
 async function resolveDiffusionRefreshFlags(
   provider: string,
   existingConfig: {
@@ -278,8 +246,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig?.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig?.thinking_level ?? DEFAULT_THINKING_LEVEL,
     enabled_capabilities: enabledCapabilities,
-    // Anything switched on here is owned here. Previously assigned capabilities are
-    // kept even when currently off, so a re-enable still resolves to this provider.
+    // Switched-on capabilities claim ownership while keeping prior assignments so re-enabling returns here.
     assigned_capabilities: Array.from(
       new Set([...(existingConfig?.assigned_capabilities ?? []), ...enabledCapabilities]),
     ),
@@ -332,13 +299,11 @@ async function hasRegisteredCustomEndpointCapability(
   return true;
 }
 
-/** The model-selection columns shared by the server and user saved-provider rows. */
 type SavedProviderModelSelection = Pick<
   SavedProviderConfigRow,
   "llm_id" | "embedding_model_id" | "diffusion_model_id" | "nai_diffusion_model_id" | "video_model_id" | "vision_llm_id"
 >;
 
-/** Whether one saved row's selections make it eligible to serve `capability`. */
 function savedProviderSelectionServesCapability(
   provider: string,
   capability: SavedProviderCapability,
@@ -372,9 +337,7 @@ function savedProviderSelectionServesCapability(
       return config.diffusion_model_id !== null || config.nai_diffusion_model_id !== null;
     case "video":
       return config.video_model_id !== null;
-    // Unlike the other slots, vision has no saved selection to require: registering an
-    // image-capable text endpoint is what makes the label eligible, and the picker chooses
-    // among that label's image-capable models.
+    // Vision needs no saved slot because any image-capable text endpoint qualifies and the picker picks among them.
     case "vision":
       return true;
     default:
@@ -382,15 +345,6 @@ function savedProviderSelectionServesCapability(
   }
 }
 
-/**
- * Keeps the saved rows whose provider is registered for `capability`.
- *
- * Server and user scopes share the eligibility rules and differ only in which registry they read
- * and which owner a custom endpoint connection must belong to.
- *
- * @param savedConfigs - Rows loaded for the scope
- * @param owner - Scope a custom endpoint connection must belong to
- */
 async function filterSavedProvidersByCapability<
   T extends SavedProviderModelSelection & Pick<SavedProviderConfigRow, "provider" | "api_key">,
 >(savedConfigs: readonly T[], capability: SavedProviderCapability, owner: OpenRouterModelScope): Promise<T[]> {
@@ -466,12 +420,8 @@ export async function loadUserSavedProvidersForCapability(
   return await filterSavedProvidersByCapability(savedConfigs, capability, { kind: "personal", ownerId: userId });
 }
 
-/**
- * Points a state at a saved provider's credential and samplers, for a model override that crosses
- * providers. The key moves with the model because `config.api_key` is sent to whichever provider
- * `llm` names, including by the background model-limits lookup; a stale key would reach the wrong
- * vendor. No saved config clears the key rather than keeping the base provider's.
- */
+// Moves api_key with the overridden model and clears it when savedConfig is absent, preventing the base key from
+// leaking to another vendor.
 export function withSavedProviderConfig(
   tomoriState: TomoriState,
   savedConfig:

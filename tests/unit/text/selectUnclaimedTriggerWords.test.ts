@@ -3,7 +3,6 @@ import { selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 
 describe("selectUnclaimedTriggerWords", () => {
   it("drops candidates already owned by another persona (case-insensitive)", () => {
-    // The shared "tomori" is owned by the main persona, so an alter keeps only its name.
     const kept = selectUnclaimedTriggerWords(["Tomori", "Lilya"], ["tomori", "rose"], { lowercase: false });
     expect(kept).toEqual(["Lilya"]);
   });
@@ -29,13 +28,11 @@ describe("selectUnclaimedTriggerWords", () => {
   });
 
   it("strips surrounding quotes before comparing against claimed words", () => {
-    // '"tomori"' normalizes to "tomori", which is already claimed.
     const kept = selectUnclaimedTriggerWords(['"tomori"', "lilya"], ["tomori"], { lowercase: false });
     expect(kept).toEqual(["lilya"]);
   });
 
   it("returns an empty array when every candidate is already claimed", () => {
-    // Mirrors a second identical alter: both its words are owned by higher-priority personas.
     const kept = selectUnclaimedTriggerWords(["tomori", "rose"], ["tomori", "rose"], { lowercase: false });
     expect(kept).toEqual([]);
   });

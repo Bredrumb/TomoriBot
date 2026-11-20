@@ -15,27 +15,13 @@ export {
 
 export const MODERATION_PANEL_RANGE_SIZE = 10;
 
-/**
- * Discord closes the initial-response window three seconds after an interaction is created.
- */
 const INTERACTION_ACK_DEADLINE_MS = 3_000;
 
-/**
- * How long an acknowledgement may take before the deadline is treated as unreachable.
- *
- * Reported, never enforced: cancelling the request would trade a slow ack for no ack at all, and
- * the request that lands after this still beats the deadline. Nothing downstream of the ack is
- * affected, so the only cost of a late one is the operator response.
- */
+// Warn-only threshold at half the Discord deadline because aborting a slow ack trades a late response for no response
+// when it can still succeed.
 const INTERACTION_ACK_WARN_MS = 1_500;
 
 export interface PanelInteractionStart<T> {
-  /**
-   * The acknowledgement itself, raised before any authorization or state load.
-   *
-   * A step rather than a direct `deferUpdate()` so the timing guard lives in one place;
-   * defaults to `interaction.deferUpdate()`.
-   */
   acknowledge?(): Promise<unknown>;
   authorize(): boolean | Promise<boolean>;
   onDenied(): Promise<unknown>;
@@ -45,19 +31,9 @@ export interface PanelInteractionStart<T> {
 
 export interface DeferredPanelInteraction {
   deferUpdate(): Promise<unknown>;
-  /**
-   * When Discord created the interaction, used to measure how much of the three-second window an
-   * acknowledgement consumed. Absent on hand-rolled test doubles.
-   */
   createdTimestamp?: number;
 }
 
-/**
- * Acknowledges a routed panel interaction and records how late it was.
- *
- * `route` is carried into the metric because the interaction's custom id already names the
- * namespace, and the failing routes are distinguished by action rather than by panel.
- */
 export async function acknowledgePanelInteraction(
   interaction: DeferredPanelInteraction & { deferUpdate(): Promise<unknown> },
   route: string,

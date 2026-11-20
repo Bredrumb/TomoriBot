@@ -6,10 +6,8 @@ import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 
-/**
- * Expanded on its own, apart from the block lines, because those carry user-controlled names and
- * reasons that must never be parsed as conditionals or macros.
- */
+// This template expands separately from block lines because those lines contain user-controlled names and reasons
+// that must not be parsed as macros.
 const UNBLOCK_AFFORDANCE_TEMPLATE =
   "{{if tool:unblock_user}}Use {unblock_user_tool} to lift a block early if needed.{{/if}}";
 

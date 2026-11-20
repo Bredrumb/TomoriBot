@@ -8,18 +8,12 @@ interface PendingWelcome {
   claim: WelcomeClaim | null;
 }
 
-/**
- * A greeting the welcome flow is preparing, which the greeted member's own trigger can take over so
- * the member gets one reply that both greets and answers them instead of two racing turns.
- */
+// Handoff state for a pending welcome greeting so the member's own trigger can absorb it into one reply instead of
+// two racing turns.
 export interface WelcomeHandoff {
-  /** Whether the member's own turn already took the greeting. */
   isTakenByMember(): boolean;
-  /**
-   * Reserves the greeting for the standalone welcome turn.
-   * @param anchorMessageId - Message the welcome turn replies to; the member's own turn for it is dropped
-   * @returns false when the member's turn already took the greeting
-   */
+  // False when the member's turn already took the greeting; otherwise drops any member turn for anchorMessageId so
+  // only the welcome replies.
   claimForWelcome(anchorMessageId: string): boolean;
   release(): void;
 }
@@ -30,11 +24,6 @@ function handoffKey(channelId: string, userDiscId: string): string {
   return `${channelId}:${userDiscId}`;
 }
 
-/**
- * Opens a handoff window for a member whose welcome is being prepared in a channel.
- *
- * @param contextItem - Welcome context the member's own turn carries if it takes the greeting
- */
 export function openWelcomeHandoff(
   channelId: string,
   userDiscId: string,
@@ -57,13 +46,8 @@ export function openWelcomeHandoff(
   };
 }
 
-/**
- * Call only once the turn is certain to run or queue, because taking the greeting cancels the
- * standalone welcome.
- *
- * @param userDiscId - Resolved trigger user, so a verified proxy repost counts as its sender
- * @returns false when the welcome turn is already replying to this exact message, so this turn must not run
- */
+// Must run only once the turn is certain to execute or queue because taking the greeting cancels the standalone
+// welcome; false means abort this turn.
 export function applyWelcomeHandoff(incoming: ChatIncoming, userDiscId: string): boolean {
   if (incoming.isManuallyTriggered || incoming.isPersonaJob || incoming.isStopResponse) return true;
 

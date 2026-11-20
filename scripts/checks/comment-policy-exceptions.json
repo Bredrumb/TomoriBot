@@ -8,36 +8,6 @@
       "text": "// —"
     },
     {
-      "file": "src/utils/db/sqlSplitter.ts",
-      "reason": "Documents SQL line-comment syntax rather than using a prose separator.",
-      "rule": "prose-dash",
-      "text": "*   - Line comments:         -- ..."
-    },
-    {
-      "file": "scripts/checks/lib/textPreviewAudit.ts",
-      "reason": "Names the live baked-ellipsis audit rule.",
-      "rule": "rule-scaffolding",
-      "text": "* Rule 1: `baked-ellipsis`"
-    },
-    {
-      "file": "scripts/checks/lib/textPreviewAudit.ts",
-      "reason": "Names the live fenced-placeholder audit rule.",
-      "rule": "rule-scaffolding",
-      "text": "* Rule 2: `unguarded-fenced-placeholder`"
-    },
-    {
-      "file": "scripts/checks/lib/textPreviewAudit.ts",
-      "reason": "Explains the execution scope of live audit rule 1.",
-      "rule": "rule-scaffolding",
-      "text": "* Rule 1: scans a single locale string for an unconditional ellipsis."
-    },
-    {
-      "file": "scripts/checks/lib/textPreviewAudit.ts",
-      "reason": "Explains the execution scope of live audit rule 2.",
-      "rule": "rule-scaffolding",
-      "text": "* Rule 2: checks that every consumer of a fenced-placeholder key guards it."
-    },
-    {
       "file": "scripts/checks/lib/textPreviewAudit.ts",
       "reason": "Documents why live audit rule 1 runs for each locale.",
       "rule": "rule-scaffolding",

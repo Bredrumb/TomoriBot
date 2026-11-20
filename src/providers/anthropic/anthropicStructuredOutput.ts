@@ -23,8 +23,7 @@ const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_MAX_BASE64_IMAGE_BYTES = 10_000_000;
 
-// The output format grammar rejects these keywords with a 400. Dropping them only loosens decoding:
-// the caller's Zod schema still enforces every one of them on the parsed reply.
+// Anthropic rejects these keywords with HTTP 400 during decoding, while the caller's Zod schema still enforces them.
 const UNSUPPORTED_OUTPUT_SCHEMA_KEYWORDS = new Set([
   "minLength",
   "maxLength",
@@ -116,10 +115,8 @@ async function buildAnthropicMessages(request: ProviderStructuredJsonRequest): P
   return { system: systemPrompt, messages, skippedImages };
 }
 
-/**
- * Rewrites standard JSON Schema into the subset `output_config.format` accepts: `oneOf` becomes
- * `anyOf` and every object is closed with `additionalProperties: false`, which the API requires.
- */
+// Anthropic's output_config.format rejects oneOf and open objects, so schemas must rewrite oneOf to anyOf and set
+// additionalProperties: false.
 function toAnthropicOutputSchema(schema: unknown): unknown {
   if (Array.isArray(schema)) return schema.map(toAnthropicOutputSchema);
   if (!schema || typeof schema !== "object") return schema;
@@ -180,10 +177,8 @@ function extractResponseText(response: Record<string, unknown>): string {
     .trim();
 }
 
-/**
- * Call Anthropic with native structured outputs (`output_config.format`). Forced tool use is not an
- * option: Sonnet 5.5, Opus 5.5 and Fable 5.1 reject a forced `tool_choice` with a 400.
- */
+// Sonnet 5.5, Opus 5.5, and Fable 5.1 reject forced tool_choice with 400, so structured outputs must use
+// output_config.format instead.
 export async function callAnthropicStructuredJSON<T>(
   request: ProviderStructuredJsonRequest,
   responseSchema: Record<string, unknown>,

@@ -1,9 +1,3 @@
-// Seeds official preset sprites (src/db/seed/catalog/personas/{name}/sprites/*)
-// into the shared `preset_sprites` table. Each image is uploaded ONCE to the
-// immutable `presets/` storage prefix; pointer personas across every server then
-// resolve it live by (preset_lineage_id, preset_language). See
-// docs/subsystems/persona-presets.md.
-
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -21,45 +15,24 @@ import { personaSections } from "./personas";
 import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput, PresetSpriteInput } from "./types";
 
-/** Length of the content hash embedded in shared sprite filenames. */
 const CONTENT_HASH_LENGTH = 12;
 
-/** What the seeder did for one run, so the caller can report counts instead of a bare "done". */
 export type PresetSpriteSeedSummary = {
-  /** Distinct `(lineage, language)` preset variants processed. Each authored locale is its own
-   * variant, and they deliberately share one storage key per sprite. */
   presets: number;
-  /** Sprite declarations processed. Each preset variant declares its own full set, so this counts
-   * the same art once per authored locale; a distinct-key count is `uploadedThisRun.size`. */
   declarations: number;
-  /** Declarations whose row was written or refreshed from an existing reference. */
   seeded: number;
-  /** Declarations skipped by a read, convert, or upload failure. */
   failed: number;
-  /** Rows removed because the catalog no longer declares that key. */
   removed: number;
 };
 
-/** Outcome of one sprite declaration. A failure is distinct from a seed so the reconcile pass can
- * protect the stored row instead of reading it as "removed from the catalog". */
+// Failed uploads remain distinct from seeded keys so the reconcile pass protects stored rows instead of treating them
+// as removed.
 type SpriteSeedOutcome = { status: "seeded"; spriteKey: string } | { status: "failed" };
 
-/**
- * Seeds all catalog-authored preset sprites into `preset_sprites`, uploading
- * each image once and reconciling removed sprites. Never throws, because a failed image
- * is logged and skipped so a single bad asset cannot abort startup.
- *
- * The reconcile pass deletes rows the catalog no longer declares, so it is scoped to the keys the
- * catalog declares rather than the keys this run seeded: a sprite that failed to upload must never
- * be indistinguishable from a removed one. Returns counts rather than logging its own success
- * line, so the caller reports what happened instead of that the step ran.
- *
- * @param client - Active DB client/transaction
- */
+// Per-sprite failures are logged and skipped rather than thrown so one bad image never aborts startup, returning
+// counts for the caller to report.
 export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<PresetSpriteSeedSummary> {
   const personas = personaSections.flatMap((section) => section.rows);
-  // Every locale variant of a preset resolves to the same storage key, so without this an art
-  // change re-uploads identical bytes once per authored locale.
   const uploadedThisRun = new Map<string, string>();
   const summary: PresetSpriteSeedSummary = { presets: 0, declarations: 0, seeded: 0, failed: 0, removed: 0 };
 
@@ -73,8 +46,7 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
     summary.presets += 1;
 
     if (persona.sprites.length === 0) {
-      // An empty array declares "this preset has no sprites", but the catalog carries no key set to
-      // scope a delete to, so there is no way to tell its rows from another preset's. Leave them.
+      // Leave existing rows untouched when sprites is empty because deletions require a non-empty seeded catalog.
       log.warn(
         `[Preset Sprites] ${persona.name} (${persona.language}) declares an empty sprite set; ` +
           "existing rows are left in place. Omit the sprites field to keep the preset out of the reconcile.",
@@ -83,8 +55,7 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
     }
 
     const seededKeys: string[] = [];
-    // Keys the catalog declares but this run could not upload. They stay inside the protected set
-    // so a storage outage cannot be read as a catalog removal.
+    // Protected from deletion so a storage outage is never misread as a catalog removal.
     const unseededKeys: string[] = [];
     for (const sprite of persona.sprites) {
       summary.declarations += 1;
@@ -93,9 +64,7 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
         seededKeys.push(outcome.spriteKey);
       } else {
         const declaredKey = normalizePersonaSpriteKey(sprite.name);
-        // A name that normalizes to nothing occupies no key in `sprite_key`, so it cannot protect a
-        // row and must not be added to the protected set as raw text: an unnormalized value would
-        // silently fail every comparison it takes part in.
+        // Skip empty normalized keys because raw names cannot match `sprite_key` in the protected set.
         if (declaredKey) {
           unseededKeys.push(declaredKey);
         }
@@ -113,8 +82,6 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
   }
 
   if (summary.declarations > 0 && summary.seeded === 0) {
-    // Every declaration failed, so the reconcile pass skipped every variant and no row was removed.
-    // Whether the cause is storage or an unusable catalog, the run must not look like a clean boot.
     await log.error(
       `[Preset Sprites] Seeded 0 of ${summary.declarations} sprite declarations across ${summary.presets} preset variants. ` +
         "No rows were removed; the upload path or the catalog images are unavailable.",
@@ -122,8 +89,6 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
       { errorType: "PresetSpriteSeedEmpty" },
     );
   } else if (summary.failed > 0) {
-    // Some declarations failed, so those variants reconciled without the missing keys. The stored
-    // rows survive, and this run's success line would otherwise read as fully clean.
     log.warn(
       `[Preset Sprites] ${summary.failed} of ${summary.declarations} sprite declarations failed; ` +
         "their stored rows were preserved and the remaining keys were reconciled.",
@@ -133,12 +98,6 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<Preset
   return summary;
 }
 
-/**
- * Seeds a single preset sprite: reads + normalizes the image, uploads it only
- * when its content changed (content-addressed filename), and upserts the row.
- *
- * @returns The seeded key, or a `failed` outcome so the caller can keep the stored row intact
- */
 async function seedOneSprite(
   client: SQL,
   persona: PersonaInput,
@@ -226,27 +185,8 @@ async function seedOneSprite(
   return { status: "seeded", spriteKey };
 }
 
-/**
- * Deletes `preset_sprites` rows for a preset whose sprite_key is no longer declared by the catalog,
- * so removing a sprite from the catalog removes it from pointer personas too. Shared images are left
- * in storage (immutable); only the rows are removed.
- *
- * The protected set is every key the catalog declares, whether or not this run managed to upload
- * it. Those rows are the only place a usable URL survives, so a mass upload failure must never
- * reach this statement as "the catalog removed everything".
- *
- * `catalogKeys` is passed already merged so the two key sets cannot be swapped at a call site: the
- * caller alone knows which keys seeded, and collapsing them here keeps that distinction from
- * reaching a destructive statement. `seededAny` is the same distinction as a gate this function
- * cannot derive for itself.
- *
- * {@link seedPersonaSpritesFromCatalog} is the production entry point; this is exported so a test
- * can drive it directly.
- *
- * @param catalogKeys - Every sprite key the catalog declares for this preset variant
- * @param seededAny - False when every declared sprite failed to seed, which preserves all rows
- * @returns How many rows were removed
- */
+// Only DB rows are deleted because shared storage images are immutable, and seededAny plus full catalogKeys prevent
+// mass failures from wiping rows.
 export async function reconcileRemovedSprites(
   client: SQL,
   scope: { lineageId: number; language: string; personaName: string },
@@ -254,8 +194,6 @@ export async function reconcileRemovedSprites(
   seededAny: boolean,
 ): Promise<number> {
   if (!seededAny) {
-    // A storage or asset outage cannot be told apart from a catalog that genuinely dropped every
-    // key, so this is the branch that decides in favor of the rows.
     log.warn(
       `[Preset Sprites] ${scope.personaName} (${scope.language}) seeded none of ${catalogKeys.length} ` +
         "declared sprite keys; stored rows preserved instead of reconciled.",

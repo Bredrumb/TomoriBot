@@ -29,14 +29,11 @@ describe("staleTranslations expected script detection", () => {
   });
 
   it("never flags Latin-script translations as likely_english", () => {
-    // Portuguese
     expect(looksLikeEnglish("Configurações do servidor", "latin")).toBe(false);
     expect(looksLikeEnglish("Gerenciar permissões e canais", "latin")).toBe(false);
 
-    // Spanish
     expect(looksLikeEnglish("Configuración del servidor", "latin")).toBe(false);
 
-    // French
     expect(looksLikeEnglish("Paramètres du serveur", "latin")).toBe(false);
   });
 
@@ -49,13 +46,10 @@ describe("staleTranslations expected script detection", () => {
   it("flags untranslated English strings in Cyrillic locales and accepts Cyrillic", () => {
     expect(EXPECTED_SCRIPT.ru).toBe("cyrillic");
 
-    // English string in Russian locale -> stale
     expect(looksLikeEnglish("Server configuration and settings", "cyrillic")).toBe(true);
 
-    // Russian string -> not stale
     expect(looksLikeEnglish("Настройки сервера", "cyrillic")).toBe(false);
 
-    // Mixed with numbers/emoji -> not stale if Cyrillic is present
     expect(looksLikeEnglish("Настройки #1 🎉", "cyrillic")).toBe(false);
   });
 
@@ -63,29 +57,23 @@ describe("staleTranslations expected script detection", () => {
     expect(EXPECTED_SCRIPT.ja).toBe("cjk");
     expect(EXPECTED_SCRIPT["zh-CN"]).toBe("cjk");
 
-    // English string in CJK locale -> stale
     expect(looksLikeEnglish("Server settings", "cjk")).toBe(true);
 
-    // Japanese (Kanji, Hiragana, Katakana) -> not stale
     expect(looksLikeEnglish("サーバー設定", "cjk")).toBe(false);
     expect(looksLikeEnglish("こんにちは世界", "cjk")).toBe(false);
 
-    // Chinese -> not stale
     expect(looksLikeEnglish("服务器设置", "cjk")).toBe(false);
   });
 
   it("flags untranslated English strings in Hangul locales and accepts Hangul", () => {
     expect(EXPECTED_SCRIPT.ko).toBe("hangul");
 
-    // English string in Korean locale -> stale
     expect(looksLikeEnglish("Server settings", "hangul")).toBe(true);
 
-    // Korean (Hangul) -> not stale
     expect(looksLikeEnglish("서버 설정", "hangul")).toBe(false);
   });
 
   it("does not classify non-empty Cyrillic or Hangul strings as intentionally shared (fixes false negative)", () => {
-    // A Russian or Korean translation must NOT be treated as intentionally shared
     expect(isIntentionallySharedTranslation("some.key", "Привет мир")).toBe(false);
     expect(isIntentionallySharedTranslation("some.key", "안녕하세요")).toBe(false);
     expect(isIntentionallySharedTranslation("some.key", "Cài đặt")).toBe(false);

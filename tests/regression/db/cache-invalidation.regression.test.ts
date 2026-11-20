@@ -1,15 +1,3 @@
-/**
- * Regression harness: Cache invalidation assertions.
- *
- * Each test follows the pattern: write → assert cache is cleared →
- * next read hits DB and returns fresh data.
- *
- * This file is the direct implementation of the plan's "at least one
- * cache-invalidation assertion (write → cache cleared → next read goes to DB)"
- * acceptance criterion for #4a.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -51,8 +39,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
   });
 
   it("stale cache is detected: getCachedUserRow reads DB value, not pre-invalidation value", async () => {
-    // Write directly to DB via raw SQL to simulate out-of-band change,
-    // bypassing dbWrite cache invalidation. Then clear cache manually and confirm read is fresh.
     await testSql`
       UPDATE user_personalization_configs upc
       SET user_nickname = '_rt_cache_test_name'
@@ -61,8 +47,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
         AND u.user_disc_id = ${FIXTURE_IDS.userDiscId}
     `;
 
-    // Without invalidation, getCachedUserRow might return the stale cached name.
-    // With invalidation, it must return the new name.
     invalidateUserCache(FIXTURE_IDS.userDiscId);
     const fresh = await getCachedUserRow(FIXTURE_IDS.userDiscId);
     expect(fresh?.user_nickname).toBe("_rt_cache_test_name");
@@ -82,11 +66,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
   it("config write → cache invalidation → fresh read reflects new config value", async () => {
     const { getCachedMainPersona } = await import("@/utils/cache/tomoriStateCache");
 
-    // Warm the cache
     await getCachedMainPersona(FIXTURE_IDS.serverDiscId);
 
     await configRepository.updateChatConfig(refs.serverId, { message_fetch_limit: 42 });
-    // Config writes should invalidate the tomori state cache in command paths.
+    // updateChatConfig leaves cache invalidation to command paths, so flush tomoriStateCache explicitly.
     invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
 
     const fresh = await getCachedMainPersona(FIXTURE_IDS.serverDiscId);

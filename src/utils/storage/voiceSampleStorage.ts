@@ -1,10 +1,3 @@
-/**
- * Voice sample storage utilities.
- *
- * Production stores samples in GCS (if VOICE_SAMPLE_GCS_BUCKET is set) or S3 (if VOICE_SAMPLE_S3_BUCKET is set).
- * Non-production stores samples on the local filesystem under data/voice-samples.
- */
-
 import { Storage } from "@google-cloud/storage";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promises as fs } from "node:fs";
@@ -37,7 +30,6 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     return null;
   }
 
-  // GCS takes priority when VOICE_SAMPLE_GCS_BUCKET is set
   const gcsBucket = process.env.VOICE_SAMPLE_GCS_BUCKET?.trim();
   if (gcsBucket) {
     const prefix = (process.env.VOICE_SAMPLE_GCS_PREFIX || "voice-samples").replace(/^\/+/, "").replace(/\/+$/, "");
@@ -46,7 +38,6 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     return { backend: "gcs", bucket: gcsBucket, prefix, publicBaseUrl };
   }
 
-  // S3 fallback
   const s3Bucket = process.env.VOICE_SAMPLE_S3_BUCKET?.trim();
   if (!s3Bucket) {
     log.warn(
@@ -169,7 +160,6 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
         }
       }
 
-      // S3 path
       try {
         await getS3Client(config.region, config.endpoint).send(
           new PutObjectCommand({
@@ -267,7 +257,6 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({

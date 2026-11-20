@@ -14,21 +14,19 @@ export interface IdleNudgeSample {
   serverId: number;
   outcome: IdleNudgeOutcome;
   phase: IdleNudgePhase;
-  /** Fixed-set reason key such as `planner_declined` or `channel_busy`. */
   reason: string;
   heat?: number;
   category?: string;
-  /** Built-in key, or the source for an authored definition, so free-text titles and local IDs stay out of telemetry. */
+  // Authored definitions pass their source rather than title or local ID, so free-text titles and local IDs stay out
+  // of telemetry.
   idleNudgeKey?: string;
   plannerModel?: string;
   plannerInputTokens?: number;
   plannerOutputTokens?: number;
 }
 
-/**
- * One row per idle nudge attempt. Fields are fixed-set strings and numbers only, never message text,
- * persona prose, or names; `recordSample` never throws, so telemetry cannot delay a nudge.
- */
+// Telemetry fields accept only fixed-set strings and numbers (never text, prose, or names), and `recordSample` never
+// throws so nudges are never delayed.
 export function recordIdleNudgeSample(sample: IdleNudgeSample): void {
   const fields: Record<string, number | string> = {
     server_id: sample.serverId,
@@ -53,9 +51,9 @@ export function recordIdleNudgeSample(sample: IdleNudgeSample): void {
 export interface ActiveNudgeSample {
   serverId: number;
   outcome: IdleNudgeOutcome;
-  /** `a` before the matcher answers, `c` after the delay. */
+  // Phase codes: `a` records outcomes before the matcher answers, while `c` records outcomes after the post-match
+  // delay.
   phase: "a" | "c";
-  /** Fixed-set reason key such as `matcher_none` or `winner_spoke`. */
   reason: string;
   heat: number;
   matcherKind?: "decision" | "llm";
@@ -63,7 +61,6 @@ export interface ActiveNudgeSample {
   optionCount?: number;
   margin?: number;
   detour?: boolean;
-  /** True when human messages after the delay forced a second matcher call. */
   rematched: boolean;
   matcherInputTokens?: number;
   matcherOutputTokens?: number;
@@ -71,7 +68,6 @@ export interface ActiveNudgeSample {
   rematchOutputTokens?: number;
 }
 
-/** One row per Active Nudge check, under the same rules as idle nudge rows: no text, prose, or names. */
 export function recordActiveNudgeSample(sample: ActiveNudgeSample): void {
   const fields: Record<string, number | string> = {
     server_id: sample.serverId,

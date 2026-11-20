@@ -1,18 +1,5 @@
-/**
- * Finds users rows that belong to Discord webhooks rather than people and folds them into the bot account.
- *
- * Persona turns used to register the posting webhook as a user. Migration 131 cleans the rows whose webhook
- * is still stored in discord_managed_webhooks; this script catches the rest (rotated or deleted webhooks) by
- * asking Discord: a webhook ID is "Unknown User" (10013), while a deleted person still resolves.
- *
- * Usage:
- *   bun scripts/maintenance/purge-webhook-users.ts           # dry run: lists what would be removed
- *   bun scripts/maintenance/purge-webhook-users.ts --apply   # merges their stats into the bot and deletes them
- *
- * Discord allows about 5 user lookups per 30 seconds per token, so expect roughly 6 seconds per row, and a
- * running bot on the same token competes for that budget. Run --apply while the bot is stopped: a running bot
- * keeps cached rows for the deleted IDs until restart.
- */
+// Webhook IDs return Discord UnknownUser (10013) while deleted users still resolve, and --apply requires the bot
+// stopped because it caches deleted rows.
 import { config } from "dotenv";
 import { DiscordAPIError, REST, RESTJSONErrorCodes, Routes } from "discord.js";
 

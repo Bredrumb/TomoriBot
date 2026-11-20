@@ -109,8 +109,7 @@ export async function generatePresetFromPromptCustom(
           errorBody: response.error.errorBody,
         },
       });
-      // The reply is public. The reason phrase is endpoint-controlled, and a status-0 message can
-      // quote the body through a JSON parse error, so the cause stays in the log above.
+      // Keep the cause in logs because replies are public and status-0 messages can quote untrusted bodies.
       return {
         error:
           response.error.status === 0

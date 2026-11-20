@@ -3,9 +3,6 @@ import { join } from "node:path";
 import { Glob } from "bun";
 import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
 
-/**
- * Lightweight logger
- */
 const log = {
   info: (msg: string) => console.log(`ℹ️  ${msg}`),
   warn: (msg: string) => console.warn(`⚠️  ${msg}`),
@@ -13,10 +10,8 @@ const log = {
   success: (msg: string) => console.log(`✅ ${msg}`),
 };
 
-/**
- * Recursively flattens a nested locale object into dot-notation key → value pairs.
- * Skips array values as they are locale-specific configurations.
- */
+// Array values are skipped because locale arrays hold locale-specific configuration rather than translatable
+// templates.
 export function flattenLocale(obj: unknown, prefix = ""): Record<string, string> {
   const result: Record<string, string> = {};
 
@@ -35,10 +30,6 @@ export function flattenLocale(obj: unknown, prefix = ""): Record<string, string>
   return result;
 }
 
-/**
- * Extracts unique placeholder names in appearance order from a localized string.
- * Placeholders follow the `{name}` format interpolated by localizer().
- */
 export function extractPlaceholders(text: string): string[] {
   const matches = text.matchAll(/\{([a-zA-Z0-9_]+)\}/g);
   const seen = new Set<string>();
@@ -66,12 +57,8 @@ export interface PlaceholderCheckSummary {
   warnings: PlaceholderParityIssue[];
 }
 
-/**
- * Compares placeholder signatures between an English source string and a translated target string.
- *
- * Missing English placeholders in the translation are ERRORS (user loses runtime data).
- * Extra placeholders in the translation are WARNINGS (may be supplied by callers, but not in en-US).
- */
+// Missing placeholders are separated from extra ones because dropping an English token loses runtime data while extra
+// tokens may still be supplied.
 export function checkKeyPlaceholderParity(
   key: string,
   enText: string,
@@ -103,9 +90,6 @@ export function checkKeyPlaceholderParity(
   };
 }
 
-/**
- * Loads and merges all category slice files for a locale into one flat record.
- */
 export async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
   const localeDir = join(process.cwd(), "src", "locales", localeName);
   const merged: Record<string, unknown> = {};
@@ -117,9 +101,6 @@ export async function loadMergedLocale(localeName: string): Promise<Record<strin
   return merged;
 }
 
-/**
- * Runs placeholder parity analysis between en-US and target locales.
- */
 export async function analyzePlaceholderParity(targetLocale?: string): Promise<PlaceholderCheckSummary> {
   const enLocale = await loadMergedLocale("en-US");
   const enFlat = flattenLocale(enLocale);
@@ -165,7 +146,8 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
 
     for (const [key, enValue] of Object.entries(enFlat)) {
       const targetValue = targetFlat[key];
-      if (typeof targetValue !== "string") continue; // missing keys are a parity gate concern
+      // Skip non-string values because missing keys belong to the parity gate.
+      if (typeof targetValue !== "string") continue;
 
       totalKeysExamined++;
       const issue = checkKeyPlaceholderParity(key, enValue, targetValue, locale);
@@ -191,7 +173,6 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
   };
 }
 
-/** Prints the placeholder section of `check-locales` and returns whether no placeholder was lost. */
 export async function reportPlaceholderParity(): Promise<boolean> {
   log.info("Checking locale placeholder parity…");
   const summary = await analyzePlaceholderParity();

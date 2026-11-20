@@ -1,10 +1,3 @@
-/**
- * One-time script: removes the first # heading from docs files that already
- * have frontmatter, since Starlight renders the frontmatter title as the H1.
- *
- * Run from repo root: bun run scripts/devtools/stripDocsH1.ts
- */
-
 import { join } from "node:path";
 
 const docsDir = join(import.meta.dir, "../../docs");

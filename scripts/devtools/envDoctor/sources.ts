@@ -13,11 +13,8 @@ function git(root: string, args: string[]): string | null {
   return result.status === 0 ? result.stdout : null;
 }
 
-/**
- * Collects scanner input from a checkout. Files come from Git (tracked plus untracked-but-not-ignored),
- * so ignored local material such as Terraform state never enters the scan. Release-only
- * deployment files absent from the checkout are read from a release ref when one exists.
- */
+// File discovery uses git ls-files instead of a filesystem walk so gitignored local files such as Terraform state
+// never enter the scan.
 export function loadCheckout(root: string, options: { includeRelease: boolean }): EnvDoctorInput {
   const unavailable: UnavailableSurface[] = [];
   const listing = git(root, ["ls-files", "--cached", "--others", "--exclude-standard"]);
@@ -74,7 +71,6 @@ export function loadCheckout(root: string, options: { includeRelease: boolean })
   return { files, liveEnvKeys: live.keys, liveEnvStatus: live.status, unavailable, releaseSource };
 }
 
-/** Reads variable names from the live `.env`. A directory or unreadable file is reported, not thrown. */
 export function readLiveEnvKeys(path: string): { keys: string[] | null; status: string } {
   try {
     if (!statSync(path).isFile()) {

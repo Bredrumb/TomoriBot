@@ -109,7 +109,6 @@ export function lorebookEntryToInput(row: LorebookEntryRow): LorebookEntryInput 
   });
 }
 
-/** Comparable identity for duplicate detection across imports and stored rows. */
 export function lorebookEntryIdentity(entry: LorebookEntryInput): string {
   const { lorebook_enabled, lorebook_channel_disc_ids, ...identity } = lorebookEntryInputSchema.parse({
     ...entry,

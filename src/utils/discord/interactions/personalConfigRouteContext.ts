@@ -244,8 +244,6 @@ export function noChangesReceipt(locale: string): PanelReceipt {
   };
 }
 
-// The positional signature placed dependencies at position 8, which forced call sites
-// targeting later presentation fields to pad preceding positions with undefined.
 export interface PersonalConfigRepaintOptions {
   locale: string;
   scope: PersonalConfigScope;
@@ -374,8 +372,7 @@ export async function repaint(
     }
   }
 
-  // The Server Model Fallback section states the behavior that setting buys. A server that requires
-  // member-provided providers never delivers it, and the section has to say so where it is read.
+  // Pass server BYOK status because the fallback notice must reflect when the guild requires personal keys.
   let serverModelAccess: { userByokMode: boolean } | null = null;
   if (category === "models" && page === "fallbacks" && scope.guildId) {
     try {
@@ -450,11 +447,8 @@ function buildScopedPersonalConfigPanelPayload(
 
 export type SpotlightPersona = { id: number; name: string; isAlter: boolean; snippet?: string | null };
 
-/**
- * Resolves a block-relative selection bitmask back to personas. Returns null when the mask cannot
- * belong to the block it names, which is how a collection that shrank under an open continuation
- * fails stale instead of silently retargeting a different persona.
- */
+// Out-of-range mask bits return null so a collection that shrank under an open continuation fails stale instead of
+// silently retargeting another persona.
 export function resolveSpotlightBlockSelection(
   personas: readonly SpotlightPersona[],
   blockIdx: number,
@@ -478,8 +472,7 @@ export interface PersonalConfigPostDeferContext {
   interaction: GlobalRoutableInteraction;
   route: PersonalConfigPanelRoute;
   dependencies: PersonalConfigRouteDependencies;
-  // An accessor pair rather than a plain field: 22 post-defer write sites reassign the scope a
-  // refreshed read returned, then repaint from it, so every handler must observe the same live value.
+  // Accessor pair required because post-defer writes reassign scope and handlers must observe the refreshed value.
   get scope(): PersonalConfigScope;
   set scope(value: PersonalConfigScope);
 }

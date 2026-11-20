@@ -9,14 +9,6 @@ import { localizer } from "@/utils/text/localizer";
 export const guildOnly = true;
 export const managerOnly = true;
 
-/**
- * Configures the `/nuke` command.
- * Completely wipes a server's settings and data, optionally preserving personas.
- *
- * Options:
- *  - `confirmation` (required, yes/no): mirrors the `/import config` safety gate.
- *  - `preserve_personas` (optional, default false): keep personas + their subtree.
- */
 export const configureCommand = (command: SlashCommandBuilder) =>
   command
     .setName("nuke")
@@ -44,17 +36,6 @@ export const configureCommand = (command: SlashCommandBuilder) =>
         .setRequired(false),
     );
 
-/**
- * Executes the destructive nuke flow.
- *
- * 1. ManageGuild permission gate
- * 2. Confirmation gate (reject if "no")
- * 3. Look up internal server_id
- * 4. Fetch + best-effort delete managed Discord webhooks on Discord's side
- * 5. Call serverRepository.nukeServer() with the chosen mode
- * 6. Invalidate tomoriStateCache for the guild
- * 7. Reply with success embed prompting `/setup` (or noting personas were kept)
- */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -64,11 +45,8 @@ export async function execute(
   const guildDiscId = interaction.guild?.id;
 
   try {
-    // Fails closed on a missing guild rather than falling back to the invoker's id. There is no
-    // membership to read ManageGuild from outside a guild, and a DM's server key is that same
-    // user id, so a fallback would wipe a record with the permission branch skipped entirely.
-    // `guildOnly` already keeps Discord from delivering this in a DM; this keeps the guarantee
-    // local to the command, where removing that export cannot silently disarm it.
+    // Fails closed without a guild rather than falling back to user id, so removing guildOnly cannot allow an
+    // unchecked DM wipe of the user's own workspace.
     const hasPermission = Boolean(guildDiscId) && (interaction.memberPermissions?.has("ManageGuild") ?? false);
     if (!guildDiscId || !hasPermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -93,7 +71,6 @@ export async function execute(
 
     const preservePersonas = interaction.options.getBoolean("preserve_personas") ?? false;
 
-    // Resolve internal server ID; missing row means "nothing to nuke"
     const serverId = await serverRepository.loadServerIdByDiscId(guildDiscId);
     if (!serverId) {
       await replyInfoEmbed(interaction, locale, {
@@ -105,11 +82,9 @@ export async function execute(
       return;
     }
 
-    // Defer once we commit to the destructive path because work may take a few seconds
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Best-effort Discord-side webhook cleanup BEFORE wiping DB rows.
-    //    We pull decrypted tokens first because the rows are about to be deleted.
+    // Best-effort webhook cleanup runs before nukeServer because deleting DB rows destroys the decrypted tokens.
     let webhooksDeleted = 0;
     let webhooksFailed = 0;
     const managedWebhooks = await serverRepository.listManagedWebhooksDecrypted(guildDiscId);
@@ -119,13 +94,11 @@ export async function execute(
         await webhook.delete("TomoriBot /nuke");
         webhooksDeleted++;
       } catch (error) {
-        // Don't fail nuke if Discord cleanup fails, so log and move on
         webhooksFailed++;
         log.warn(`[Nuke] Failed to delete Discord webhook ${webhookDiscId} for guild ${guildDiscId}`, error);
       }
     }
 
-    // DB wipe: atomic on the preserve-mode branch, single cascade on full nuke
     const nuked = await serverRepository.nukeServer(serverId, guildDiscId, {
       preservePersonas,
     });
@@ -140,7 +113,6 @@ export async function execute(
       return;
     }
 
-    // Invalidate cache AFTER successful write
     invalidateTomoriStateCache(guildDiscId);
 
     await replyInfoEmbed(interaction, locale, {

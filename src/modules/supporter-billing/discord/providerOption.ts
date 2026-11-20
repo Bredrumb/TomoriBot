@@ -173,7 +173,7 @@ async function ensureSelection(scope: ProviderOptionScope): Promise<boolean> {
   });
 }
 
-/** Personal ownership moves with each row's enabled capabilities, so only the server marker is written here. */
+// Personal ownership moves with each row's enabled capabilities, so only the server marker is written here.
 async function setFunded(
   scope: ProviderOptionScope,
   capability: ProviderOptionCapability,

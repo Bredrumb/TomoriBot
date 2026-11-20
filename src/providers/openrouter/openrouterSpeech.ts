@@ -43,10 +43,8 @@ export async function synthesizeOpenRouterSpeech(request: OpenRouterSpeechReques
   }
 }
 
-/**
- * Seed interprets its single prompt instead of reading it aloud and ignores OpenRouter's
- * `instructions` field, so the voice description and delivery direction both travel inside it.
- */
+// Seed interprets its single prompt instead of reading it aloud and ignores OpenRouter's instructions field, so voice
+// description and direction both go inside it.
 export function buildSeedDesignPrompt(description: string, script: string, direction?: string): string {
   const delivery = direction?.trim();
   // An inner double quote would end the spoken line early, so Seed would read the rest as direction.
@@ -85,7 +83,6 @@ function buildSpeechBody(request: OpenRouterSpeechRequest): Record<string, unkno
   };
 }
 
-/** Classifies a failed OpenRouter audio response, keeping a spend-limit refusal as the cause. */
 export async function throwOpenRouterAudioError(
   response: Response,
   apiKey: string,

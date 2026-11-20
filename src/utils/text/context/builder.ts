@@ -7,7 +7,6 @@ import { buildContextNative } from "./nativeBuilder";
 import { resolveRandomChoiceMacrosInBuildOutput } from "./templates";
 import type { BuildContextParams, BuildContextResult } from "./types";
 
-/** Applies SillyTavern preset reassembly when one is active. */
 export async function buildContext(params: BuildContextParams): Promise<BuildContextResult> {
   const messageIdMap = params.messageIdMap ?? new MessageIdMap();
   const paramsWithMap = { ...params, messageIdMap };

@@ -1,10 +1,3 @@
-/**
- * AI-Powered Preset Generation for TomoriBot
- * Uses a dual-agent approach: the provider's configured default handles Google
- * Search Grounding when web search is requested, then the user's configured model
- * generates the structured persona JSON.
- */
-
 import { GoogleGenAI, type Content, type GenerateContentConfig } from "@google/genai";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
@@ -42,14 +35,14 @@ async function reportPresetFailure(error: unknown, apiKey: string, operation: st
 }
 
 interface CharacterSearchContext {
-  description?: string; // Character description from user
-  speechExamples?: string; // How the character should speak
-  additionalInstructions?: string; // Extra instructions
+  description?: string;
+  speechExamples?: string;
+  additionalInstructions?: string;
 }
 
 interface CharacterSearchResult {
-  characterInfo?: string; // Found character information
-  error?: string; // Error message if search failed
+  characterInfo?: string;
+  error?: string;
   errorType?:
     | "RATE_LIMIT"
     | "BLOCKED_CONTENT"
@@ -61,9 +54,6 @@ interface CharacterSearchResult {
     | "UNKNOWN";
 }
 
-/**
- * Helper function to safely extract error message from unknown error types
- */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -84,13 +74,8 @@ function isGoogleModelUnavailableError(errorMessage: string): boolean {
   );
 }
 
-/**
- * Localized `/persona generate` failure text for a Google error. The raw message only selects the
- * billing variant: the reply is public, and an endpoint can echo the request key in its error body,
- * so callers log the upstream text instead.
- * @param errorCode - The Google API error code (e.g., "400", "429")
- * @param rawMessage - Raw error message from Google API, used for classification only
- */
+// Public reply text omits rawMessage because endpoints can echo request keys, so rawMessage only selects the billing
+// variant.
 function createGoogleErrorMessage(
   errorType: string,
   errorCode: string | number | undefined,
@@ -142,13 +127,6 @@ function createGoogleErrorMessage(
   return `Error Code ${displayCode}: ${localizer(locale, `genai.google.${messageKey}`)}`;
 }
 
-/**
- * Search for character information using Google Search
- * Uses configured Gemini model with Google Search tool enabled
- *
- * @param locale - User's locale for error messages
- * @param context - Optional additional context for search
- */
 async function searchCharacterInfo(
   apiKey: string,
   characterName: string,
@@ -169,12 +147,11 @@ async function searchCharacterInfo(
 
     const MODEL_NAME = modelName;
 
-    // Configure generation with Google Search tool
     const generationConfig: GenerateContentConfig = {
       temperature: 1.0,
       topP: 0.9,
       maxOutputTokens: 4096,
-      tools: [{ googleSearch: {} }], // Enable Google Search
+      tools: [{ googleSearch: {} }],
     };
 
     let prompt = `You are a character information researcher. Search for detailed information about the character "${characterName}".
@@ -216,7 +193,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
     log.info(`Searching for character: ${characterName} using model: ${MODEL_NAME}`);
 
     try {
-      // Create timeout promise (60 seconds for search)
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Character search timed out after 60 seconds")), 60000);
       });
@@ -330,14 +306,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
   }
 }
 
-/**
- * Generate preset data from user prompts using Gemini with structured output
- * Uses single-agent approach for Gemini 3 models (with web search tools)
- * Uses dual-agent approach for other models (separate search + generation)
- *
- * @param locale - User's locale for error messages
- * @returns Promise<PresetGenerationResult> - Generated preset or error
- */
 export async function generatePresetFromPrompt(
   apiKey: string,
   params: GeneratePresetParams,
@@ -382,7 +350,6 @@ export async function generatePresetFromPrompt(
         client,
       );
 
-      // Propagate hard errors (API key, rate limit, etc.)
       if (searchResult.error) {
         return {
           error: searchResult.error,
@@ -395,8 +362,7 @@ export async function generatePresetFromPrompt(
       log.info("Search sub-agent completed, proceeding to generation");
     }
 
-    // Set up generation model; always uses the user's configured model so
-    //    free-tier users aren't silently upgraded to a paid model.
+    // Always use the user's configured model so free-tier users are not silently upgraded to a paid model.
     let MODEL_NAME = configuredModel;
     const FALLBACK_MODEL = undefined;
 
@@ -440,7 +406,7 @@ export async function generatePresetFromPrompt(
     };
 
     const generationConfig: GenerateContentConfig = {
-      temperature: 1.5, // Creative but controlled
+      temperature: 1.5,
       topP: 0.9,
       // The caller resolved this against the server's ceiling and the model's own limit, so
       // recomputing it here would silently ignore a cap the deployment set.
@@ -486,7 +452,6 @@ Use the web search information to accurately represent the character's personali
 
     log.info(`Generating preset for: ${params.characterName}`);
 
-    // Retry logic with fallback model (only for Gemini 3)
     let lastError: PresetGenerationResult | null = null;
     const modelsToTry = FALLBACK_MODEL ? [MODEL_NAME, FALLBACK_MODEL] : [MODEL_NAME];
 
@@ -495,7 +460,6 @@ Use the web search information to accurately represent the character's personali
       log.info(`Attempting preset generation with model: ${MODEL_NAME}`);
 
       try {
-        // Create timeout promise (90 seconds for generation)
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("Request timed out after 60 seconds")), 90000);
         });
@@ -521,7 +485,7 @@ Use the web search information to accurately represent the character's personali
             ),
             errorType: "BLOCKED_CONTENT",
           };
-          continue; // Try fallback model if available
+          continue;
         }
 
         const responseText = result.text;
@@ -536,7 +500,7 @@ Use the web search information to accurately represent the character's personali
             ),
             errorType: "EMPTY_RESPONSE",
           };
-          continue; // Try fallback model if available
+          continue;
         }
 
         const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
@@ -554,7 +518,7 @@ Use the web search information to accurately represent the character's personali
             ),
             errorType: failureType,
           };
-          continue; // Try fallback model if available
+          continue;
         }
 
         const preset: PresetExportData = {
@@ -585,7 +549,7 @@ Use the web search information to accurately represent the character's personali
             error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
             errorType: "TIMEOUT",
           };
-          continue; // Try fallback model if available
+          continue;
         }
 
         if (errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("rate limit")) {
@@ -593,7 +557,6 @@ Use the web search information to accurately represent the character's personali
             error: createGoogleErrorMessage("RATE_LIMIT", errorCode || 429, errorMessage, locale),
             errorType: "RATE_LIMIT",
           };
-          // Don't retry on rate limit
           return lastError;
         }
 
@@ -602,7 +565,7 @@ Use the web search information to accurately represent the character's personali
             error: createGoogleErrorMessage("BLOCKED_CONTENT", errorCode || 400, errorMessage, locale),
             errorType: "BLOCKED_CONTENT",
           };
-          continue; // Try fallback model if available
+          continue;
         }
 
         if (errorMessage.includes("PERMISSION_DENIED") || errorMessage.includes("API key")) {
@@ -610,7 +573,6 @@ Use the web search information to accurately represent the character's personali
             error: createGoogleErrorMessage("API_KEY", errorCode || 403, errorMessage, locale),
             errorType: "API_KEY",
           };
-          // Don't retry on auth error
           return lastError;
         }
 
@@ -620,7 +582,7 @@ Use the web search information to accurately represent the character's personali
             errorType: "MODEL_ERROR",
           };
           log.warn(`Model ${MODEL_NAME} not found, trying fallback...`);
-          continue; // Try fallback model if available
+          continue;
         }
 
         throw apiError;
@@ -631,7 +593,6 @@ Use the web search information to accurately represent the character's personali
       return lastError;
     }
 
-    // Fallback error if no lastError was set (should never happen)
     return {
       error: createGoogleErrorMessage("UNKNOWN", undefined, "Preset generation failed with no error details", locale),
       errorType: "UNKNOWN",

@@ -1,16 +1,11 @@
 import type { Classification, ConsumerRole, DeclarationSite, ScanLanguage } from "./types";
 
-/** Shape every scanner requires before it treats a token as an environment variable name. */
 export const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*[A-Z0-9]$/;
 
 export function isEnvName(value: string): boolean {
   return ENV_NAME_PATTERN.test(value) && /[A-Z]{2}/.test(value);
 }
 
-/**
- * Names the operating system, shell, CI runner, or container platform provides. They are not
- * operator configuration, so reporting them as undocumented would bury real findings.
- */
 const PLATFORM_NAMES = new Set([
   "APPDATA",
   "BASH_REMATCH",
@@ -53,19 +48,12 @@ export function isPlatformName(name: string): boolean {
   return PLATFORM_NAMES.has(name) || PLATFORM_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
-/**
- * Matches whole `_`-delimited segments, so `OPERATIONS` does not match `RATIO` and
- * `MAX_OUTPUT_TOKENS` does not match `TOKEN`.
- */
 function segments(...phrases: string[]): RegExp {
   return new RegExp(`(^|_)(${phrases.join("|")})(_|$)`);
 }
 
-/**
- * A secret word names a credential when it ends the name (`API_KEY`, `HF_TOKEN`) or starts a
- * qualifier (`CRYPTO_SECRET_V1`, `AWS_SECRET_ACCESS_KEY`). Elsewhere it usually describes a
- * setting about the credential, as in `KEY_ROTATION_COOLDOWN_MS` or `CHARS_PER_TOKEN`.
- */
+// Secret tokens are anchored to suffixes or SECRET_/PASSWORD_ prefixes because mid-name words such as CHARS_PER_TOKEN
+// denote settings rather than secrets.
 const SECRET_NAME_PATTERN = new RegExp(
   [
     /(^|_)(TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE_KEY|CREDENTIALS?|COOKIES(_JSON)?|KEY|KEY_ID|DSN)$/.source,
@@ -74,17 +62,12 @@ const SECRET_NAME_PATTERN = new RegExp(
 );
 const NOT_SECRET_PATTERN = /_PER_TOKEN$/;
 
-/** Values of these names are replaced in every output, including tracked example placeholders. */
 export function isSecretName(name: string): boolean {
   return SECRET_NAME_PATTERN.test(name) && !NOT_SECRET_PATTERN.test(name);
 }
 
 export const REDACTED = "<redacted>";
 
-/**
- * Assigns a consumer's role from its path. Archived and deprecated trees are `inactive` because
- * nothing imports them, so a variable they alone read is as removable as one nobody reads.
- */
 export function roleForPath(path: string, language: ScanLanguage): ConsumerRole {
   const normalized = path.replaceAll("\\", "/");
   if (/(^|\/)(\.deprecated|archived|\[archive\])\//.test(normalized)) {
@@ -110,18 +93,12 @@ export function roleForPath(path: string, language: ScanLanguage): ConsumerRole 
   return "runtime";
 }
 
-/**
- * Read sites whose name comes from outside the repository or is otherwise known not to hide a
- * declared variable. An unregistered unresolved read downgrades every dead verdict to undecided,
- * so a new dynamic read must be registered here with its reason before the report trusts itself.
- */
+// Any unregistered unresolved dynamic read downgrades every dead verdict to undecided, so safe external dynamic reads
+// must be listed here.
 export const REGISTERED_DYNAMIC_READS: { file: string; reason: string }[] = [];
 
-/**
- * Consumers in `deploy/` and `terraform/`, which exist only on the `release` branch. Used only
- * when neither the checkout nor a release ref provides those files; with a ref available, the
- * doctor reads them directly and reports any drift between this list and what it found.
- */
+// This list applies only when neither checkout nor release ref has deploy/ or terraform/, because the doctor reads
+// them directly and flags drift when available.
 export const RELEASE_ONLY_CONSUMERS: Record<string, string> = {
   CONTAINER_MEMORY_LIMIT_MB: "set by deploy/azure/docker-compose.yml on release",
   SEARXNG_BLOCKING_THREADS: "interpolated by deploy/azure/docker-compose.yml on release",
@@ -135,20 +112,12 @@ export const RELEASE_ONLY_CONSUMERS: Record<string, string> = {
   TOMORIBOT_PIDS_LIMIT: "interpolated by deploy/azure/docker-compose.yml on release",
 };
 
-/**
- * Variables a dependency reads on its own, so no call site in this repository names them. Each one
- * counts as consumed; the reason names the dependency so a reviewer can confirm it still does.
- */
 export const LIBRARY_CONSUMERS: Record<string, string> = {
   AWS_ACCESS_KEY_ID: "read by the AWS SDK default credential chain",
   AWS_SECRET_ACCESS_KEY: "read by the AWS SDK default credential chain",
   GOOGLE_APPLICATION_CREDENTIALS: "read by Google Application Default Credentials",
 };
 
-/**
- * Explanations attached to variables whose consumer surface looks odd but is intended. They never
- * change a verdict; they tell the reviewer why the odd surface is expected.
- */
 export const KNOWN_NOTES: Record<string, string> = {
   GRAFANA_PASSWORD: "only docker/compose.monitor.yaml interpolates it, for the Grafana container",
   SEARXNG_SECRET: "Compose and the SearXNG entrypoint pass it to the SearXNG container; the bot never reads it",
@@ -195,10 +164,8 @@ const TIER_CANDIDATES: Record<
   7: { candidate: "deployment", confidence: "medium", reason: "Tier 7 production hosting" },
 };
 
-/**
- * Name rules for variables with no `.env.optional.example` tier. They run after the tier rule so a
- * documented variable keeps the classification its author chose by placing it.
- */
+// These rules run after the tier check so documented variables keep the classification chosen by their
+// .env.optional.example tier.
 const UNTIERED_NAME_RULES: {
   pattern: RegExp;
   candidate: Classification["candidate"];
@@ -260,11 +227,6 @@ const UNTIERED_NAME_RULES: {
   },
 ];
 
-/**
- * Rule-based classification for a variable that has at least one consumer. The first matching
- * rule wins, and the rule's own wording becomes the reason, so a reviewer can see exactly which
- * heuristic produced the candidate and overrule it.
- */
 export function classifyConsumed(
   name: string,
   liveLanguages: Set<ScanLanguage>,

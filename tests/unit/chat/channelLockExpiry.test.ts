@@ -25,7 +25,6 @@ function heldLock(ageMs: number): ChannelLockEntry {
   return entry;
 }
 
-/** Starts a watchdog phase that stays in flight until the returned `finish` is called. */
 function startPhase(): { finish: () => void; settled: Promise<void> } {
   let finish = () => {};
   const settled = runUnderWatchdog(
@@ -48,8 +47,6 @@ afterEach(() => {
 
 describe("channel lock expiry", () => {
   it("does not release a lock while a watchdog phase is in flight, however long it runs", async () => {
-    // A slow provider queue or a long tool used to cross the lock timeout, and the next message in
-    // the channel then killed the healthy turn with the same "Response Timed Out" embed.
     const entry = heldLock(0);
     const phase = startPhase();
     ageLock(entry, CHANNEL_LOCK_TIMEOUT_MS * 2);

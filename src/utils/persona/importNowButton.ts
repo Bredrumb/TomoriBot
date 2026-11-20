@@ -1,15 +1,3 @@
-/**
- * "Import Now" button wiring for `/persona generate` and `/persona create`
- * success messages.
- *
- * The success message is a public Components V2 container. A server manager can
- * press "Import Now" to import the freshly generated persona as an alter without
- * re-uploading the image via `/persona import`. Because the message is public,
- * the manager-only restriction is enforced on click (not by visibility), and the
- * button is driven by a per-message collector; matching the established pattern
- * in `expandableEmbedNotice.ts` (this codebase has no global button router).
- */
-
 import {
   type ButtonInteraction,
   ButtonStyle,
@@ -34,23 +22,13 @@ import { localizer } from "@/utils/text/localizer";
 import type { PresetExportData } from "@/types/preset/presetExport";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
-/** Custom ID for the Import Now button (unique across the app). */
 const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
 
-/**
- * Collector lifetime for the Import Now button. Kept under Discord's 15-minute
- * interaction-token window so the timeout teardown can still edit the original
- * reply.
- */
+// Must stay under Discord's 15-minute interaction-token window so timeout teardown can still edit the original reply.
 const IMPORT_NOW_BUTTON_TIMEOUT_MS = 14 * 60 * 1000;
 
 type ImportNowButtonState = "active" | "done" | "expired";
 
-/**
- * Builds the Import Now button config for a given state. The label is a locale
- * key resolved later by {@link buildPersonaResultContainer}, so no locale is needed here.
- *
- */
 export function importNowButton(state: ImportNowButtonState): PersonaResultButtonOptions {
   if (state === "done") {
     return {
@@ -68,36 +46,18 @@ export function importNowButton(state: ImportNowButtonState): PersonaResultButto
   };
 }
 
-/**
- * Parameters for {@link attachImportNowCollector}.
- */
 export interface ImportNowCollectorParams {
-  /** The already-sent public success message carrying the Import Now button. */
   message: Message;
-  /** Discord client (for avatar fallback resolution inside the import core). */
   client: Client;
-  /** Guild the import targets (Import Now is only attached in guild contexts). */
   guild: Guild | null;
-  /** Server scope ID the persona belongs to. */
   serverDiscId: string;
-  /** Locale for all button/confirmation strings. */
   locale: string;
-  /** Validated preset payload to import (already in memory from generation). */
   presetData: PresetExportData;
-  /** Persona image (PNG) used as the alter avatar. */
   avatarImageBuffer: Buffer | null;
-  /** Container layout/content used to re-render the message on state changes. */
   containerOptions: Omit<PersonaResultContainerOptions, "button">;
-  /** Source interaction, used to disable the button if the collector times out. */
   sourceInteraction: ModalSubmitInteraction | ChatInputCommandInteraction;
 }
 
-/**
- * Maps an {@link importAlterPreset} failure reason to a localized error embed.
- *
- * @param result - The failed import result.
- * @returns An EmbedBuilder describing the failure.
- */
 function buildImportErrorEmbed(
   locale: string,
   result: Exclude<Awaited<ReturnType<typeof importAlterPreset>>, { ok: true }>,
@@ -136,15 +96,6 @@ function buildImportErrorEmbed(
   }
 }
 
-/**
- * Attaches the Import Now click handler to a persona-result message.
- *
- * On click: enforces ManageGuild, then runs the shared {@link importAlterPreset}
- * core (always as an alter, identity preserved), disables the button on success,
- * and replies ephemerally with the outcome. The button is one-shot: a successful
- * import stops the collector; a failure re-arms it for another attempt.
- *
- */
 export function attachImportNowCollector(params: ImportNowCollectorParams): void {
   const {
     message,
@@ -168,8 +119,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
-    // Manager-only gate. The message is public, so the restriction must be
-    //    enforced here rather than relying on who can see the button.
+    // Enforce ManageGuild here because the button message is public and anyone can click it.
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasPermission) {
       await interaction
@@ -213,7 +163,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // Run the shared alter-import core (always alter, identity preserved).
     const result = await importAlterPreset({
       client,
       guild,
@@ -245,7 +194,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       log.warn("Import Now: failed to disable button after import", error as Error);
     }
 
-    // Confirm privately to the manager who imported.
     const followUpColor = result.hasNoTriggers || result.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
     await interaction
       .followUp({
@@ -271,11 +219,8 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("end", async (_collected, reason) => {
-    // Success already disabled the button; nothing to do.
     if (reason === "imported") return;
 
-    // Best-effort: grey out the button on timeout. Edits the original reply via
-    // the source interaction token, which is still valid given the <15m timeout.
     try {
       await sourceInteraction.editReply(
         validateAndFallbackPanelPayload(

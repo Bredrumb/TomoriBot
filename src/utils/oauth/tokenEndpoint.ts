@@ -64,7 +64,8 @@ interface OAuthTokenRequestOptions {
   fetchImpl?: OAuthFetch;
 }
 
-/** `optionalExpiresIn` admits a response without `expires_in`, which RFC 6749 allows and MCP servers may send. */
+// `optionalExpiresIn` exists because RFC 6749 allows omitting `expires_in` and MCP servers may return tokens without
+// it.
 export async function requestOAuthToken(
   options: OAuthTokenRequestOptions & { optionalExpiresIn?: false },
 ): Promise<OAuthToken>;

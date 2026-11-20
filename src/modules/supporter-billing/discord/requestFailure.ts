@@ -137,12 +137,7 @@ export function getSupporterRequestFailureCopy(
   };
 }
 
-/**
- * A tool's error reaches only the model, which may paraphrase or drop it, so the subscription notice
- * also goes to the channel directly.
- *
- * @returns The localized description to return to the model as the tool error.
- */
+// Tool errors may be paraphrased or dropped by the model, so the subscription notice also goes directly to the channel.
 export async function notifySupporterToolFailure(
   context: Pick<ToolContext, "channel" | "locale" | "isUserImpersonation">,
   error: SupporterRequestDeniedError,

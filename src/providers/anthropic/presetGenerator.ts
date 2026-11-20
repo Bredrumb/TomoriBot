@@ -1,12 +1,5 @@
-/**
- * AI-Powered Preset Generation for the Anthropic provider.
- *
- * Offers a `preset_export_data` tool whose input_schema matches the preset response schema and
- * leaves `tool_choice` at auto, because Sonnet 5.5, Opus 5.5 and Fable 5.1 reject a forced choice.
- * A reply that skips the tool is parsed from its text instead.
- *
- * Includes a tool-calling loop for models with web-search tools enabled.
- */
+// Sonnet 5.5, Opus 5.5, and Fable 5.1 reject a forced tool_choice, so preset generation leaves tool_choice at auto
+// and parses text fallback.
 
 import { log } from "@/utils/misc/logger";
 import { executeTool } from "@/tools/toolRegistry";
@@ -35,9 +28,6 @@ interface AnthropicPresetGenerationOptions {
   maxToolRounds?: number;
 }
 
-/**
- * Injects the response schema so the model knows the expected output shape.
- */
 function buildAnthropicPresetSystemPrompt(): string {
   const schema = buildPresetResponseSchema();
   return [
@@ -49,9 +39,6 @@ function buildAnthropicPresetSystemPrompt(): string {
   ].join("\n\n");
 }
 
-/**
- * Anthropic tool call format from streaming response
- */
 interface AnthropicToolCallBlock {
   type: "tool_use";
   id: string;
@@ -59,9 +46,6 @@ interface AnthropicToolCallBlock {
   input: Record<string, unknown>;
 }
 
-/**
- * Generate preset data from user prompts using the Anthropic Messages API.
- */
 export async function generatePresetFromPromptAnthropic(
   apiKey: string,
   params: GeneratePresetParams,
@@ -217,8 +201,6 @@ export async function generatePresetFromPromptAnthropic(
     const presetToolCall = toolUseBlocks.find((tc) => tc.name === "preset_export_data");
 
     if (presetToolCall) {
-      // The tool-call path hands over an already-decoded object, so there is no text to
-      // parse and no truncation to repair; only the preset contract is left to enforce.
       const decoded = validatePresetGenerationFields(presetToolCall.input);
 
       if (!decoded.ok) {
@@ -239,7 +221,6 @@ export async function generatePresetFromPromptAnthropic(
       return { preset };
     }
 
-    // If no tool_use blocks, try to parse text content as JSON (fallback)
     const responseText = textBlocks
       .map((b) => (b as { text?: string }).text ?? "")
       .join("")
@@ -258,8 +239,7 @@ export async function generatePresetFromPromptAnthropic(
     if (!decoded.ok) {
       log.error(`Anthropic preset generation rejected: ${decoded.failure.code}`);
       return {
-        // A payload nothing could read is a provider fault worth naming; a schema miss is
-        // the model's, and the shared message is the instruction the user can act on.
+        // Surface unparseable JSON as a provider fault, while schema misses keep the shared copy for user guidance.
         error:
           decoded.failure.code === "PARSE_FAILED"
             ? "Invalid JSON response from Anthropic."

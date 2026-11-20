@@ -16,7 +16,6 @@ type CommandOption = {
   options?: CommandOption[];
 };
 
-/** The raw snake_case fields the registration payload carries onto the wire. */
 type RegistrationRestrictions = {
   contexts?: number[];
   default_member_permissions?: string;
@@ -30,7 +29,6 @@ const STRING_TYPE = 3;
 const ATTACHMENT_TYPE = 11;
 const BOT_DM_CONTEXT = 1;
 
-/** The eight leaves the portable-transfer product boundary names. */
 const EXPECTED_PATHS = [
   "export config",
   "export memories",
@@ -94,8 +92,8 @@ describe("export and import command registration", () => {
     for (const rootName of ["export", "import"]) {
       const root = findRoot(commandData.registrationData, rootName);
       if (!root) throw new Error(`/${rootName} is not registered`);
-      // Both roots host a user-owned personal group, so a root-level Manage Server default would hide it from the
-      // members who own it. Each workspace leaf performs its own runtime authorization instead.
+      // Both roots host a user-owned personal group that a root-level Manage Server default
+      // would hide, so each workspace leaf enforces authorization at runtime instead.
       const restrictions = root as unknown as RegistrationRestrictions;
       expect({ rootName, permissions: restrictions.default_member_permissions }).toEqual({
         rootName,

@@ -29,10 +29,7 @@ function makeRow(overrides: Partial<UserSavedProviderConfigRow> & { provider: st
   } as unknown as UserSavedProviderConfigRow;
 }
 
-/**
- * `anthropic` sorts before `deepseek`, so any resolution that falls back to provider
- * name ordering picks the wrong row. Every case below depends on that.
- */
+// "anthropic" precedes "deepseek" here so any fallback to provider-name sorting picks the wrong row.
 function makeAccount(): UserSavedProviderConfigRow[] {
   return [
     makeRow({ provider: "anthropic", llm_id: 100 }),
@@ -41,14 +38,8 @@ function makeAccount(): UserSavedProviderConfigRow[] {
   ];
 }
 
-/**
- * Drives the real helpers against an in-memory row set so a toggle sequence can be
- * asserted end to end. Production resolves both repo members at call time, so
- * spying on the singleton avoids a module-level mock registration, which Bun
- * cannot unregister. Naming that registrar in full here would also make
- * scripts/checks/lib/testIsolation.ts read this file as a mock user and hand it a
- * private process, hiding whether it really is safe to batch.
- */
+// Singleton spyOn is used instead of a module-level mock because Bun cannot unregister one and naming its registrar
+// flags testIsolation.ts.
 function stubRepo(rows: UserSavedProviderConfigRow[]): { rows: UserSavedProviderConfigRow[] } {
   const state = { rows };
 
@@ -175,9 +166,8 @@ describe("setPersonalCapabilityEnabled", () => {
   });
 
   it("reports success when disabling a capability no provider serves", async () => {
-    // The quick-toggle modal submits all six capabilities and ANDs the results, so an
-    // unconfigured capability returning false turned an unrelated successful write into
-    // "Operation Failed".
+    // The quick-toggle modal submits all six capabilities and ANDs the results, so disabling an unconfigured
+    // capability must return true.
     const state = stubRepo(makeAccount());
 
     expect(await setPersonalCapabilityEnabled(1, "video", false)).toBe(true);

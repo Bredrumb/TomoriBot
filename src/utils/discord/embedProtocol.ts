@@ -27,7 +27,8 @@ export type ProtocolKind =
   | "generation_source";
 type ProtocolEntry = { key: string; kind: ProtocolKind; match?: "template" | "prefix" };
 
-/** These rendered strings are persisted in Discord and must remain recognizable after a locale ships. */
+// Locale strings for these keys are persisted in historical Discord messages, so existing renderings must remain
+// recognizable after locale changes.
 export const PROTOCOL_KEYS: ProtocolEntry[] = [
   { key: "tools.media.generation_source_line", kind: "generation_source", match: "template" },
   ...[
@@ -93,8 +94,7 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
   })),
 ];
 
-// The bot no longer writes this footer token because it rendered as visible text. Embeds already
-// posted with it still carry it, so the reader keeps honoring it.
+// Legacy embeds posted before removal still carry this footer token, so the reader keeps honoring it.
 const TOKEN_PATTERN = /\[tomori:v1:([a-z_]+)\]/;
 const targetKinds = new Set<ProtocolKind>([
   "memory_learning",
@@ -113,12 +113,8 @@ const targetKinds = new Set<ProtocolKind>([
 ]);
 const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_context", "generation_source"]);
 
-/**
- * Kinds whose notices can render at Minimal verbosity. Minimal titles once dropped their leading
- * emoji, and those messages remain in channel history, so only these kinds are stored and matched
- * emoji-free: reward and punish titles share text across commands ("Snack Time!") and are told apart
- * by that emoji alone.
- */
+// Only these kinds match emoji-free because reward and punish share title text across commands and rely on their
+// leading emoji to tell them apart.
 const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>([
   "memory_learning",
   "reminder_set",
@@ -126,7 +122,6 @@ const MINIMAL_TITLE_KINDS = new Set<ProtocolKind>([
   "user_moderation",
 ]);
 
-/** Whether a notice of this kind may arrive as a bare title, because it renders Minimal. */
 export function isMinimalTitleKind(kind: ProtocolKind | null): boolean {
   return kind !== null && MINIMAL_TITLE_KINDS.has(kind);
 }
@@ -141,8 +136,7 @@ let templates: Match[] = [];
 let prefixes: Match[] = [];
 let diceRollFooterKinds = new Map<string, ProtocolKind>();
 
-// Most locales author the reply-context description as a bare `{message_url}`. A template that is
-// only a placeholder compiles to `^.+?$`, which would classify any embed with a description as one.
+// Bare `{message_url}` templates must map to a URL pattern because compiling them to `^.+?$` would match any embed.
 const PLACEHOLDER_PATTERNS = new Map([["message_url", "https?://\\S+"]]);
 
 function placeholderSignature(value: string): string {
@@ -170,9 +164,8 @@ export function buildProtocolLookup(
     for (const entry of entries) {
       const authored = read(locale, entry.key);
       if (authored === undefined) continue;
-      // Titles render their status circle from the surface color (see `statusTitle.ts`), and Minimal
-      // notices drop their emoji, so the stored value and the rendered title can differ by that
-      // marker. Both sides normalize here.
+      // Rendered titles gain a status circle and Minimal notices drop their emoji, so both sides normalize that
+      // marker here.
       const value = normalizeProtocolTitle(authored, entry.kind);
       const previousKey = seenValues.get(value);
       if (previousKey && previousKey !== entry.key) {
@@ -233,12 +226,12 @@ export function initializeEmbedProtocol(): void {
 
 export function classifyProtocolTitle(title: string | null | undefined): ProtocolKind | null {
   if (!title) return null;
-  // Titles reach here as Discord rendered them, circle included. The lookup stores bare values.
+  // Discord-rendered titles include the status circle while the lookup stores bare values, so strip it first.
   const bareTitle = stripStatusCircle(title);
   const exact = exactTitles.get(bareTitle);
   if (exact) return exact.kind;
-  // Reply-context patterns match embed fields, never titles. The English URL field is a bare
-  // placeholder, so including it here would accept every non-empty Japanese notice title.
+  // Exclude reply_context from title matching because its field-only bare placeholder would accept arbitrary notice
+  // titles.
   const template = templates.find((entry) => entry.kind !== "reply_context" && entry.pattern?.test(bareTitle));
   if (template) return template.kind;
   const prefix = prefixes.find((entry) => bareTitle.startsWith(entry.value));

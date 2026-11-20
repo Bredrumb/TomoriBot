@@ -114,7 +114,7 @@ function getCommandOptions(command: ApplicationCommandData): CommandOptionShape[
   return command.options.filter(isCommandOptionShape);
 }
 
-/** Formats the same registration payload sent to Discord, so discovery cannot drift from runtime commands. */
+// Capability discovery formats the Discord registration payload directly, so it cannot drift from runtime commands.
 export function formatCommandCapabilities(registrationData: ApplicationCommandData[]): {
   markdown: string;
   totalCommands: number;

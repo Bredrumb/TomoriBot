@@ -8,11 +8,7 @@ import type { PatreonReconcileJobHandle } from "@/modules/supporter-billing/patr
 import type { AppEnvironment } from "@/types/config";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Starts supporter billing and returns its reconcile job for the shutdown path to stop.
- *
- * @throws When the billing config, secrets, or schema are invalid, so startup shutdown releases shard leases.
- */
+// Billing startup failures must propagate so shutdown releases shard leases.
 export async function initSupporterBilling(
   environment: AppEnvironment,
   client?: Client,

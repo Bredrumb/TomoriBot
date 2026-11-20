@@ -5,7 +5,7 @@ import type { DecisionModelRow } from "@/types/db/schema";
 export const NATURAL_NUDGE_CATEGORIES = ["ping_user", "revive_topic", "start_topic", "play_scene"] as const;
 export type NaturalNudgeCategory = (typeof NATURAL_NUDGE_CATEGORIES)[number];
 
-/** Tools an idle nudge may require or recommend; `image` stands for either image generator. */
+// The "image" entry is a sentinel alias rather than a literal tool name, so either image generator satisfies it.
 export const NUDGE_TOOL_NAMES = [
   "web_search",
   "fetch_url",
@@ -42,7 +42,8 @@ export const NUDGE_PREREQUISITE_IDS: readonly string[] = [
   ...NUDGE_TOOL_NAMES.map((tool) => `${TOOL_PREREQUISITE_PREFIX}${tool}`),
 ];
 
-/** The prerequisite each category already enforces in `isIdleNudgeEligible`, so authors never need to pick it. */
+// Each category prerequisite here is already enforced in isIdleNudgeEligible, so authors do not pick it and forms
+// strip it.
 export const CATEGORY_IMPLIED_PREREQUISITES: Record<NaturalNudgeCategory, string | null> = {
   ping_user: RELATIONSHIP_USER_PREREQUISITE,
   revive_topic: HANGING_CONVERSATION_PREREQUISITE,
@@ -68,7 +69,7 @@ export const NATURAL_NUDGE_INTEREST_LIMIT = 8;
 export const NATURAL_NUDGE_INTEREST_LABEL_MAX = 40;
 export const NATURAL_NUDGE_INTEREST_DESCRIPTION_MAX = 160;
 
-/** Level 0 never nudges; 2 is the default for personas without a config row. */
+// Level 0 disables nudges entirely rather than lowering frequency, because talkativeness scales from 0 (off) to 4.
 export const NATURAL_NUDGE_TALKATIVENESS_LEVELS = [0, 1, 2, 3, 4] as const;
 export const DEFAULT_NATURAL_NUDGE_TALKATIVENESS = 2;
 
@@ -82,7 +83,8 @@ export const naturalNudgeInterestSchema = z
   .strict();
 export type NaturalNudgeInterest = z.infer<typeof naturalNudgeInterestSchema>;
 
-/** Bun returns JSONB as text from some query shapes, so stored arrays are parsed before validation. */
+// Bun SQL returns JSONB columns as raw text in some query shapes, so stored values must be parsed before Zod
+// validation.
 function parseJsonbText(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -97,10 +99,8 @@ export const naturalNudgeInterestsSchema = z.preprocess(
   z.array(naturalNudgeInterestSchema).max(NATURAL_NUDGE_INTEREST_LIMIT),
 );
 
-/**
- * Compares by position, because JSONB reorders object keys while Zod emits them in schema order. A
- * stored list that does not parse matches nothing.
- */
+// Interests are compared as positional tuples because PostgreSQL JSONB reorders object keys while Zod emits them in
+// schema order.
 export function sameNaturalNudgeInterests(interests: readonly NaturalNudgeInterest[], stored: unknown): boolean {
   const parsed = naturalNudgeInterestsSchema.safeParse(stored);
   if (!parsed.success) return false;
@@ -140,7 +140,7 @@ export const serverNaturalNudgeConfigSchema = z.object({
   active_nudges_enabled: z.boolean(),
   channel_disc_ids: z.array(z.string()),
   llm_id: z.number().int().nullable(),
-  /** At most one checker column is set; both null means the recommended Active Nudge Checker. */
+  // At most one checker column may be non-null, because both null selects the recommended Active Nudge Checker.
   checker_llm_id: z.number().int().nullable(),
   checker_decision_model_id: z.number().int().nullable(),
   idle_nudge_frequency: frequencyLevelSchema,
@@ -153,7 +153,7 @@ export const serverNaturalNudgeConfigSchema = z.object({
 });
 export type ServerNaturalNudgeConfig = z.infer<typeof serverNaturalNudgeConfigSchema>;
 
-/** Column defaults from migrations 110 and 114 and `schema.sql`, used when a server has never saved Natural Nudges settings. */
+// Defaults here must match schema.sql column defaults so servers without a saved row match newly inserted rows.
 export function defaultServerNaturalNudgeConfig(serverId: number): ServerNaturalNudgeConfig {
   return {
     server_id: serverId,
@@ -173,7 +173,6 @@ export function defaultServerNaturalNudgeConfig(serverId: number): ServerNatural
 
 export type ServerNaturalNudgeConfigPatch = Partial<Omit<ServerNaturalNudgeConfig, "server_id">>;
 
-/** The Active Nudge Checker asks one `choice` question, so a predicate-only Decision model cannot serve it. */
 export function supportsCheckerChoice(model: Pick<DecisionModelRow, "supported_primitives">): boolean {
   return (model.supported_primitives as readonly string[]).includes("choice");
 }
@@ -201,7 +200,7 @@ export const customIdleNudgeRowSchema = customIdleNudgeInputSchema.extend({
 });
 export type CustomIdleNudgeRow = z.infer<typeof customIdleNudgeRowSchema>;
 
-/** Four add actions plus 20 entries fill one 25-option select. */
+// Capped at 20 because four add actions plus 20 entries fit within Discord's 25-option select limit.
 export const PERSONA_AUTHORED_IDLE_NUDGE_LIMIT = 20;
 const PERSONA_AUTHORED_IDLE_NUDGE_ID_MAX = 24;
 export const PERSONA_AUTHORED_IDLE_NUDGE_ID_PATTERN = new RegExp(
@@ -308,9 +307,9 @@ export const personaNaturalNudgeConfigSchema = z.object({
   interests: naturalNudgeInterestsSchema,
   idle_nudges: personaAuthoredIdleNudgesSchema,
   disabled_idle_nudge_ids: z.preprocess(parseJsonbText, z.array(personaAuthoredIdleNudgeIdSchema)),
-  /** The persona has its own row; an unforked pointer still inherits a null authored list. */
+  // True whenever a config row exists, because an unforked pointer can hold a row with null authored_idle_nudges.
   has_override: z.boolean(),
-  /** The row holds an explicit authored list; `false` on a pointer reads the preset list live. */
+  // False on a pointer means authored_idle_nudges is null, so the persona still reads the preset list live.
   idle_nudges_override: z.boolean(),
   idle_nudges_inherited: z.boolean(),
 });
@@ -318,14 +317,15 @@ export type PersonaNaturalNudgeConfig = z.infer<typeof personaNaturalNudgeConfig
 
 export const CUSTOM_IDLE_NUDGE_KEY_PREFIX = "custom:";
 
-/** Fire rows and persona scopes store this key, so it must stay stable for a custom idle nudge's lifetime. */
+// Fire rows and persona scopes persist this key format, so it must stay stable for a custom idle nudge's lifetime.
 export function customIdleNudgeKey(customIdleNudgeId: number): string {
   return `${CUSTOM_IDLE_NUDGE_KEY_PREFIX}${customIdleNudgeId}`;
 }
 
 export const PERSONA_AUTHORED_IDLE_NUDGE_KEY_PREFIX = "persona:";
 
-/** Runtime keys also carry the persona instance ID, so one local ID can exist on several servers. */
+// Runtime keys include personaId because preset local IDs can repeat across personas on the same or different
+// servers.
 export function personaAuthoredIdleNudgeKey(personaId: number, idleNudgeId: string): string {
   return `${PERSONA_AUTHORED_IDLE_NUDGE_KEY_PREFIX}${personaId}:${idleNudgeId}`;
 }
@@ -335,10 +335,11 @@ export const personaScopeRowSchema = z.object({
   persona_ids: z.preprocess(parseJsonbText, z.array(z.number().int()).min(1)),
 });
 
-/** Persona IDs each scoped idle nudge is limited to; a key without an entry is open to every persona. */
+// Absent map keys leave the idle nudge open to every persona, so present keys restrict it to those persona IDs.
 export type IdleNudgePersonaScopes = ReadonlyMap<string, readonly number[]>;
 
-/** A `null` scope opens the idle nudge to every persona, including ones created later. */
+// Scope uses null to mean all current and future personas, because an explicit ID array would exclude personas
+// created later.
 export type IdleNudgeAvailability = { enabled: false } | { enabled: true; scope: readonly number[] | null };
 
 export const runtimeStateSchema = z.object({
@@ -392,7 +393,8 @@ export const pingUserCandidateSchema = z.object({
 });
 export type PingUserCandidate = z.infer<typeof pingUserCandidateSchema>;
 
-/** Agenda length the DB CHECK allows; the planner schema enforces the same bound. */
+// The 500 limit matches the DB CHECK constraint and planner schema bound, so changing one requires updating the
+// others.
 export const NATURAL_NUDGE_AGENDA_MAX = 500;
 
 export const enabledIdleNudgeServerSchema = z.object({

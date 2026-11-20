@@ -29,11 +29,13 @@ import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
 const admittedTags = novelaiLayoutTags("admitted");
 const memoryTags = novelaiLayoutTags("memory");
-// Keep one sample exchange and two recent history exchanges until conversational quality checks justify a different floor.
+// Keep one sample exchange and two recent history exchanges until conversational quality checks justify a different
+// floor.
 const MINIMUM_SAMPLE_EXCHANGES = 1;
 const MINIMUM_HISTORY_EXCHANGES = 2;
 const MEMORY_WINDOW_FRACTION = 0.2;
-// Erato expands each name into multiple token sequences, so match SillyTavern's 1,024-sequence cap to bound the request.
+// Erato expands each name into multiple token sequences, so match SillyTavern's 1,024-sequence cap to bound the
+// request.
 const MAX_NATIVE_STOP_SEQUENCES = 1024;
 
 interface NovelAIFitReport {

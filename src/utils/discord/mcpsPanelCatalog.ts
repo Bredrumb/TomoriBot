@@ -1,7 +1,3 @@
-/**
- * Host-neutral route input used by the MCP panel renderer. Hosts provide the namespace,
- * version, and codec implementation while the panel keeps one bounded action set for every surface.
- */
 export type McpsPanelRouteInput =
   | { action: "range"; locale: string; rangeIndex: number }
   | { action: "retry"; locale: string; selectedId: number | "none" }

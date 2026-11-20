@@ -11,7 +11,14 @@ import * as userCache from "@/utils/cache/userCache";
 import * as mentions from "@/utils/discord/mentionHelper";
 import { userRepository } from "@/utils/db/repositories";
 import { evaluateChatAdmission, normalizeChatInvocation } from "@/utils/chat/admission";
-import { selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
+import {
+  acquireChannelLockForTurn,
+  clearChannelProcessingQueue,
+  getOrCreateChannelLockEntry,
+  releaseChannelLockAndReplayQueue,
+  selfReplySuppressionUntil,
+  suppressNextSelfReply,
+} from "@/utils/chat/channelQueue";
 import { applyWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { PrivacyLevel } from "@/types/db/schema";
@@ -88,6 +95,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     },
   } as unknown as GuildMember;
   const admissions: string[] = [];
+  const echoReasons: Array<string | undefined> = [];
   const contexts: StructuredContextItem[] = [];
   const blacklist = spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(true);
   const spies = [
@@ -105,13 +113,56 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(privacyLevel),
     spyOn(chat, "tomoriChat").mockImplementation(async (input) => {
       contexts.push(...(input.injectedContextItems ?? []));
-      const admission = await evaluateChatAdmission(
-        normalizeChatInvocation({
-          ...input,
-          skipLock: true,
-        }),
-      );
+      const incoming = normalizeChatInvocation({
+        ...input,
+        skipLock: true,
+      });
+      const admission = await evaluateChatAdmission(incoming);
       admissions.push(admission.disposition);
+
+      suppressNextSelfReply(channel.id);
+      const unrelatedManual = normalizeChatInvocation({
+        client,
+        message,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        borrowsTriggerMessage: true,
+      });
+      await evaluateChatAdmission(unrelatedManual);
+      expect(unrelatedManual.suppressSelfReply).toBeUndefined();
+      expect(selfReplySuppressionUntil.has(channel.id)).toBe(true);
+      selfReplySuppressionUntil.delete(channel.id);
+
+      const lockEntry = getOrCreateChannelLockEntry(channel.id, guild.id);
+      acquireChannelLockForTurn(lockEntry, {
+        messageId: message.id,
+        userDiscId: message.author.id,
+        isPersonaJob: false,
+        isCommandTriggered: true,
+        suppressSelfReply: incoming.suppressSelfReply,
+      });
+      const botEcho = (id: string) =>
+        ({
+          ...message,
+          id,
+          author: { id: "fixture-bot", username: "Tomori", bot: true },
+          content: "welcome line",
+        }) as unknown as Message;
+      const inFlightEcho = await evaluateChatAdmission(
+        normalizeChatInvocation({ client, message: botEcho("echo-1"), isFromQueue: false }),
+      );
+      echoReasons.push(inFlightEcho.reason);
+      releaseChannelLockAndReplayQueue({
+        channelId: channel.id,
+        lockEntry,
+        completedMessageId: message.id,
+        handleStopResponse: async () => {},
+        processQueuedMessage: async () => {},
+      });
+      const postReleaseEcho = await evaluateChatAdmission(
+        normalizeChatInvocation({ client, message: botEcho("echo-2"), isFromQueue: false }),
+      );
+      echoReasons.push(postReleaseEcho.reason);
       return admission.disposition;
     }),
   ];
@@ -119,6 +170,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     await handler(client, member);
     return {
       admissions,
+      echoReasons,
       blacklistReads: blacklist.mock.calls.length,
       prompt: contexts
         .flatMap((context) => context.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])))
@@ -126,14 +178,16 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     };
   } finally {
     for (const spy of spies) spy.mockRestore();
+    clearChannelProcessingQueue(channel.id);
     selfReplySuppressionUntil.delete(channel.id);
   }
 }
 
 describe("welcome attribution", () => {
-  it("admits a welcome anchored on a blacklisted bystander's message", async () => {
+  it("admits a welcome anchored on a blacklisted bystander's message and suppresses its gateway echoes", async () => {
     const result = await runWelcome();
     expect(result.admissions).toEqual(["run"]);
+    expect(result.echoReasons).toEqual(["self_reply_suppressed", "self_reply_suppressed"]);
     expect(result.blacklistReads).toBe(0);
   });
 

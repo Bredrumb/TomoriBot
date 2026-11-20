@@ -36,7 +36,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
   metadata: "trace: pcfg-op-789012 | user: 123456789012345678 | latency: 29ms",
 };
 
-/** Every identity field the personal config panel renders, so the sweep sees a fully populated user. */
 const USER_OVERRIDES: UserFixtureOverrides = {
   user_disc_id: "user-123",
   user_nickname: "Test User",
@@ -52,7 +51,6 @@ const USER_OVERRIDES: UserFixtureOverrides = {
 
 const USER: UserRow = createUserRow(USER_OVERRIDES);
 
-/** The single persona every case renders against. */
 const MAIN_PERSONA = createPersona({ persona_id: 1, persona_lineage_id: 10, persona_nickname: "Tomori" });
 
 function makeModelDisplayInfo(fallbackCount = 2, providerCount = 1): PersonalConfigModelDisplayInfo {
@@ -309,7 +307,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
   });
 
   it("covers every record in the union of paginated pages without dropping overflow", () => {
-    const totalRemoveOptions = SPOTLIGHT_REMOVE_PAGE_SIZE + 1; // 51 options -> 2 blocks
+    const totalRemoveOptions = SPOTLIGHT_REMOVE_PAGE_SIZE + 1;
     const page0Input: PersonalConfigPanelRenderInput = {
       locale: "en-US",
       category: "advanced",
@@ -334,12 +332,11 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
 
     const removeSelect = selects.find((s) => s.customId?.includes(":s-rem-s:"));
     expect(removeSelect).toBeDefined();
-    // SPOTLIGHT_REMOVE_PAGE_SIZE + 1 options yields 2 blocks: 1..pageSize and (pageSize + 1)..total
     expect(removeSelect?.options.length).toBe(2);
     expect(removeSelect?.options[0]?.value).toBe("0");
     expect(removeSelect?.options[1]?.value).toBe(String(SPOTLIGHT_REMOVE_PAGE_SIZE));
 
-    const overflowPersonaCount = 26; // > PERSONA_SELECT_MAX_OPTIONS (25)
+    const overflowPersonaCount = 26;
     const personas = Array.from({ length: overflowPersonaCount }, (_, i) =>
       createPersona({ persona_id: i + 1, persona_lineage_id: 1000 + i, persona_nickname: `Persona ${i + 1}` }),
     );

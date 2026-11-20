@@ -249,9 +249,7 @@ export async function executePersonaImpersonation(
         return;
       }
 
-      // Same alternation as the response stream, so an impersonated line next to the persona's
-      // own sprite lines cannot merge under their avatar. Identity sprites already carry a
-      // distinct decorated name.
+      // Alternate identity like the response stream so non-identity lines cannot merge with adjacent persona lines.
       const identity = !spriteRenderTarget
         ? resolveChannelBaseAppearanceIdentity(
             channel.id,

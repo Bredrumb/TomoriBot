@@ -40,19 +40,12 @@ type CopiedRenderCandidate =
 export type CopiedRenderTarget = {
   displayName: string;
   identity: ResolvedWebhookIdentity;
-  /**
-   * Decorated "Name (modifier)" label recorded in accumulated text so the model
-   * sees its own modifier usage. For sprites this differs from the webhook
-   * username, which stays the clean persona name.
-   */
+  // Recorded as "Name (modifier)" in accumulated text so the model sees its modifier usage even when the sprite
+  // webhook uses the clean persona name.
   contextLabel: string;
-  /** Present for sprite targets: persisted after send for context label recovery. */
   spriteRecord?: SpriteMessageRecordInfo;
-  /**
-   * True only for identity sprites. Identity sprites already use a distinct
-   * decorated "Sprite (Persona)" webhook name, so they skip the group-break
-   * alternation applied to clean-named non-identity sprites.
-   */
+  // Identity sprites skip group-break alternation because their "Sprite (Persona)" webhook name is already distinct
+  // in Discord.
   isIdentitySprite?: boolean;
 };
 
@@ -107,10 +100,8 @@ export async function resolveSpriteIdentity(
   sprite: PersonaSpriteRow,
   webhookUsername: string,
 ): Promise<ResolvedWebhookIdentity | null> {
-  // The webhook username is decided by the caller: ordinary sprites use the clean
-  // persona name (and recover "Name (sprite):" from persona_sprite_messages during
-  // context rebuilding), while identity sprites show the decorated "Sprite (Name)"
-  // label directly in Discord like a DID alter / copied identity.
+  // Callers supply the Discord username because ordinary sprites use the clean persona name while identity sprites
+  // show "Sprite (Name)".
   const username = webhookUsername.trim() || "Persona";
   const avatarReference = sprite.avatar_url.trim();
   const publicAvatarUrl = resolvePersonaAvatarPublicUrl(avatarReference);
@@ -177,7 +168,7 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
         addCandidate(candidatesByKey, {
           kind: "persona",
           key: target.serializedKey,
-          // displayLabel keeps the persona's last history decoration, such as "Tomori (shocked)".
+          // Use persona_nickname instead of target.displayLabel because displayLabel keeps history sprite decorations.
           displayName: persona.persona_nickname,
           persona,
         });
@@ -241,18 +232,8 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
   return [...candidatesByKey.values()];
 }
 
-/**
- * Collects every speaker name the model could plausibly leak as a turn label: other personas in
- * the guild (nickname) and users referenced in the conversation (display label + aliases). The
- * active persona is excluded (collectCopiedRenderCandidates skips it), since its labels are
- * handled by the render-modifier parse and own-name stripping.
- *
- * Used by the stream segment processor's opening-label leak guard to decide whether a plain
- * "Name:" opening is a known participant (a leak) or ordinary prose ("Note:", "TL;DR:").
- *
- * @param context - Active stream context (provides guild + conversation user references)
- * @returns Known speaker names, un-normalized (callers compare via matchesRenderModifierName)
- */
+// The active persona is excluded because own-name labels go through render-modifier parsing and stripping; callers
+// compare via matchesRenderModifierName.
 export async function collectKnownSpeakerNames(context: StreamContext): Promise<string[]> {
   const names: string[] = [];
   for (const candidate of await collectCopiedRenderCandidates(context)) {
@@ -314,11 +295,8 @@ async function buildCopiedRenderTarget(
   const shownName = sprite
     ? formatRenderModifierWebhookName(candidate.displayName, sprite.sprite_name)
     : candidate.displayName;
-  // Discord shows the impersonated name first ("Zallya (Ren)") so the
-  // disguise reads naturally in chat; the model-facing label keeps the source
-  // persona first ("Ren (Zallya)") so the LLM never confuses who is speaking.
-  // resolveRenderModifierSourcePersona reconstructs the source persona from
-  // either orientation when rebuilding context from webhook names.
+  // Discord shows "Target (Source)" for disguise while contextLabel keeps "Source (Target)" so the model knows
+  // who spoke.
   const username = formatRenderModifierWebhookName(shownName, sourceDisplayName);
   const contextLabel = formatRenderModifierWebhookName(sourceDisplayName, shownName);
   if (candidate.kind === "persona") {
@@ -384,11 +362,8 @@ export async function resolveSpriteRenderModifierTarget(
     return { status: "not_found" };
   }
 
-  // Identity sprites render the decorated "Sprite (Persona)" name in Discord (the
-  // disguise reads naturally, like copied identities); ordinary sprites keep the
-  // clean persona name. The model-facing contextLabel stays "Persona (Sprite)"
-  // either way, and the decorated webhook name still recovers to the source
-  // persona via resolveRenderModifierSourcePersona during context rebuilding.
+  // Identity sprites show "Sprite (Persona)" in Discord while ordinary sprites keep the clean name, and
+  // contextLabel stays "Persona (Sprite)" so the model keeps the source speaker.
   const webhookUsername = sprite.is_identity
     ? formatRenderModifierWebhookName(sprite.sprite_name, sourceDisplayName)
     : sourceDisplayName;

@@ -5,8 +5,8 @@ import {
   resetHostMemoryCountersForTests,
 } from "@/utils/misc/hostMemory";
 
-// Captured from the production container on 2026-08-19, so the parsers are checked against the
-// exact whitespace and column layout the host actually emits rather than an idealized fixture.
+// Captured from a production container so the parsers are checked against real host whitespace and column layouts
+// rather than an idealized fixture.
 const MEMINFO = `MemTotal:         862976 kB
 MemFree:           68804 kB
 MemAvailable:     217692 kB
@@ -67,9 +67,8 @@ describe("collectHostMemorySnapshot", () => {
   });
 
   it("splits swap usage per device", async () => {
-    // The aggregate from /proc/meminfo cannot answer the question this sink exists for: zram and
-    // the disk-backed /swapfile differ by roughly 100x in fault cost, and the AMA offload's
-    // success criterion is specifically /swapfile growth.
+    // Aggregate /proc/meminfo cannot separate zram from disk-backed /swapfile (roughly 100x different fault costs),
+    // so this sink tracks each swap device individually.
     const fields = await collectHostMemorySnapshot(0, readerFor(FULL_SOURCES));
 
     expect(fields?.swapfile_used_mb).toBe(21.2);
@@ -119,8 +118,8 @@ describe("collectHostMemorySnapshot", () => {
   });
 
   it("drops rates when the counters restart", async () => {
-    // A host reboot zeroes /proc/vmstat. Reporting the negative delta would draw a large downward
-    // spike into a series whose whole purpose is spotting upward pressure.
+    // A host reboot zeroes /proc/vmstat, so reporting negative deltas would draw fake downward spikes into an
+    // upward-pressure series.
     const read = readerFor({ ...FULL_SOURCES, "/proc/vmstat": vmstat(9000, 9000, 9000) });
     await collectHostMemorySnapshot(0, read);
 

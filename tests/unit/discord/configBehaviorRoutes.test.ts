@@ -1,10 +1,3 @@
-/**
- * Route coverage for Behavior > General and Trigger.
- *
- * These cases dispatch through the real registry, policy, and route handler. Repository spies
- * only observe the canonical methods the handler should call, which keeps the authorization and
- * acknowledgement assertions on the actual wiring.
- */
 import { humanizerSettingsFromDegree, pickHumanizerSettings } from "@/constants/humanizer";
 import { type HumanizerCheckboxGroup, humanizerCheckboxFieldName } from "@/utils/discord/humanizerOptions";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
@@ -119,18 +112,13 @@ function makeRandomTrigger(): RandomTriggerRow & { trigger_id: number } {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   scope: ConfigScope;
-  /** Payloads every interaction in this harness has edited, oldest first. */
   readonly edits: unknown[];
-  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
   readonly replies: unknown[];
   modals: unknown[];
   deferredAtWrite: boolean[];
   telemetry: string[];
-  /** Values the intercepted modal store holds, keyed by interaction id then field id. */
   selectValues: Map<string, Map<string, string>>;
-  /** Checkbox payloads by interaction id; an interaction with none set reads every group as empty. */
   checkboxValues: Map<string, Map<string, string[]>>;
-  /** Files the newest interaction's arrays behind the running `edits`/`replies` views. */
   record: (interaction: RouteInteraction) => void;
 }
 
@@ -215,11 +203,8 @@ function makeInteraction(
   options: {
     kind?: "button" | "modal" | "select";
     fields?: Record<string, string>;
-    /** Component type per field id, for modal fields that are not text inputs. */
     componentTypes?: Record<string, number>;
-    /** Values the reader should find in the intercepted store, keyed by field id. */
     selectValues?: Record<string, string>;
-    /** Checkbox payloads keyed by field id; a field left out reads as never submitted. */
     checkboxValues?: Record<string, string[]>;
     values?: string[];
     isManager?: boolean;
@@ -248,9 +233,8 @@ function makeInteraction(
   // repaint from has to be present there.
   interaction.guild?.channels.cache.set("channel-1", { type: ChannelType.GuildText, name: "lounge" });
 
-  // The route's text reader checks the submitted component's type before reading it, because
-  // discord.js keys every submitted component by custom id whatever its kind. The shared factory's
-  // presence map cannot carry a type, so the richer one is attached here.
+  // The route checks each submitted component's type by custom id because discord.js keys all
+  // components together, so this map adds the component type the shared factory omits.
   const submittedFields = options.fields ?? {};
   const fieldRows = new Map(
     Object.entries(submittedFields).map(([fieldId, value]) => [
@@ -289,12 +273,6 @@ function collectRawComponentTypes(value: unknown): number[] {
   ];
 }
 
-/**
- * Maps each modal field's custom id to the type of the component the reader will actually receive.
- *
- * The component carrying a custom id sits one level below the label that wraps it, so the type of
- * interest is the innermost one.
- */
 function collectModalFieldTypes(payload: unknown): Map<string, number> {
   const types = new Map<string, number>();
 
@@ -542,9 +520,8 @@ describe("config Behavior routes", () => {
   });
 
   it("never renders a field the write path reads as text as a radio group", () => {
-    // A radio group is keyed by custom id like any other component, so reading it with
-    // `getTextInputValue` finds the id, fails the type check, and throws out of the route. Pinning
-    // the types makes a builder change that breaks that pairing fail in CI rather than in a guild.
+    // Reading a radio group with getTextInputValue fails discord.js's type check at runtime,
+    // so pinning the raw component types catches builder-route mismatches in tests.
     const nonce = "nonce1234567";
     const humanizerFields = collectModalFieldTypes(
       buildBehaviorHumanizerModal("en-US", nonce, humanizerSettingsFromDegree(1)),
@@ -576,20 +553,20 @@ describe("config Behavior routes", () => {
     const memoryTypes = collectRawComponentTypes(buildBehaviorMemoryTaggingModal("en-US", "nonce1234567", false, true));
     const stmTypes = collectRawComponentTypes(buildBehaviorStmParametersModal("en-US", "nonce1234567", null));
 
-    expect(addTypes).toContain(18); // Label
-    expect(addTypes).toContain(8); // Channel Select
-    expect(addTypes).toContain(22); // Checkbox Group
-    expect(addTypes).toContain(4); // Text Input
-    expect(humanizerTypes).toContain(18); // Label
-    expect(humanizerTypes).toContain(22); // Checkbox Group
-    expect(removeTypes).toContain(18); // Label
-    expect(removeTypes).toContain(22); // Checkbox Group
-    expect(experimentalTypes).toContain(4); // Text Input
-    expect(triggerTypes).toContain(3); // String Select
-    expect(triggerRemoveTypes).toContain(22); // Checkbox Group
-    expect(noticeTypes).toContain(22); // Checkbox Group
-    expect(memoryTypes).toContain(21); // Radio Group
-    expect(stmTypes).toContain(21); // Radio Group
+    expect(addTypes).toContain(18);
+    expect(addTypes).toContain(8);
+    expect(addTypes).toContain(22);
+    expect(addTypes).toContain(4);
+    expect(humanizerTypes).toContain(18);
+    expect(humanizerTypes).toContain(22);
+    expect(removeTypes).toContain(18);
+    expect(removeTypes).toContain(22);
+    expect(experimentalTypes).toContain(4);
+    expect(triggerTypes).toContain(3);
+    expect(triggerRemoveTypes).toContain(22);
+    expect(noticeTypes).toContain(22);
+    expect(memoryTypes).toContain(21);
+    expect(stmTypes).toContain(21);
 
     const fiftyTriggerEntries = Object.fromEntries(
       ["image", "video", "voice", "reminder", "search"].map((target) => [
@@ -740,8 +717,8 @@ describe("config Behavior routes", () => {
   });
 
   it("reads the humanizer toggles from the checkbox store, not from the modal text fields", async () => {
-    // The toggles are rendered as a checkbox group, so they never arrive as text. Carrying a value
-    // as a text field must therefore leave the setting untouched rather than read as "all off".
+    // Humanizer toggles render as a checkbox group, so submitting a text field with the same
+    // prefix must leave the setting untouched rather than reading as all off.
     const harness = makeHarness(false);
     const update = spyOn(configRepository, "updateChatConfig").mockResolvedValue(true);
     const field = buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, "nonce1234567");
@@ -1206,7 +1183,6 @@ describe("config Behavior routes", () => {
       harness,
       makeInteraction(harness, buildConfigRouteId({ action: "behavior-random-add-submit", locale: "en-US", nonce }), {
         kind: "modal",
-        // No settings value is submitted; the prefill was removed in favour of a placeholder.
         fields: {},
       }),
     );
@@ -1529,7 +1505,6 @@ describe("config Behavior routes", () => {
     const edit = JSON.stringify(harness.edits[0]);
     expect(edit).toContain(buildConfigRouteId({ action: "behavior-random-remove-select", locale: "en-US" }));
     expect(edit).toContain(String(CONFIG_PERSONA_SELECT_PAGE_SIZE * CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY));
-    // Window paging keeps the page inside the removal-range state rather than the ordinary page.
     expect(edit).toContain(buildConfigRouteId({ action: "behavior-random-remove-cancel", locale: "en-US" }));
     expect(edit).not.toContain(buildConfigRouteId({ action: "behavior-random-add-open", locale: "en-US" }));
   });
@@ -1581,7 +1556,6 @@ describe("config Behavior routes", () => {
     const ordinary = JSON.stringify(harness.edits[1]);
     expect(ordinary).toContain(buildConfigRouteId({ action: "behavior-random-add-open", locale: "en-US" }));
     expect(ordinary).not.toContain(buildConfigRouteId({ action: "behavior-random-remove-select", locale: "en-US" }));
-    // Cancel lands back on the first schedule page, where the summary still reports the overflow.
     expect(ordinary).toMatch(localizedProse("en-US", "commands.config.panel.random_trigger_more"));
   });
 });

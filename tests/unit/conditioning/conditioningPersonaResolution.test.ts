@@ -1,9 +1,5 @@
-/**
- * Autocomplete is an optimization, never authorization: Discord submits whatever the user typed,
- * not only what was suggested. These tests pin the execute-side contract that an omitted option
- * resolves through the shared fallback chain, while a value that does not resolve to a persona the
- * actor may currently trigger is rejected before any repository write.
- */
+// Discord submits arbitrary user input rather than only autocomplete suggestions, so execute-side checks must reject
+// unauthorized personas before any write.
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   ChannelType,
@@ -240,7 +236,6 @@ describe("conditioning user targets", () => {
   });
 });
 
-/** Builds an interaction that clears every guard ahead of persona resolution. */
 function createInteraction(personaOption: string | null) {
   const replies: unknown[] = [];
   const channel = {
@@ -284,10 +279,8 @@ function createInteraction(personaOption: string | null) {
   return { replies, channel, interaction: interaction as unknown as ChatInputCommandInteraction };
 }
 
-/**
- * `restrictedPersonaIds` is the exclusion list: anything absent from it is allowed, and anything
- * present is allowed only when it also appears in `whitelistedPersonaIds`.
- */
+// restrictedPersonaIds acts as the exclusion list when whitelistedPersonaIds is empty, so personas absent from it
+// remain allowed.
 function stubWorkspace(available: TomoriState[], blockedPersonaIds: number[] = []): ReturnType<typeof spyOn> {
   const availableIds = new Set(available.map((persona) => persona.persona_id));
   const restricted = [MAIN, ALTER, HIDDEN]
@@ -456,7 +449,6 @@ describe("conditioning persona resolution", () => {
   });
 });
 
-/** A text channel where the bot holds Manage Webhooks, so the embed posts as the invoker. */
 function createWebhookInteraction(send: () => Promise<unknown>) {
   const base = createInteraction("2");
   const webhook = { id: "invoker-hook", send: mock(send), delete: mock(async () => undefined) };

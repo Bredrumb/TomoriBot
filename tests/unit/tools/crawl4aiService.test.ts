@@ -18,7 +18,6 @@ afterAll(() => {
   crawler.stop(true);
 });
 
-/** A chunked body with no content-length, counting how much the server had to produce. */
 function endlessBody(totalBytes: number, counter: { produced: number }): ReadableStream<Uint8Array> {
   return new ReadableStream({
     pull(controller) {

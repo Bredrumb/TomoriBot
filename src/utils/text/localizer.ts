@@ -28,23 +28,16 @@ Reflect.set(globalThis, LOCALIZER_RUNTIME_STATE, localizerState);
 
 const locales = localizerState.locales;
 
-/**
- * Removes common indentation from multi-line strings.
- * Allows for proper indentation in locale files without affecting output.
- * @param str - The string to dedent
- * @returns The dedented string with common leading whitespace removed
- */
 function dedent(str: string): string {
-  // If string is empty or has only one line, return it as is
   if (!str?.includes("\n")) return str;
 
   const lines = str.split("\n");
 
   const firstNonEmptyLine = lines.find((line) => line.trim().length > 0);
-  if (!firstNonEmptyLine) return str; // All lines are empty
+  if (!firstNonEmptyLine) return str;
 
   const match = firstNonEmptyLine.match(/^[ \t]+/);
-  if (!match) return str; // No common indent
+  if (!match) return str;
 
   const indent = match[0];
   const indentRegex = new RegExp(`^${indent}`);
@@ -52,11 +45,6 @@ function dedent(str: string): string {
   return lines.map((line) => (line.trim().length > 0 ? line.replace(indentRegex, "") : line)).join("\n");
 }
 
-/**
- * Initialize the localization system by loading all locale files.
- * This must be called and awaited before using the localizer.
- * @returns A promise that resolves when all locale files are loaded
- */
 export function initializeLocalizer(): Promise<void> {
   if (localizerState.isInitialized) return Promise.resolve();
   if (localizerState.initializationPromise) return localizerState.initializationPromise;
@@ -76,7 +64,7 @@ async function initializeLocalizerUncached(): Promise<void> {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      const locale = entry.name; // e.g., "en-US", "ja"
+      const locale = entry.name;
       if (!isDiscordLocaleCode(locale) || Object.hasOwn(LOCALE_ALIASES, locale)) {
         log.error(`Skipping unsupported or aliased locale directory: ${locale}`);
         continue;
@@ -133,10 +121,6 @@ async function initializeLocalizerUncached(): Promise<void> {
   }
 }
 
-/**
- * Recursively processes an object, applying dedent to all string values
- * @returns A new object with all strings dedented
- */
 function processLocaleStrings(obj: unknown): LocaleValue {
   if (typeof obj === "string") {
     return dedent(obj);
@@ -161,7 +145,6 @@ function processLocaleStrings(obj: unknown): LocaleValue {
 
 const FALLBACK_LOCALE = "en-US";
 
-/** Resolve a row description from its locale-keyed descriptions JSONB map. */
 export function resolveDescription(
   descriptions: Record<string, string> | null | undefined,
   locale: string,
@@ -181,7 +164,8 @@ export function resolveDescription(
   }
   return null;
 }
-/** Picker label for a system prompt preset; the English `name` doubles as the stored identity and the fallback. */
+// English `system_prompt_preset_name` doubles as the stored identity as well as the fallback, so localized labels
+// stay in `display_names`.
 export function resolvePresetDisplayName(
   preset: { system_prompt_preset_name: string; display_names?: Record<string, string> | null },
   locale: string,
@@ -191,7 +175,6 @@ export function resolvePresetDisplayName(
 
 const DEFAULT_BASE_TRIGGER_WORDS = ["tomori", "tomo"];
 
-/** Exact and alias matches win; a base language matches only when it is unambiguous. */
 function resolveAuthoredLocale(locale: string): LocaleCode | null {
   if (isDiscordLocaleCode(locale) && locales[locale]) return locale;
 
@@ -207,14 +190,11 @@ export function resolveSupportedLocale(locale: string): LocaleCode {
   return resolveAuthoredLocale(locale) ?? FALLBACK_LOCALE;
 }
 
-/** One `locale:key` per process, so a hot path cannot turn a single gap into a log flood. */
+// Each `locale:key` warns once per process, so a hot path cannot turn a single missing key into a log flood.
 const warnedFallbackKeys = localizerState.warnedFallbackKeys;
 
-/**
- * Walks the loaded tree for `locale` only. Returns `undefined` for an absent path or for a
- * path that lands on a namespace rather than a leaf string, which lets callers tell a real
- * miss apart from a legitimately empty string.
- */
+// Missing keys and non-leaf paths return `undefined` rather than empty string, so callers can distinguish a real miss
+// from a legitimately empty leaf.
 function lookupLocaleString(locale: string, key: string): string | undefined {
   const localeTree = locales[locale];
   if (!localeTree) return undefined;
@@ -230,19 +210,8 @@ function lookupLocaleString(locale: string, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/**
- * Get a localized string for a specific key.
- *
- * Resolution order is the authored locale selected by exact, alias, or unambiguous base-language
- * match, then `en-US`, then the key itself. The per-key
- * `en-US` retry is what lets an incomplete locale degrade to English instead of showing users
- * a raw dot-notation path; a key absent from both locales still echoes back, which several
- * callers rely on to detect an unknown key.
- *
- * @param locale - The locale code (e.g., 'en-US', 'ja').
- * @param key - The key path from the locale object (e.g., 'commands.help.features.title').
- * @param variables - Key-value pairs to replace placeholders in the localized string.
- */
+// Unknown keys echo the key string back rather than throwing or returning empty, because callers compare against the
+// key to detect missing entries.
 export const localizer = (locale: string, key: string, variables: LocalizerVariables = {}): string => {
   if (!localizerState.isInitialized) {
     log.warn(`Localization system not initialized when requesting key: ${key}`);
@@ -282,13 +251,8 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
   return result;
 };
 
-/**
- * Authored locale codes, in the order every language picker presents them.
- *
- * The set comes from the locale directories loaded at startup, but the order comes from
- * `LOCALE_DISPLAY_ORDER` rather than from `readdir`: an indexed directory returns hash order, so
- * the picker would otherwise reshuffle between hosts and never agree with the docs switcher.
- */
+// Ordering comes from `LOCALE_DISPLAY_ORDER` rather than `readdir`, because filesystem directory order varies across
+// hosts and must match the docs switcher.
 export function getSupportedLocales(): string[] {
   if (!localizerState.isInitialized) {
     log.warn("Localization system not initialized when requesting supported locales");
@@ -300,7 +264,6 @@ export function getSupportedLocales(): string[] {
   return [...ordered, ...loaded.filter((code) => !ordered.includes(code)).sort()];
 }
 
-/** Discord-facing keys include aliases only while their authored source is loaded. */
 export function getRegisterableLocales(): LocaleCode[] {
   const registerable = getSupportedLocales() as LocaleCode[];
   for (const [alias, source] of Object.entries(LOCALE_ALIASES)) {
@@ -309,18 +272,11 @@ export function getRegisterableLocales(): LocaleCode[] {
   return registerable;
 }
 
-/** Each authored locale supplies its own language name for the personal language picker. */
 export function getLocaleEndonym(locale: string): string {
   const authored = resolveAuthoredLocale(locale);
   return (authored && lookupLocaleString(authored, "general.language_name")) || locale;
 }
 
-/**
- * Get the child keys of a locale path that resolve to objects (i.e., sub-namespaces).
- * Useful for dynamically discovering all entries under a locale group (e.g., all reward types).
- * @param locale - The locale code (e.g., 'en-US')
- * @param path - Dot-notation path to the parent object (e.g., 'commands.reward')
- */
 export function getLocaleSubKeys(locale: string, path: string): string[] {
   if (!localizerState.isInitialized || !locales[locale]) return [];
 
@@ -335,32 +291,21 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
 
   if (typeof obj !== "object" || obj === null) return [];
 
-  // Return only keys whose values are objects (sub-namespaces), not leaf strings
   return Object.entries(obj as Record<string, unknown>)
     .filter(([, v]) => typeof v === "object" && v !== null && !Array.isArray(v))
     .map(([k]) => k);
 }
 
-/**
- * True when `locale` itself defines `key` as a leaf string, with no `en-US` fallback.
- *
- * Callers that build keys dynamically need this because `localizer()`'s return value can no
- * longer answer the question: a miss now yields English rather than the key path, so inspecting
- * the returned string cannot distinguish "this locale defines it" from "English was substituted".
- *
- * @param locale - The locale code (e.g., 'en-US')
- * @param key - Dot-notation path to a leaf string (e.g., 'commands.reward.hug.embed_title')
- */
+// No `en-US` fallback is applied here, because `localizer()` substitutes English on a miss and cannot tell callers
+// whether `locale` itself defines `key`.
 export function hasLocaleKey(locale: string, key: string): boolean {
   if (!localizerState.isInitialized) return false;
 
   return lookupLocaleString(locale, key) !== undefined;
 }
 
-/**
- * A string-list leaf from exactly one authored locale, with no `en-US` fallback. Intent packs take
- * the union across locales, so substituting English for a missing list would silently duplicate it.
- */
+// No `en-US` fallback is used here because intent packs union across locales, so substituting English for a missing
+// list would duplicate entries.
 export function getLocaleStringList(locale: string, key: string): string[] | undefined {
   if (!localizerState.isInitialized) return undefined;
 
@@ -375,12 +320,6 @@ export function getLocaleStringList(locale: string, key: string): string[] | und
   return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? [...value] : undefined;
 }
 
-/**
- * Uses the localization system to fetch the appropriate bot name based on the server's locale.
- * Falls back to the generic environment default when no locale key is available.
- * @param locale - The locale code (e.g., 'en-US', 'ja')
- * @returns The default bot name for the specified locale
- */
 export function getDefaultBotName(locale: string): string {
   const localizedName = localizer(locale, "general.defaults.bot_name");
 
@@ -391,12 +330,6 @@ export function getDefaultBotName(locale: string): string {
   return process.env.DEFAULT_BOTNAME || "Tomori";
 }
 
-/**
- * Uses the localization system to fetch locale-appropriate trigger words.
- * Uses the English locale's list when the requested locale has no list.
- * @param locale - The locale code (e.g., 'en-US', 'ja')
- * @returns Array of base trigger words for the specified locale
- */
 export function getBaseTriggerWords(locale: string): string[] {
   if (!localizerState.isInitialized) {
     log.warn("Localization system not initialized when requesting base trigger words");
@@ -415,16 +348,14 @@ export function getBaseTriggerWords(locale: string): string[] {
   return readWords(resolveSupportedLocale(locale)) ?? readWords(FALLBACK_LOCALE) ?? [...DEFAULT_BASE_TRIGGER_WORDS];
 }
 
-/** Groups an integer the way the resolved authored locale does, matching the sentence around it. */
+// Number formatting uses `resolveSupportedLocale(locale)` rather than raw `locale`, so digit grouping matches the
+// surrounding sentence's locale.
 export function formatLocaleInteger(value: number, locale: string): string {
   return Math.round(value).toLocaleString(resolveSupportedLocale(locale));
 }
 
-/**
- * Base trigger words from every authored locale, deduplicated. Trigger-word reservation uses the
- * union because a server's members can address the bot in any language the bot ships, and an alter
- * must never claim the bot's localized name.
- */
+// All authored locales are unioned because members can address the bot in any shipped language and an alter must
+// never claim its localized name.
 export function getAllBaseTriggerWords(localeCodes: readonly string[] = getSupportedLocales()): string[] {
   const codes = localeCodes.length > 0 ? localeCodes : [FALLBACK_LOCALE];
   return [...new Set(codes.flatMap((code) => getBaseTriggerWords(code)))];

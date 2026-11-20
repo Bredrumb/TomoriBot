@@ -1,8 +1,4 @@
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
-/**
- * Recent Message Interaction Tool
- * Lets Tomori react to or reply to a recent message without needing message-management permissions.
- */
 
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
@@ -275,9 +271,8 @@ export class InteractWithRecentMessageTool extends BaseTool {
     await verifyMessageWebhook(targetMessage);
     const targetPersona = resolvePersonaForMessage(targetMessage, allPersonas, context.client.user?.id);
 
-    // Only a backtrack on the active persona's own message may speak as the target's identity.
-    // Routing a reply to ANOTHER persona's message through that persona posts the active
-    // persona's words under someone else's name.
+    // Only adopt the target persona on a backtrack to the active persona's own message so replies never post under
+    // another persona's name.
     if (
       targetPersona &&
       context.activePersonaId !== undefined &&

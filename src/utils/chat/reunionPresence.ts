@@ -1,10 +1,3 @@
-/**
- * Coordinates the one-shot reunion note and its successful presence commit.
- * Eligibility is global to a persona lineage and speaker, while the claim prevents
- * separate channel contexts in this process from injecting the same reunion. The
- * speaker is the host account for an ordinary message and the proxied identity for a
- * verified repost, so those two never share a reunion.
- */
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatTurn, GenerationTurnResult } from "@/utils/chat/types";
@@ -23,10 +16,8 @@ interface ReunionClaimEntry {
   expiryTimer: ReturnType<typeof setTimeout>;
 }
 
-/**
- * Process-wide exclusion for reunion context injection. Expiry prevents a turn
- * interrupted outside the normal post-turn path from suppressing future notes.
- */
+// Process-wide reunion claim registry whose TTL expiry prevents a turn interrupted before post-turn cleanup from
+// suppressing future reunion notes.
 export class ReunionClaimRegistry {
   private readonly claims = new Map<string, ReunionClaimEntry>();
 
@@ -75,11 +66,10 @@ export interface ReunionPresenceStore {
   readonly isTrackingEnabled: boolean;
   getUserPersonaReunionInfo: typeof statRepository.getUserPersonaReunionInfo;
   recordPresenceSeen: typeof statRepository.recordPresenceSeen;
-  /** Resolves a proxied speaker's clock scope; its Discord id is not a snowflake. */
   loadUserRow?: typeof getCachedUserRow;
 }
 
-/** Prototype getters and methods do not survive a spread, so bind them explicitly. */
+// Explicitly binds statRepository members because prototype getters and methods do not survive an object spread.
 const defaultPresenceStore: ReunionPresenceStore = {
   isTrackingEnabled: statRepository.isTrackingEnabled,
   getUserPersonaReunionInfo: (userId, lineageId) => statRepository.getUserPersonaReunionInfo(userId, lineageId),
@@ -87,23 +77,15 @@ const defaultPresenceStore: ReunionPresenceStore = {
   loadUserRow: getCachedUserRow,
 };
 
-/**
- * Resolves a one-shot reunion for the direct triggerer and reserves it before
- * another channel can build an equivalent context.
- *
- * The clock follows the speaker, not the host account. A verified repost ticks the
- * proxied identity's own clock, so two members of one system meet Tomori and return to
- * her independently while their sibling talks from the same account in between.
- */
+// Reunion clocks follow the verified proxied speaker rather than the host account so system members sharing one
+// account meet and return independently.
 export async function resolveReunionNote(
   args: {
     turn: ChatTurn;
     effectivePersona: TomoriState;
     isUserImpersonation: boolean;
-    /** The turn answers another persona (a self-reply chain or a later scene turn), so no person is returning. */
     isPersonaSpeaker: boolean;
     proxiedIdentityName?: string | null;
-    /** Set only for a verified stable proxied speaker; absent for ordinary host messages. */
     proxiedIdentityUserDiscId?: string | null;
   },
   presenceStore: ReunionPresenceStore = defaultPresenceStore,
@@ -179,11 +161,6 @@ export async function resolveReunionNote(
   return { note, presence: { ...basePresence, mode: "claimed", claim } };
 }
 
-/**
- * Commits direct-triggerer presence only after a response lands. Claimed turns
- * release on every terminal result, while concurrent deferred turns never
- * consume the reunion they did not receive.
- */
 export async function recordReunionPresence(
   presence: ReunionPresenceScope | null,
   result: GenerationTurnResult,

@@ -1,45 +1,29 @@
 import type { ButtonStyle } from "discord.js";
 import type { AttachmentBuilder, ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
 
-/**
- * Options for creating a standard info/status embed.
- */
 export interface StandardEmbedOptions {
   titleKey: string;
-  titleVars?: Record<string, string | number | boolean>; // Added
-  descriptionKey?: string; // Made optional when description is provided
-  description?: string; // Added: raw description text (takes precedence over descriptionKey)
-  descriptionVars?: Record<string, string | number | boolean>; // Added
+  titleVars?: Record<string, string | number | boolean>;
+  descriptionKey?: string;
+  // Raw text takes precedence over descriptionKey when both are set.
+  description?: string;
+  descriptionVars?: Record<string, string | number | boolean>;
   color?: ColorResolvable;
   footerKey?: string;
   footerVars?: Record<string, string | number | boolean>;
-  /** Adds the shared `/config` > Behavior > Notices line below the footer, for notices a server can hide. */
   configHint?: boolean;
-  /**
-   * Renders a Minimal notice: the title exactly as Verbose renders it (emoji and status circle
-   * included), in the notice color, and nothing else.
-   * Description, footer, config hint, thumbnail, and any expand button are all dropped.
-   */
   minimal?: boolean;
   thumbnailUrl?: string;
   flags?: MessageFlags;
   timestamp?: boolean;
-  /**
-   * Optional atomic tip-item locale keys. When present, embed senders add a button that opens
-   * these keys as a dashed bullet list in a read-only text modal.
-   */
   tipKeys?: string[];
-  /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */
   tipVars?: Record<string, string | number | boolean>;
-  /**
-   * Raw diagnostic text behind a second button, rendered by `sendStandardEmbed` and `replyInfoEmbed`.
-   * The Components V2 fallback in `replyInfoEmbed` drops it along with the tip button.
-   */
+  // Callers cannot rely on this in Components V2 fallback replies because replyInfoEmbed drops both restrictedDetail
+  // and the tip button there.
   restrictedDetail?: RestrictedDetailModal;
   files?: AttachmentBuilder[];
 }
 
-/** Restricts who may open a read-only text modal; anyone else gets `deniedKey` as an ephemeral reply. */
 export interface TextDisplayModalAccess {
   canOpen: (interaction: ButtonInteraction) => boolean;
   deniedKey: string;
@@ -50,9 +34,6 @@ export interface RestrictedDetailModal {
   access: TextDisplayModalAccess;
 }
 
-/**
- * Options for translation embeds
- */
 export interface TranslationEmbedOptions {
   text: string;
   translations: Record<TranslationProvider, string>;
@@ -64,7 +45,7 @@ export interface ConfirmationOptions {
   embedTitleKey: string;
   embedDescriptionKey: string;
   embedDescriptionVars?: Record<string, string | number | boolean>;
-  embedColor?: ColorResolvable; // Allow number or hex
+  embedColor?: ColorResolvable;
   useComponentsV2?: boolean;
   continueLabelKey: string;
   cancelLabelKey: string;
@@ -77,7 +58,7 @@ export interface ConfirmationOptions {
 
 export type ConfirmationResult = {
   outcome: "continue" | "cancel" | "timeout";
-  interaction?: ButtonInteraction; // The button interaction if outcome is 'continue'
+  interaction?: ButtonInteraction;
 };
 
 export enum TranslationProvider {
@@ -85,12 +66,9 @@ export enum TranslationProvider {
   BING = "bing",
 }
 
-/**
- * Brand colors for translation providers
- */
 export const TRANSLATOR_COLORS = {
-  [TranslationProvider.GOOGLE]: "#DE3163", // Google red
-  [TranslationProvider.BING]: "#7DDA58", // Bing green
+  [TranslationProvider.GOOGLE]: "#DE3163",
+  [TranslationProvider.BING]: "#7DDA58",
 } as const satisfies Record<TranslationProvider, ColorResolvable>;
 
 export interface SummaryEmbedOptions extends StandardEmbedOptions {
@@ -98,40 +76,37 @@ export interface SummaryEmbedOptions extends StandardEmbedOptions {
   docsLabelKey?: string;
   fields: Array<{
     nameKey?: string;
-    name?: string; // Allow direct name string
-    nameVars?: Record<string, string | number | boolean>; // Variables for the name
-    valueKey?: string; // Localization key for the value
-    value?: string; // Direct value string (used when valueKey is not provided)
-    valueVars?: Record<string, string | number | boolean>; // Variables for the value localization
+    name?: string;
+    nameVars?: Record<string, string | number | boolean>;
+    valueKey?: string;
+    value?: string;
+    valueVars?: Record<string, string | number | boolean>;
     inline?: boolean;
   }>;
-  /**
-   * Extra pre-built embeds to send alongside the summary embed in the same message
-   * (e.g. a separate yellow "notes" embed). Sent after the main embed, in order.
-   */
   appendEmbeds?: EmbedBuilder[];
 }
 
 export interface PaginatedChoiceOptions {
-  titleKey: string; // Localization key for the embed title
-  titleVars?: Record<string, string | number | boolean>; // Variables for the title localization
-  descriptionKey: string; // Localization key for the embed description
-  descriptionVars?: Record<string, string | number | boolean>; // Variables for the description localization
-  items: string[]; // Array of items to display (e.g., trigger words)
-  itemLabelKey?: string; // Optional key to label the items (e.g., "Trigger Words:")
+  titleKey: string;
+  titleVars?: Record<string, string | number | boolean>;
+  descriptionKey: string;
+  descriptionVars?: Record<string, string | number | boolean>;
+  items: string[];
+  itemLabelKey?: string;
   color?: ColorResolvable;
-  onSelect: (index: number) => Promise<void>; // Callback function when an item is selected
-  onCancel?: () => Promise<void>; // Optional callback when pagination is cancelled
+  onSelect: (index: number) => Promise<void>;
+  onCancel?: () => Promise<void>;
   // When true, returns the selected button interaction unacknowledged so caller can show a modal.
   preserveSelectedInteraction?: boolean;
-  ephemeral?: boolean; // Whether the message should be ephemeral
+  ephemeral?: boolean;
   flags?: MessageFlags;
 }
 
 export interface PaginatedChoiceResult {
-  success: boolean; // Whether a selection was made successfully
-  selectedIndex?: number; // The index of the selected item (if success is true)
-  selectedItem?: string; // The selected item value (if success is true)
-  interaction?: ButtonInteraction; // Selected button interaction (when preserveSelectedInteraction=true)
-  reason?: "timeout" | "cancelled" | "error" | "fatal"; // Reason for failure if success is false; "fatal" means the Discord interaction token is dead and retrying will loop
+  success: boolean;
+  selectedIndex?: number;
+  selectedItem?: string;
+  interaction?: ButtonInteraction;
+  // "fatal" means the Discord interaction token is dead so retrying will loop.
+  reason?: "timeout" | "cancelled" | "error" | "fatal";
 }

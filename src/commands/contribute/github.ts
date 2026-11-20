@@ -5,22 +5,15 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 
-/**
- * Configure the github subcommand for contribute category
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("github").setDescription(localizer("en-US", "commands.contribute.github.description"));
 
-/**
- * Execute the contribute github command - show GitHub repository link and contribution information
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Defer the interaction before async file I/O to prevent timeout
   await interaction.deferReply();
 
   const bannerFile = Bun.file("assets/img/gitbanner.png");

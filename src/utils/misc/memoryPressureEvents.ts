@@ -1,25 +1,17 @@
-/**
- * Counts Bun's `memoryPressure` events for the periodic `host_memory` metric sample.
- *
- * The event is the operating system's own low-memory verdict (a PSI trigger on Linux). It is
- * recorded beside the swap, zram, and PSI averages this deployment already samples, so its timing
- * can be judged against a known saturation record before anything is allowed to act on it. This
- * module only observes: nothing here frees memory.
- */
+// This module only observes Bun memoryPressure events without freeing memory so timing can be judged against swap and
+// PSI records first.
 
 import { accessSync, constants } from "node:fs";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Bun arms the trigger by writing to one of these files. Container runtimes usually mount cgroupfs
- * read-only, which would leave the listener registered yet unable to ever fire, so a sample of
- * zero events is ambiguous without knowing whether a trigger could have been armed at all.
- */
+// Bun writes to these paths to arm memoryPressure, so probing writability disambiguates zero events in read-only
+// container cgroupfs mounts.
 const TRIGGER_PATHS = ["/sys/fs/cgroup/memory.pressure", "/proc/pressure/memory"] as const;
 
 export type TriggerAccess = "writable" | "readonly" | "absent";
 
-/** Encoded into the sample: 1 any trigger file writable, 0 present but read-only, -1 none present. */
+// Sentinel codes distinguish trigger availability for telemetry queries: 1 means writable, 0 means read-only, and -1
+// means no trigger file exists.
 type TriggerWritableCode = 1 | 0 | -1;
 
 let installed = false;
@@ -51,11 +43,6 @@ function onMemoryPressure(): void {
   }
 }
 
-/**
- * Registers the listener once and records whether a trigger could be armed.
- *
- * @param access - Injected so tests do not depend on the host's `/proc` and cgroup layout.
- */
 export function installMemoryPressureListener(access: (path: string) => TriggerAccess = defaultTriggerAccess): void {
   if (installed) return;
   process.on("memoryPressure", onMemoryPressure);
@@ -63,11 +50,8 @@ export function installMemoryPressureListener(access: (path: string) => TriggerA
   triggerWritable = probeTriggerWritable(access);
 }
 
-/**
- * Returns the events since the previous drain and resets the count, so each sample carries a rate
- * over its interval. The listener and trigger fields repeat on every sample so any single row can
- * answer whether a zero was even capable of being nonzero.
- */
+// Listener and trigger fields repeat on every drained sample so any single metric row tells whether a zero event
+// count could have fired.
 export function drainMemoryPressureCounters(): Record<string, number> {
   const drained = {
     memory_pressure_events_5m: eventsSinceDrain,
@@ -78,7 +62,6 @@ export function drainMemoryPressureCounters(): Record<string, number> {
   return drained;
 }
 
-/** Test seam: removes the listener and clears all state between cases. */
 export function resetMemoryPressureForTesting(): void {
   process.off("memoryPressure", onMemoryPressure);
   installed = false;

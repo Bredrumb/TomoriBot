@@ -7,7 +7,6 @@ beforeAll(async () => {
   await initializeLocalizer();
 });
 
-/** Only `id` and `embeds` are read, so these are not real discord.js messages. */
 function makeMessage(id: string, embeds: EmbedBuilder[] = []): Message {
   return { id, embeds: embeds.map((embed) => embed.toJSON()) } as unknown as Message;
 }

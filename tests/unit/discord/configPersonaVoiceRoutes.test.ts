@@ -18,7 +18,6 @@ const CLIENT = {} as Client;
 
 type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
 
-/** Voice routes address persona 55 on server 9, and the factory default nickname is "Mirri". */
 function makePersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
   return createPersona({ persona_id: 55, server_id: 9, ...overrides });
 }

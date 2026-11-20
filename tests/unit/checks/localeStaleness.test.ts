@@ -60,13 +60,8 @@ interface FixtureRepo {
   commit(message: string): string;
 }
 
-/**
- * Base repositories, keyed by their file map, built once and copied per case.
- *
- * Building a repository costs a `git init`, a `git add`, and a `git commit`; the cases here only
- * differ in what they do afterwards, so paying that once per distinct starting shape is enough.
- * Every case still gets its own repository, because each one commits its own change.
- */
+// Base repos are cached by file map and copied per case because git init/commit is costly while sharing a repo would
+// leak test commits.
 const templateRepos = new Map<string, string>();
 
 afterAll(() => {
@@ -99,10 +94,6 @@ function writeLocaleFile(root: string, relativePath: string, contents: string): 
   writeFileSync(target, contents, "utf8");
 }
 
-/**
- * A real repository rather than a mocked git, so the shallow-clone, missing-ref, and merge-base
- * paths under test are the ones the command actually takes.
- */
 function createFixtureRepo(files: Record<string, string>): FixtureRepo {
   const root = mkdtempSync(join(tmpdir(), "locale-staleness-"));
   temporaryRoots.push(root);
@@ -127,11 +118,8 @@ function reportFor(repo: FixtureRepo, base: string, source?: "head" | "worktree"
   return checkLocaleStaleness({ repoRoot: repo.root, base, source });
 }
 
-/**
- * A genuine CI-shaped shallow checkout: one commit, no remote-tracking base branch, and no local
- * `main`. The refs are deleted deliberately because a `file://` clone otherwise copies the source
- * repository's branches and leaves a resolvable base behind.
- */
+// Local and remote-tracking refs must be deleted after cloning because git clone over file:// copies the source
+// branches and leaves a resolvable base behind.
 function createShallowClone(source: FixtureRepo): string {
   const root = mkdtempSync(join(tmpdir(), "locale-staleness-shallow-"));
   temporaryRoots.push(root);
@@ -158,7 +146,6 @@ describe("checkLocaleStaleness parsing", () => {
       "en-US/general.ts",
     );
 
-    // A commented-out key is not a key, while a quoted literal name is one the runtime can read.
     expect([...values.keys()].sort()).toEqual(["/etc/passwd", "general.yes"]);
     expect(values.get("general.yes")).toBe("Yes");
   });
@@ -277,7 +264,6 @@ describe("checkLocaleStaleness advisories", () => {
     expect(report.added).toEqual([]);
     expect(report.changed.map((entry) => entry.key)).toEqual(["general.untouched", "general.updated"]);
 
-    // The Japanese translation moved with the English value, so the unchanged translations remain.
     const untouched = report.changed.find((entry) => entry.key === "general.untouched");
     expect(untouched?.review.map((status) => status.locale)).toEqual(["es-419", "ja"]);
 
@@ -419,8 +405,8 @@ describe("checkLocaleStaleness advisories", () => {
     const repo = createFixtureRepo(BASE_FILES);
     const branchPoint = git(repo.root, "rev-parse", "HEAD");
 
-    // The base branch advances after this feature branch starts, so its tip holds an English key
-    // the branch never saw. Diffing against the tip would invent that key as a removal.
+    // Advancing the base branch after branching puts a key on its tip that diffing against the tip would
+    // misreport as removed.
     repo.write(
       "en-US/general.ts",
       localeObject(`  general: {\n    language_name: \`English\`,\n    landed_after_branch: \`Later work\`,\n  },`),
@@ -539,7 +525,6 @@ describe("checkLocaleStaleness head source", () => {
     const repo = createFixtureRepo(BASE_FILES);
     const base = git(repo.root, "rev-parse", "HEAD");
 
-    // Committed work the report must see, plus local work it must not attribute to the branch.
     repo.write(
       "en-US/general.ts",
       localeObject(`  general: {\n    language_name: \`English\`,\n    committed_key: \`In the branch\`,\n  },`),
@@ -550,8 +535,6 @@ describe("checkLocaleStaleness head source", () => {
     const report = await reportFor(repo, base);
     expect(report.added.map((entry) => entry.key)).toEqual(["general.committed_key"]);
 
-    // The Japanese edit is absent from the comparison, and its presence in the working tree is
-    // disclosed rather than silently folded into the branch.
     expect(report.localeEditCounts.get("ja")).toBe(0);
     expect(report.includesUncommittedEdits).toBe(true);
     const rendered = renderStalenessReport(report, { verboseOutput: false });
@@ -608,7 +591,6 @@ describe("checkLocaleStaleness head source", () => {
     const repo = createFixtureRepo(BASE_FILES);
     const base = git(repo.root, "rev-parse", "HEAD");
 
-    // A brand new file that has not been added yet is the most common shape of work in progress.
     repo.write("en-US/features.ts", localeObject(`  general: {\n    draft_key: \`Written but not staged\`,\n  },`));
 
     const committed = await reportFor(repo, base);
@@ -632,8 +614,6 @@ describe("checkLocaleStaleness head source", () => {
     const base = git(repo.root, "rev-parse", "HEAD");
     rmSync(join(repo.root, "src", "locales", "en-US", "general.ts"));
 
-    // The deletion is not in the branch, so the committed report is unchanged and says the tree is
-    // dirty rather than dropping the file from the comparison.
     const report = await reportFor(repo, base);
     expect(report.removed).toEqual([]);
     expect(report.includesUncommittedEdits).toBe(true);

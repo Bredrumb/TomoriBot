@@ -18,7 +18,7 @@ import {
 
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
-import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed, truncateForEmbedDescription } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { getCachedUserRow } from "../utils/cache/userCache";
@@ -40,28 +40,20 @@ import {
 
 const REMINDER_DELIVERY_RETRY_DELAY_MS = 60_000;
 
-/**
- * Cap on unacknowledged delivery retries before a reminder is surfaced via the plain
- * fallback embed. Without a cap, any failure that also writes to the channel
- * becomes an unbounded loop: the retry's own output changes the channel's last message,
- * which is the very input the next retry reads back.
- */
+// Without a retry cap, a failure that writes to the channel changes the last message each retry reads back as input,
+// creating an unbounded loop.
 const REMINDER_DELIVERY_MAX_RETRIES = 5;
 
-/**
- * Consecutive failed occurrences after which a recurring reminder gets one generation attempt per
- * occurrence instead of the full retry budget: by then the provider is broken rather than flaky, and
- * each retry spends a call while the plain fallback still delivers the content.
- */
+// After 3 consecutive failures, drop to one generation attempt per occurrence because retries waste calls while the
+// plain fallback still delivers.
 const REMINDER_DEGRADED_AFTER_FAILED_OCCURRENCES = 3;
 
-/** Shortest failure streak that can remove a reminder, so a brief outage cannot delete an hourly one. */
+// Shortest failure streak that can remove a reminder, so a brief outage cannot delete an hourly one.
 const REMINDER_REMOVAL_MIN_STREAK_HOURS = 24;
 
-/** The shortest month, which is all the removal streak needs from a monthly interval. */
+// Conservative 28-day month because the removal streak only needs a monthly lower bound.
 const HOURS_PER_SHORTEST_MONTH = 28 * 24;
 
-/** A recurring reminder is dead once its failures have outlasted both thresholds and reached nobody. */
 function isDeadRecurringReminder(failedOccurrences: number, repetition: NonNullable<ReminderRepetition>): boolean {
   const intervalHours =
     repetition.unit === "months" ? repetition.interval * HOURS_PER_SHORTEST_MONTH : repetition.interval;
@@ -229,8 +221,6 @@ export class ReminderProcessor {
         work,
       });
 
-      suppressNextSelfReply(channel.id);
-
       const disposition = await tomoriChat({
         client: this.client,
         message: lastMessage,
@@ -246,6 +236,7 @@ export class ReminderProcessor {
           created_by_user_id: reminder.created_by_user_id,
         },
         borrowsTriggerMessage: true,
+        suppressSelfReply: true,
         selectedPersonaId: reminder.persona_id ?? undefined,
         isPersonaJob: false,
         isUserImpersonation: false,
@@ -266,8 +257,8 @@ export class ReminderProcessor {
 
       log.info(`tomoriChat call completed for reminder ${reminder.reminder_id} (disposition: ${disposition})`);
 
-      // If the chat call was rejected before it could run (ignored/blocked/error), do not delete
-      // the DB row. Defer it so transient blocked/ignored states cannot consume the reminder.
+      // Defer rejected calls instead of deleting the row so transient ignored or blocked states never consume a
+      // reminder.
       if (disposition !== "run" && disposition !== "queued") {
         log.warn(`Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); deferring for retry.`);
         await deliveryTracker.deferRetry(`admission_${disposition}`);
@@ -506,11 +497,8 @@ export class ReminderProcessor {
       : false;
   }
 
-  /**
-   * Resolves the locale for a reminder's own embeds. The recipient's saved preference wins over the
-   * guild default, mirroring the slash-command chain, because a reminder addresses one person rather
-   * than the room. Bridge users have no local user row, so they fall through to the guild.
-   */
+  // User preference beats guild locale because a reminder addresses one person, and bridge users fall through since
+  // they have no local user row.
   private async resolveReminderLocale(reminder: ReminderRow, channel: TextBasedChannel): Promise<string> {
     if (!isBridgeUserId(reminder.user_discord_id)) {
       const userRow = await getCachedUserRow(reminder.user_discord_id).catch(() => null);
@@ -592,7 +580,6 @@ export class ReminderProcessor {
     }
   }
 
-  /** Posts the plain fallback embed and reports whether it reached the channel. */
   private async sendFallbackReminderEmbed(
     reminder: ReminderRow,
     footerKey: string,
@@ -649,7 +636,7 @@ export class ReminderProcessor {
     }
   }
 
-  /** Tells the recipient by DM that their reminder was removed, since its channel is unreachable by definition. */
+  // DM delivery is required because a dead reminder's channel is unreachable.
   private async notifyDeadReminderRemoved(
     reminder: ReminderRow,
     failedOccurrences: number,

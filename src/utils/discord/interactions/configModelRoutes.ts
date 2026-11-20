@@ -84,7 +84,8 @@ import { localizer } from "@/utils/text/localizer";
 import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 
-/** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
+// Routes in this set open a modal and must not be deferred beforehand because Discord treats showModal as the
+// interaction acknowledgement.
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "sampling-open",
   "generation-open",
@@ -153,10 +154,8 @@ function noChangesReceipt(locale: string, detailKey: string): PanelReceipt {
   return receipt(locale, "info", "commands.config.panel.no_changes_heading", detailKey);
 }
 
-/**
- * Server model state lives on the assembled workspace config that every persona row carries, so any
- * persona is an equally authoritative source for it.
- */
+// Every persona row carries the assembled workspace config, so reading scope.personas[0] is authoritative for
+// server-wide model state.
 function serverStateFromScope(scope: ConfigScope): TomoriState | null {
   return scope.personas[0] ?? null;
 }
@@ -196,12 +195,8 @@ function baseRepaint(
   });
 }
 
-/**
- * Modal-open half of the Models surface.
- *
- * Runs before the panel controller defers, because a modal is its own acknowledgement: deferring
- * first would consume the interaction and Discord would reject the modal.
- */
+// Modal-open handlers must run before the panel controller defers because Discord rejects showModal after an
+// interaction is deferred.
 export async function handleConfigModelModalOpen(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -210,9 +205,7 @@ export async function handleConfigModelModalOpen(
 ): Promise<boolean> {
   if (!CONFIG_MODEL_MODAL_OPEN_ACTIONS.has(route.action)) return false;
 
-  // Clearing is a write rather than a modal, and it rides the provider select alongside the entries
-  // that do open one. Declining before the gate below routes it through the deferred path, which
-  // owns both the acknowledgement a write needs and the denial repaint an unauthorized replay gets.
+  // Clear actions bypass the modal-open gate because clearing writes state and needs the deferred denial path.
   if (
     route.action === "model-provider-select" &&
     interaction.isStringSelectMenu() &&
@@ -1377,10 +1370,6 @@ async function handleImageGeneration(context: ConfigModelRouteContext): Promise<
   return true;
 }
 
-/**
- * Post-defer half of the Models surface. Returns false for a route this module does not own so the
- * caller falls through to its own navigation repaint.
- */
 export async function handleConfigModelRoutes(context: ConfigModelRouteContext): Promise<boolean> {
   const page = MODELS_PAGE_BY_ROUTE[context.route.action];
   if (!page) return false;

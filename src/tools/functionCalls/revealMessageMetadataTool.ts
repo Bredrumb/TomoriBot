@@ -1,10 +1,3 @@
-/**
- * Reveal Message Metadata Tool
- *
- * Triggers a context rewrite that annotates existing visible message turns with
- * compact metadata such as `ref_N` handles, sent timestamps, and reactor names.
- */
-
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
 

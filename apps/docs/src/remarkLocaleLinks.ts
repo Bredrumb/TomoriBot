@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { DEFAULT_DOCS_LOCALE_ID, DOCS_LOCALES } from "../../../src/constants/docsLocales";
 import { findEntryFile } from "./docsRouting";
 
-/** Declared locally because `apps/docs` does not depend on `@astrojs/markdown-remark`; see `remarkHeadingIds.ts`. */
+// Local type avoids depending on `@astrojs/markdown-remark`: see `remarkHeadingIds.ts`.
 type RemarkPlugin = () => (tree: unknown, file: { path?: string }) => void;
 
 interface MdastNode {
@@ -15,10 +15,7 @@ interface MdastNode {
 
 const LOCALE_IDS: readonly string[] = DOCS_LOCALES.map((locale) => locale.id);
 
-/**
- * Locale of a docs source file, read from its path. The last `/docs/<locale>/` segment wins because
- * the project itself lives under `apps/docs/`, which also contains the string `/docs/`.
- */
+// Last `/docs/<locale>/` match wins because the repo path under `apps/docs/` also contains `/docs/`.
 function localeFromSourcePath(path: string | undefined): string | undefined {
   if (!path) return undefined;
   const matches = [...path.replaceAll("\\", "/").matchAll(/\/docs\/([A-Za-z0-9-]+)\//g)];
@@ -26,15 +23,8 @@ function localeFromSourcePath(path: string | undefined): string | undefined {
   return locale && LOCALE_IDS.includes(locale) ? locale : undefined;
 }
 
-/**
- * Prefixes a locale-less docs link with the locale it should open in, or returns it unchanged.
- *
- * Pages deploy only under a locale prefix, so an authored `/self-hosting/` points at nothing. A page
- * that exists in the reader's locale keeps the reader there; an untranslated one goes to the
- * default locale instead of a `noindex` fallback route that repeats English under a foreign URL.
- * Links that already carry a locale, leave the docs tree (assets, external sites), or are not
- * root-absolute are left alone, so a translator's explicit prefix always wins.
- */
+// Untranslated links resolve to the default locale so readers avoid `noindex` fallback URLs, while links with an
+// explicit locale prefix stay untouched.
 export function localizeDocsLink(
   url: string,
   locale: string,
@@ -55,18 +45,8 @@ export function localizeDocsLink(
   return `/${target}${pathname}${suffix}`;
 }
 
-/**
- * Rewrites root-absolute docs links to the page's own locale at build time.
- *
- * Authors write `/features/knowledge/memory/long-term-memory/` once for every locale (see "Links" in the docs
- * authoring guide), and this plugin is what makes that URL resolve. It covers Markdown links and the
- * `href` prop of MDX components such as `LinkCard`.
- *
- * The output depends on which other pages exist, but Astro's content layer reuses a page's rendered
- * HTML until that page's own content changes. A build that reuses `.astro/data-store.json` therefore
- * keeps old targets after a translation is added or removed. Clean builds are correct; if a deploy
- * ever restores that cache, include the locale page list in the content config digest.
- */
+// Astro caches rendered HTML per file in `.astro/data-store.json`, so cached builds keep stale link targets unless
+// the content digest tracks locale pages.
 export function remarkLocaleLinks(docsRoot: string): RemarkPlugin {
   const sections: ReadonlySet<string> = new Set(
     readdirSync(join(docsRoot, DEFAULT_DOCS_LOCALE_ID), { withFileTypes: true })
@@ -74,7 +54,6 @@ export function remarkLocaleLinks(docsRoot: string): RemarkPlugin {
       .map((entry) => entry.name),
   );
 
-  // A path names either a page or a directory index, and the URL alone does not say which.
   const pageExists = (locale: string, pageId: string): boolean =>
     findEntryFile(docsRoot, locale, pageId) !== undefined ||
     findEntryFile(docsRoot, locale, `${pageId}/index`) !== undefined;

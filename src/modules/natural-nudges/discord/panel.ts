@@ -131,11 +131,8 @@ export interface PersonaNudgesRenderInput {
   locale: string;
   persona: TomoriState;
   config: PersonaNaturalNudgeConfig | undefined;
-  /** Read-only for members and while the workspace read is stale. */
   writesDisabled: boolean;
-  /** Blockers for this persona's own entries; absent on a read that could not resolve tools. */
   personaNudges?: PersonaNudgeBlockerView;
-  /** Full body text allowance from the parent `/config` payload. */
   textBudget?: number;
 }
 
@@ -414,7 +411,6 @@ export function buildPersonaNudgesBody(input: PersonaNudgesRenderInput): Compone
   return components;
 }
 
-/** Every interest, all checked, so unchecking one removes it on submit. */
 export function buildInterestRemovalModal(
   locale: string,
   nonce: string,
@@ -578,16 +574,10 @@ export function buildPersonaNudgeRemovalModal(
   );
 }
 
-/**
- * Marks a checker select value as a Decision model provider. Text model values are a provider name or a
- * `start|provider` page, and neither can begin with this prefix.
- */
+// Prefix sentinel for Decision model providers, because text model select values are provider names or start|provider
+// pages that never start with it.
 export const NUDGE_DECISION_PROVIDER_PREFIX = "decision>";
 
-/**
- * Provider entries for a model select; a provider with more models than one modal holds is split. A
- * Decision model provider gets its own entry, so the checker select lists both kinds by provider.
- */
 function modelProviderOptions(
   locale: string,
   groups: ReadonlyArray<{ provider: string; models: readonly ConfigModelChoice[] }>,
@@ -623,7 +613,6 @@ function formatChatModel(locale: string, chatModel: { codename: string; provider
   );
 }
 
-/** The placeholder is the only place the select can name the model it will actually use. */
 function plannerModelPlaceholder(locale: string, view: NaturalNudgesSettingsView): string {
   const t = (key: string, vars: Record<string, string | number> = {}) => localizer(locale, key, vars);
   const chat = view.status?.chatModel;
@@ -646,7 +635,6 @@ function plannerModelPlaceholder(locale: string, view: NaturalNudgesSettingsView
   });
 }
 
-/** A placeholder cannot say why the default cannot plan nudges, so that reason gets its own line. */
 function plannerDefaultNotice(locale: string, view: NaturalNudgesSettingsView): string | null {
   const { status } = view;
   if (view.config.llm_id !== null || !status || status.plannerModel.kind === "ready") return null;
@@ -964,7 +952,6 @@ function modelSelectRow(
   };
 }
 
-/** Names the checker the next check would use; modal paths render without status, so they name the saved choice. */
 function checkerPlaceholder(locale: string, view: NaturalNudgesSettingsView): string {
   const t = (key: string, vars: Record<string, string | number> = {}) => localizer(locale, key, vars);
   const checker = view.status?.checker;

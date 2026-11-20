@@ -87,10 +87,8 @@ describe("voice sample duration cap", () => {
   });
 });
 
-/**
- * The constant is read once at module load, so an in-process assignment cannot exercise the
- * override. A child process gets a real module load with the variable already in place.
- */
+// Tests run in a child process because the duration cap env var is read once at module load, so in-process assignment
+// cannot exercise it.
 describe("voice sample duration cap override", () => {
   async function probe(rawValue: string): Promise<number | null> {
     const workspace = await mkdtemp(join(tmpdir(), "tomori-sample-cap-"));

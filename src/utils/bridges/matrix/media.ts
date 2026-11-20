@@ -108,10 +108,8 @@ export async function downloadAvatar(url: string): Promise<DownloadedMedia | nul
   return { buffer: result.buffer, mimeType: result.contentType ?? "image/png" };
 }
 
-/**
- * Downloads homeserver media with the appservice token, refusing any identifier that could leave
- * the authenticated download route.
- */
+// Malformed MXC identifiers are refused before requesting media so the appservice token never leaves the
+// authenticated download route.
 export async function downloadMatrixMedia(
   mxcUrl: string,
   homeserverUrl: string,
@@ -166,11 +164,8 @@ export async function downloadMatrixMedia(
   }
 }
 
-/**
- * The spec lets the download route redirect to a CDN, but a redirect response cannot authorize a
- * destination to receive the appservice token, so the target is fetched anonymously through the
- * guarded downloader.
- */
+// Matrix download redirects to a CDN cannot authorize receiving the appservice token, so redirect targets fetch
+// anonymously via the guarded downloader.
 async function followAnonymousMediaRedirect(
   response: Response,
   downloadUrl: URL,
@@ -197,10 +192,8 @@ async function followAnonymousMediaRedirect(
   return { buffer: result.buffer, mimeType: result.contentType ?? "application/octet-stream" };
 }
 
-/**
- * Parses `mxc://<server-name>/<media-id>` into exactly two segments, so dot segments, separators,
- * encoded traversal, queries, and fragments never reach a token-bearing request.
- */
+// Strict two-segment mxc:// parsing rejects dot segments, traversal, queries, and fragments so they never reach a
+// token-bearing request.
 export function parseMxcUri(value: string): MxcIdentifier | null {
   const scheme = "mxc://";
   if (!value.startsWith(scheme)) return null;
@@ -214,10 +207,8 @@ export function parseMxcUri(value: string): MxcIdentifier | null {
   return { serverName, mediaId };
 }
 
-/**
- * Follows the appendix server-name grammar: an IPv4 literal, bracketed IPv6 literal, or DNS name,
- * with an optional port.
- */
+// Validation follows the Matrix spec appendix server-name grammar (IPv4, bracketed IPv6, or DNS name with optional
+// port) so invalid hosts are rejected.
 function isMatrixServerName(serverName: string): boolean {
   const match = SERVER_NAME_PATTERN.exec(serverName);
   if (!match) return false;

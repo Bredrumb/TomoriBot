@@ -1,11 +1,3 @@
-/**
- * Regression harness: PersonaRepository domain.
- *
- * Covers: loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow,
- * updateTomori.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
@@ -160,7 +152,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     expect(state).not.toBeNull();
     expect(state?.persona_id).toBe(refs.personaId);
-    // Config should load the server-scoped row
     expect(state?.config).not.toBeNull();
     expect(state?.llm).not.toBeNull();
   });

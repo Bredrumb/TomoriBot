@@ -7,14 +7,8 @@ import {
   getPromptLayoutInsert,
 } from "@/utils/text/context/promptLayout";
 
-/**
- * Estimates the input token count from a list of context items.
- *
- * Uses a 4-characters-per-token approximation applied only to text parts.
- * Image and video parts are excluded, so their token cost is absorbed by the
- * 10% safety margin in {@link truncateDialogueHistory}.
- *
- */
+// Text parts use a 4 chars per token estimate and omit media, because the 10% margin in `truncateDialogueHistory`
+// absorbs image and video cost.
 function estimateInputTokens(items: StructuredContextItem[]): number {
   let totalChars = 0;
   for (const item of items) {
@@ -27,10 +21,8 @@ function estimateInputTokens(items: StructuredContextItem[]): number {
   return Math.floor(totalChars / 4);
 }
 
-/**
- * The estimated input tokens history may fill before truncation starts. The 10% margin absorbs
- * tokenizer estimation error, and `/context` draws its free space against this same figure.
- */
+// The 0.9 multiplier reserves a 10% margin for tokenizer estimation error, because `/context` also derives its
+// free-space figure from this budget.
 export function computeSafeInputBudget(contextLength: number, maxCompletionTokens: number): number {
   return Math.floor((contextLength - maxCompletionTokens) * 0.9);
 }
@@ -42,7 +34,6 @@ type TruncationResult = {
   totalDropped: number;
 };
 
-/** Drops oldest history exchanges in stride batches, preserving samples and the newest user request. */
 export function truncateDialogueHistory(
   contextItems: StructuredContextItem[],
   contextLength: number,

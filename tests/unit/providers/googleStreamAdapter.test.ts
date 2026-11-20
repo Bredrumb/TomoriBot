@@ -77,10 +77,6 @@ it("records the final Google request shape on rejection without retaining its co
   }
 });
 
-/**
- * Builds a RawStreamChunk wrapping a Google-shaped data object.
- * chunk.data is typed as unknown so no type assertion is needed in the fixture.
- */
 function makeGoogleChunk(data: Record<string, unknown>): RawStreamChunk {
   return { data, provider: "google", metadata: { timestamp: Date.now() } };
 }
@@ -97,11 +93,9 @@ describe("GoogleStreamAdapter.processChunk", () => {
 
   it("captures thought summary in thoughts and emits no visible text", () => {
     const adapter = new GoogleStreamAdapter();
-    // Chunk with only thoughtSummary, no text field
     const result = adapter.processChunk(makeGoogleChunk({ thoughtSummary: "internal reasoning step" }));
 
     expect(result.type).toBe("text");
-    // Reasoning must not surface as visible Discord text
     expect(result.content).toBe("");
     expect(result.thoughts).toBeDefined();
     expect(result.thoughts?.[0]).toMatchObject({ kind: "summary", content: "internal reasoning step" });
@@ -113,7 +107,6 @@ describe("GoogleStreamAdapter.processChunk", () => {
 
     expect(result.type).toBe("text");
     expect(result.content).toBe("Visible reply.");
-    // Reasoning must not be mixed into visible content
     expect(result.content).not.toContain("hidden thought");
     expect(result.thoughts?.[0]).toMatchObject({ kind: "summary", content: "hidden thought" });
   });
@@ -206,7 +199,6 @@ describe("GoogleStreamAdapter.processChunk", () => {
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("search_web");
     expect(result.functionCall?.args).toEqual({ query: "TomoriBot changelog" });
-    // Visible content must not leak
     expect(result.content).toBeUndefined();
   });
 
@@ -223,7 +215,6 @@ describe("GoogleStreamAdapter.processChunk", () => {
     const result = adapter.processChunk(makeGoogleChunk(preNormalized));
 
     expect(result.type).toBe("error");
-    // Must carry the original error object through
     expect(result.error?.type).toBe("rate_limit");
   });
 });
@@ -250,9 +241,8 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("maps HTTP 401 JSON error to api_error, not retryable", () => {
     const adapter = new GoogleStreamAdapter();
-    // Google double-nests the real payload inside error.message, and its ErrorInfo metadata echoes
-    // the called method back. Both shapes matter here: the code must survive extraction, and the
-    // method name must not steer classification.
+    // Google double-nests the payload in error.message and echoes the called method in ErrorInfo, so extraction
+    // must handle both without misclassifying.
     const nested = JSON.stringify({
       error: {
         code: 401,
@@ -281,8 +271,8 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("does not treat the 'rate' inside GenerateContent method names as a rate limit", () => {
     const adapter = new GoogleStreamAdapter();
-    // No parseable status code, so classification falls through to the message-content heuristics.
-    // "StreamGenerateContent" contains "rate", which used to match the rate-limit branch outright.
+    // Without a status code, classification falls back to message heuristics where "StreamGenerateContent" contains
+    // "rate".
     const error = new Error(
       "Stream failed for google.ai.generativelanguage.v1beta.GenerativeService.StreamGenerateContent",
     );
@@ -320,8 +310,7 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("classifies RESOURCE_EXHAUSTED message as rate_limit when no JSON code present", () => {
     const adapter = new GoogleStreamAdapter();
-    // Plain error message without JSON structure, so triggers fallback message-content classification.
-    // Must not include "API key" since that branch fires first in the default case.
+    // Plain errors without JSON trigger content heuristics where an "API key" substring would match first.
     const error = new Error("RESOURCE_EXHAUSTED: quota exceeded for this project");
     const result = adapter.handleProviderError(error);
 

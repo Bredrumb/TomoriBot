@@ -6,24 +6,14 @@ import { log } from "@/utils/misc/logger";
 import { unseenToolImageNotice } from "@/providers/utils/strictChatCompat";
 
 export interface ToolResponseMediaInput {
-  /** Adapter name used in the skip log, e.g. `GoogleStreamAdapter`. */
   adapterName: string;
   imageMetadata?: FunctionResponseImageMetadata;
   seesImages: boolean;
   messageIdMap?: StreamContext["messageIdMap"];
 }
 
-/**
- * Builds the media parts a tool response contributes to a Gemini/Vertex replay turn: the delivered
- * images, or a notice standing in for them when the model cannot see images, plus the Discord
- * message IDs the tool sent them under.
- *
- * Vertex rejects a function-response turn that also carries inline data or text, so these parts ride
- * in their own user turn; AI Studio tolerates the combined shape, and both adapters keep the
- * stricter one so a payload that works in one works in the other. A reference that cannot be
- * fetched is logged and skipped rather than failing the turn, since the tool's own response text
- * already reported what it delivered.
- */
+// Vertex rejects inline data or text inside function-response turns, so both Gemini adapters emit these parts in a
+// separate user turn.
 export async function buildGeminiToolMediaParts({
   adapterName,
   imageMetadata,

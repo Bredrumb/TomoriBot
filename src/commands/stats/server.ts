@@ -15,10 +15,6 @@ import {
   TIMEFRAME_VALUES,
 } from "@/utils/stats/statsDashboard";
 
-/**
- * Configures the /stats server subcommand: server-wide usage stats for the chosen
- * timeframe (leaderboard, models, tools, expression, generations).
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("server")
@@ -33,9 +29,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
-/**
- * Renders the server-wide stats dashboard.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -73,8 +66,6 @@ export async function execute(
       botUserDiscId: interaction.client.user.id,
     });
 
-    // Pin the server's icon to the dashboard's top-right corner (null when the guild
-    // has no custom icon, so the card simply renders without one).
     const iconUrl = guild.iconURL({ extension: "png", size: 256 }) ?? undefined;
     await renderStatsDashboard(
       interaction,

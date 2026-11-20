@@ -1,7 +1,4 @@
-/**
- * Migration names a database recorded when it ran the launch build; files added later stay pending
- * against this list, so never regenerate it from the migrations directory.
- */
+// Never regenerate this list from the migrations directory because later migrations must remain pending.
 export const LAUNCH_MIGRATION_NAMES = [
   "001_baseline",
   "002_server_config_tables",

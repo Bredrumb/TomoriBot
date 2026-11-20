@@ -172,11 +172,6 @@ describe("short-term memory panel", () => {
 });
 
 describe("memories panel route catalog", () => {
-  /**
-   * Pins the memories v1 wire contract: a row is [literal custom ID, exact route it must decode to].
-   * Encoding and decoding through one shared codec cannot catch a field reordering, because both
-   * sides move together and a round trip still succeeds; only literal bytes can.
-   */
   const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, MemoriesPanelRoute]> = [
     ["memories:v1:category:en-US:memories", { action: "category", locale: "en-US", category: "memories" }],
     ["memories:v1:category:en-US:documents", { action: "category", locale: "en-US", category: "documents" }],
@@ -434,11 +429,6 @@ describe("memories panel route catalog", () => {
     expect(parseMemoriesPanelRoute(parsed)).toEqual(expectedRoute);
   });
 
-  /**
-   * Routes whose shorter legal form omits a field the longer form carries. A row is
-   * [field the parser must leave out, what the case is, custom ID carrying the shorter form], so a
-   * parser that fabricates the field names it.
-   */
   const ABSENT_OPTIONAL_FIELDS: ReadonlyArray<readonly [string, string, string]> = [
     ["rangeIndex", "a select route without a range", "memories:v1:select:en-US:1770"],
     ["lineageId", "a retry route without a lineage", "memories:v1:retry:en-US:documents"],
@@ -469,10 +459,6 @@ describe("memories panel route catalog", () => {
     expect(customId.length).toBeLessThanOrEqual(100);
   });
 
-  /**
-   * Route envelopes the parser must refuse before it reads a segment. A row is
-   * [what the envelope gets wrong, parsed envelope handed straight to the decoder].
-   */
   const REJECTED_ROUTE_ENVELOPES: ReadonlyArray<readonly [string, ParsedInteractionRoute]> = [
     ["foreign namespace", { namespace: "other", version: "v1", segments: ["category", "en-US", "memories"] }],
     ["retired version", { namespace: "memories", version: "v99", segments: ["category", "en-US", "memories"] }],
@@ -853,7 +839,6 @@ describe("memories permissions and scoping", () => {
   });
 
   it("passes actor userId as owner filter for non-managers and undefined for managers", async () => {
-    // Non-manager interaction
     const nonManagerInteraction = {
       user: { id: "user-42", username: "user42" },
       guildId: "guild-123",
@@ -872,7 +857,6 @@ describe("memories permissions and scoping", () => {
     expect(callsNonManager).toContain("getMemoryCountsByLineage:1:42");
     expect(panelNonManager.components.length).toBeGreaterThan(0);
 
-    // Manager interaction
     const managerInteraction = {
       user: { id: "user-42", username: "user42" },
       guildId: "guild-123",
@@ -917,15 +901,12 @@ describe("memories permissions and scoping", () => {
       requireRoute(nonManagerInteraction.customId),
     );
 
-    // Non-manager must NOT trigger getStmEntries or preWarmServerStm
     expect(calls.some((c) => c.startsWith("getStmEntries"))).toBe(false);
     expect(calls.some((c) => c.startsWith("preWarmServerStm"))).toBe(false);
 
-    // Non-manager receives the explanatory notice
     const textDisplays = collectTextDisplays(editedReply);
     expect(textDisplays.some((t) => t.includes("You need Manage Server permission to view"))).toBe(true);
 
-    // Now test manager in guild
     calls.length = 0;
     const managerInteraction = {
       id: "int-stm-manager",
@@ -1103,7 +1084,6 @@ describe("memories permissions and scoping", () => {
 
     const values = personaSelect?.options?.map((o) => o.value) ?? [];
     expect(values).toEqual(["100", "200"]);
-    // Option label uses the representative (main persona)
     expect(personaSelect?.options?.[0]?.label).toBe(localizer("en-US", "commands.export.memories.scope_choice_main"));
 
     const components = (JSON.parse(JSON.stringify(payload)).components[0].components ?? []) as unknown[];
@@ -1119,7 +1099,6 @@ describe("memories permissions and scoping", () => {
   it("renders the shared pagination row for memory and document selectors", () => {
     const personas = [makePersona(1, 100, "Main Persona", false)];
 
-    // 48 memories = 2 pages (page size 24) -> one pagination row.
     const smallMemories = Array.from({ length: 48 }, (_, i) =>
       makeMemory(i + 1, { persona_lineage_id: 100, content: `Memory ${i + 1}` }),
     );
@@ -1142,7 +1121,6 @@ describe("memories permissions and scoping", () => {
     expect(rangeButtons.map((button) => button.label)).toEqual(["← Previous", "Page 1 of 2", "Next →"]);
     expect(rangeButtons.map((button) => button.disabled)).toEqual([true, true, false]);
 
-    // 150 memories = 7 pages (page size 24) -> still one in-place pagination row.
     const largeMemories = Array.from({ length: 150 }, (_, i) =>
       makeMemory(i + 1, { persona_lineage_id: 100, content: `Memory ${i + 1}` }),
     );
@@ -1505,11 +1483,6 @@ describe("memories permissions and scoping", () => {
     }
   });
 
-  /**
-   * The document-scope row for one panel state, as the serverwide and persona buttons in render
-   * order. The count is asserted here rather than assumed: a panel that dropped a scope button would
-   * otherwise read as the wrong kind of state instead of failing.
-   */
   function documentScopeRow(input: {
     selectedLineageId: number;
     selectedDocumentPersonaId: number;
@@ -2027,12 +2000,6 @@ describe("memories permissions and scoping", () => {
     expect(memberTexts.some((text) => text.includes("only the memories you taught"))).toBe(true);
   });
 
-  /**
-   * A refusal used to arrive as a second ephemeral message, which reads as an unrelated error
-   * rather than as this panel's answer. Ordering is the subtle half: these branches sit above
-   * `beginPanelInteraction` precisely because they may open a modal, so a refusal has to
-   * acknowledge for itself.
-   */
   it("answers a refused modal branch by repainting the panel, never by a separate reply", async () => {
     const { dependencies, calls } = createTestDependencies({
       resolveScope: async (interaction) => ({
@@ -2147,7 +2114,6 @@ describe("memories permissions and scoping", () => {
       expect(collectTextDisplays(refusalPayload).join(" ")).toContain("blacklisted");
       expect(addRepositoryCalled).toBe(false);
 
-      // Verify add-submit also refuses write
       let editReplyPayload: unknown = null;
       const addSubmitInteraction = {
         id: "int-add-submit-blacklisted",
@@ -2314,7 +2280,6 @@ describe("memories permissions and scoping", () => {
       const { dependencies } = createTestDependencies();
       const route = createMemoriesInteractionRoute(dependencies);
 
-      // Memory ID 999 does not exist in dependencies.memories
       let editReplyPayload: unknown = null;
       const editSubmitInteraction = {
         id: "int-edit-stale",
@@ -2430,7 +2395,6 @@ describe("memories permissions and scoping", () => {
       );
 
       expect(addBatchCalled).toBe(true);
-      // "Already existing line" filtered out, "New memory line A" deduplicated
       expect(insertedLines).toEqual(["New memory line A", "New memory line B"]);
 
       const text = collectTextDisplays(editReplyPayload);
@@ -2464,7 +2428,6 @@ describe("memories permissions and scoping", () => {
     ]);
 
     try {
-      // Test edit cache invalidation
       invalidatedWorkspace = null;
       const editResult = await serverMemoriesOperations.edit({
         serverId: 1,
@@ -2481,7 +2444,6 @@ describe("memories permissions and scoping", () => {
       expect(editResult.status).toBe("success");
       expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
-      // Test remove cache invalidation
       invalidatedWorkspace = null;
       const removeResult = await serverMemoriesOperations.remove({
         serverId: 1,
@@ -2496,7 +2458,6 @@ describe("memories permissions and scoping", () => {
       expect(removeResult.status).toBe("success");
       expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
-      // Test addBatch cache invalidation
       invalidatedWorkspace = null;
       const batchResult = await serverMemoriesOperations.addBatch({
         serverId: 1,
@@ -2816,11 +2777,6 @@ describe("memories teaching gate on edit and remove", () => {
       for (const spy of [add, batch, edit, load, contents, limit, invalidate]) spy.mockRestore();
     }
   });
-  /**
-   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`
-   * and on the server blacklist, not just memory addition. The two guards are asserted separately
-   * rather than assumed to travel together.
-   */
   it("refuses edit and remove for a non-manager when teaching is disabled", async () => {
     const editSpy = spyOn(serverMemoryRepository, "edit").mockImplementation(async () => true);
     const removeSpy = spyOn(serverMemoryRepository, "remove").mockImplementation(async () => true);
@@ -2999,11 +2955,6 @@ describe("memories document operation ordering", () => {
     }
   });
 
-  /**
-   * Every repository and provider read one document write makes, so a case only states the write it
-   * runs and the invalidation it expects. Returns the spies a case asserts on plus a restore for its
-   * finally block.
-   */
   function stubDocumentWriteDependencies() {
     // Keyed rather than positional: a case names the four spies it asserts on instead of an index,
     // and restore walks every stub this helper installed.

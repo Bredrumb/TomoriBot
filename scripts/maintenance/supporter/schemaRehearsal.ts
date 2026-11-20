@@ -1,23 +1,4 @@
-/**
- * Rehearse the gated supporter billing schema initializer against a scratch
- * database (ideally a restored production snapshot) before enabling billing.
- *
- * Mirrors the release procedure in
- * plans/tomori_monetization/07-ci-cd-and-release-ops.md:
- *   1. Report whether supporter_% tables are present BEFORE init (they should be
- *      absent on a normal/disabled deployment that only ran shared migrations).
- *   2. Run the billing schema initializer twice to prove idempotency.
- *   3. Verify every expected supporter_% table is present afterwards.
- *
- * SAFETY: this CREATEs supporter_% tables, so it must only run against a scratch
- * database. The --confirm-scratch-db flag is required to proceed.
- *
- * Optionally validate production-shaped config/secrets with --validate-config.
- *
- * Usage:
- *   bun run scripts/maintenance/supporter/schemaRehearsal.ts --confirm-scratch-db
- *   bun run scripts/maintenance/supporter/schemaRehearsal.ts --confirm-scratch-db --validate-config
- */
+// This creates supporter tables, so run it only against a scratch database.
 import {
   checkSupporterBillingTablesExist,
   initializeSupporterBillingSchema,

@@ -1,18 +1,3 @@
-/**
- * Anthropic LLM provider implementation.
- *
- * Provides direct access to Claude models (claude-sonnet-4-6, claude-haiku-4-5,
- * claude-opus-4-6, claude-opus-4-7) via the Anthropic Messages API.
- *
- * Key differences from OpenAI-compatible providers:
- * - System prompt is a top-level parameter, not a message
- * - Messages use content blocks (text, image, tool_use, tool_result)
- * - Tool results are sent as user-role messages with tool_result content blocks
- * - Strict user/assistant alternation is enforced
- * - Extended thinking supported for reasoning models (Opus)
- * - API key sent via `x-api-key` header with `anthropic-version` header
- */
-
 import { pickHumanizerSettings } from "@/constants/humanizer";
 import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import type {
@@ -106,9 +91,6 @@ export class AnthropicProvider
     }
   }
 
-  /**
-   * Validate an Anthropic API key by making a minimal Messages API request.
-   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     try {
       const response = await fetch(ANTHROPIC_MESSAGES_URL, {
@@ -129,7 +111,6 @@ export class AnthropicProvider
       if (!response.ok) {
         const errorText = await response.text();
 
-        // 401 = invalid key, 403 = permission denied
         if (response.status === 401 || response.status === 403) {
           log.info("Anthropic API key validation failed: invalid credentials");
           return {
@@ -142,7 +123,6 @@ export class AnthropicProvider
           };
         }
 
-        // Other errors (400, 429, etc.) mean the key is valid but something else went wrong
         log.info(`Anthropic API key validation: key accepted but got status ${response.status}`);
       }
 
@@ -160,17 +140,11 @@ export class AnthropicProvider
     }
   }
 
-  /**
-   * Format a provider error for display in embeds.
-   */
   formatErrorDescription(error: ProviderError, locale: string): string | null {
     const adapter = new AnthropicStreamAdapter();
     return adapter.createErrorDescription(error, locale);
   }
 
-  /**
-   * Call Anthropic with structured JSON output via forced tool use.
-   */
   async callStructuredJSON<T>(
     request: ProviderStructuredJsonRequest,
     responseSchema: Record<string, unknown>,
@@ -183,9 +157,6 @@ export class AnthropicProvider
     return 50;
   }
 
-  /**
-   * Get available tools for the Anthropic provider in Anthropic format.
-   */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
@@ -394,9 +365,6 @@ export class AnthropicProvider
     }
   }
 
-  /**
-   * Resolve web-search tools for preset generation, or undefined if not needed.
-   */
   private async getPresetGenerationTools(
     request: ProviderPresetGenerationRequest,
   ): Promise<Array<Record<string, unknown>> | undefined> {
@@ -460,9 +428,6 @@ export class AnthropicProvider
     return await adapter.getAllToolsInProviderFormat(searchTools, request.tomoriState.server_id, mcpFunctionNames);
   }
 
-  /**
-   * Generate a character preset using the Anthropic API.
-   */
   async generatePreset(request: ProviderPresetGenerationRequest): Promise<PresetGenerationResult> {
     const tools = await this.getPresetGenerationTools(request);
 
@@ -475,16 +440,10 @@ export class AnthropicProvider
     });
   }
 
-  /**
-   * Generate a plain-text conversation summary using the Anthropic API.
-   */
   async generateConversationSummary(request: ProviderCompactSummaryRequest): Promise<CompactConversationResult> {
     return await generateConversationSummaryAnthropic(request);
   }
 
-  /**
-   * Generate a structured roleplay summary using the Anthropic API.
-   */
   async generateRoleplaySummary(request: ProviderCompactSummaryRequest): Promise<CompactRoleplayResult> {
     return await generateRoleplaySummaryAnthropic(request);
   }

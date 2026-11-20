@@ -8,10 +8,8 @@ import { loadVoiceSampleById } from "@/utils/db/repositories/SpeechRepository";
 import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
-/** Timeout for local /synthesize requests, configurable via env. */
 const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
 
-/** Regex matching any bracket-tag in the form [content]. */
 const ANY_BRACKET_TAG_REGEX = /\[([^\]\r\n]{1,40})\]/g;
 const CHATTERBOX_TURBO_TAGS = new Set([
   "clear throat",
@@ -36,16 +34,13 @@ export type TtsCloneErrorKind =
 export interface TtsCloneResult {
   success: boolean;
   audioBuffer?: Buffer;
-  /** Bare MIME type (no parameters), e.g. "audio/wav". */
+  // Bare MIME type without parameters because Discord rejects voice message waveform metadata otherwise.
   contentType?: string;
   extension?: string;
-  /** Script text with markup stripped, suitable for transcript display. */
   cleanedCaptionText?: string;
   errorKind?: TtsCloneErrorKind;
-  /**
-   * Shown in the command reply and returned to the model by the voice tool. An endpoint can echo the
-   * request key in its error body or headers, so those stay in the log and only the status goes here.
-   */
+  // Endpoint error bodies and headers stay in logs because they can echo the request key, so only the status goes
+  // here for replies and tools.
   details?: string;
 }
 
@@ -53,16 +48,14 @@ export interface TtsCloneRequest {
   endpoint: CustomEndpointRow;
   voiceSampleId: number;
   script: string;
-  /** Empty string for local endpoints that don't require auth. */
+  // Empty string means local endpoints require no auth.
   apiKey: string;
-  /** Optional per-message delivery direction for clone engines that advertise instruction support. */
   voiceInstructions?: string;
   chatterbox?: {
     turboEnabled: boolean;
     cfgWeight: number;
     exaggeration: number;
   };
-  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
   abortSignal?: AbortSignal;
 }
 
@@ -73,10 +66,6 @@ function resolveExtensionFromContentType(contentType: string): string {
   return "mp3";
 }
 
-/**
- * Strips all bracket tags for "plain" endpoints that only support clean speech text.
- * Normalises whitespace produced by the removals.
- */
 function stripAllBracketTags(text: string): string {
   return text
     .replace(ANY_BRACKET_TAG_REGEX, "")
@@ -120,14 +109,8 @@ function isIrodoriTtsEndpoint(endpoint: CustomEndpointRow): boolean {
   );
 }
 
-/**
- * Label sniff for Chatterbox deployments, mirroring `isIrodoriTtsEndpoint`.
- *
- * The endpoint schema carries no engine identifier, so the only available signal is what the
- * server manager typed into `/config`. Callers that expose a Chatterbox-only control gate on
- * this: a control that silently changes nothing is worse than an absent one, and the absence
- * is recoverable by renaming the endpoint.
- */
+// Endpoint rows carry no engine ID, so this sniffs user-configured text to hide Chatterbox-only controls rather than
+// silently doing nothing.
 export function isChatterboxEndpoint(endpoint: CustomEndpointRow | null | undefined): boolean {
   if (!endpoint) return false;
   return [endpoint.label, endpoint.model_name, endpoint.endpoint_url].some((value) =>
@@ -137,33 +120,24 @@ export function isChatterboxEndpoint(endpoint: CustomEndpointRow | null | undefi
 
 export interface TtsCloneBufferRequest {
   endpoint: CustomEndpointRow;
-  /** Reference audio bytes, already normalized by the caller. */
+  // Reference audio bytes must already be normalized by the caller because this adapter encodes the buffer directly
+  // without transcoding.
   refAudio: Buffer;
   refText: string | null;
   script: string;
-  /** Empty string for local endpoints that don't require auth. */
+  // Empty string when local endpoints require no auth.
   apiKey: string;
-  /** Optional per-message delivery direction for clone engines that advertise instruction support. */
   voiceInstructions?: string;
   chatterbox?: {
     turboEnabled: boolean;
     cfgWeight: number;
     exaggeration: number;
   };
-  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
   abortSignal?: AbortSignal;
 }
 
-/**
- * Calls a local TTS clone server with reference audio supplied directly.
- *
- * This is the core path: `/generate voice-message` synthesizes from an ad-hoc upload that has
- * no `voice_samples` row, so it cannot go through the sample-loading wrapper below.
- *
- * 1. Strips markup from script according to the endpoint's `script_markup`.
- * 2. POSTs to {endpoint_url}/synthesize with the base64 reference audio.
- * 3. Returns the raw audio buffer and content-type.
- */
+// Ad-hoc uploads from /generate voice-message lack a voice_samples row, so this direct buffer path must remain
+// separate from the sample wrapper.
 export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferRequest): Promise<TtsCloneResult> {
   const { endpoint, refAudio, refText, script, apiKey, voiceInstructions, chatterbox, abortSignal } = request;
 
@@ -171,15 +145,12 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
   const supportsInstruct = Boolean(endpoint.extra_config.supports_instruct);
   const preserveUnicodeEmojis = scriptMarkup === "emoji" || isIrodoriTtsEndpoint(endpoint);
 
-  // Prepare script: strip all bracket tags for "plain" endpoints and
-  //    standard Chatterbox, because only Turbo handles bracket descriptors.
-  //    Turbo gets a conservative whitelist so unsupported bracket text is not spoken aloud.
-  //    For other bracket-tags/emoji endpoints, strip only for the caption text.
+  // Strip bracket tags except on Chatterbox Turbo (whitelisted) and bracket-tag/emoji engines, so unsupported tags are
+  // not spoken aloud.
   let processedScript: string;
   let captionText: string;
-  // Callers attach the persona's Chatterbox settings to every clone request, with Turbo defaulting
-  // on, so applying them unconditionally would strip Fish S2 Pro's free-form expression tags down
-  // to Turbo's whitelist.
+  // Gate tag rules by endpoint because callers attach default-on Chatterbox settings to non-Chatterbox engines like
+  // Fish S2 Pro.
   const chatterboxTagRules = isChatterboxEndpoint(endpoint) ? chatterbox : undefined;
   const shouldStripBracketTagsForTts = scriptMarkup === "plain" || chatterboxTagRules?.turboEnabled === false;
   if (shouldStripBracketTagsForTts) {
@@ -293,15 +264,6 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
   };
 }
 
-/**
- * Calls a local TTS clone server that implements the /synthesize spec.
- *
- * 1. Loads voice sample metadata from DB.
- * 2. Reads the WAV file from disk and base64-encodes it.
- * 3. Strips markup from script if script_markup = "plain".
- * 4. POSTs to {endpoint_url}/synthesize.
- * 5. Returns the raw audio buffer and content-type.
- */
 export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Promise<TtsCloneResult> {
   const { endpoint, voiceSampleId, script, apiKey, voiceInstructions, chatterbox, abortSignal } = request;
 

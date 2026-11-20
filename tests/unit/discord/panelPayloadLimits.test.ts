@@ -25,23 +25,8 @@ import { buildConfigMcpPagePayload } from "../../helpers/configMcpPage";
 
 beforeAll(async () => initializeLocalizer());
 
-/**
- * Builds one payload from one panel at one locale and receipt state.
- *
- * These rows are the cases that differ only in their panel builder and the worst-case fixture it is
- * handed, so all of them live here instead of repeating the locale and receipt sweep per panel. A
- * panel whose fixture needs its own composite builder (moderation's scope graph, the setup draft
- * modes, the personal config view inputs, the transfer surfaces) keeps its own suite, because
- * restating that builder here would duplicate more than the case it replaced.
- */
 type PanelPayloadBuilder = (locale: string, receipt: PanelReceipt | undefined) => ComponentsV2MessagePayload;
 
-/**
- * A row: the label, the panel's own realistic receipt, and the builder.
- *
- * The receipt travels with the row because the text-display budget depends on its length, so the
- * receipt a panel's suite proved is part of that panel's worst case.
- */
 type PanelPayloadRow = [label: string, receipt: PanelReceipt, build: PanelPayloadBuilder];
 
 const MCP_RECEIPT: PanelReceipt = {
@@ -65,7 +50,6 @@ const PROVIDERS_RECEIPT: PanelReceipt = {
   metadata: "trace: provider-op-987654 | actor: 123456789012345678 | elapsed: 48ms",
 };
 
-/** The budget rows measure how much of the cap truncation uses, so their receipt wording is generic. */
 const BUDGET_RECEIPT: PanelReceipt = {
   tone: "success",
   heading: "Panel Action Completed Successfully",
@@ -73,7 +57,6 @@ const BUDGET_RECEIPT: PanelReceipt = {
   metadata: "trace: panel-op-987654 | actor: 123456789012345678 | elapsed: 48ms",
 };
 
-/** The single persona the memory panels render against. */
 const MAIN_PERSONA = createPersona({ persona_nickname: "Main Persona" });
 
 function oversizedMcpRow(id: number): GuildMcpServerRow {
@@ -91,12 +74,10 @@ function oversizedMcpRow(id: number): GuildMcpServerRow {
   };
 }
 
-/** A full MCP page: every stored name and endpoint far past any display budget. */
 const OVERSIZED_MCP_CONFIGS: GuildMcpServerRow[] = Array.from({ length: MAX_MCP_PANEL_PAGE_SIZE }, (_, index) =>
   oversizedMcpRow(index + 1),
 );
 
-/** A full preset page: every stored name over the import limit and every description 20,000 characters. */
 const OVERSIZED_PRESETS: StPresetRow[] = Array.from({ length: MAX_PRESETS_PER_SELECTOR_PAGE }, (_, index) => ({
   preset_id: index + 1,
   server_id: 1,
@@ -108,10 +89,8 @@ const OVERSIZED_PRESETS: StPresetRow[] = Array.from({ length: MAX_PRESETS_PER_SE
   updated_at: new Date(index + 1),
 }));
 
-/**
- * A full provider page whose display names and model codenames are 20,000 characters. The provider
- * key stays short because it is part of every entry route ID, which must fit Discord's 100.
- */
+// Provider keys stay short because they are embedded into each entry's route custom ID, which must fit Discord's
+// 100-character limit.
 const OVERSIZED_PROVIDER_ENTRIES: ProviderPanelEntry[] = Array.from(
   { length: PROVIDERS_ENTRIES_PER_SELECTOR_PAGE },
   (_, index) => ({
@@ -148,7 +127,6 @@ const PROVIDER_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "ed
   "remove",
 ]);
 
-/** A stored memory at the length the memories panel truncates. */
 const MAX_CONTENT_MEMORY: ServerMemoryRow = {
   server_memory_id: 1,
   decay_days: 0,
@@ -166,7 +144,6 @@ const MAX_CONTENT_MEMORY: ServerMemoryRow = {
   updated_at: new Date(),
 };
 
-/** A stored document with one preview chunk at the same length. */
 const MAX_CONTENT_DOCUMENT: DocumentListRow = {
   document_id: 1,
   document_name: "Document 1.pdf",
@@ -182,7 +159,6 @@ const MAX_CONTENT_CHUNK: DocumentChunkRow = {
   content: "D".repeat(10_000),
 };
 
-/** A personal memory at the same length, owned by the given lineage so the category filter keeps it. */
 function maxContentPersonalMemory(personaLineageId: number): PersonalMemoryRow {
   return {
     personal_memory_id: 1,
@@ -427,11 +403,8 @@ const BUDGET_ROWS: PanelPayloadRow[] = [
   ],
 ];
 
-/**
- * Cutting truncates within 3 characters of the available budget, so a panel that leaves more than
- * this unused fills less of the budget than it could. The remainder alone passes a payload over the
- * cap, which is how a wrapped `ja` footer reached 4,004 unnoticed, so the rows assert the cap too.
- */
+// Tolerance is 3 because truncation cuts within 3 characters of the budget; rows still assert the cap since overruns
+// yield negative remainders.
 const PAYLOAD_TIGHTNESS_TOLERANCE = 3;
 
 describe("panel payload worst cases", () => {

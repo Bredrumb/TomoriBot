@@ -10,12 +10,6 @@ import {
   validatePresetGenerationFields,
 } from "@/providers/utils/presetCommon";
 
-/**
- * The preset contract lives in one helper that every provider calls, so these tests are the
- * only place the accepted shape and the user-facing failure text are stated. A provider that
- * regresses the counts is caught here rather than at the export schema, where the error names
- * a field path instead of the instruction the user needs.
- */
 describe("preset generation field contract", () => {
   const valid = {
     attribute_list: ["a", "b", "c", "d", "e", "f"],
@@ -107,7 +101,6 @@ describe("preset generation response extraction", () => {
   });
 
   test("recovers the finished fields from a response cut off mid-payload", () => {
-    // Cut inside the last dialogue, so the attributes and the whole input list survived.
     const truncated = `${validJson.slice(0, validJson.lastIndexOf('"5"]'))}"5`;
 
     const result = extractPresetGenerationFields(truncated, JSON.parse, () => {});

@@ -9,19 +9,6 @@ import { DEFAULT_PYTHON_HEALTH_TIMEOUT_MS, resolvePositiveTimeoutMs } from "../l
 
 config();
 
-// scripts/devtools/launch.ts
-//
-//   bun run launch [--searxng] [--crawl4ai] [--slopguard] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3] [--moss]
-//
-//   Starts requested local servers, waits for them to be ready, then
-//   launches the bot in watch mode (equivalent to `bun run dev`).
-//
-//   Docker-backed servers are started via docker inspect/start/run and polled until
-//   their healthcheck reports "healthy". Python servers are spawned directly
-//   from their pre-built venv and polled through their JSON health endpoint.
-//
-//   Press Ctrl+C to stop everything.
-
 const ROOT = process.cwd();
 
 const argv = process.argv.slice(2);
@@ -69,41 +56,26 @@ ${pc.bold("Examples:")}
 
 interface DockerLocalServer {
   kind: "docker";
-  /** docker container name */
   containerName: string;
-  /** image used when creating a container */
   image: string;
-  /** repo directory holding a Dockerfile; set when `image` is built locally before each launch */
   buildContext?: string;
-  /** args passed after "docker run" when creating a fresh container */
   runArgs: string[];
-  /**
-   * Environment for the `docker run` process. Secrets go here and runArgs names them with a bare
-   * `-e NAME`, because argv is readable by every local user through the process list.
-   */
+  // Secrets must go in runEnv with bare -e NAME in runArgs, because argv is readable by every local user via the
+  // process list.
   runEnv?: Record<string, string>;
-  /** milliseconds to wait for healthcheck before aborting (default 120s) */
   healthTimeoutMs?: number;
-  /**
-   * HTTP URL to probe as a fallback when the container has no Docker healthcheck
-   * (e.g. an existing container created before --health-cmd was added to runArgs).
-   * Polled every 2s; a 2xx response is treated as healthy.
-   */
+  // HTTP fallback probe for existing containers created before --health-cmd was added to runArgs, since those lack a
+  // Docker healthcheck.
   httpHealthUrl?: string;
 }
 
 interface PythonLocalServer {
   kind: "python";
   displayName: string;
-  /** path to the .venv directory, relative to ROOT */
   venvRelPath: string;
-  /** path to the server script, relative to ROOT */
   scriptRelPath: string;
-  /** extra args passed to the script */
   scriptArgs?: string[];
-  /** JSON health endpoint used to distinguish loading from ready. */
   healthUrl: string;
-  /** Status values that mean the server can accept requests. */
   readyStatuses?: readonly string[];
 }
 
@@ -112,7 +84,6 @@ type LocalServerDef = DockerLocalServer | PythonLocalServer;
 // Pinned so its egress policy and token requirement match the self-hosting guide.
 const CRAWL4AI_IMAGE = "unclecode/crawl4ai:0.9.4";
 
-/** Registry of all supported --flag → local server definitions. */
 const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   searxng: {
     kind: "docker",
@@ -267,11 +238,6 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   },
 };
 
-/**
- * Checks whether a named Docker container exists (regardless of state).
- * Returns the container's current state ("running", "exited", etc.) or null
- * if the container does not exist.
- */
 async function getContainerState(name: string): Promise<string | null> {
   const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Status}}", name], {
     stdout: "pipe",
@@ -282,10 +248,8 @@ async function getContainerState(name: string): Promise<string | null> {
   return new Response(proc.stdout).text().then((t) => t.trim());
 }
 
-/**
- * Reads the Docker healthcheck status for a running container.
- * Returns "healthy", "unhealthy", "starting", or "" if no healthcheck is defined.
- */
+// Docker prints nothing when a container defines no healthcheck, so an empty string sentinel means no healthcheck
+// exists.
 async function getContainerHealth(name: string): Promise<string> {
   const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Health.Status}}", name], {
     stdout: "pipe",
@@ -295,12 +259,6 @@ async function getContainerHealth(name: string): Promise<string> {
   return new Response(proc.stdout).text().then((t) => t.trim());
 }
 
-/**
- * Polls until the container is ready, using Docker's healthcheck when available
- * and falling back to an HTTP probe when the container has no healthcheck defined
- * (e.g. an existing container created before --health-cmd was added to runArgs).
- * Throws on timeout or a Docker "unhealthy" status.
- */
 async function waitForHealthy(def: DockerLocalServer, timeoutMs: number): Promise<void> {
   const { containerName, httpHealthUrl } = def;
   const deadline = Date.now() + timeoutMs;
@@ -311,7 +269,6 @@ async function waitForHealthy(def: DockerLocalServer, timeoutMs: number): Promis
     if (health === "healthy") return;
     if (health === "unhealthy") throw new Error(`Container "${containerName}" reported unhealthy.`);
 
-    // No Docker healthcheck on this container, so fall back to HTTP probe.
     if (health === "" && httpHealthUrl) {
       try {
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
@@ -364,7 +321,6 @@ async function waitForPythonReady(
   throw new Error(`Server did not report a ready JSON status within ${timeoutMs / 1000}s.`);
 }
 
-/** Waits for the container's healthcheck to pass before returning. */
 async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
   const { containerName, healthTimeoutMs = 120_000 } = def;
   const label = pc.cyan(`[${containerName}]`);
@@ -411,10 +367,8 @@ async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
   console.log(`${label} ${pc.green("Healthy ✓")}`);
 }
 
-/**
- * Stops a spawned process together with its children. On Windows `proc.kill()` ends only the
- * top process, which would orphan a wrapper's nested runtime (Fish S2 starts its own API server).
- */
+// Windows proc.kill() ends only the top process, so taskkill /T is needed to avoid orphaning nested runtimes such as
+// Fish S2's API server.
 function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
   try {
     if (process.platform === "win32" && proc.pid) {
@@ -426,15 +380,10 @@ function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
       proc.kill();
     }
   } catch {
-    /* already exited */
+    // already exited
   }
 }
 
-/**
- * Spawns a Python local server from its pre-built venv and waits for JSON readiness before
- * returning the handle.
- * Throws if the venv is missing (user must run setup first).
- */
 async function startPythonLocalServer(def: PythonLocalServer, flagName: string): Promise<ReturnType<typeof Bun.spawn>> {
   const { displayName, venvRelPath, scriptRelPath, scriptArgs = [] } = def;
   const healthTimeoutMs = resolvePositiveTimeoutMs(
@@ -525,7 +474,6 @@ async function main(): Promise<void> {
   });
   childProcesses.push(bot);
 
-  // Graceful shutdown because kill all managed processes on Ctrl+C.
   let isShuttingDown = false;
   const shutdown = () => {
     if (isShuttingDown) return;
@@ -538,7 +486,6 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  // Wait for the bot to exit (its exit code becomes this process's exit code).
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {

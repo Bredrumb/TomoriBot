@@ -70,11 +70,6 @@ export interface ZaiProviderConfig extends ProviderConfig {
   seesVideos?: boolean;
 }
 
-/**
- * Z.ai LLM Provider.
- * Provides chat, reasoning, structured output, and native image generation
- * via the Z.ai general API (OpenAI-compatible family).
- */
 export class ZaiProvider
   extends BaseLLMProvider
   implements
@@ -88,10 +83,6 @@ export class ZaiProvider
     return zaiProviderInfo;
   }
 
-  /**
-   * Validate a Z.ai API key by sending a minimal request.
-   * @returns Validation result indicating success or failure with error details
-   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     try {
       const response = await fetch(ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
@@ -123,21 +114,11 @@ export class ZaiProvider
     }
   }
 
-  /**
-   * Format a provider error into a user-friendly localized description.
-   * @param error - The provider error object
-   * @param locale - Locale for the error message
-   * @returns Localized error description or null
-   */
   formatErrorDescription(error: ProviderError, locale: string): string | null {
     const adapter = new ZaiStreamAdapter();
     return adapter.createErrorDescription(error, locale);
   }
 
-  /**
-   * @param responseSchema - JSON Schema for expected response
-   * @param zodSchema - Zod schema for runtime validation
-   */
   async callStructuredJSON<T>(
     request: ProviderStructuredJsonRequest,
     responseSchema: Record<string, unknown>,
@@ -146,22 +127,12 @@ export class ZaiProvider
     return await callZaiStructuredJSON(request, responseSchema, zodSchema);
   }
 
-  /**
-   * Generate an image using Z.ai's native image generation API.
-   * @param request - Image generation request with prompt and aspect ratio
-   * @returns Generated image data as base64 with MIME type
-   */
   async generateNativeImage(
     request: ProviderNativeImageGenerationRequest,
   ): Promise<ProviderNativeImageGenerationResult> {
     return await generateZaiNativeImage(request);
   }
 
-  /**
-   * Get available tools formatted for Z.ai's OpenAI-compatible tool calling.
-   * @param streamingContext - Optional streaming context for filtering
-   * @returns Array of tool definitions in OpenAI format
-   */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
@@ -265,9 +236,6 @@ export class ZaiProvider
     return DEFAULT_ZAI_MODEL;
   }
 
-  /**
-   * @returns Provider config ready for streaming
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<ZaiProviderConfig> {
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: ZaiProviderConfig = {
@@ -294,19 +262,6 @@ export class ZaiProvider
     return config;
   }
 
-  /**
-   * Stream a Z.ai response to Discord using the OpenAI-compatible stream pipeline.
-   * @param emojiStrings - Optional emoji strings for the response
-   * @param functionInteractionHistory - Optional function call history
-   * @param initialInteraction - Optional initial command interaction
-   * @param replyToMessage - Optional message to reply to
-   * @param streamingContext - Optional streaming context
-   * @param userLocale - User locale for error messages
-   * @param webhook - Optional webhook for persona identity
-   * @param personaAvatarUrl - Optional persona avatar URL
-   * @param personaUsername - Optional persona username
-   * @param prefixStrippingName - Optional prefix stripping name
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,
@@ -350,7 +305,6 @@ export class ZaiProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Z.ai uses a single endpoint, so no beta URL needed for prefill
       if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("ZaiProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
@@ -394,7 +348,6 @@ export class ZaiProvider
     }
   }
 
-  /** Resolve web-search tools for preset generation, or undefined if not needed. */
   private async getPresetGenerationTools(
     request: ProviderPresetGenerationRequest,
   ): Promise<Array<Record<string, unknown>> | undefined> {

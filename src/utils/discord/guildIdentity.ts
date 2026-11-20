@@ -62,9 +62,8 @@ async function patchGuildMemberSelf(
       const errorText = await response.text();
       const summary = discordErrorSummary(errorText);
 
-      // Discord throttles guild identity changes far below its documented buckets, so this is an
-      // expected outcome rather than a fault: keep it off the error sink and tell the user to wait
-      // instead of showing them raw API JSON.
+      // Discord throttles guild identity PATCHes below documented buckets, so treat rate limits as expected and
+      // keep them off the error sink.
       if (isAvatarUpdateRateLimited(response.status, errorText)) {
         log.metric("guild_identity_patch_failure", {
           guildId,
@@ -134,7 +133,7 @@ async function patchGuildMemberSelf(
   }
 }
 
-/** A null data URI removes the avatar. */
+// Sentinel value: passing null for avatarDataUri removes the guild bot avatar rather than leaving it unchanged.
 export function setGuildBotAvatar(
   guildId: string,
   avatarDataUri: string | null,

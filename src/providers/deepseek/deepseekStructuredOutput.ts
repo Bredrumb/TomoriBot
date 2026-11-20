@@ -50,9 +50,7 @@ function parseDeepseekJsonResponse(text: string): unknown {
 
   try {
     return JSON.parse(cleanedText);
-  } catch {
-    // Continue to fallback extraction attempts below.
-  }
+  } catch {}
 
   const fencedMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {
@@ -91,12 +89,8 @@ function parseDeepseekJsonResponse(text: string): unknown {
   return JSON.parse(cleanedText);
 }
 
-/**
- * Call DeepSeek with JSON Output (`response_format: json_object`).
- * DeepSeek does not currently expose a schema-enforced JSON mode in the stable API,
- * so we inject explicit json instructions plus a schema/example into the system prompt
- * and validate the parsed response locally with Zod.
- */
+// DeepSeek's stable API lacks schema-enforced JSON mode, so callers rely on json_object with prompt schema injection
+// and local Zod validation.
 export async function callDeepseekStructuredJSON<T>(
   request: DeepseekStructuredOutputRequest,
   responseSchema: Record<string, unknown>,

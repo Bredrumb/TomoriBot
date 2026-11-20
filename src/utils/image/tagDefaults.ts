@@ -1,9 +1,5 @@
-/**
- * Default image prompt tags persisted in server config.
- * Positive tags are appended to standard image prompts and prepended to NovelAI tag prompts.
- * Negative tags are consumed by image providers with a real negative-prompt channel.
- * These mirror the schema defaults in `src/db/schema.sql`.
- */
+// Positive and negative tag defaults must stay mirrored with src/db/schema.sql because server configs persist them as
+// baseline prompt tags.
 export const DEFAULT_IMAGE_POSITIVE_TAGS = [
   "absurdres",
   "aesthetic",

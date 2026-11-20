@@ -10,19 +10,13 @@ import {
   personaAuthoredIdleNudgesSchema,
 } from "@/modules/natural-nudges/db/types";
 
-const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 256, 716, 1770, 3585, 50, 666]); // 1337 (Zaya) pending
+const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 256, 716, 1770, 3585, 50, 666]);
 
 const PERSONA_COLUMNS =
   "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id, preset_naming_config, is_nsfw, natural_nudge_interests, natural_nudge_talkativeness, natural_nudge_idle_nudges";
 
-// Upsert identity is the stable (lineage, language) pair, NOT persona_preset_name.
-// The name is a mutable, human-facing catalog label, so keying on it would turn a
-// rename into an orphan-plus-duplicate (and collide with the lineage/language unique
-// index, aborting the whole batch INSERT). Matching on the lineage pair instead lets a
-// name change resolve to the existing row and update the label in place. The arbiter is
-// the partial index `idx_persona_presets_lineage_language_unique`, so its WHERE predicate
-// must be restated here for inference. persona_preset_name is therefore now a normal
-// updated column rather than the conflict target.
+// Upsert keys on (preset_lineage_id, preset_language) so renames update in place; WHERE restates
+// idx_persona_presets_lineage_language_unique's predicate for Postgres partial-index inference.
 const PERSONA_ON_CONFLICT = `ON CONFLICT (preset_lineage_id, preset_language) WHERE preset_lineage_id IS NOT NULL DO UPDATE SET
   persona_preset_name = EXCLUDED.persona_preset_name,
   persona_preset_desc = EXCLUDED.persona_preset_desc,

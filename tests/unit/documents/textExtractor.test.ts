@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { extractTextFromBuffer, PdfParseTimeoutError, parsePdfWithDeadline } from "@/utils/documents/textExtractor";
 
-/** Builds a one-page PDF with correct xref offsets, since the repository ships no PDF fixture. */
 function onePagePdf(text: string): Buffer {
   const stream = `BT /F1 18 Tf 20 100 Td (${text}) Tj ET`;
   const objects = [

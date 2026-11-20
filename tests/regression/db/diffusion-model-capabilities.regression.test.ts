@@ -51,8 +51,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Image model capability declarations (migra
   });
 
   it("does not erase an existing declaration when a later caller declares nothing", async () => {
-    // Re-registering the same codename from a path that carries no capability values must not silently
-    // reset a model that was already declared.
     await llmModelRepo.upsertScopedDiffusionModel(CODENAME, PROVIDER);
     expect(await readDeclarations()).toEqual({
       supports_txt2img: true,

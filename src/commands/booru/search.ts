@@ -33,7 +33,7 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 const MIN_AUTOCOMPLETE_CHARS = 2;
-/** Leaves room inside Discord's 3-second autocomplete window to send the empty answer. */
+// Kept at 2s so autocomplete retains headroom inside Discord's 3s interaction window to send an empty response.
 const AUTOCOMPLETE_TIMEOUT_MS = 2_000;
 const MAX_AUTOCOMPLETE_CHOICES = 25;
 const MAX_CHOICE_LENGTH = 100;

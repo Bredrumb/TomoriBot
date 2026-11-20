@@ -12,14 +12,11 @@ import { personaSections } from "./personas";
 import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput } from "./types";
 
-/** Same hash length as the preset avatar seed, so both filenames read alike in storage. */
+// Hash length matches presetAvatarSeed so avatar and character-reference filenames read alike in storage.
 const CONTENT_HASH_LENGTH = 12;
 
-/**
- * Seeds every catalog persona's character reference into shared storage and stamps
- * `preset_char_ref_shared_url` on its preset row. A persona without one is cleared, so removing the
- * declaration also removes it from pointer personas. Never throws, so one bad image cannot abort startup.
- */
+// Missing declarations clear preset_char_ref_shared_url so pointer rows drop stale refs, and upload errors skip
+// instead of throwing so startup continues.
 export async function seedPersonaCharacterReferencesFromCatalog(
   client: SQL,
 ): Promise<{ declarations: number; seeded: number; failed: number }> {

@@ -27,7 +27,6 @@ import { expectForEveryLocale } from "../../helpers/localeCases";
 
 await initializeLocalizer();
 
-/** Rendered walks run per locale because wrapping depends on the interpolated translation. */
 const AUTHORED_LOCALES = getSupportedLocales();
 
 const PANEL_CONTAINER_SOURCE_EXCLUSIONS = new Set([
@@ -40,10 +39,8 @@ interface UnformattedTextDisplay {
   where: string;
 }
 
-/**
- * Scanned paths come back with forward slashes, matching how the exclusion keys are written. An
- * OS-native separator would let the shared-boundary gate report its own exclusions as bypasses.
- */
+// Paths normalize backslashes to forward slashes because PANEL_CONTAINER_SOURCE_EXCLUSIONS keys use forward slashes
+// even on Windows.
 function sourceFiles(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const path = join(root, entry.name);
@@ -171,12 +168,6 @@ describe("panel prose runtime formatting", () => {
       expect(collectUnformattedTextDisplays(build(null))).toEqual([]);
     }, AUTHORED_LOCALES));
 
-  /**
-   * The Documents page grew its own thumbnail, and it renders one only under the persona scope.
-   * Walking the serverwide payload alone would leave that Section unvisited while the file-level
-   * coverage check above still passed, because the Memories page already puts this builder in the
-   * covered set.
-   */
   it("formats workspace documents automatically beside its persona avatar", () =>
     expectForEveryLocale((locale) => {
       const personas = [
@@ -208,17 +199,8 @@ describe("panel prose runtime formatting", () => {
       expect(collectUnformattedTextDisplays(build(0, null))).toEqual([]);
     }, AUTHORED_LOCALES));
 
-  /**
-   * The Models parameter summary composes each quote row at runtime from a label key and a stored
-   * value. Walking the built payload covers those composed rows even when the summary moves into a
-   * child builder that the panel-boundary source check cannot see.
-   *
-   * The sampler columns are Postgres `real`, so `Math.fround` reproduces what the driver returns
-   * rather than what someone typed. These are the values whose readback is widest inside each
-   * column's own bounds: 0.01 returns as 0.009999999776482582 and -0.03 as -0.029999999329447746,
-   * which produce the widest Generation row. The two integer columns carry their widest in-range
-   * values instead, since they cannot pick up the artifact.
-   */
+  // Sampler values use Math.fround(0.01) and Math.fround(-0.03) because Postgres real columns expand them into the
+  // widest float32 readback strings in bounds.
   it("formats the Models parameter summary through the runtime boundary in every provider state", () =>
     expectForEveryLocale((locale) => {
       const user = {
@@ -269,11 +251,6 @@ describe("panel prose runtime formatting", () => {
       expect(collectUnformattedTextDisplays(build(["vertexexpress"]))).toEqual([]);
       expect(collectUnformattedTextDisplays(build(["vertexexpress", "openrouter", "novelai"]))).toEqual([]);
     }, AUTHORED_LOCALES));
-  /**
-   * `/config` filters its own body by actor, so a member and a DM owner render different pages
-   * behind the same thumbnail Section. Each is walked because a heading only one of them reaches
-   * would otherwise never be measured.
-   */
   it("formats /config Persona General automatically beside its avatar", () =>
     expectForEveryLocale((locale) => {
       const personas = [
@@ -318,11 +295,6 @@ describe("panel prose runtime formatting", () => {
       expect(collectUnformattedTextDisplays(build(dmOwner, 55, null))).toEqual([]);
     }, AUTHORED_LOCALES));
 
-  /**
-   * The Sprites page is the only `/config` body whose detail lines interpolate stored values beside
-   * a Thumbnail, and the loop below renders it with no sprites at all. The widest legal sprite name
-   * and usage note are the inputs that decide whether those lines fit, so they are walked here.
-   */
   it("formats /config Persona Sprites automatically beside its sprite image", () =>
     expectForEveryLocale((locale) => {
       const personas = [
@@ -410,13 +382,6 @@ describe("panel prose runtime formatting", () => {
       expect(collectUnformattedTextDisplays(confirm)).toEqual([]);
     }, AUTHORED_LOCALES));
 
-  /**
-   * The setup receipt is the terminal panel of `/setup`, and most of its prose is composed at
-   * runtime from a locale key plus a stored name, so the static scan above measures the template
-   * rather than the rendered line. The completion explanation names a model and an endpoint, both of
-   * which reach their documented maximum, and the DM explanation is long enough to exercise
-   * runtime wrapping.
-   */
   it("formats the setup receipt at runtime for every provider mode and context", () =>
     expectForEveryLocale((locale) => {
       const maxEndpointLabel = "e".repeat(40);
@@ -480,13 +445,6 @@ describe("panel prose runtime formatting", () => {
       }
     }, AUTHORED_LOCALES));
 
-  /**
-   * The wizard anchor is what the actor reviews before committing, and every quote row under a step
-   * is composed from a stored draft value rather than from a locale template. The static scan above
-   * only sees what sits inside a `content:` literal, so it measures none of these rows: the endpoint
-   * label, the custom model code, and the two catalog preset names each reach the longest value their
-   * own editor accepts.
-   */
   it("formats the setup wizard anchor at runtime for every draft state", () =>
     expectForEveryLocale((locale) => {
       const maxEndpointLabel = "e".repeat(40);

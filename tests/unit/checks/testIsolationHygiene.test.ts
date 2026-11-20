@@ -6,35 +6,13 @@ import {
   usesModuleMocks,
 } from "../../../scripts/checks/lib/testIsolation";
 
-/**
- * Enforces the invariants that let `bun run test` batch files into shared
- * processes. The runner (scripts/checks/runTests.ts) groups most files into one
- * `bun test` process per lane and runs the lanes concurrently, which is only
- * safe while two rules hold:
- *
- *   - Nothing under `tests/unit/` touches the fixture database, because the
- *      unit lanes run CONCURRENTLY with the serial DB lane.
- *   - No file that shares a process mutates process-wide state without undoing
- *      it, because Bun does not reset such state between files.
- *
- * Both rules used to hold for free: the old runner gave every file its own
- * process, so nothing could leak and nothing could race. Batching traded that
- * blanket guarantee for speed, and this test is what replaces it: a contributor
- * (or agent) who has never read the lane docs gets a red gate with instructions
- * instead of corrupting an unrelated file's results.
- *
- * The detectors are shared with the runner via scripts/checks/lib/testIsolation.ts
- * so the gate and the harness can never disagree about what counts as isolated.
- */
+// Detectors are shared via testIsolation.ts because runTests.ts batches files into shared Bun processes and runs unit
+// lanes concurrently with the DB lane.
 
-/**
- * Meta-tests live here and quote the very markers the detectors search for, so
- * scanning them would flag this tooling rather than real tests. Excluded by path
- * for the same reason the locale scanner needs its examples written in split form.
- */
+// Checks tests under this path quote the forbidden markers they test, so the directory is excluded to prevent
+// self-flagging.
 const SCAN_EXEMPT_DIRECTORY = "tests/unit/checks/";
 
-/** Normalized to forward slashes for stable matching. */
 async function discoverTestFiles(): Promise<string[]> {
   const glob = new Bun.Glob("**/*.test.ts");
   const files: string[] = [];
@@ -44,7 +22,6 @@ async function discoverTestFiles(): Promise<string[]> {
   return files.sort();
 }
 
-/** Reads every scannable test file as `[path, source]` pairs. */
 async function readScannableFiles(): Promise<Array<[string, string]>> {
   const files = (await discoverTestFiles()).filter((file) => !file.startsWith(SCAN_EXEMPT_DIRECTORY));
   return Promise.all(files.map(async (file) => [file, await Bun.file(file).text()] as [string, string]));
@@ -64,9 +41,8 @@ describe("test isolation hygiene", () => {
       .filter(([, source]) => reachesTestDatabase(source))
       .map(([file]) => file);
 
-    // A DB test under tests/unit/ joins the unit lane, which runs at the same time
-    // as the DB lane, so both would hit the same disposable database and its fixed-id
-    // fixtures. Move it to tests/regression/db/, where files run serially.
+    // Unit-lane tests run concurrently with the DB lane, so DB tests must live in serial tests/regression/db/
+    // instead of sharing fixed-id fixtures.
     expect(offenders).toEqual([]);
   });
 
@@ -76,17 +52,15 @@ describe("test isolation hygiene", () => {
       .filter(([, unrestored]) => unrestored.length > 0)
       .map(([file, unrestored]) => `${file} -> ${unrestored.join(", ")}`);
 
-    // These persist for the life of the process, so an unrestored mutation silently
-    // changes behaviour for every other file batched alongside this one and the
-    // failure surfaces in THAT file, not this one. Restore it in afterEach/afterAll.
+    // Process-wide mutations persist across batched files, so any unrestored one silently breaks sibling tests
+    // unless undone in afterEach/afterAll.
     expect(offenders).toEqual([]);
   });
 });
 
 describe("testIsolation detectors", () => {
-  // Markers are assembled from fragments so this file never contains a literal
-  // occurrence: the scanners above read test sources, and a bare marker here
-  // would make the suite flag its own fixtures.
+  // Assemble markers from fragments so this file contains no literal occurrence for the test-source scanners
+  // above to flag.
   const MOCK_CALL = `mock${"."}module("@/x", () => ({}))`;
   const SCOPED_MOCK_CALL = `createScopedModuleMocker(mock, { "@/x": realX })`;
   const DB_IMPORT = `import { testSql } from "./setup${"/"}testDb"`;
@@ -174,9 +148,8 @@ describe("testIsolation detectors", () => {
   });
 
   it("exempts files that already run in their own process", () => {
-    // Mock users get a private process, so nothing they mutate can reach another
-    // file: this is why tests/unit/chat/toolLoop.test.ts may set process.env at
-    // module scope without restoring it.
+    // Mock users run in private processes, so module-scope mutations like toolLoop.test.ts's process.env
+    // writes cannot reach sibling files.
     const source = `${MOCK_CALL}\nprocess.env.BOT_MAX_ITERATIONS = "10";`;
     expect(findUnrestoredMutations(source)).toEqual([]);
   });

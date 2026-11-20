@@ -118,9 +118,7 @@ interface DependencyCalls {
 interface DependencyOptions {
   contents?: string;
   downloadFails?: boolean;
-  /** Leaves the real snapshot store in place, so a test can observe the binding the route will later look for. */
   realSnapshotStore?: boolean;
-  /** Leaves the real guarded panel delivery in place, so a test can observe the real interaction sink. */
   realPreviewDelivery?: boolean;
 }
 

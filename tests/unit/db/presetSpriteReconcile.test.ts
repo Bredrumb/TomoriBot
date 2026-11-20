@@ -6,25 +6,13 @@ import { log } from "@/utils/misc/logger";
 const SCOPE = { lineageId: 4, language: "en-US", personaName: "Default Tomori" };
 
 type CapturedStatement = {
-  /** Bind parameters in the order the client received them. */
   values: unknown[];
-  /** The protected key set, taken from the only array-valued parameter. */
   protectedKeys: string[];
-  /** Text of the statement, for shape assertions. */
   text: string;
 };
 
-/**
- * Reads the protected key set out of the bind the driver receives.
- *
- * Our `sql.array(keys, "text")` marshals to Bun's `{ serializedValues, arrayType }` wrapper whose
- * `serializedValues` is a PostgreSQL array literal (`{"smug","silly"}`), not a JS array. Parsing
- * that literal is what keeps the assertion on the real statement rather than on a restatement of
- * the test's own input.
- *
- * The caller passes the bind position, so a statement that binds its keys elsewhere yields an empty
- * set and the assertion fails rather than quietly passing.
- */
+// Bun's sql.array marshals to { serializedValues, arrayType } with a PostgreSQL array literal rather than a JS array,
+// so this parses that wrapper directly.
 function readKeySet(bind: unknown): string[] {
   if (Array.isArray(bind)) return bind as string[];
   const serialized = (bind as { serializedValues?: unknown } | undefined)?.serializedValues;
@@ -75,7 +63,6 @@ afterEach(() => {
   for (const restore of restoreSpies.splice(0)) restore();
 });
 
-/** Captures log.warn calls; always restored, including when the delete path throws. */
 function captureWarnings() {
   const warnings: string[] = [];
   const spy = spyOn(log, "warn").mockImplementation((message: string) => {
@@ -87,8 +74,7 @@ function captureWarnings() {
 
 describe("reconcileRemovedSprites", () => {
   it("keeps stored rows when every declared sprite failed to seed", async () => {
-    // `seededAny: false` must be a no-op delete. These keys are the only reference to images that
-    // are already uploaded and immutable, so losing them costs the art until a later run uploads it.
+    // `seededAny: false` must be a no-op delete because these keys are the sole reference to immutable uploaded art.
     const { client, statements } = makeClient(["smug", "silly", "happy"]);
     const warnings = captureWarnings();
 
@@ -100,7 +86,6 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("deletes only the stored keys the catalog no longer declares", async () => {
-    // `retired` is gone from the catalog; `smug` and `silly` are still declared.
     const { client, statements } = makeClient(["smug", "silly", "retired"]);
     const removed = await reconcileRemovedSprites(client, SCOPE, ["smug", "silly"], true);
 
@@ -113,7 +98,6 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("protects a failed sprite while still collecting a removed one", async () => {
-    // The protected set carries the seeded key and the failed one, so only `gone` comes back.
     const { client, statements } = makeClient(["smug", "happy", "gone"]);
     const removed = await reconcileRemovedSprites(client, SCOPE, ["smug", "happy"], true);
 
@@ -122,9 +106,8 @@ describe("reconcileRemovedSprites", () => {
   });
 
   it("is destructive on an empty protected set, which is why the seeder never calls it that way", async () => {
-    // An empty protected set collects every row, so the seeder's empty-array `continue` is the only
-    // thing standing between an empty declaration and a wipe. This call is unreachable in
-    // production; the test pins what the guard is protecting against.
+    // An empty protected set wipes every row, so this pins the catastrophic behavior the seeder's
+    // empty-array guard prevents.
     const { client, statements } = makeClient(["smug"]);
     const warnings = captureWarnings();
 

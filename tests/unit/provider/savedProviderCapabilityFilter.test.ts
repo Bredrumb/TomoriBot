@@ -84,7 +84,6 @@ afterEach(() => {
 
 describe("saved provider capability filters", () => {
   it("applies the static provider capability matrix to non-custom rows", async () => {
-    // google advertises vision and embeddings; novelai advertises neither.
     spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockImplementation(async () => [
       makeSavedRow({ provider: "google" }),
       makeSavedRow({ provider: "novelai" }),
@@ -106,9 +105,7 @@ describe("saved provider capability filters", () => {
       new Map([[41, [{ capability: "text", sees_images: true }]]]),
     );
 
-    // Vision has no saved selection to require, so both rows are eligible.
     expect((await loadSavedProvidersForCapability(1, "vision")).length).toBe(2);
-    // Text still requires the selection, so only the row carrying an llm_id survives.
     const textRows = await loadSavedProvidersForCapability(1, "text");
     expect(textRows.length).toBe(1);
     expect(textRows[0]?.llm_id).toBe(900);
@@ -119,7 +116,6 @@ describe("saved provider capability filters", () => {
     spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockImplementation(async () => [
       makeSavedRow({ provider: customProvider, llm_id: 901 }),
     ]);
-    // The connection is registered for image generation, not text.
     stubConnections([makeConnection({ connection_id: 42, server_id: 1, capability: "image" })], new Map());
 
     expect(await loadSavedProvidersForCapability(1, "text")).toEqual([]);
@@ -133,7 +129,6 @@ describe("saved provider capability filters", () => {
     spyOn(llmProviderRepo, "loadUserSavedProviderConfigs").mockImplementation(async () => [
       makeUserSavedRow({ provider: customProvider, llm_id: 903 }),
     ]);
-    // The connection belongs to the user, so the server-scoped lookup must not claim it.
     stubConnections([makeConnection({ connection_id: 43, user_id: 7 })], new Map());
 
     expect(await loadSavedProvidersForCapability(1, "text")).toEqual([]);

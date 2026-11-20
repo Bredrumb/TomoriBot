@@ -54,7 +54,8 @@ import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { buildConfigVoicesBody, type ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
 export type { ConfigVoicesView };
 
-/** Keeps the active preset line from consuming room needed by receipts and future parameter copy. */
+// This headroom reserves message text budget so the active preset line never crowds out receipts or future parameter
+// copy.
 const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
 
 interface ConfigNaiPresetView {
@@ -79,10 +80,8 @@ export const CONFIG_MODEL_CAPABILITY_LOCALE_KEYS: Record<ConfigModelCapability, 
   stt: "commands.config.panel.capability_stt",
 };
 
-/**
- * Clearing Vision disables the image-understanding tools outright, while either image slot only
- * contributes to one shared flag, so the two consequences cannot share one description.
- */
+// Vision and image slots need separate descriptions because clearing vision disables image-understanding tools while
+// image slots share one flag.
 const MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS: Partial<Record<ConfigModelCapability, string>> = {
   vision: "commands.config.panel.model_no_model_vision_description",
   image: "commands.config.panel.model_no_model_image_description",
@@ -90,34 +89,24 @@ const MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS: Partial<Record<ConfigModelCapability,
   stt: "commands.config.panel.model_no_model_stt_description",
 };
 
-/** One server-default slot as the panel renders it. */
 interface ConfigModelSlotView {
   capability: ConfigModelCapability;
   currentModelName: string | null;
   currentProvider: string | null;
   eligibleProviders: string[];
-  /** Offset into the provider entry list the select is scrolled to. */
   providerPageStart: number;
-  /** Provider whose catalog is spread across page entries, or null while none is expanded. */
   expandedProvider: string | null;
   expandedOptionCount: number;
 }
 
-/** Which capability's provider selector is expanded, and where its entry list is scrolled. */
 export interface ConfigSwitchModelsProviderPage {
   capability: ConfigModelCapability;
   provider?: string;
   start: number;
 }
 
-/**
- * One Text-scope override as the Switch page lists it: the target the assignment applies to and the
- * model that target actually generates with, matching the rows `/model override remove` presents.
- */
 interface ConfigTextOverrideEntry {
-  /** Channel mention or persona nickname the override applies to. */
   target: string;
-  /** Effective model, formatted as `codename (provider)`. */
   model: string;
 }
 
@@ -148,9 +137,7 @@ interface ConfigFallbackSlotView {
 export interface ConfigFallbacksView {
   slots: ConfigFallbackSlotView[];
   providerEntries: Array<{ value: string; label: string }>;
-  /** Provider whose option list is spread across page entries, or null while none is expanded. */
   expandedProvider: string | null;
-  /** Offset into the entry list the select is scrolled to. */
   entryStart: number;
   randomizerEnabled: boolean;
   hasFallbacks: boolean;
@@ -175,7 +162,6 @@ export interface ConfigModelsPageInput {
   fallbacksView?: ConfigFallbacksView;
   imageView?: ConfigImageGenerationView;
   voicesView?: ConfigVoicesView;
-  /** True when the server requires members to bring their own provider, which bypasses every server default on these pages. */
   userByokMode?: boolean;
 }
 
@@ -196,10 +182,8 @@ function hasUsableModel(slot: ConfigModelSlotView): boolean {
   );
 }
 
-/**
- * Red means something the server expects to work is broken or ignored; yellow means an optional
- * capability is simply switched off.
- */
+// Notes use error only when an expected feature is broken or ignored, and warning when an optional capability is off,
+// so severity stays consistent.
 interface ConfigNote {
   tone: Extract<StatusTone, "error" | "warning">;
   text: string;
@@ -278,17 +262,10 @@ function buildSwitchProviderOptions(input: SwitchProviderOptionsInput): Provider
   return [{ value: "none", label: localizer(input.locale, "commands.config.panel.no_providers_option") }];
 }
 
-/** Rows one Text scope lists before the remainder collapses into a count. */
 const CONFIG_TEXT_OVERRIDE_ROW_LIMIT = 8;
 
-/**
- * Lists one scope's overrides under its label, so the page names which target diverges from the
- * server default and which model it uses rather than only how many targets do.
- *
- * The row limit exists because one scope can hold a full modal page of overrides, and every row
- * spends the same message-wide text budget the capability selectors already draw on. The
- * label keeps the true total, so a collapsed list still reports how many are hidden.
- */
+// Rows are capped because overrides share the message-wide text budget with capability selectors, while the label
+// keeps the true total count.
 function buildTextOverrideScopeLines(
   locale: string,
   entries: readonly ConfigTextOverrideEntry[],
@@ -321,9 +298,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
     if (!slot) continue;
     const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
 
-    // The clear entry is re-prepended to every provider page, so it costs one option slot per
-    // page: the direct limit has to shrink or the last provider of each page would be sliced away
-    // with no page able to reach it.
+    // Prepending clear on each page leaves one fewer slot per page so trailing providers stay reachable.
     const showClear = slot.currentModelName !== null && CONFIG_CLEARABLE_MODEL_CAPABILITIES.has(capability);
     const clearDescriptionKey = showClear ? MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS[capability] : undefined;
     const directLimit = CONFIG_MODEL_PROVIDER_DIRECT_LIMIT - (showClear ? 1 : 0);
@@ -378,9 +353,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         serverDefaultDescription: clearDescriptionKey ? localizer(locale, clearDescriptionKey) : undefined,
         serverDefaultDisplay: localizer(locale, "commands.config.panel.none_label"),
         placeholderOverride: routingWindow.placeholderOverride,
-        // A model assignment can outlive the provider it came from, so the clear entry keeps the
-        // select live even with nothing eligible left to pick; without it the select is inert
-        // rather than absent, and the placeholder is what keeps the assignment readable.
+        // Keep selects active when Clear is available so orphaned model assignments remain removable and readable.
         disabled: writesDisabled || (entries.length === 0 && !showClear),
       }),
     );
@@ -720,9 +693,7 @@ function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerD
     content: `${localizer(locale, "commands.config.panel.fallback_order_description")}\n${slotLines}`,
   });
 
-  // One expanded provider contributes an entry per option page, so the entry list outgrows a single
-  // select long before the provider list does; slicing it and paging the rest is what keeps the
-  // payload under Discord's 25-option ceiling.
+  // Expanded providers emit one entry per option page, so paging avoids exceeding Discord's 25-option cap.
   const rangeCount = Math.max(1, Math.ceil(view.providerEntries.length / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT));
   const rangeIndex = Math.min(
     Math.max(0, Math.floor(view.entryStart / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT)),
@@ -824,9 +795,7 @@ ${localizer(locale, "commands.config.panel.randomizer_description")}${
     ),
     {
       type: ComponentType.TextDisplay,
-      // Clearing every fallback slot leaves the stored flag on, so the selection above tracks the
-      // stored value while this sentence tracks the effective one. Collapsing the two would report
-      // a randomizer as running for a workspace whose chain is empty.
+      // Track the effective randomizer state here because clearing all fallback slots leaves the stored flag enabled.
       content: `> ${localizer(
         locale,
         view.randomizerEnabled && view.hasFallbacks

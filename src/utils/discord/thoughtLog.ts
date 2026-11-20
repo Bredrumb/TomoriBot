@@ -137,10 +137,8 @@ function buildThoughtLogEmbeds(args: {
 
   let metadataAttached = false;
   for (const section of sections) {
-    // Code-block sections: split content across multiple embeds, each with
-    // properly opened and closed triple-backtick fences.
     if (section.codeBlock) {
-      const fenceOverhead = "```\n\n```".length; // Opening + closing backticks with newlines
+      const fenceOverhead = "```\n\n```".length;
       const sectionHeader = `**${section.label}**\n`;
       let remaining = section.content;
 
@@ -242,10 +240,6 @@ async function resolveThoughtLogOwnerIdentity(
   return await resolvePersonaWebhookIdentity(owner.persona, thoughtLogChannel.guild);
 }
 
-/**
- * Posts attribution alone when no thought-log embed was emitted, so admins still see whose
- * credentials and which model answered.
- */
 export async function sendAttributionOnlyEmbed({
   client,
   locale,

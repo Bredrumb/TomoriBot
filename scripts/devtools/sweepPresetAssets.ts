@@ -1,5 +1,4 @@
-// Reviews shared preset art against every database column that can retain a reference.
-// Deletion is manual because a catalog seed can fail while its previous objects remain live.
+// Keep deletion manual (--apply) because a failed catalog seed can leave previous shared preset objects live.
 
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { Storage } from "@google-cloud/storage";

@@ -19,10 +19,6 @@ export const configureCommand = (command: SlashCommandBuilder) => {
     );
 };
 
-/**
- * Executes the /comment command
- * Sends an embed with user input text and a footer showing who created the comment
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -51,7 +47,6 @@ export async function execute(
 
   const channel = interaction.channel;
 
-  // Defer reply ephemerally while processing
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const commentContent = interaction.options.getString("content", true);

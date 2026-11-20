@@ -36,22 +36,20 @@ export interface StudioEntry {
   definition: IdleNudgeDefinition;
   enabled: boolean;
   custom?: CustomIdleNudgeRow;
-  /** Stored persona IDs, deleted personas included; absent when every persona may use it. */
+  // Absent means every persona may use the nudge: a present array restricts to those IDs and may include deleted
+  // personas.
   scope?: readonly number[];
-  /** Present only on an enabled idle nudge that nothing on this server can run. */
   blocker?: IdleNudgeBlocker;
 }
 
 export interface NudgeStudioView {
   category: NaturalNudgeCategory;
   entries: StudioEntry[];
-  /** Across every category, because the custom idle nudge limit is per server. */
+  // Total across all categories rather than only view.category, because the custom idle nudge limit is per server.
   customCount: number;
-  /** Live persona nicknames by ID, empty on modal paths that never render rows. */
   personaNames: ReadonlyMap<number, string>;
 }
 
-/** Text and list fields one custom idle nudge modal submits. */
 export interface IdleNudgeForm {
   title: string;
   brief: string;
@@ -60,7 +58,6 @@ export interface IdleNudgeForm {
   recommendedTools: readonly string[];
 }
 
-/** The portable fields a form modal prefills and a persona-owned nudge stores. */
 export interface IdleNudgeFormContent {
   category: NaturalNudgeCategory;
   title: string;
@@ -103,7 +100,6 @@ export function idleNudgeContentFromDefinition(definition: IdleNudgeDefinition):
   };
 }
 
-/** Local ID within its owner's list, which the runtime key carries after the persona instance ID. */
 export function personaNudgeLocalId(definition: IdleNudgeDefinition): string | null {
   const personaId = definition.ownerPersonaId;
   if (personaId === undefined) return null;
@@ -111,10 +107,6 @@ export function personaNudgeLocalId(definition: IdleNudgeDefinition): string | n
   return definition.key.startsWith(prefix) ? definition.key.slice(prefix.length) : null;
 }
 
-/**
- * Loads the form's own fields and drops the prerequisite the category already enforces and any
- * recommended tool a prerequisite already requires.
- */
 export function parseIdleNudgeForm(
   category: NaturalNudgeCategory,
   form: IdleNudgeForm,
@@ -149,7 +141,6 @@ async function loadPersonaToolSets(
   return new Map(targets.map((persona, index) => [persona.persona_id ?? 0, tools[index]]));
 }
 
-/** Blockers for one persona's own enabled entries, judged against that owner plus every nudging persona as a scene partner. */
 export interface PersonaNudgeBlockerView {
   blockers: ReadonlyMap<string, IdleNudgeBlocker>;
 }
@@ -175,11 +166,8 @@ export async function loadPersonaNudgeBlockerView(
   return { blockers };
 }
 
-/**
- * What a Toggle Availability submit produces: no live persona left turns the idle nudge off, and every
- * live persona opens it to everyone. Only presented personas change, so one created while the modal was
- * open keeps its current access, and IDs of deleted personas are dropped.
- */
+// Only presented personas are toggled so personas created while the modal is open or past the modal cap keep their
+// current access.
 export function nextAvailability(
   current: IdleNudgeAvailability,
   livePersonaIds: readonly number[],
@@ -207,11 +195,7 @@ function entryAvailability(entry: StudioEntry): IdleNudgeAvailability {
   return entry.enabled ? { enabled: true, scope: entry.scope ?? null } : { enabled: false };
 }
 
-/**
- * Loads one category's idle nudges from every source. With `personas`, enabled entries are also
- * judged for blockers; modal paths pass the list with `judgeBlockers: false` because resolving tools
- * can outlast Discord's three-second window.
- */
+// Modal paths pass judgeBlockers: false because resolving tools can outlast Discord's 3-second interaction window.
 export async function loadNudgeStudioView(
   serverId: number,
   category: NaturalNudgeCategory,
@@ -324,7 +308,6 @@ export const nudgeStudioOperations = {
     return (await naturalNudgeRepository.updateCustomIdleNudge(serverId, id, parsed)) ? "success" : "write-failed";
   },
 
-  /** Edits one persona-owned definition in place, after the owner is checked against the current live set. */
   async updatePersonaIdleNudge(
     category: NaturalNudgeCategory,
     livePersonaIds: readonly number[],
@@ -349,7 +332,6 @@ export const nudgeStudioOperations = {
     return result === "success" || result === "unchanged" ? result : result === "invalid" ? "invalid" : "stale";
   },
 
-  /** Flips only the owner's local switch, which never snapshots an inherited list or forks a pointer. */
   async setPersonaIdleNudgeAvailability(
     category: NaturalNudgeCategory,
     livePersonaIds: readonly number[],
@@ -369,7 +351,6 @@ export const nudgeStudioOperations = {
     return result === "success" || result === "unchanged" ? result : result === "invalid" ? "invalid" : "stale";
   },
 
-  /** Removes only presented persona entries whose owner is still live, one stable ID at a time. */
   async removePersonaIdleNudges(
     category: NaturalNudgeCategory,
     livePersonaIds: readonly number[],
@@ -424,7 +405,6 @@ export const nudgeStudioOperations = {
     return "success";
   },
 
-  /** Removes presented custom idle nudges left unchecked that still exist in this category. */
   async removeCustomIdleNudges(
     serverId: number,
     category: NaturalNudgeCategory,

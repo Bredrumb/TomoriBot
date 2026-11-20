@@ -1,32 +1,16 @@
-/**
- * Bun module-mock surface and lifetime audit.
- *
- * `mock.module()` replacements persist for the entire Bun process, so every project module
- * mock needs both a complete export surface and scoped behavioral overrides that fall back to
- * real behavior after the declaring file. The runner isolates mocking files in their own
- * process, but a bare `bun test` does not, and a partial mock of even a low-fanout module
- * breaks whichever later file imports a member it left out.
- */
+// Bun mock.module() persists process-wide and bare bun test shares one process, so partial mocks or missing fallbacks
+// break later test files.
 
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { ts } from "ts-morph";
 
-/**
- * Modules that must never be mocked at module level, not even full-surface and leak-scoped.
- *
- * Scoping fixes leaked *behavior*, but the module record stays replaced for the rest of the
- * process, and that alone is enough to break a later file: `spyOn` on an export of a replaced
- * module installs nothing, silently, so the spy records zero calls while the real implementation
- * runs. `log` is a singleton whose members production resolves at call time, so `stubLogMembers()`
- * in `tests/helpers/mockSurface.ts` covers every case a module mock was serving here.
- */
+// Bun module mocks keep the module record replaced, silently breaking later `spyOn` calls; use `stubLogMembers()`
+// since `log` resolves members at call time.
 export const FORBIDDEN_MOCK_MODULES = new Set(["@/utils/misc/logger"]);
 
-/**
- * Project modules, addressed through the `@/` alias. A relative specifier is not guarded: Bun
- * resolves it from the file that calls `mock.module`, and every project mock uses the alias.
- */
+// Relative specifiers are unguarded because Bun resolves them from the caller's file, and project mocks standardize
+// on the `@/` alias.
 export function isGuardedMockModule(moduleSpecifier: string): boolean {
   return moduleSpecifier.startsWith("@/");
 }
@@ -40,11 +24,8 @@ export type MockModuleSurfaceViolationKind =
   | "unscoped-behavior";
 
 export interface MockModuleSurfaceViolation {
-  /** Repo-relative path with POSIX separators. */
   file: string;
-  /** 1-based source line. */
   line: number;
-  /** 1-based source column. */
   column: number;
   moduleSpecifier: string;
   kind: MockModuleSurfaceViolationKind;
@@ -135,9 +116,6 @@ function moduleCallReceiver(call: ts.CallExpression): string | null {
   return ts.isIdentifier(receiver) ? receiver.text : null;
 }
 
-/**
- * Scan one test source for unsafe mocks of project modules.
- */
 export function scanMockModuleSurfaceSource(
   content: string,
   file = "tests/unknown.test.ts",
@@ -248,7 +226,6 @@ async function listFiles(directory: string): Promise<string[]> {
   return nested.flat();
 }
 
-/** Audit every test file in the real repository. */
 export async function auditMockModuleSurfaces(
   repoRoot = MOCK_MODULE_SURFACE_REPO_ROOT,
 ): Promise<MockModuleSurfaceAuditResult> {

@@ -93,7 +93,6 @@ describe("personal reset post-commit operation", () => {
   });
 
   it("evicts populated user and spotlight cache entries when real invalidators are wired", async () => {
-    // Populate user cache entry
     const loadSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(
       createUserRow({ user_id: USER_ID, user_disc_id: USER_DISC_ID, registration_locale: null }),
     );
@@ -102,7 +101,6 @@ describe("personal reset post-commit operation", () => {
     await getCachedUserRow(USER_DISC_ID);
     expect(getUserCacheStats().cacheSize).toBe(1);
 
-    // Populate spotlight cache entry
     const hasSpotlightsSpy = spyOn(userRepository, "serverHasPersonalSpotlights").mockResolvedValue(true);
     const spotlightStatusSpy = spyOn(userRepository, "getPersonalSpotlightStatus").mockResolvedValue({
       serverId: SERVER_ID_A,
@@ -132,7 +130,6 @@ describe("personal reset post-commit operation", () => {
       );
 
       expect(result).not.toBeNull();
-      // Both populated caches must now be evicted
       expect(getUserCacheStats().cacheSize).toBe(0);
       expect(getPersonalSpotlightCacheStats().size).toBe(0);
     } finally {

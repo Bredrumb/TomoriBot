@@ -1,14 +1,5 @@
-/**
- * Shared Discord avatar/nickname rate-limit detection.
- *
- * Discord throttles guild member avatar (and nickname) changes more aggressively
- * than its documented buckets: beyond a plain HTTP 429 it can return a 200-level
- * error envelope whose `errors.avatar`/`errors.nick` carry an `AVATAR_RATE_LIMIT`
- * code, or a message mentioning a rate limit. Every avatar PATCH site (`/persona avatar`,
- * `/persona import`, `/persona swap`, and the preset-avatar fan-out reconciler) must treat any
- * of these as "back off and retry later" rather than as a fault, so the detection lives here in
- * one place.
- */
+// Discord can throttle avatar or nickname PATCHes with 200-level `AVATAR_RATE_LIMIT` envelopes beyond HTTP 429, so
+// every avatar PATCH site shares this check.
 
 type DiscordApiErrorPayload = {
   message?: string;
@@ -19,13 +10,6 @@ type DiscordApiErrorPayload = {
   };
 };
 
-/**
- * Detects whether a guild member avatar/nickname PATCH was rate limited.
- *
- * @param status - HTTP status code from the PATCH response
- * @param errorText - Raw response body text (may be empty)
- * @returns true when the failure is (or looks like) a rate limit
- */
 export function isAvatarUpdateRateLimited(status: number, errorText: string): boolean {
   if (status === 429) {
     return true;

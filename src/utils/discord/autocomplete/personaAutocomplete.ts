@@ -35,12 +35,6 @@ function rankPersonasByNickname<T extends { persona_nickname?: string | null }>(
   return [...exact, ...prefix, ...substring];
 }
 
-/**
- * Answers a persona autocomplete with every persona in the workspace that passes `include`, ranked
- * by nickname match, ignoring channel whitelists and spotlights.
- *
- * @param leadingChoices - Non-persona entries listed first while their name matches the typed text
- */
 export async function respondWithPersonaChoices(
   interaction: AutocompleteInteraction,
   serverDiscId: string | undefined,
@@ -74,36 +68,23 @@ export async function respondWithPersonaChoices(
     if (!responded) {
       try {
         await interaction.respond([]);
-      } catch {
-        // Autocomplete must fail silently if respond throws
-      }
+      } catch {}
     }
   }
 }
 
-/**
- * Suggests every persona on the server, ignoring channel whitelists and spotlights, for commands
- * that inspect a persona rather than trigger it (`/stats persona`, `/context`).
- */
 export const handleServerPersonaAutocomplete: CommandAutocompleteFunction = async (
   _client: Client,
   interaction: AutocompleteInteraction,
 ): Promise<void> => respondWithPersonaChoices(interaction, interaction.guild?.id);
 
-/**
- * Like `handleServerPersonaAutocomplete`, but a DM resolves to the user's own workspace, for commands
- * that also run in DMs (`/persona export`).
- */
 export const handleWorkspacePersonaAutocomplete: CommandAutocompleteFunction = async (
   _client: Client,
   interaction: AutocompleteInteraction,
 ): Promise<void> => respondWithPersonaChoices(interaction, interaction.guild?.id ?? interaction.user.id);
 
-/**
- * Shaped as `CommandAutocompleteFunction` so a module can export it directly. The client is unused
- * but must stay in the signature: a shorter one still assigns cleanly and would silently receive
- * the client as its first argument.
- */
+// Unused `_client` parameter must stay because TypeScript allows a shorter function to assign here and silently pass
+// `client` as `interaction`.
 export const handlePersonaAutocomplete: CommandAutocompleteFunction = async (
   _client: Client,
   interaction: AutocompleteInteraction,
@@ -170,11 +151,10 @@ export const handlePersonaAutocomplete: CommandAutocompleteFunction = async (
 
     await interaction.respond(choices);
   } catch (error) {
-    // Autocomplete must always answer, even on failure.
     try {
       await interaction.respond([]);
     } catch {
-      // The dispatcher still logs and attempts its own fallback answer.
+      // Ignore respond() errors here so the original failure still reaches the dispatcher.
     }
     throw error;
   }

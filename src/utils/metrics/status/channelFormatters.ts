@@ -25,7 +25,6 @@ async function resolveChannelMention(client: Client, id: string, locale: string)
   }
 }
 
-/** Collapses to a count when over the max. Returns the localized "None" when empty. */
 export async function formatChannelList(client: Client, ids: string[], locale: string): Promise<string> {
   if (ids.length === 0) {
     return localizer(locale, "commands.choices.none");
@@ -38,12 +37,6 @@ export async function formatChannelList(client: Client, ids: string[], locale: s
       });
 }
 
-/**
- * Formats the channel whitelist as a numbered list.
- * Shows each whitelisted channel with its per-channel cooldown type and duration.
- * When no entries exist, shows an "all channels allowed" message instead.
- * @returns Formatted whitelist string
- */
 export async function formatWhitelistEntries(
   client: Client,
   entries: ChannelWhitelistRow[],
@@ -72,11 +65,6 @@ export async function formatWhitelistEntries(
   return lines.join("\n");
 }
 
-/**
- * Formats the role whitelist as a numbered list.
- * When no entries exist, shows an "all roles allowed" message instead.
- * @returns Formatted role whitelist string
- */
 export function formatWhitelistRolesEntries(entries: RoleWhitelistRow[], locale: string): string {
   if (entries.length === 0) {
     return localizer(locale, "commands.status.whitelist_roles_all_allowed");
@@ -125,10 +113,6 @@ export async function formatWhitelistPersonaEntries(
   return lines.join("\n");
 }
 
-/**
- * Each entry shows channel, persona name, timer interval, and trigger probability.
- * @returns Formatted random trigger list string, or localized "None" if empty
- */
 export async function formatRandomTriggers(
   client: Client,
   triggers: RandomTriggerRow[],
@@ -224,11 +208,6 @@ export async function formatAutochatChannels(
   return lines.join("\n");
 }
 
-/**
- * Formats the list of channel-level LLM overrides as a numbered list.
- * Each entry shows channel mention and the model codename + provider.
- * @returns Formatted channel LLM override list string, or localized "None" if empty
- */
 export async function formatChannelLlmOverrides(
   client: Client,
   overrides: { channelDiscId: string; llm: LlmRow }[],
@@ -250,11 +229,6 @@ export async function formatChannelLlmOverrides(
   return lines.join("\n");
 }
 
-/**
- * Formats the list of persona-level LLM overrides as a numbered list.
- * Only includes personas that have an explicit model override set.
- * @returns Formatted persona LLM override list string, or localized "None" if empty
- */
 export function formatPersonaLlmOverrides(
   personas: TomoriState[],
   locale: string,
@@ -274,13 +248,6 @@ export function formatPersonaLlmOverrides(
     .join("\n");
 }
 
-/**
- * Formats welcome channel configuration as a single-line string.
- * Shows channel mention with associated persona if configured.
- * When no welcome channel is set, shows a localized "None" message.
- * @param config - TomoriState config containing welcome_channel_disc_id and welcome_persona_id
- * @param personaNameMap - Map of persona IDs to nicknames
- */
 export async function formatWelcomeChannel(
   client: Client,
   config: AssembledServerConfig,

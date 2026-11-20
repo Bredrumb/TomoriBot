@@ -1,12 +1,3 @@
-/**
- * Regression harness: ServerRepository domain.
- *
- * Covers: channel whitelist reads/writes, blacklist, server setup basics.
- * loadTomoriState implicitly tests server row loading; this file focuses on
- * server-scoped operations that don't fit other domain files.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
@@ -34,10 +25,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
     expect(result).toBe(false);
   });
 
-  // ── blacklist write + re-read ─────────────────────────────────────────────
-  // The personalization_blacklist table stores server_id (internal) + user_disc_id.
-  // We insert directly via testSql to avoid needing full command-flow wiring.
-
   it("isBlacklisted returns true after inserting a blacklist entry", async () => {
     await testSql`
       INSERT INTO personalization_blacklist (server_id, user_disc_id)
@@ -59,12 +46,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
     expect(result).toBe(false);
   });
 
-  // ── setup's alter-name collision guard ────────────────────────────────────
-  // Exercises the disambiguating UPDATE from sqlSetupServer against the real schema rather
-  // than through setup() itself, which needs a Guild and a seeded persona_presets row. What
-  // has to hold is that the statement parses, renames only the colliding alter, and leaves
-  // idx_personas_server_nickname_ci_unique satisfied for the main persona insert that follows.
-
+  // Runs sqlSetupServer's alter-rename UPDATE directly because setup() requires a Guild and seeded preset.
   it("setup's guard renames a colliding alter so the default-named main persona can insert", async () => {
     const defaultName = "Tomori";
 
@@ -93,7 +75,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
     `;
     expect(mainPersona.persona_nickname).toBe("_rt_persona");
 
-    // The name is now free, which is the whole point of the guard.
     const [claimed] = await testSql`
       INSERT INTO personas (server_id, persona_nickname, is_alter)
       VALUES (${refs.serverId}, ${defaultName}, true)

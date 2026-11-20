@@ -30,11 +30,6 @@ interface PythonRead {
   consumerIndices: number[];
 }
 
-/**
- * Scans Python for `os.getenv`, `os.environ.get`, `os.environ[...]`, and same-file helpers whose
- * parameter reaches one of those. Nested defaults (`os.getenv("A", os.getenv("B", "1"))`) and `or`
- * chains are reported as aliases because both names feed one value.
- */
 export function scanPython(file: SourceFile): ScanResult {
   const result = emptyScanResult();
   const role = roleForPath(file.path, "python");
@@ -159,7 +154,6 @@ function findDefs(text: string): PythonDef[] {
   });
 }
 
-/** A def is a helper when a parameter reaches an env reader, directly or via another helper. */
 function findHelpers(defs: PythonDef[]): Map<string, number> {
   const helpers = new Map<string, number>();
   let changed = true;
@@ -182,7 +176,6 @@ function findHelpers(defs: PythonDef[]): Map<string, number> {
   return helpers;
 }
 
-/** Links reads joined by `or`, plus nested defaults, into alias groups. */
 function collectAliases(
   text: string,
   reads: PythonRead[],

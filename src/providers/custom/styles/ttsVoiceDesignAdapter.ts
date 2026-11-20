@@ -11,24 +11,19 @@ function isEnabledEnv(value: string | undefined): boolean {
   return value === "true" || value === "1";
 }
 
-/** Timeout for local /synthesize requests, configurable via env. */
 const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
 const TTS_VOICE_DESIGN_LOG_PAYLOADS = isEnabledEnv(process.env.TTS_VOICE_DESIGN_LOG_PAYLOADS);
 const TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS = 240;
 
-/** Regex matching any bracket-tag in the form [content]. */
 const ANY_BRACKET_TAG_REGEX = /\[([^\]\r\n]{1,40})\]/g;
 
 export interface TtsVoiceDesignRequest {
   endpoint: CustomEndpointRow;
   script: string;
-  /** Natural-language prompt describing the desired speaker voice. */
   designPrompt: string;
-  /** Optional per-message delivery direction, e.g. "sound angry" or "near tears". */
   voiceInstructions?: string;
-  /** Empty string for local endpoints that don't require auth. */
+  // Empty string indicates auth is omitted locally (no header).
   apiKey: string;
-  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
   abortSignal?: AbortSignal;
 }
 
@@ -64,15 +59,6 @@ function previewForLog(text: string): string {
   return `${escaped.slice(0, TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS)}...`;
 }
 
-/**
- * Prepares text for instruct/voice-design TTS endpoints.
- *
- * The model-facing voice design prompt is sent separately as `instruct`, so
- * the spoken script should stay clean. Today Qwen3-TTS VoiceDesign expects
- * plain speech text, but this keeps the adapter aligned with the endpoint's
- * `script_markup` metadata in case another design model later supports emoji
- * markers.
- */
 function prepareVoiceDesignText(
   script: string,
   scriptMarkup: string,
@@ -89,16 +75,8 @@ function prepareVoiceDesignText(
   return { processedScript, captionText };
 }
 
-/**
- * Calls a local voice-design TTS server that implements TomoriBot's
- * `/synthesize` contract.
- *
- * This is intentionally separate from `ttsCloningAdapter.ts`. Clone models
- * synthesize from a stored speaker sample; voice-design models synthesize from
- * a persona-level natural-language prompt. Sending the prompt as `instruct`
- * makes the JSON body honest and keeps `/config` focused on actual
- * reference samples.
- */
+// Voice-design synthesis stays separate from ttsCloningAdapter so persona prompts go as instruct without polluting
+// /config reference samples.
 export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignRequest): Promise<TtsCloneResult> {
   const { endpoint, script, designPrompt, voiceInstructions, apiKey, abortSignal } = request;
   const scriptMarkup = (endpoint.extra_config.script_markup as string | undefined) ?? "plain";
@@ -127,10 +105,8 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     : cleanedDesignPrompt;
   const body: Record<string, unknown> = {
     text: processedScript,
-    // VoiceDesign requests deliberately omit ref_audio/ref_text. Some FastAPI
-    // wrappers type those fields as optional strings but still reject explicit
-    // JSON null, and omitting unused clone fields makes the request shape the
-    // server's auto mode can reliably distinguish from voice cloning.
+    // Omit ref_audio and ref_text because FastAPI wrappers can reject null strings and rely on their absence for auto
+    // mode.
     instruct,
   };
 

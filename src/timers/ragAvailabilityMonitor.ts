@@ -1,22 +1,10 @@
-/**
- * RAG Availability Monitor
- * Re-probes pgvector when startup detection never reached the database, then stops.
- */
-
 import { getRagAvailabilityState, probeRagUsable } from "@/utils/db/ragAvailability";
 import { log } from "@/utils/misc/logger";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 
-/**
- * Recovers RAG from an undetermined startup probe without a restart.
- *
- * `detectRagAvailability` caches only a probe that completed, so a connection that died
- * during boot leaves the flag unset and every RAG command gated. This retries on an
- * interval and stops on the first success. It deliberately does not run when startup
- * settled the question either way: a definitive "pgvector absent" needs no polling, and
- * the probe is a database round-trip that would otherwise repeat forever.
- */
+// This runs only when boot probing missed the DB and stops once settled, because completed probes are cached and
+// polling absent pgvector wastes DB round-trips.
 class RagAvailabilityMonitor {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;

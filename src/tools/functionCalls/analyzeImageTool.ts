@@ -1,9 +1,4 @@
 import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
-/**
- * Vision analysis tool for non-vision chat models.
- * Delegates image analysis to a configured vision model via the same provider's API.
- * Only available when: (1) a vision model is configured AND (2) the active chat model cannot see images.
- */
 
 import { escapeMarkdown } from "discord.js";
 import { BaseTool } from "@/types/tool/interfaces";
@@ -22,28 +17,19 @@ import { notifyProviderToolFailure } from "@/utils/provider/providerUsage";
 
 export { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
 
-/** Discord message ID pattern (17-19 digit snowflake) */
 const DISCORD_ID_PATTERN = /^\d{17,19}$/;
 
-/** Default prompt sent to the vision model when no custom prompt is provided */
 const DEFAULT_VISION_PROMPT =
   "Describe what you see in this image in detail. Include any text, objects, people, colors, and notable elements.";
 
-/** Maximum total size of all images in bytes (default: 10 MiB) to avoid API rejections. */
 const MAX_TOTAL_IMAGE_BYTES = MEDIA_LIMITS.MAX_MEDIA_SIZE_MB * 1024 * 1024;
 
-/** Maximum wall-clock time for image extraction and vision inference (default: 60 seconds). */
 const parsedVisionAnalysisTimeoutMs = Number.parseInt(process.env.VISION_ANALYSIS_TIMEOUT_MS ?? "", 10);
 const VISION_ANALYSIS_TIMEOUT_MS =
   Number.isFinite(parsedVisionAnalysisTimeoutMs) && parsedVisionAnalysisTimeoutMs > 0
     ? parsedVisionAnalysisTimeoutMs
     : 60_000;
 
-/**
- * Built-in tool that analyzes images using a dedicated vision model.
- * Allows non-vision chat models (e.g., Z.ai glm-5) to understand images
- * by routing the analysis through a vision-capable model (e.g., Z.ai glm-4.6v).
- */
 export class AnalyzeImageTool extends BaseTool {
   name = "analyze_image";
   description =
@@ -51,8 +37,7 @@ export class AnalyzeImageTool extends BaseTool {
   category = "utility" as const;
   requiresFollowUp = true;
 
-  // Only expose to non-vision models during context building (system prompt tool list).
-  // The full vision_llm check happens in isAvailableForContext() at execution time.
+  // Only checks sees_images here; vision_llm availability is checked at execution time in isAvailableForContext().
   requiredModelCapabilities = { sees_images: false as const };
 
   parameters: ToolParameterSchema = {
@@ -72,35 +57,17 @@ export class AnalyzeImageTool extends BaseTool {
     required: ["media_id"],
   };
 
-  /**
-   * Basic provider check: available for all providers.
-   * The real gating logic is in isAvailableForContext().
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Context-aware availability check.
-   * Only expose this tool when:
-   * - A vision model is configured (tomoriState.vision_llm exists)
-   * - The active chat model does NOT support images (sees_images = false)
-   */
   isAvailableForContext(_provider: string, context: ToolContext): boolean {
     const hasVisionModel = !!context.tomoriState?.vision_llm;
     const chatModelSeesImages = context.tomoriState?.llm?.sees_images ?? false;
 
-    // Only available when vision model is set AND chat model can't see images
     return hasVisionModel && !chatModelSeesImages;
   }
 
-  /**
-   * Execute the image analysis.
-   * 1. Validate parameters and context
-   * 2. Extract images from the Discord message
-   * 3. Route the images to the vision model, which owns its own credential resolution
-   * 4. Return the analysis result
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const rawMediaId = args.media_id as string;
     const messageId = MessageIdMap.isOpaqueKey(rawMediaId) ? context.messageIdMap?.resolve(rawMediaId) : rawMediaId;
@@ -198,24 +165,13 @@ export class AnalyzeImageTool extends BaseTool {
     }
   }
 
-  /**
-   * Extract images from a Discord message and convert to base64 format.
-   *
-   * Discovery is delegated to the shared {@link resolveMessageImageUrls} helper,
-   * which scans attachments, embeds, stickers, custom emojis, Components V2 media,
-   * and the direct reply target when needed. The download loop below stays local
-   * because vision payloads enforce a cumulative byte budget and skip re-optimization.
-   * @param context - Tool execution context with channel access
-   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
-   * @returns Array of objects with mimeType and base64 data
-   */
+  // Download loop stays local rather than using shared image downloaders because vision payloads enforce a cumulative
+  // byte budget and skip re-optimization.
   private async extractImagesFromMessage(
     messageId: string,
     context: ToolContext,
     signal: AbortSignal,
   ): Promise<VisionImage[]> {
-    // Discover images on the message, or on its direct reply target when the
-    //    reply itself is text-only.
     const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
 
     log.info(`Found ${imageUrls.length} image(s) in message ${sourceMessageId} for vision analysis`);
@@ -264,7 +220,6 @@ export class AnalyzeImageTool extends BaseTool {
   }
 }
 
-/** Turns a vision failure into the reason text this tool reports to the calling model. */
 function describeVisionFailure(failure: { reason: string; detail?: string } | undefined): string {
   if (!failure) return "unknown error";
 

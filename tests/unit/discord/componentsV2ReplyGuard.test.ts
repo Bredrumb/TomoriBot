@@ -1,16 +1,5 @@
-/**
- * Components V2 reply-guard tests (Phase 1 of the paginated-modal-selector-consistency plan).
- *
- * Once a message carries `IsComponentsV2`, Discord permanently forbids editing it with
- * legacy `embeds`/`content`. `interactionCore` tracks such interactions in a WeakSet and
- * teaches the shared legacy sinks (`replyInfoEmbed`, `replySummaryEmbed`) to emit a V2
- * notice container instead of embeds when the target is marked.
- *
- * These tests import the REAL `interactionCore` and use no `mock.module`, so the official
- * runner batches this file into the shared unit lane where `interactionCore` is never
- * mocked. See scripts/checks/runTests.ts (planLanes) and tests/unit/checks/
- * testIsolationHygiene.test.ts for why this keeps the real module intact.
- */
+// This suite must not use mock.module, so runTests.ts keeps it in the shared unit lane where interactionCore stays
+// unmocked.
 
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { AttachmentBuilder, type ButtonInteraction, ComponentType, MessageFlags } from "discord.js";
@@ -46,29 +35,21 @@ import { createRouteInteraction, type RouteInteraction } from "../../helpers/rou
 beforeAll(async () => initializeLocalizer());
 useEnvSandbox(["RUN_ENV", "ERROR_DB_LOGGING_ENABLED"]);
 
-/** One recorded acknowledgement call against the fake interaction. */
 interface RecordedCall {
   method: "reply" | "editReply" | "webhook.send";
   payload: Record<string, unknown>;
 }
 
-/** The shared route fake, typed as the command interaction the reply sinks accept. */
 type ReplyGuardInteraction = RouteInteraction & ChatInputCommandInteraction;
 
-/**
- * Fake interaction for the sinks under test.
- *
- * `deferred` selects whether a sink routes to `editReply` (acknowledged) or `reply`, and the
- * acknowledgement goes through `deferUpdate` rather than a flag assignment so the fake's recorded
- * state stays the one its own call log describes.
- */
+// Acknowledgement uses deferUpdate rather than assigning deferred directly so the fake's recorded state stays
+// consistent with its call log.
 function makeReplyGuardInteraction(deferred: boolean): ReplyGuardInteraction {
   const interaction = createRouteInteraction();
   if (deferred) void interaction.deferUpdate();
   return interaction as ReplyGuardInteraction;
 }
 
-/** In call order, as payloads these tests can inspect. */
 function acknowledgementCalls(interaction: RouteInteraction): RecordedCall[] {
   return interaction.calls
     .filter((call) => call.method === "reply" || call.method === "editReply" || call.method === "webhook.send")
@@ -124,7 +105,6 @@ describe("Components V2 reply guard", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
-    // Legacy path carries embeds and an empty components array, never IsComponentsV2.
     expect(Array.isArray(call.payload.embeds)).toBe(true);
     expect(call.payload.flags).toBeUndefined();
   });
@@ -139,11 +119,10 @@ describe("Components V2 reply guard", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
-    // The payload is a V2 component container.
     expect(call.payload.flags).toBe(MessageFlags.IsComponentsV2);
     expect(Array.isArray(call.payload.components)).toBe(true);
     expect((call.payload.components as unknown[]).length).toBeGreaterThan(0);
-    // It MUST NOT carry legacy embeds, so Discord rejects those on a V2 message.
+    // Discord rejects legacy embeds on a V2 message, so the embeds property must be omitted.
     expect("embeds" in call.payload).toBe(false);
   });
 
@@ -427,7 +406,7 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
             components: [
               {
                 type: ComponentType.TextDisplay,
-                content: `${SECRET_SENTINEL} - `.repeat(150), // > 4000 chars
+                content: `${SECRET_SENTINEL} - `.repeat(150),
               },
             ],
           },
@@ -440,24 +419,19 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
         panel: "config:plugins:response-drafting",
       });
 
-      // Does not throw in production mode
       expect(result).toBeDefined();
 
-      // Interaction received fallback payload
       expect(calls).toHaveLength(1);
       const receivedPayload = calls[0].payload as ComponentsV2MessagePayload;
       expect(receivedPayload.flags).toBe(MessageFlags.IsComponentsV2);
       expect(hasComponentsV2Reply(interaction)).toBe(true);
 
-      // Verify log was called with redacted metadata
       expect(loggedErrors.length).toBeGreaterThan(0);
       const loggedEntry = loggedErrors[0];
       const serializedLog = JSON.stringify(loggedEntry);
 
-      // Log must NOT contain the sensitive prompt string
       expect(serializedLog).not.toContain(SECRET_SENTINEL);
 
-      // Log MUST contain structured violation metadata
       const context = loggedEntry.context as {
         metadata?: { panel?: string; violations?: Array<{ code: string; limit: number; observed: number }> };
       };
@@ -484,11 +458,9 @@ describe("after-write invariant preservation", () => {
       let writeCommitted = false;
       const { interaction, calls } = makeGuardedInteraction({ canUpdate: true });
 
-      // Simulate performPanelAction lifecycle: write -> reload -> repaint
       const performAction = async () => {
         writeCommitted = true;
 
-        // Builder generates an over-budget payload
         const overBudgetRepaintPayload = {
           flags: MessageFlags.IsComponentsV2,
           components: [
@@ -504,7 +476,6 @@ describe("after-write invariant preservation", () => {
           ],
         };
 
-        // Repaint uses deliverGuardedPanel
         await deliverGuardedPanel(interaction, overBudgetRepaintPayload, {
           method: "update",
           locale: "en-US",

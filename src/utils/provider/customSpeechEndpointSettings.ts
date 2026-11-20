@@ -12,10 +12,8 @@ export interface SpeechEndpointSettings {
   supportsInstruct: boolean;
 }
 
-/**
- * ElevenLabs renders bracket tags as delivery direction, while a local clone server would speak them
- * aloud. Only `tts-clone` servers implement the clone/VoiceDesign/Auto split.
- */
+// ElevenLabs renders bracket tags as delivery direction, whereas local tts-clone servers speak them aloud, so
+// tts-clone defaults to plain markup.
 function defaultsForApiStyle(apiStyle: CustomEndpointApiStyle): SpeechEndpointSettings {
   return apiStyle === "tts-clone"
     ? { voiceMode: "clone", scriptMarkup: "plain", supportsInstruct: false }
@@ -50,10 +48,8 @@ export function readSpeechEndpointSettings(
   };
 }
 
-/**
- * VoiceDesign and Auto both send the persona's voice prompt as an instruct field, so they imply
- * instruct support. The explicit flag only decides the question for a plain clone server.
- */
+// VoiceDesign and Auto always send the voice prompt as an instruct field, so they imply instruct support regardless
+// of explicitlySelected.
 function deriveSupportsInstruct(voiceMode: SpeechVoiceMode, explicitlySelected: boolean): boolean {
   return voiceMode === "voice-design" || voiceMode === "auto" || explicitlySelected;
 }

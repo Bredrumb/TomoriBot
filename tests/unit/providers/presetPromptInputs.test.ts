@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildPresetPrompt } from "@/providers/utils/presetCommon";
 
-/**
- * Every provider builds its request from this one prompt, so a field that reaches the params but
- * not this function is silently dropped. Google previously carried its own copy and lost the
- * appearance caption that way, which is what these tests guard.
- */
 describe("preset prompt inputs", () => {
   const base = {
     characterName: "Juno",

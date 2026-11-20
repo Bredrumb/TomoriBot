@@ -103,7 +103,7 @@ const seedChecks: SeedCheck[] = [
 
 const lifecycleCryptoSecret = process.env.CRYPTO_SECRET || "validation_crypto_secret";
 
-/** A distinctive plaintext so a restore that returned seed defaults or a re-encrypted blob cannot match. */
+// Distinctive plaintext so a restore returning seed defaults or a re-encrypted blob cannot match.
 const sentinelApiKey = "sk-lifecycle-sentinel-0123456789";
 const sentinelServerDiscId = "lifecycle-server-1";
 const sentinelUserDiscId = "lifecycle-user-1";
@@ -219,11 +219,8 @@ async function hasRagSchema(client: SQL): Promise<boolean> {
   return Boolean(row?.exists);
 }
 
-/**
- * Inserts one representative row per user-owned domain so a restore has something to lose.
- * The credential is encrypted with pgcrypto directly because `encryptApiKey` is bound to the
- * app's global client, which points at the real database rather than the disposable one.
- */
+// Credentials use pgcrypto directly because encryptApiKey binds to the app's global client on the real database
+// rather than this disposable one.
 async function seedUserData(client: SQL): Promise<void> {
   const [server] = await client<{ server_id: number }[]>`
     INSERT INTO servers (server_disc_id) VALUES (${sentinelServerDiscId}) RETURNING server_id
@@ -292,7 +289,6 @@ async function seedUserData(client: SQL): Promise<void> {
   `;
 }
 
-/** Reads the seeded rows back as plain values, throwing if any of them is missing. */
 async function readUserData(client: SQL): Promise<UserDataSnapshot> {
   const [server] = await client<UserDataSnapshot["server"][]>`
     SELECT server_disc_id FROM servers WHERE server_disc_id = ${sentinelServerDiscId}
@@ -493,8 +489,7 @@ function writeValidationEnv(databaseUrl: string, baseUrl: URL): void {
       `POSTGRES_PASSWORD=${postgresPassword}`,
       `POSTGRES_DB=${tempDatabaseName}`,
       `CRYPTO_SECRET=${lifecycleCryptoSecret}`,
-      // Maintenance scripts load the full secret set, which requires a Discord token even though
-      // they never connect. Local runs hide this because Bun auto-loads the repo .env; CI has none.
+      // Provide a dummy token for CI runs without .env because maintenance scripts load the full secret schema.
       "DISCORD_TOKEN=lifecycle_validation_placeholder_token",
       "RUN_ENV=development",
       "",

@@ -303,8 +303,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         char === ")" ||
         char === "]" ||
         char === '"' ||
-        char === "\u300D" || // 」
-        char === "\u2026" || // …
+        char === "\u300D" ||
+        char === "\u2026" ||
         char === "\u2014" || // —
         char === "\n"
       ) {

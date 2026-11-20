@@ -1,23 +1,3 @@
-/**
- * Test runner wrapper for the TomoriBot regression harness.
- *
- * Behavior:
- *  1. Detect whether a valid local Postgres connection is available.
- *  2. If yes:  create a disposable `tomoribot_test_<id>` database, inject
- *              TEST_DB_READY=1 + POSTGRES_DB=<name> into the child env, run the
- *              suites, then drop the database on any exit path (clean finish,
- *              uncaught error, SIGINT, or SIGTERM).
- *  3. If no:   run the suites without DB env vars so the DB regression tests
- *              skip gracefully instead of erroring.
- *
- * Test files are grouped into LANES that run concurrently: see {@link planLanes}
- * for the grouping rules and why they are safe.
- *
- * Invoke via `bun run test` (package.json), optionally followed by explicit test
- * files for a focused disposable-database run. Do not call `bun test tests/`
- * directly when database coverage is required.
- */
-
 import type { SQL } from "bun";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,16 +6,8 @@ import { config } from "dotenv";
 import { createScriptSqlClient } from "./lib/scriptSqlClient";
 import { usesModuleMocks } from "./lib/testIsolation";
 
-/**
- * Per-test and per-hook budget handed to every `bun test` child.
- *
- * Bun defaults to 5 s, which is sized for a quiet machine. Lanes here run concurrently, so a
- * CPU-bound suite can starve an unrelated lane and surface as a timeout in whichever test happened
- * to be running: a full-tree TypeScript parse and a database `beforeAll` both failed this way on CI
- * at just over 5 s while finishing in about 1 s locally. Applied as a CLI flag rather than a
- * per-test argument because only the flag also covers hooks; Bun silently ignores a third argument
- * to `describe`.
- */
+// Timeout is passed via CLI flag because Bun's 5s default flakes under lane starvation and only the CLI flag covers
+// hooks.
 function getTestTimeoutMs(): string {
   return process.env.TOMORI_TEST_TIMEOUT_MS ?? "30000";
 }
@@ -54,27 +26,17 @@ const DATABASE_ENV_KEYS = [
   "TEST_DB_READY",
 ] as const;
 
-/** Unique suffix for the disposable database created per run. */
 const runId = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const tempDbName = `tomoribot_${runId}`;
 
-/**
- * Resolved Postgres connection details extracted from whichever env-var
- * combination the contributor has set.
- */
 interface ConnectionParams {
   host: string;
   port: string;
   user: string;
   password: string;
-  /** The maintenance database used to issue CREATE/DROP DATABASE. */
   maintenanceDb: string;
 }
 
-/**
- * Parses connection parameters from `DATABASE_URL`/`POSTGRES_URL` or the
- * individual `POSTGRES_*` vars. Returns null when no credentials are found.
- */
 function getConnectionParams(): ConnectionParams | null {
   const explicitUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
   const maintenanceDb = process.env.POSTGRES_MAINTENANCE_DB ?? "postgres";
@@ -107,9 +69,6 @@ function getConnectionParams(): ConnectionParams | null {
   };
 }
 
-/**
- * Builds a connection URL pointing at the given database name.
- */
 function buildUrl(params: ConnectionParams, database: string): string {
   const url = new URL("postgresql://localhost");
   url.hostname = params.host;
@@ -120,11 +79,7 @@ function buildUrl(params: ConnectionParams, database: string): string {
   return url.toString();
 }
 
-/**
- * Rejects non-local hosts to prevent accidentally creating/dropping a
- * database on a remote or production server. Opt-out via env var for
- * intentional use against a disposable remote instance.
- */
+// Non-local hosts are rejected by default so tests never create or drop databases on a remote or production server.
 function isLocalHost(params: ConnectionParams): boolean {
   if (process.env.TOMORI_TESTS_ALLOW_NONLOCAL_DB === "true") return true;
   const allowed = new Set(["localhost", "127.0.0.1", "::1", "postgres", "tomoribot-db", "host.docker.internal"]);
@@ -142,12 +97,8 @@ async function discoverTestFiles(): Promise<string[]> {
   return files.sort();
 }
 
-/**
- * Concatenates per-file JUnit XML files into the single outfile the caller
- * expects, then removes the per-file temporaries. The `vl` JUnit parser scans
- * for `<testsuite>` tags across the whole string, so plain concatenation yields a
- * file it reads correctly without needing one well-formed root element.
- */
+// The vl JUnit parser scans for <testsuite> tags across the whole string, so plain concatenation works without a
+// single XML root element.
 async function mergeJUnitFiles(sources: string[], dest: string): Promise<void> {
   const parts: string[] = [];
   for (const src of sources) {
@@ -160,24 +111,19 @@ async function mergeJUnitFiles(sources: string[], dest: string): Promise<void> {
   await Bun.write(dest, parts.join("\n"));
 }
 
-/** One `bun test` invocation covering one or more files. */
 interface Batch {
   files: string[];
 }
 
-/** An ordered list of batches. Batches within a lane run sequentially; lanes run concurrently. */
 interface Lane {
   id: string;
   batches: Batch[];
 }
 
-/**
- * Every `bun test` process currently running. Signal handlers iterate this so
- * Ctrl+C terminates all concurrent lanes before the disposable database is dropped.
- */
+// Tracked at module scope so signal handlers can terminate every concurrent lane before dropping the disposable
+// database.
 const liveProcesses = new Set<ReturnType<typeof Bun.spawn>>();
 
-/** Kills every running `bun test` process and waits for them to exit. */
 async function killLiveTestProcesses(): Promise<void> {
   const running = [...liveProcesses];
   for (const proc of running) proc.kill();
@@ -185,7 +131,6 @@ async function killLiveTestProcesses(): Promise<void> {
   liveProcesses.clear();
 }
 
-/** True when the file calls `mock.module()`, which leaks process-wide in Bun. */
 async function fileUsesModuleMocks(file: string): Promise<boolean> {
   const source = await Bun.file(file)
     .text()
@@ -217,28 +162,8 @@ export function buildFileBatches(files: readonly string[], maxArgChars = MAX_TES
   return batches;
 }
 
-/**
- * Groups test files into concurrently-runnable lanes.
- *
- * `mock.module()` is applied process-wide by Bun and never restored between
- * files, so a file that stubs a shared module (e.g. the `@/utils/db/repositories`
- * barrel) corrupts every file loaded LATER IN THE SAME PROCESS: surfacing as
- * ordering-dependent "X is not a function" / "Export named X not found" failures.
- * That hazard is confined to a single process, so the rule required is "no two
- * mock-using files share a process", NOT "no two files ever share a process".
- * Mock users are therefore detected by source inspection and given a batch each,
- * while everything else shares batches capped to the command-line limit. Detection
- * is by content rather than a hardcoded list so a newly-added mock user isolates
- * itself automatically instead of silently corrupting its neighbours.
- *
- * DB regression files all live in one lane and never run concurrently with each
- * other: they share a single disposable Postgres database with fixed-id fixtures,
- * so parallel runs would collide on the same rows. They are safe to overlap with
- * the unit lanes, which touch no database.
- *
- * Input order is preserved within every lane so batching never reorders DB
- * fixture interactions relative to a sequential run.
- */
+// Mock files each get one process because Bun leaks mock.module(), and DB suites stay sequential in input order
+// because they share fixed-id fixtures.
 export async function planLanes(files: string[]): Promise<Lane[]> {
   const mockFlags = await Promise.all(files.map(fileUsesModuleMocks));
 
@@ -266,7 +191,6 @@ export async function planLanes(files: string[]): Promise<Lane[]> {
   return lanes;
 }
 
-/** Result of running one lane to completion. */
 interface LaneResult {
   lane: Lane;
   exitCode: number;
@@ -274,11 +198,8 @@ interface LaneResult {
   junitOutfiles: string[];
 }
 
-/**
- * Runs a lane's batches sequentially. Output is buffered rather than inherited
- * because lanes run concurrently and interleaved test output is unreadable; the
- * caller replays each lane's buffer in lane order once everything settles.
- */
+// Lane output is buffered instead of inherited because concurrent lanes would interleave it, so the caller replays
+// buffers in lane order.
 async function runLane(
   lane: Lane,
   extraEnv: Record<string, string>,
@@ -297,7 +218,6 @@ async function runLane(
       junitOutfiles.push(batchOutfile);
     }
 
-    // Spawn the batch and track it so signal-driven cleanup can terminate it.
     const streamOutput = process.env.TOMORI_TEST_STREAM_OUTPUT === "true";
     const childEnv = { ...process.env, ...extraEnv };
     if (omitDatabaseEnv) {
@@ -306,8 +226,7 @@ async function runLane(
       childEnv.STAT_TRACKING_ENABLED = "false";
     }
 
-    // The wrapper owns environment loading and database selection. Prevent a child from loading a
-    // more specific local env file and silently undoing the disposable-database or skip decision.
+    // Pass --no-env-file so a child test process cannot reload local .env files and bypass disposable DB isolation.
     const proc = Bun.spawn(
       ["bun", "--no-env-file", "test", "--timeout", getTestTimeoutMs(), ...batch.files, ...reporterArgs],
       {
@@ -335,12 +254,6 @@ async function runLane(
   return { lane, exitCode, output: chunks.join(""), junitOutfiles };
 }
 
-/**
- * Runs every file across concurrent lanes. When `BUN_TEST_JUNIT_OUTFILE` is set
- * (the `vl` checklist sets it), each batch writes its own JUnit file which are
- * then merged into that requested path.
- *
- */
 async function runTestFiles(
   files: string[],
   extraEnv: Record<string, string> = {},
@@ -353,8 +266,7 @@ async function runTestFiles(
     lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv || lane.id !== "db")),
   );
 
-  // Replay buffered output in fixed lane order so concurrent runs stay readable.
-  // TOMORI_TEST_QUIET is set by `vl` in quiet mode to mute passing lanes while keeping failing ones.
+  // `vl` sets TOMORI_TEST_QUIET to suppress passing lanes while keeping failing ones in fixed lane order.
   for (const result of results) {
     if (process.env.TOMORI_TEST_QUIET === "true" && result.exitCode === 0) continue;
     const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
@@ -371,9 +283,7 @@ async function runTestFiles(
 }
 
 async function main(): Promise<void> {
-  // Suites assume the self-hosted branch, and a workstation `.env` may be production-shaped to exercise
-  // hosted-only flows by hand. Pinning here instead of refusing keeps `bun run test` working as typed;
-  // `isLocalHost` is what keeps a production database out of reach, not this.
+  // Pin self-hosted mode so production-shaped local .env files still run tests; isLocalHost guards production DBs.
   process.env.RUN_ENV = "development";
   delete process.env.TEST_PRODUCTION;
 
@@ -399,7 +309,6 @@ async function main(): Promise<void> {
     process.exit(await runTestFiles(testFiles, {}, true));
   }
 
-  // Non-local host detected, so fall back to skip mode to avoid touching remote DBs.
   if (!isLocalHost(params)) {
     console.warn(
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
@@ -413,9 +322,7 @@ async function main(): Promise<void> {
 
   let adminSql: SQL | null = null;
 
-  /** Kills every running test process and drops the disposable database. */
   async function cleanup(): Promise<void> {
-    // Lanes run concurrently, so several processes may be alive at once.
     await killLiveTestProcesses();
     if (adminSql) {
       // Terminate any remaining connections so DROP DATABASE can proceed.
@@ -431,7 +338,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Register signal handlers so Ctrl+C and process termination still drop the DB.
   process.on("SIGINT", async () => {
     await cleanup();
     process.exit(130);
@@ -458,8 +364,7 @@ async function main(): Promise<void> {
     await adminSql`DROP DATABASE IF EXISTS ${adminSql(tempDbName)} WITH (FORCE)`;
     await adminSql`CREATE DATABASE ${adminSql(tempDbName)}`;
 
-    // Inject the test DB coordinates into the child environment.
-    //    TEST_DB_READY=1 tells testDb.ts to enable the DB regression suites.
+    // TEST_DB_READY=1 is required because testDb.ts skips DB regression suites without it.
     const testEnv: Record<string, string> = {
       POSTGRES_HOST: params.host,
       POSTGRES_PORT: params.port,
@@ -470,8 +375,6 @@ async function main(): Promise<void> {
       TEST_DB_READY: "1",
     };
 
-    // Run the lanes; every spawned process registers itself in liveProcesses so
-    // signal-driven cleanup can terminate them all and still drop the DB.
     exitCode = await runTestFiles(testFiles, testEnv);
   } finally {
     console.log(`[test-runner] Dropping test database: ${tempDbName}`);

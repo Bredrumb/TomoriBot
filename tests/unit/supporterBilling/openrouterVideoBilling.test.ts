@@ -4,7 +4,6 @@ import { generateOpenRouterNativeVideo } from "@/providers/openrouter/openrouter
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { findOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 
-/** Answers each external-helper request in order, through a real child process like the helper itself. */
 function spawnReplies(replies: Array<{ status: number; body: unknown }>) {
   const originalSpawn = Bun.spawn;
   return spyOn(Bun, "spawn").mockImplementation(() => {

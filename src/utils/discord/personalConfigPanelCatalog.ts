@@ -35,12 +35,13 @@ export const PERSONAL_CONFIG_PAGES_BY_CATEGORY: Record<PersonalConfigCategory, r
   advanced: ["response-modes", "impersonation", "spotlight"],
 };
 
-/** A managed identity edits only its profile; the other categories hold the invoker's own account state. */
+// Managed identities expose only the profile category because other personal categories hold the invoker's own
+// account state.
 export function visiblePersonalConfigCategories(identityMode: boolean): readonly PersonalConfigCategory[] {
   return identityMode ? ["profile"] : PERSONAL_CONFIG_CATEGORIES;
 }
 
-/** Spotlights limit personas in guild channels, so a DM workspace has no Spotlight page. */
+// Spotlights limit personas in guild channels, so DM workspaces omit the Spotlight page.
 export function visiblePersonalConfigPages(
   category: PersonalConfigCategory,
   guildId: string | null,
@@ -78,10 +79,8 @@ export const QUICK_TOGGLE_CAPABILITIES: readonly PersonalConfigManagedCapability
   "transcription",
 ] as const;
 
-/**
- * Literal locale key per routing capability. Keep these literal: `check-locales` only sees
- * dot-notation string literals, so a composed key resolves to raw text with every gate green.
- */
+// Locale keys here must stay string literals because check-locales only validates dot-notation literals and misses
+// composed keys.
 export const ROUTING_CAPABILITY_LOCALE_KEYS: Record<PersonalProviderCapability, string> = {
   text: "commands.personal.config.routing_text",
   vision: "commands.personal.config.routing_vision",
@@ -94,19 +93,12 @@ export const ROUTING_CAPABILITY_LOCALE_KEYS: Record<PersonalProviderCapability, 
   transcription: "commands.config.panel.capability_stt",
 };
 
-/**
- * Rows one Spotlight removal modal can present: Discord allows five components, each a ten-option
- * checkbox group. The renderer, the range chooser, and the submit handler must agree on it, because
- * unchecked-means-remove derives the removal set from the slice that was presented.
- */
+// Capped at 50 (5 Discord modal components of 10 checkboxes) and shared across renderers and submit handlers because
+// unchecked-means-remove slices by it.
 export const SPOTLIGHT_REMOVE_PAGE_SIZE = 50;
 
-/**
- * Options one String Select modal page can present. A String Select caps at 25, so a page that
- * reserves a slot for its own "none" entry holds 24. Each renderer, range chooser, and modal
- * builder that slices the same list must share one of these, because a range button carries an
- * absolute row offset and a reader that divides by a different size lands on another page.
- */
+// Discord String Selects cap at 25 (24 when reserving a "none" slot), and callers must share these sizes because
+// range buttons carry absolute row offsets.
 export const PERSONAL_MODEL_PAGE_SIZE = 25;
 export const PERSONAL_PROVIDER_DIRECT_LIMIT = 24;
 export const PERSONAL_PROVIDER_RANGE_VALUE = "__provider_range__";
@@ -118,10 +110,6 @@ export function encodeProviderRangeValue(start: number, expandedProvider: string
   return `${PROVIDER_RANGE_VALUE_PREFIX}${start}:${encodedProvider}`;
 }
 
-/**
- * Returns null for any value that is not a range sentinel so callers can branch on shape rather
- * than on a separate flag.
- */
 export function decodeProviderRangeValue(value: string): { start: number; expandedProvider: string | null } | null {
   if (value === PERSONAL_PROVIDER_RANGE_VALUE) {
     return { start: 0, expandedProvider: null };
@@ -144,24 +132,15 @@ export function decodeProviderRangeValue(value: string): { start: number; expand
 export const PERSONAL_FALLBACK_PAGE_SIZE = 24;
 export const SPOTLIGHT_AUTO_TRIGGER_PAGE_SIZE = 24;
 
-/**
- * Personas one Spotlight persona modal can present: five components, each a ten-option checkbox
- * group. Channel and duration take their own earlier step precisely so all five are available here.
- * A spotlight's personas therefore come from one block of this size, which is why the selection
- * bitmask is block-relative and the block index travels with it.
- */
+// Capped at 50 (5 Discord modal components of 10 checkboxes), so channel and duration run in an earlier step and the
+// selection bitmask stays block-relative.
 export const SPOTLIGHT_PERSONA_PAGE_SIZE = 50;
 
-/**
- * Range/block options one select menu can present: Discord allows at most 25 options.
- */
+// Capped at 25 because Discord allows at most 25 options in one select menu.
 export const SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE = 25;
 
-/**
- * Base36 rather than hex because the bitmask shares a 100-character custom ID with a snowflake, a
- * duration, a fingerprint, and a nonce. At the 50-bit bound a hex mask is 13 characters and lands
- * `spot-set-cf` on exactly 100 with no headroom; base36 is 10.
- */
+// Base36 (10 chars at 50 bits) is used instead of hex (13 chars) because spot-set-cf would otherwise hit Discord's
+// 100-character custom ID limit.
 export function encodeSpotlightMask(bits: bigint): string {
   return bits.toString(36);
 }
@@ -185,21 +164,14 @@ export function decodeProviderParam(encoded: string): string {
   return encoded.replace(/~/g, ":");
 }
 
-/**
- * Marks a provider select value that also carries a page offset into that provider's option list.
- * `!` survives the `:`/`~` swap {@link encodeProviderParam} performs, so a page value stays
- * distinguishable from a bare provider value after decoding.
- */
+// The ! delimiter survives encodeProviderParam's colon/tilde swap so paged provider values stay distinct from bare
+// provider names.
 const PROVIDER_PAGE_VALUE_PREFIX = "page!";
 
 export function encodeProviderPageValue(provider: string, start: number): string {
   return `${PROVIDER_PAGE_VALUE_PREFIX}${start}!${encodeProviderParam(provider)}`;
 }
 
-/**
- * Returns null for a bare provider value so callers can branch on shape rather than on a separate
- * flag that could disagree with the value they actually received.
- */
 export function decodeProviderPageValue(value: string): { provider: string; start: number } | null {
   if (!value.startsWith(PROVIDER_PAGE_VALUE_PREFIX)) return null;
   const rest = value.slice(PROVIDER_PAGE_VALUE_PREFIX.length);
@@ -211,10 +183,8 @@ export function decodeProviderPageValue(value: string): { provider: string; star
   return provider ? { provider, start } : null;
 }
 
-/**
- * Binds spotlight set selection to the exact presented persona collection and actor scope.
- * Drift in persona count or ordering invalidates the continuation without writing.
- */
+// Actor scope and ordered persona IDs are fingerprinted so stale submissions abort without writing if persona count
+// or order drifts.
 export function computeSpotlightSetFingerprint(
   guildId: string,
   userDiscId: string,
@@ -224,10 +194,8 @@ export function computeSpotlightSetFingerprint(
   return createHash("sha256").update(`spotlight-set:${guildId}:${userDiscId}:${ids}`).digest("base64url").slice(0, 8);
 }
 
-/**
- * Binds spotlight removal to the exact active rows presented when the removal action started.
- * Drift in active rows or ordering invalidates unchecked-means-remove derivation without writing.
- */
+// Actor scope and ordered channel IDs are fingerprinted so unchecked-means-remove aborts without writing if active
+// rows shift.
 export function computeSpotlightRemoveFingerprint(
   guildId: string,
   userDiscId: string,
@@ -266,7 +234,6 @@ export type PersonalConfigPanelRoute =
   | { action: "crossserver-toggle"; locale: string }
   | { action: "crossserver-set"; locale: string; enabled: boolean }
   | { action: "ping-user-set"; locale: string; enabled: boolean }
-  // Models - Switch Models
   | { action: "quick-toggle-open"; locale: string }
   | { action: "quick-toggle-submit"; locale: string; nonce: string }
   | { action: "model-provider-select"; locale: string; capability: PersonalConfigManagedCapability }
@@ -277,30 +244,24 @@ export type PersonalConfigPanelRoute =
       provider: string;
       nonce: string;
     }
-  // Models - Parameters
   | { action: "parameters-provider-select"; locale: string }
   | { action: "parameters-1-open"; locale: string; provider: string }
   | { action: "parameters-1-submit"; locale: string; provider: string; nonce: string }
   | { action: "parameters-2-open"; locale: string; provider: string }
   | { action: "parameters-2-submit"; locale: string; provider: string; nonce: string }
-  // Models - Fallbacks
   | { action: "fallbacks-provider-select"; locale: string }
   | { action: "fallbacks-page"; locale: string; provider: string; start: number }
   | { action: "fallbacks-submit"; locale: string; provider: string; nonce: string }
   | { action: "randomizer-toggle"; locale: string; provider: string }
   | { action: "randomizer-set"; locale: string; provider: string; enabled: boolean }
-  // Models - Fallbacks, account-wide
   | { action: "server-fallback-set"; locale: string; enabled: boolean }
-  // Advanced - Response Modes
   | { action: "trigger-mode-set"; locale: string; mode: "off" | "follow" | "on" }
   | { action: "tool-mode-set"; locale: string; mode: "off" | "follow" | "on" }
-  // Advanced - Impersonation
   | { action: "impersonation-open"; locale: string }
   | { action: "impersonation-submit"; locale: string; nonce: string }
   | { action: "impersonation-clear-view"; locale: string }
   | { action: "impersonation-clear-confirm"; locale: string; nonce: string }
   | { action: "impersonation-clear-cancel"; locale: string }
-  // Advanced - Personal Spotlight
   | { action: "spotlight-set-open"; locale: string }
   | { action: "spotlight-set-step1"; locale: string; nonce: string }
   | { action: "spotlight-set-block"; locale: string; channelId: string; hours: number; fp: string; blockIdx: number }
@@ -400,8 +361,6 @@ export type PersonalConfigPanelRoute =
       page: PersonalConfigPage;
       lineageId?: number;
     };
-
-// const WIRE_ACTION_TOKENS was folded into PERSONAL_CONFIG_ROUTE_CODECS; wire tokens are defined per codec.
 
 export type PersonalConfigAction = PersonalConfigPanelRoute["action"];
 
@@ -574,11 +533,6 @@ const enabledField: RouteFieldCodec<"enabled", boolean> = {
   decode: (v) => parseEnabled(v),
 };
 
-/**
- * Authoritative codec table for all personal-config routes.
- * Keyed by semantic action to guarantee compile-time exhaustiveness.
- * Preserves the exact v2 wire format: wire token, locale, and ordered field serialization.
- */
 export const PERSONAL_CONFIG_ROUTE_CODECS: PersonalConfigRouteCodecs = {
   category: {
     wireToken: "category",
@@ -850,16 +804,10 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<PersonalConfigAction, Person
   PERSONAL_CONFIG_ROUTE_CODECS,
 );
 
-/**
- * Encodes a typed route object through the authoritative codec table into route segments.
- */
 export function buildPersonalConfigRouteSegments(route: PersonalConfigPanelRoute): string[] {
   return buildRouteSegments(PERSONAL_CONFIG_ROUTE_CODECS[route.action], route);
 }
 
-/**
- * Builds a custom ID from a typed route object using the authoritative codec table.
- */
 export function buildPersonalConfigRouteId(route: PersonalConfigPanelRoute): string {
   return buildInteractionRouteId(
     PERSONAL_CONFIG_ROUTE_NAMESPACE,

@@ -54,7 +54,6 @@ export function mergeConversionReports(
   };
 }
 
-/** Splits content at the edit limit without bisecting a surrogate pair. */
 function splitLorebookContent(content: string): string[] {
   const chunks: string[] = [];
   for (let offset = 0; offset < content.length; ) {
@@ -73,7 +72,6 @@ function truncateLorebookTitle(title: string, suffix = ""): string {
   return `${title.slice(0, LOREBOOK_TITLE_MAX - suffix.length).trim()}${suffix}`;
 }
 
-/** Maps a Character Book (a card's `character_book`) into lorebook entries. */
 export function convertCharacterBook(characterBook: unknown): LorebookConversion {
   const book = asSillyTavernObject(characterBook);
   const report = emptyConversionReport();

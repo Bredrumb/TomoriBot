@@ -803,8 +803,8 @@ describe("isConfigRouteAuthorized", () => {
   });
 
   it("keeps every TTS Parameters & Voices route manager-only in a guild and open to a DM owner", () => {
-    // These ten absorb /speech leaves that shipped with no handler-level check at all, so the panel
-    // route is their entire gate. The DM owner keeps access because the page is workspace scoped.
+    // These routes absorb /speech leaves with no handler-level check, so the panel route is
+    // their entire gate while DM owners retain workspace-scoped access.
     const routes: ConfigPanelRoute[] = [
       { action: "tts-parameters-open", locale: "en-US" },
       { action: "tts-parameters-submit", locale: "en-US", nonce: "nonce1234567" },

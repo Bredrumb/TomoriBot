@@ -1,11 +1,3 @@
-/**
- * Crawl4AI function wrappers.
- *
- * These are intentionally hidden from LLM discovery. `fetchUrl/crawl4aiEngine`
- * calls this wrapper so the REST integration follows the same shape as other
- * sibling REST tool implementation modules.
- */
-
 import { log } from "@/utils/misc/logger";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import {
@@ -57,8 +49,7 @@ export async function crawl4ai_fetch_url(args: Record<string, unknown>, context?
     const filterMode = resolveFilterMode(args);
     const request = { url: args.url.trim(), f: filterMode };
     const cookies = getCrawl4aiCookies();
-    // Use /crawl with browser_config when cookies are configured, so /md
-    //    does not expose a cookies field so injection requires /crawl.
+    // /md does not accept cookies, so cookie-configured fetches route through /crawl instead.
     const result =
       cookies.length > 0
         ? await crawl4aiCrawlWithCookies(request, cookies, { signal: context?.abortSignal })

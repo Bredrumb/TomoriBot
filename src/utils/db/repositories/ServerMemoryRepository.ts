@@ -4,16 +4,6 @@ import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { documentHeadingText, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
 import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
-/**
- * ServerMemoryRepository: manages the `server_memories` table.
- *
- * Server memories are long-term facts Tomori learns about a Discord server,
- * scoped to a persona lineage. They are read back as part of TomoriState
- * (loaded by PersonaRepository.loadState) and written here.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import type { ErrorContext, ServerMemoryRow } from "@/types/db/schema";
 import { serverMemorySchema } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
@@ -22,16 +12,10 @@ import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } f
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Row shape for server_memory_configs (Phase 6). */
 type ServerMemoryConfigsRow = {
   memory_tagging_enabled: boolean;
 };
 
-/**
- * Export shape for ServerMemoryRepository.
- * Includes the Phase 6 server_memory_configs table in addition to
- * the existing memories array (expanded in Phase 6 #16.7).
- */
 type ServerMemoryExportShape = {
   server_disc_id: string;
   memory_configs: ServerMemoryConfigsRow | null;
@@ -58,10 +42,8 @@ type DocumentListDbRow = {
 
 type DocumentMeta = { document_name: string; channel_disc_ids: string[]; channel_scope_pending: boolean };
 
-/**
- * True while a document's legacy `#name` scope is unresolved; readers keep such a document out of
- * every channel, as an unmatched name filter always did.
- */
+// Pending legacy #name scopes keep a document out of every channel so unresolved rows match the old unmatched-name
+// filter rather than showing everywhere.
 function documentScopePending() {
   return sql`EXISTS (
     SELECT 1 FROM legacy_channel_scope_tags l
@@ -70,10 +52,6 @@ function documentScopePending() {
 }
 
 class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
-  /**
-   * Returns the count of documents in the documents table for a server.
-   *
-   */
   async countDocuments(serverId: number): Promise<number> {
     try {
       const [row] = await sql<[{ doc_count: string | number }]>`
@@ -86,7 +64,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /** Counts documents on this server that still hold chunks from a different embedding family. */
   async countMismatchedEmbeddingDocuments(serverId: number, embeddingFamily: string): Promise<number> {
     try {
       const [row] = await sql<[{ doc_count: string | number }]>`
@@ -102,7 +79,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /** Returns newest-first scoped rows including decay counters and UTC days for stage derivation. */
   async loadServerMemoriesScoped(
     serverId: number,
     personaLineageId: number,
@@ -144,16 +120,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Server memory count per persona lineage, for the panel's persona selector.
-   *
-   * Omits a lineage with no memories rather than mapping it to zero, matching
-   * `PersonalMemoryRepository.memoryCountsByLineage`. The panel must not substitute a guess when a
-   * lineage is absent: the count it renders is read as authoritative.
-   *
-   * @param userId - If provided, counts only memories taught by this user, matching the owner
-   *                 filter `loadServerMemoriesScoped` applies for a non-manager
-   */
+  // Zero-memory lineages are omitted (matching PersonalMemoryRepository), and userId mirrors loadServerMemoriesScoped
+  // so non-manager selector counts stay exact.
   async memoryCountsByLineage(serverId: number, userId?: number): Promise<Map<number, number>> {
     try {
       const rows =
@@ -178,13 +146,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Document count per persona, plus the serverwide scope's own count.
-   *
-   * Serverwide is a separate field because `persona_id IS NULL` is a real scope here with its own
-   * rows, and null cannot key a Map. Applies no `source_type` filter, matching `loadDocuments`, so a
-   * history-sourced document counts exactly as it does in the list the user is reading.
-   */
+  // Intentionally omits a source_type filter, matching loadDocuments, so history-sourced documents count alongside
+  // uploaded ones in the UI list.
   async documentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }> {
     try {
       const rows = await sql<Array<{ persona_id: number | string | null; count: number | string }>>`
@@ -209,11 +172,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Returns all memory content strings for a server + persona lineage.
-   * Used for case-insensitive duplicate detection before insert.
-   *
-   */
   async loadServerMemoryContents(serverId: number, personaLineageId: number): Promise<string[]> {
     try {
       const rows = await sql<Array<{ content: string }>>`
@@ -229,12 +187,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Returns memory content, tags, and channel scope for in-character history extraction context.
-   * The caller owns any channel filtering because it has the import channel set.
-   *
-   * @returns Newest-first rows
-   */
+  // Channel filtering is intentionally left to the caller because it holds the target import channel set.
   async loadServerMemoryContentTags(
     serverId: number,
     personaLineageId: number,
@@ -262,12 +215,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Returns true if a document with the given name already exists in the scope.
-   * Used for duplicate-name checking before insert.
-   *
-   * @param personaId     - null = serverwide scope; non-null = per-persona scope
-   */
   async documentExistsByName(serverId: number, personaId: number | null, documentName: string): Promise<boolean> {
     try {
       const rows =
@@ -293,9 +240,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * @param personaId - null = serverwide scope; non-null = per-persona scope
-   */
   async countDocumentsScoped(serverId: number, personaId: number | null): Promise<number> {
     try {
       const [row] =
@@ -319,11 +263,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Returns the count of document chunks across all documents in the given server + scope.
-   *
-   * @param personaId - null = serverwide scope; non-null = per-persona scope
-   */
   async countChunksScoped(serverId: number, personaId: number | null): Promise<number> {
     try {
       const [row] =
@@ -349,13 +288,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Returns true if any document exists for the given server + RAG scope.
-   * For persona scope, also checks serverwide documents (persona_id IS NULL)
-   * since RAG retrieval includes shared docs.
-   *
-   * @param personaId - null = serverwide only; non-null = persona OR serverwide
-   */
+  // Non-null personaId also checks serverwide documents (persona_id IS NULL) because RAG retrieval includes shared
+  // serverwide docs.
   async hasDocumentInScope(serverId: number, personaId: number | null): Promise<boolean> {
     const rows =
       personaId === null
@@ -374,7 +308,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return rows.length > 0;
   }
 
-  /** Edits preserve decay state, remove all vector families on content changes, and settle pending channel scope in the same transaction. */
   async edit(
     serverMemoryId: number,
     content: string,
@@ -428,7 +361,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /** Callers invalidate the Tomori cache after the batch transaction commits. */
+  // Callers must invalidate the Tomori state cache after this transaction commits, because addBatch omits cache
+  // invalidation.
   async addBatch(
     serverId: number,
     personaId: number,
@@ -474,14 +408,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Inserts a new server memory taught by Tomori.
-   * Invalidates the tomori state cache so the next context build reads the new memory.
-   *
-   * @param serverDiscId    - Discord server snowflake (required for cache invalidation)
-   * @param channelDiscIds  - Channels the memory is limited to; empty means every channel
-   * @returns Inserted ServerMemoryRow or null on failure
-   */
+  // Empty channelDiscIds means every channel, and serverDiscId must be passed so the Tomori state cache invalidates
+  // after insert.
   async add(
     serverId: number,
     personaId: number,
@@ -523,11 +451,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return row;
   }
 
-  /**
-   *
-   * @param personaLineageId - Optional persona lineage scope
-   * @returns MemoryValidationResult indicating whether the limit is exceeded
-   */
   async checkServerMemoryLimit(serverId: number, personaLineageId?: number): Promise<MemoryValidationResult> {
     const limits = getMemoryLimits();
 
@@ -564,11 +487,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Reads server_memory_configs for the given server.
-   * Memory rows are exported by ExportRepository; this method covers the config table.
-   *
-   */
+  // ExportRepository owns server_memories row exports, so this method intentionally covers only server_memory_configs
+  // and returns memories: [].
   async toExportShape(ownerId: string | number): Promise<ServerMemoryExportShape | null> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -578,9 +498,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return { server_disc_id: serverDiscId, memory_configs: memoryConfigs, memories: [] };
   }
 
-  /**
-   * Restores server_memory_configs for a server.
-   */
   async fromExportShape(ownerId: string | number, data: ServerMemoryExportShape): Promise<boolean> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -630,11 +547,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Load non-history documents for a server/tomori scope.
-   *
-   * @param personaId - Null = server-wide (shared) scope; non-null = per-persona scope
-   */
   async loadDocuments(serverId: number, personaId: number | null): Promise<DocumentListDbRow[]> {
     if (personaId === null) {
       return await sql<DocumentListDbRow[]>`
@@ -662,13 +574,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Delete a document (chunks cascade-delete via FK).
-   *
-   * @param serverId   - Internal server DB ID (ownership guard)
-   * @param personaId   - Null = server-wide scope; non-null = per-persona scope
-   * @returns Deleted document_name or null when not found
-   */
   async loadDocumentChunks(
     documentId: number,
     serverId: number,
@@ -711,11 +616,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
         `;
   }
 
-  /**
-   * Updates a single chunk's content and embedding. Used by /memories chunk edit flow.
-   * The chunk's embedding_model_id and embedding_family are overwritten to match the
-   * model that produced the new embedding, so retrieval keeps working.
-   */
   async updateChunk(params: {
     chunkId: number;
     serverId: number;
@@ -776,7 +676,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /** Leaves a gap in chunk_index; callers should rebuild text_content separately if needed. */
+  // Intentionally skips reindexing chunk_index and updating documents.text_content, so callers must rebuild
+  // text_content separately if needed.
   async deleteChunk(chunkId: number, serverId: number, personaId: number | null): Promise<boolean> {
     try {
       const [deleted] =
@@ -806,10 +707,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Loads document metadata needed by the view/edit flow (name + channel scope).
-   * Returns null if the document doesn't exist or belongs to a different server.
-   */
   async loadDocumentMeta(documentId: number, serverId: number, personaId: number | null): Promise<DocumentMeta | null> {
     const [row] =
       personaId === null
@@ -832,10 +729,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return row ?? null;
   }
 
-  /**
-   * Replaces a document's channel scope and settles any pending legacy scope, because saving the
-   * form is the admin's channel choice. Empty array = available in all channels.
-   */
+  // Empty channelDiscIds means all channels, and saving settles pending legacy scope because the form save is the
+  // admin's channel choice.
   async updateDocumentChannelScope(
     documentId: number,
     serverId: number,
@@ -875,11 +770,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Loads the `#name` scopes migration 111 moved aside that nothing has resolved yet.
-   *
-   * @param serverDiscId - Limits the load to one server; omitted, every server is loaded
-   */
   async loadPendingLegacyChannelScopes(serverDiscId?: string): Promise<PendingLegacyChannelScope[]> {
     const serverFilter = serverDiscId === undefined ? sql`` : sql`AND s.server_disc_id = ${serverDiscId}`;
     return await sql<PendingLegacyChannelScope[]>`
@@ -892,7 +782,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /** Drops legacy scopes after their memory, document, or lorebook entry is deleted. */
   async pruneOrphanedLegacyChannelScopes(): Promise<void> {
     await lorebookRepository.pruneLegacyChannelScopes();
     await sql`
@@ -911,10 +800,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Writes resolved channel scopes for one server and marks their legacy rows resolved, in one
-   * transaction. A row another instance already resolved is left untouched.
-   */
+  // Legacy rows are claimed where resolved_at IS NULL first so rows already resolved by another instance are left
+  // untouched.
   async applyLegacyChannelScopes(
     serverId: number,
     resolutions: ReadonlyArray<{ sourceTable: LegacyChannelScopeSource; rowId: number; channelDiscIds: string[] }>,
@@ -964,11 +851,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return (rows[0]?.document_name as string | undefined) ?? null;
   }
 
-  /**
-   * Load history-sourced documents for a server/tomori scope.
-   *
-   * @param personaId - Null = server-wide scope; non-null = per-persona scope
-   */
   async loadHistoryDocuments(
     serverId: number,
     personaId: number | null,
@@ -993,14 +875,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Returns the set of persona ids that own at least one history-sourced document in the given
-   * server, for the Documents page's per-persona history marker. Reproduces the
-   * `source_type = 'history'` filter `loadHistoryDocuments` applies, so a persona with only
-   * uploaded documents is excluded.
-   *
-   * @returns Set of `persona_id` values with history documents.
-   */
   async personaIdsWithHistoryDocuments(serverId: number): Promise<Set<number>> {
     try {
       const rows = await sql<Array<{ persona_id: number | string }>>`
@@ -1017,13 +891,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Delete a history-sourced document (chunks cascade-delete via FK).
-   *
-   * @param serverId   - Internal server DB ID (ownership guard)
-   * @param personaId   - Null = server-wide scope; non-null = per-persona scope
-   * @returns Deleted document_name or null when not found
-   */
   async removeHistoryDocument(documentId: number, serverId: number, personaId: number | null): Promise<string | null> {
     const rows =
       personaId === null
@@ -1046,14 +913,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     return (rows[0]?.document_name as string | undefined) ?? null;
   }
 
-  /**
-   * Delete a server memory scoped to server + persona lineage.
-   * Used by the updateLongTermMemoryTool function call handler.
-   *
-   * @param serverId         - Internal server DB ID (ownership guard)
-   * @param personaLineageId - Persona lineage scope guard
-   * @returns Row with server_memory_id, content, user_id or null when not found
-   */
   async removeByIdWithLineage(
     memoryId: number,
     serverId: number,
@@ -1075,7 +934,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       : null;
   }
 
-  /** Scoped content edits preserve decay state and delete every vector family atomically when optional vector storage exists. */
   async updateByIdWithLineage(
     memoryId: number,
     content: string,
@@ -1169,7 +1027,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       return null;
     }
   }
-  /** Locks the server before rechecking its lineage cap and atomically evicts the least reinforced dormant unprotected memory only when the global switch is on. */
   async addWithEviction(
     serverId: number,
     personaId: number,
@@ -1217,5 +1074,4 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const serverMemoryRepository = new ServerMemoryRepository();

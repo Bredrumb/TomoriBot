@@ -34,9 +34,7 @@ export type BufferedDeliveryBoundary =
 export type StreamDeliveryOptions = {
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
-  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
   spriteRecord?: SpriteMessageRecordInfo;
-  /** The persona's base appearance under an identity override, which is not a copied identity. */
   isNeutralAppearance?: boolean;
 };
 
@@ -45,9 +43,6 @@ type StreamMessageDeliveryDependencies = {
   uiUpdater: StreamUiUpdater;
 };
 
-/**
- * Owns Discord message delivery, typing simulation, aggregate-mode flushing, and table attachments.
- */
 export class StreamMessageDelivery {
   public constructor(private readonly deps: StreamMessageDeliveryDependencies) {}
 
@@ -189,11 +184,8 @@ export class StreamMessageDelivery {
       // so the entry must exist before the button can be clicked.
       setCachedRenderedMarkdownTable(sentMessage.id, tableMarkdown.trim());
 
-      // A webhook-authored message can only be edited through the webhook that sent it, so
-      // hand the collector whichever webhook actually delivered this table, plus the thread
-      // id a parent-channel webhook needs to address a message posted inside a thread.
-      // A sprite render can put the main persona on the webhook path without ever populating
-      // `context.webhook`, so resolve it lazily in that case; the lookup is cached.
+      // Resolve the authoring webhook lazily when sentMessage.webhookId is set because sprite renders can use
+      // webhooks without populating context.webhook.
       const authoringWebhook = sentMessage.webhookId
         ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)) ?? undefined)
         : undefined;

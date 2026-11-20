@@ -1,10 +1,5 @@
-// Removes shared preset images left behind by the retired
-// `presets/{lineage}/{language}/...` storage layout. Preset art does not vary by locale, so that
-// layout stored one identical copy per authored locale; the current layout is
-// `presets/{lineage}/...`. Run this once, AFTER a startup re-seed has written the language-free
-// copies and repointed the DB rows.
-//
-// Local filesystem only. Production objects live in GCS/S3 and are not touched.
+// Prune local `presets/{lineage}/{language}/` duplicates only after startup re-seed writes language-free copies
+// (GCS/S3 untouched).
 
 import { readdir, rm, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -16,9 +11,7 @@ const PRESET_ROOT = path.join(process.cwd(), "data", "avatars", "presets");
 const LOCALE_SEGMENTS = new Set<string>(DISCORD_LOCALES);
 
 interface Candidate {
-  /** Absolute path of the file under the retired per-language layout. */
   legacyPath: string;
-  /** Absolute path its bytes should also live at under the current layout. */
   currentPath: string;
   bytes: number;
 }
@@ -40,12 +33,6 @@ async function hashOf(filePath: string): Promise<string> {
     .digest("hex");
 }
 
-/**
- * Pairs each legacy file with the current-layout path holding the same image.
- *
- * A legacy path is `presets/{lineage}/{locale}/[sprites/]{file}`; dropping the locale segment gives
- * the current path. Anything already language-free is skipped rather than reported.
- */
 async function collectCandidates(): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
   for (const legacyPath of await listPngFiles(PRESET_ROOT)) {

@@ -48,9 +48,7 @@ describe("classifyOpenAICompatibleStatus", () => {
 
 describe("processChunk on an SSE error event", () => {
   it("classifies a mid-stream 500 as a retryable provider overload", () => {
-    // The SSE path used to hardcode a non-retryable api_error, which reported a transient
-    // mid-stream failure to users as a permanent request error while the HTTP path for the very
-    // same status said provider_overloaded.
+    // SSE error events must match the HTTP path so transient 500s classify as retryable provider_overloaded.
     const processed = makeAdapter().processChunk(
       makeChunk({ error: { code: 500, message: "Internal server error", type: "internal_server_error" } }),
     );

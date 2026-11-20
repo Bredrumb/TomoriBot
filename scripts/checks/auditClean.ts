@@ -1,12 +1,5 @@
-/**
- * Runs `bun audit --audit-level=high` and exits non-zero only if high or
- * critical vulnerabilities are found. Low and moderate advisories are reported
- * but do not block the pipeline.
- *
- * bun audit has no working workspace filter: it always audits the whole
- * lockfile, including apps/docs devDeps. Advisories reaching the gate via
- * workspace:tomoribot-docs are build-time-only, but still block audit:clean.
- */
+// `bun audit` has no working workspace filter and scans the entire lockfile, so build-time `apps/docs` devDependency
+// advisories still hit `audit:clean`.
 
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";

@@ -1,8 +1,3 @@
-/**
- * Memory/Learning Tool
- * Allows the AI to learn and remember new information for future interactions
- */
-
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
@@ -12,9 +7,6 @@ import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtecti
 import { renderMemorySaveNoticeContent, memoryServerDiscId } from "@/tools/functionCalls/memoryNoticeContent";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
-/**
- * Tool for remembering and learning new information during conversations
- */
 export class MemoryTool extends BaseTool {
   name = "create_long_term_memory";
   description =
@@ -45,26 +37,14 @@ export class MemoryTool extends BaseTool {
     required: ["memory_content", "memory_scope"],
   };
 
-  /**
-   * Check if memory tool is available for the given provider
-   * @returns True if provider supports memory functionality
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Check if self-teaching functionality is enabled in Tomori config
-   * @returns True if self-teaching is enabled
-   */
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.self_teaching_enabled;
   }
 
-  /**
-   * Execute memory storage
-   * @param args - Arguments containing memory details
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
@@ -111,7 +91,6 @@ export class MemoryTool extends BaseTool {
     const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
     if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {
-      // Log which specific value is missing for diagnostics
       const missing = [
         !tomoriState && "tomoriState",
         !userRow && "userRow",
@@ -226,8 +205,7 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    // Sanitize unknown {word} placeholders (e.g. {zallya}), so the LLM sometimes wraps
-    // usernames in braces imitating {user}. Strip the braces so the name appears plainly.
+    // Strip unknown {word} braces because the LLM sometimes wraps usernames in braces imitating {user}.
     const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
 
     // Validate memory content length after any bridge/self fallback rewrites.
@@ -249,8 +227,7 @@ export class MemoryTool extends BaseTool {
       };
     }
 
-    // Guard: lineage_id=0 is reserved for global memories, never a valid persona ID.
-    // The schema migration repairs this, but block the write if it somehow persists.
+    // Block lineage_id=0 writes because 0 is reserved for global memories rather than any persona.
     if (tomoriState.persona_lineage_id === 0) {
       log.error(
         `Self-teach blocked: Tomori ${tomoriState.persona_id} has persona_lineage_id=0. Schema migration may not have run.`,
@@ -404,11 +381,9 @@ export class MemoryTool extends BaseTool {
           };
         }
 
-        // Check if user has opted out of personalization (privacy setting)
         const { PrivacyLevel } = await import("../../types/db/schema");
         const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
 
-        // Block self-teaching for PARTIAL and FULL privacy levels
         if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
           log.info(
             `Self-teach blocked: User ${resolvedTargetUserId} (${targetUserDisplayName}) has privacy level ${userPrivacyLevel}`,
@@ -475,7 +450,6 @@ export class MemoryTool extends BaseTool {
             forgottenContent: saveResult.evicted?.content,
           });
 
-          // Determine footer key based on personalization settings
           const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
           const serverDiscId = memoryServerDiscId(
             context,
@@ -541,7 +515,6 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    // This should never be reached due to validation above
     return {
       success: false,
       error: "Invalid memory scope",

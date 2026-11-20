@@ -1,12 +1,3 @@
-/**
- * Conversation compaction for the Anthropic provider.
- *
- * - Plain-text conversation summaries via a direct POST to the
- *   Anthropic Messages API (non-streaming).
- * - Roleplay structured summaries delegated to callAnthropicStructuredJSON,
- *   which uses the forced tool-use pattern for structured output.
- */
-
 import { log } from "@/utils/misc/logger";
 import type {
   CompactConversationResult,
@@ -19,9 +10,6 @@ import { buildRoleplaySchema, CompactRoleplaySummarySchema } from "@/providers/u
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 
-/**
- * Generate a plain-text conversation summary using the Anthropic Messages API.
- */
 export async function generateConversationSummaryAnthropic(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactConversationResult> {
@@ -40,7 +28,6 @@ export async function generateConversationSummaryAnthropic(
       temperature: request.temperature ?? 0.7,
     };
 
-    // Add system prompt if provided (Anthropic uses top-level system parameter)
     if (request.systemPrompt) {
       body.system = request.systemPrompt;
     }
@@ -93,9 +80,6 @@ export async function generateConversationSummaryAnthropic(
   }
 }
 
-/**
- * Generate a structured roleplay summary using the Anthropic API.
- */
 export async function generateRoleplaySummaryAnthropic(
   request: ProviderCompactSummaryRequest,
 ): Promise<CompactRoleplayResult> {

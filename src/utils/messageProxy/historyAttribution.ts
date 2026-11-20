@@ -29,7 +29,6 @@ const DEFAULT_DEPENDENCIES: MessageProxyHistoryAttributionDependencies = {
   loadMessageIdentities: (messageDiscIds) => messageProxyRepository.getMessageIdentitiesByMessageIds(messageDiscIds),
 };
 
-/** Current verified identity from the adapter cache, including the webhook name fallback. */
 export function resolveCachedMessageProxyIdentity(
   message: Message,
   dependencies: Pick<
@@ -106,15 +105,8 @@ export async function resolveMessageProxyMessageIdentitiesForHistory(
   return identities;
 }
 
-/**
- * Resolves verified proxy attribution for one message that sits outside the prepared history
- * window, such as a reply reference fetched by ID. Uses the same cache-first lookup and single
- * batched index read as history, so rebuilding context never calls a service API, and a
- * confirmed miss is remembered so repeated lookups for the same message stay free.
- *
- * A hit is merged into `identities` so every later consumer in the same turn reads the same
- * attribution the history loop would have produced for that message.
- */
+// Context rebuilds read cache and the DB index without calling a service API, and hits merge into identities so
+// downstream consumers share one attribution.
 export async function ensureMessageProxyMessageIdentity(
   message: Message,
   identities: Map<string, MessageProxyHistoryIdentity>,

@@ -1,27 +1,3 @@
-/**
- * Shared building blocks for the `/stats` commands (Phase 2 presentation layer).
- * Lives under utils/ (not commands/) because it is a helper module, not a loadable
- * command file: the command loader only scans commands/ for configureSubcommand/execute.
- *
- * - Timeframe → window resolution (daily-bucket floor).
- * - Per-view tab builders (personal / persona / server) that turn StatRepository
- *   reads into localized dashboard "tabs".
- * - A public, invoker-controlled tabbed dashboard renderer built on Components V2:
- *   each tab is a single container (H3 title, separator-divided stat sections, and
- *   the tab buttons living INSIDE the card). A row of named tab buttons swaps which
- *   tab container is shown (a tabbed view, not item pagination).
- *
- * Timeframe gating: metrics whose underlying data is inherently
- * all-time (rewards/punishments and memories) are only surfaced when timeframe =
- * all_time, and span metrics (streaks, peak hour/day) are hidden under the single-day
- * "today" view where they are meaningless. The builders decide this directly so
- * gated reads are never even fired. Generation totals are daily telemetry and work
- * for every timeframe.
- *
- * Token/cost figures prefer provider-reported usage and fall back to character estimates
- * when usage is unavailable (see tokenEstimate / postTurnEffects). They remain estimates
- * because catalog prices can be incomplete or provider-dependent.
- */
 import { TIMEFRAME_LABEL_KEYS } from "@/utils/discord/statsDashboardCatalog";
 import {
   type AttachmentBuilder,
@@ -50,23 +26,15 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { buildDashboardPagePayload, type DashboardPage } from "@/utils/metrics/status/statusPageRenderer";
 import { buildStatsDashboardButtonId } from "@/utils/discord/statsDashboardCatalog";
 
-/** Selectable time windows. `all_time` omits the bucket floor entirely. */
 export type Timeframe = "today" | "week" | "month" | "year" | "all_time";
 
-/** The choice values offered by the `timeframe` slash option, in display order. */
 export const TIMEFRAME_VALUES: Timeframe[] = ["today", "week", "month", "year", "all_time"];
 
-/** Default timeframe when the (optional) slash option is omitted: all-time. */
 export const DEFAULT_TIMEFRAME: Timeframe = "all_time";
 
-/** Scope choice for the personal view: current server vs. across all servers. */
 export type StatsScope = "this_server" | "global";
 
-/**
- * Resolves a timeframe to a `bucket >= from` floor (YYYY-MM-DD, UTC), or undefined
- * for all-time. "today" is the current UTC day only: the daily bucket grain cannot
- * express a rolling 24h, so the option is labelled "Today" rather than "24 hours".
- */
+// Today uses the current UTC day only because the daily bucket grain cannot express a rolling 24h window.
 export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
   if (timeframe === "all_time") return undefined;
   const now = new Date();
@@ -75,10 +43,12 @@ export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
     case "today":
       break;
     case "week":
-      floor.setUTCDate(floor.getUTCDate() - 6); // last 7 days incl. today
+      // Subtract 6 days so the inclusive 7-day window includes today.
+      floor.setUTCDate(floor.getUTCDate() - 6);
       break;
     case "month":
-      floor.setUTCDate(floor.getUTCDate() - 29); // last 30 days incl. today
+      // Subtract 29 days so the inclusive 30-day window includes today.
+      floor.setUTCDate(floor.getUTCDate() - 29);
       break;
     case "year":
       floor.setUTCFullYear(floor.getUTCFullYear() - 1);
@@ -87,20 +57,14 @@ export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
   return floor.toISOString().split("T")[0];
 }
 
-/** Locale-grouped integer (e.g. 12,345). */
 function fmtInt(n: number, locale: string): string {
   return formatLocaleInteger(n, locale);
 }
 
-/** USD cost with 4 decimals (estimates are small). */
 function fmtUsd(n: number): string {
   return `$${n.toFixed(4)}`;
 }
 
-/**
- * Renders a ranked "1. label: `count` unit" list, or the localized empty placeholder.
- * `unit` is an already-localized suffix (e.g. "messages sent") appended after the count.
- */
 function rankedList(locale: string, entries: Array<{ label: string; count: number }>, unit?: string): string {
   if (entries.length === 0) return localizer(locale, "commands.stats.empty");
   return entries
@@ -108,10 +72,6 @@ function rankedList(locale: string, entries: Array<{ label: string; count: numbe
     .join("\n");
 }
 
-/**
- * Renders the richer per-model rows: "1. `model`: 31,386 in / 155 out / $0.0000".
- * Falls back to the localized empty placeholder when there is no token data.
- */
 function modelCostList(locale: string, entries: ModelCostEntry[]): string {
   if (entries.length === 0) return localizer(locale, "commands.stats.empty");
   const inShort = localizer(locale, "commands.stats.units.tokens_in_short");
@@ -124,12 +84,10 @@ function modelCostList(locale: string, entries: ModelCostEntry[]): string {
     .join("\n");
 }
 
-/** Title-cases a raw emotion key for display (matches the /expressions UI). */
 function titleCaseEmotion(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-/** Renders a ranked emotion list with title-cased category labels. */
 function emotionList(locale: string, entries: EmotionEntry[]): string {
   return rankedList(
     locale,
@@ -137,7 +95,6 @@ function emotionList(locale: string, entries: EmotionEntry[]): string {
   );
 }
 
-/** Index of the highest-count key in a numeric record, or null when empty. */
 function peakKey(record: Record<number, number>): number | null {
   let best: number | null = null;
   let bestCount = -1;
@@ -150,17 +107,12 @@ function peakKey(record: Record<number, number>): number | null {
   return best;
 }
 
-/** Resolves a persona lineage id to its nickname from the server's personas. */
 function lineageLabel(locale: string, names: Map<number, string>, lineageId: number): string {
   return names.get(lineageId) ?? localizer(locale, "commands.stats.unknown_persona", { id: lineageId });
 }
 
-/**
- * Builds a lineage→nickname map from the guild's cached personas. `loadAllForServer`
- * returns the main persona first, so we keep the FIRST nickname seen per lineage:
- * when a renamed/forked persona shares a lineage with a former main (copy-on-write),
- * the current main's name wins instead of a stale alter's (e.g. "Ellen", not "Lucoa").
- */
+// Only the first nickname per lineage is kept because getCachedAllPersonas orders the main persona before forked
+// alters.
 async function resolvePersonaNames(guildId: string): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   try {
@@ -176,7 +128,6 @@ async function resolvePersonaNames(guildId: string): Promise<Map<number, string>
   return map;
 }
 
-/** Shifted by a personal UTC offset when provided. */
 function formatPeakHour(locale: string, hour: number | null, offsetHours?: number | null): string {
   if (hour === null) return localizer(locale, "commands.stats.empty");
   const minutesPerDay = 24 * 60;
@@ -188,7 +139,6 @@ function formatPeakHour(locale: string, hour: number | null, offsetHours?: numbe
   return `${hh}:${mm} ${suffix}`;
 }
 
-/** Formats the peak weekday from the histogram using localized short day names. */
 function formatPeakWeekday(locale: string, byWeekday: Record<number, number>): string {
   const peak = peakKey(byWeekday);
   if (peak === null) return localizer(locale, "commands.stats.empty");
@@ -196,24 +146,16 @@ function formatPeakWeekday(locale: string, byWeekday: Record<number, number>): s
   return names[peak] ?? String(peak);
 }
 
-/**
- * One dashboard field. Inline scalars are merged into a compact block; non-inline
- * fields (ranked lists) get their own labelled section; separators flush the scalar
- * buffer and insert a visual divider between field groups.
- */
 type StatField = { kind: "stat"; nameKey: string; value: string; inline: boolean } | { kind: "separator" };
 
-/** A single-line scalar stat field (localized name + computed value). */
 function statField(nameKey: string, value: string, inline = true): StatField {
   return { kind: "stat", nameKey, value: value || "(None)", inline };
 }
 
-/** A visual section divider: flushes the scalar buffer and inserts a separator. */
 function sepField(): StatField {
   return { kind: "separator" };
 }
 
-/** The resolved content of one tab (title + subtitle + ordered fields + footer). */
 interface StatsTabPage {
   titleKey: string;
   subtitle: string;
@@ -221,27 +163,19 @@ interface StatsTabPage {
   fields: StatField[];
 }
 
-/** One dashboard tab: a button (label) plus the page it reveals. */
 export interface StatsTab {
-  /** Stable id used in the button custom_id and to locate the tab on click. */
   id: string;
-  /** Locale key for the button label. */
   labelKey: string;
-  /** The page shown when this tab is active. */
   page: StatsTabPage;
 }
 
 const FOOTER_KEY = "commands.stats.footer";
 const DASHBOARD_COLOR = ColorCode.INFO;
 
-/** Common page scaffolding (title + subtitle + footer) for a tab. */
 function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTabPage {
   return { titleKey, subtitle, footerKey: FOOTER_KEY, fields };
 }
 
-/**
- * Builds the rows of named tab buttons (≤5 per row); the active tab is disabled.
- */
 function buildTabButtonRows(
   context: StatsDashboardViewContext,
   tabs: StatsTab[],
@@ -267,7 +201,6 @@ function buildTabButtonRows(
   return rows;
 }
 
-/** Adapts statistics fields to the shared dashboard layout without losing visual separators. */
 function toDashboardPage(tabPage: StatsTabPage, iconUrl?: string): DashboardPage {
   return {
     titleKey: tabPage.titleKey,
@@ -283,10 +216,8 @@ function toDashboardPage(tabPage: StatsTabPage, iconUrl?: string): DashboardPage
   };
 }
 
-/**
- * Builds the editReply/update payload for the active tab. `iconFile` is re-attached
- * on every paint so an `attachment://` icon ref keeps resolving across tab switches.
- */
+// iconFile is attached on every payload because Discord requires it on each update for attachment:// icon URLs to
+// keep resolving.
 export function buildStatsDashboardPayload(
   context: StatsDashboardViewContext,
   tabs: StatsTab[],
@@ -299,10 +230,6 @@ export function buildStatsDashboardPayload(
   flags: MessageFlags.IsComponentsV2;
   files?: AttachmentBuilder[];
 };
-/**
- * Compatibility overload for callers that only exercise the shared layout helper.
- * Production renderers always provide a typed view context.
- */
 export function buildStatsDashboardPayload(
   legacyContext: string,
   tabs: StatsTab[],
@@ -368,21 +295,6 @@ export function buildStatsDashboardPayload(
   };
 }
 
-/**
- * Renders a public tabbed dashboard. The dashboard buttons are durable global routes,
- * so each repaint is handled by the interaction router rather than a message collector.
- *
- * @param interaction - The acknowledged (publicly deferred) slash interaction.
- * @param context     - Immutable view inputs encoded into every tab button.
- * @param tabs        - The tabs to render (first is shown initially).
- * @param iconUrl     - Optional avatar/icon URL pinned to the card's top-right corner
- *                      (user avatar for /personal, persona avatar for /persona, server
- *                      icon for /server). Either a public http(s) URL or an
- *                      `attachment://<name>` ref backed by `iconFile`.
- * @param iconFile    - Optional attachment backing an `attachment://` iconUrl (a local
- *                      persona avatar loaded from disk when no public URL exists, e.g.
- *                      non-production). Re-attached on every repaint so the ref resolves.
- */
 export async function renderStatsDashboard(
   interaction: ChatInputCommandInteraction,
   context: StatsDashboardViewContext,
@@ -394,10 +306,6 @@ export async function renderStatsDashboard(
   await interaction.editReply(buildStatsDashboardPayload(context, tabs, 0, true, iconUrl, iconFile));
 }
 
-/**
- * Renders the same public dashboard through a caller-owned one-shot public reply.
- * Persona uses this after its private validation acknowledgement is deleted.
- */
 export async function renderStatsDashboardWithReply(
   reply: (payload: ReturnType<typeof buildStatsDashboardPayload>) => Promise<unknown>,
   context: StatsDashboardViewContext,
@@ -422,11 +330,6 @@ export type StatsDashboardViewContext =
   | (StatsDashboardViewContextBase & { view: "persona"; personaId: number })
   | (StatsDashboardViewContextBase & { view: "server" });
 
-/**
- * Builds the personal (`/stats personal`) dashboard tabs for one user.
- * `scopeServerId` is the internal server id when scope=this_server, else undefined
- * (global, aggregated across every server the user shares with the bot).
- */
 export async function buildPersonalTabs(args: {
   locale: string;
   userId: number;
@@ -439,8 +342,7 @@ export async function buildPersonalTabs(args: {
   subtitle: string;
   timezoneOffset?: number | null;
 }): Promise<StatsTab[]> {
-  // Dashboards are low-frequency reads. Drain telemetry first so the rendered
-  // snapshot includes any successfully buffered work from the current process.
+  // Drain buffered telemetry before dashboard reads so recent current-process activity appears in the snapshot.
   await statRepository.flush();
   const { locale, userId, from, scopeServerId, subtitle, timeframe } = args;
   const isAllTime = timeframe === "all_time";
@@ -686,9 +588,6 @@ export async function buildPersonalTabs(args: {
   ];
 }
 
-/**
- * Builds the persona (`/stats persona`) dashboard tabs for one lineage on this server.
- */
 export async function buildPersonaTabs(args: {
   locale: string;
   serverId: number;
@@ -741,8 +640,6 @@ export async function buildPersonaTabs(args: {
   const unitRewards = localizer(locale, "commands.stats.units.rewards");
   const unitPunishments = localizer(locale, "commands.stats.units.punishments");
 
-  // ── Overview (mirrors the personal/server core: messages, cost, memories,
-  //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_persona", fmtInt(messages, locale)),
     sepField(),
@@ -858,9 +755,6 @@ export async function buildPersonaTabs(args: {
   ];
 }
 
-/**
- * Builds the server (`/stats server`) dashboard tabs.
- */
 export async function buildServerTabs(args: {
   locale: string;
   serverId: number;
@@ -916,8 +810,8 @@ export async function buildServerTabs(args: {
     [conditioning, memorableMembers, serverMemoryCount, memberMemoryCount] = await Promise.all([
       statRepository.getConditioningTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
-      // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
-      // cross-server); kept as separate rows since they are different kinds of memory.
+      // Server memories are exact and server-scoped while member memories are cross-server estimates, so keep them
+      // separate.
       statRepository.getServerMemoryCount({ serverId }),
       statRepository.getMemberMemoryCount({ serverId }),
     ]);
@@ -932,9 +826,6 @@ export async function buildServerTabs(args: {
     : localizer(locale, "commands.stats.empty");
   const mostPopularModel = modelCost[0] ? modelCost[0].model : localizer(locale, "commands.stats.empty");
 
-  // ── Overview (shared core; Images/Videos are deliberately omitted on the
-  // persona view to keep this card focused on conversational affinity). ──
-  // Group 1: trigger count + top persona + top model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages", fmtInt(messages, locale)),
     statField("commands.stats.fields.most_popular_persona", mostPopularPersonaName),
@@ -1071,7 +962,6 @@ export async function buildServerTabs(args: {
   ];
 }
 
-/** Builds the localized "{timeframe} • {scope}" subtitle shown under each tab title. */
 export function buildSubtitle(locale: string, timeframe: Timeframe, scopeLabelKey?: string): string {
   const timeframeLabel = localizer(locale, TIMEFRAME_LABEL_KEYS[timeframe]);
   if (!scopeLabelKey) return `**${timeframeLabel}**`;

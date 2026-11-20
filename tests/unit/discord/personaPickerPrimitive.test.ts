@@ -7,14 +7,10 @@ import {
 } from "@/utils/discord/ui/interactionCore";
 import { createPersona } from "../../helpers/fixtures";
 
-/** Terminal states the harness can drive the picker into. */
 type PickerOutcome = "cancel" | "timeout" | "collector-timeout";
 
-/**
- * Builds the error discord.js v14 actually rejects with when
- * `Message#awaitMessageComponent` expires: an `InteractionCollectorError`
- * rather than the bare "time" string used by raw collectors.
- */
+// discord.js v14 Message#awaitMessageComponent rejects with InteractionCollectorError rather than raw collectors'
+// bare "time" string, so tests match that shape.
 function makeInteractionCollectorError(reason: string): Error {
   return Object.assign(new Error(`Collector received no interactions before ending with reason: ${reason}`), {
     code: "InteractionCollectorError",

@@ -1,9 +1,3 @@
-/**
- * Brave Search REST API Service
- * Direct HTTP implementation for Brave Search API endpoints
- * Supports Web, Image, Video, and News search with server-specific API keys
- */
-
 import { log } from "../../../utils/misc/logger";
 import { getOptApiKeyCredentials } from "@/utils/security/crypto";
 import { withProviderUsageContext, type ProviderUsageContext } from "@/utils/provider/providerUsage";
@@ -27,19 +21,14 @@ const BRAVE_API_BASE_URL = "https://api.search.brave.com/res/v1";
 const SERVICE_NAME = "brave-search";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-const REQUEST_TIMEOUT = 15000; // 15 seconds
+const REQUEST_TIMEOUT = 15000;
 
-/**
- * Language code mapping: Standard ISO 639-1 codes to Brave API codes
- * Brave uses non-standard codes for some languages (e.g., "jp" instead of "ja")
- */
+// Brave Search API expects non-standard language codes such as "jp" instead of ISO 639-1 "ja", so this map translates
+// before sending queries.
 const BRAVE_LANGUAGE_CODE_MAP: Record<string, string> = {
-  ja: "jp", // Japanese: ISO 639-1 "ja" → Brave "jp"
+  ja: "jp",
 };
 
-/**
- * Normalize language code to Brave API format
- */
 function normalizeBraveLangCode(langCode: string | undefined): string | undefined {
   if (!langCode) return undefined;
 
@@ -71,9 +60,7 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   for (const result of response.results) {
     if (result.properties?.url) {
       imageUrls.push(result.properties.url);
-    }
-    // Fallback to thumbnail URL if available
-    else if (result.thumbnail?.src) {
+    } else if (result.thumbnail?.src) {
       imageUrls.push(result.thumbnail.src);
     }
   }
@@ -82,10 +69,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   return imageUrls;
 }
 
-/**
- * Add fetch capability reminder to web search results
- * @param originalResult - Original web search result text
- */
 export function addFetchCapabilityReminder(originalResult: string): {
   enhancedMessage: string;
   urlsFound: number;
@@ -120,11 +103,6 @@ export function addFetchCapabilityReminder(originalResult: string): {
   }
 }
 
-/**
- * Get Brave API key for the given server, with fallback to environment variable
- * @param serverId - Discord server ID (optional)
- * @returns API key or null if not available
- */
 async function getBraveApiKey(
   serverId?: number,
 ): Promise<{ apiKey: string; usageContext?: ProviderUsageContext } | null> {
@@ -140,7 +118,6 @@ async function getBraveApiKey(
     }
   }
 
-  // Fallback to environment variable
   const envApiKey = process.env.BRAVE_API_KEY;
   if (envApiKey) {
     log.info("Using environment variable Brave API key");
@@ -151,10 +128,6 @@ async function getBraveApiKey(
   return null;
 }
 
-/**
- * @param params - Query parameters
- * @param config - Request configuration
- */
 async function makeBraveApiRequest<T>(
   endpoint: string,
   params: Record<string, string | number | boolean | undefined>,
@@ -253,11 +226,6 @@ async function makeBraveApiRequest<T>(
   }
 }
 
-/**
- * Perform a web search using Brave Search API
- * @param params - Web search parameters
- * @param config - Request configuration
- */
 export async function braveWebSearch(
   params: WebSearchParams,
   config: ApiRequestConfig = {},
@@ -267,12 +235,12 @@ export async function braveWebSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: 20, // Always 20 for optimal performance
+    count: 20,
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
     text_decorations: params.text_decorations !== false,
-    summary: true, // Always enabled for better results
+    summary: true,
     ...(params.freshness ? { freshness: params.freshness } : {}),
     ...(params.result_filter ? { result_filter: params.result_filter } : {}),
     ...(params.units ? { units: params.units } : {}),
@@ -281,11 +249,6 @@ export async function braveWebSearch(
   return makeBraveApiRequest<WebSearchApiResponse>("/web/search", searchParams, config);
 }
 
-/**
- * Perform an image search using Brave Search API
- * @param params - Image search parameters
- * @param config - Request configuration
- */
 export async function braveImageSearch(
   params: ImageSearchParams,
   config: ApiRequestConfig = {},
@@ -294,18 +257,13 @@ export async function braveImageSearch(
     q: params.q,
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
-    count: Math.min(Number(params.count) || 3, 10), // Max 10 for images, default 3
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    count: Math.min(Number(params.count) || 3, 10),
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
   };
   return makeBraveApiRequest<ImageSearchApiResponse>("/images/search", searchParams, config);
 }
 
-/**
- * Perform a video search using Brave Search API
- * @param params - Video search parameters
- * @param config - Request configuration
- */
 export async function braveVideoSearch(
   params: VideoSearchParams,
   config: ApiRequestConfig = {},
@@ -315,22 +273,16 @@ export async function braveVideoSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: Math.min(Number(params.count) || 5, 10), // Max 10 for videos, default 5
+    count: Math.min(Number(params.count) || 5, 10),
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
-    // Only include freshness if specified
     ...(params.freshness ? { freshness: params.freshness } : {}),
   };
 
   return makeBraveApiRequest<VideoSearchApiResponse>("/videos/search", searchParams, config);
 }
 
-/**
- * Perform a news search using Brave Search API
- * @param params - News search parameters
- * @param config - Request configuration
- */
 export async function braveNewsSearch(
   params: NewsSearchParams,
   config: ApiRequestConfig = {},
@@ -340,30 +292,21 @@ export async function braveNewsSearch(
     country: params.country || "US",
     search_lang: normalizeBraveLangCode(params.search_lang) || "en",
     ui_lang: params.ui_lang || "en-US",
-    count: Math.min(Number(params.count) || 10, 20), // Max 20 for news, default 10
+    count: Math.min(Number(params.count) || 10, 20),
     offset: Math.min(Number(params.offset) || 0, 9),
-    safesearch: params.safesearch || "off", // Default to "off" if not specified
+    safesearch: params.safesearch || "off",
     spellcheck: params.spellcheck !== false,
-    // Only include freshness if specified
     ...(params.freshness ? { freshness: params.freshness } : {}),
   };
 
   return makeBraveApiRequest<NewsSearchApiResponse>("/news/search", searchParams, config);
 }
 
-/**
- * @param serverId - Discord server ID (optional)
- * @returns True if API key is available
- */
 export async function isBraveSearchAvailable(serverId?: number): Promise<boolean> {
   const apiKey = await getBraveApiKey(serverId);
   return apiKey !== null;
 }
 
-/**
- * Format search results for consistent output with current MCP implementation
- * @param searchType - Type of search performed
- */
 export function formatBraveSearchResults(
   response: BraveSearchResponse,
   searchType: "web" | "image" | "video" | "news",
@@ -463,12 +406,6 @@ export function formatBraveSearchResults(
   }
 }
 
-/**
- * Check if an error is related to API key issues
- * @param error - Error to check
- * @param statusCode - HTTP status code
- * @returns True if error is API key related
- */
 export function isBraveApiKeyError(error: string, statusCode?: number): boolean {
   const keywordErrors = ["unauthorized", "invalid api key", "subscription", "authentication"];
 
@@ -477,12 +414,6 @@ export function isBraveApiKeyError(error: string, statusCode?: number): boolean 
   );
 }
 
-/**
- * Check if an error is related to rate limiting
- * @param error - Error to check
- * @param statusCode - HTTP status code
- * @returns True if error is rate limit related
- */
 export function isBraveRateLimitError(error: string, statusCode?: number): boolean {
   const rateLimitKeywords = ["rate limit", "too many requests", "quota exceeded"];
 

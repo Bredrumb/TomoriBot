@@ -1,27 +1,10 @@
-/**
- * Minimal fake ChatInputCommandInteraction for interaction timing tests.
- *
- * Records every acknowledgement-related call (reply, deferReply, showModal,
- * editReply, followUp, deferUpdate, update) so tests can assert exact call
- * order without connecting to Discord.
- */
-
-/** One recorded call to the fake interaction object. */
 export type FakeCall = {
-  /** Name of the interaction method that was invoked. */
   method: string;
-  /** Arguments passed to the method. */
   args: unknown[];
 };
 
-/**
- * Covers every acknowledgement method the Discord command-system docs require plus the helpers
- * commands call directly.
- */
 export type FakeInteraction = {
-  /** Tracks whether deferReply() has been called. */
   deferred: boolean;
-  /** Tracks whether reply() or showModal() has been called. */
   replied: boolean;
   id: string;
   createdTimestamp: number;
@@ -56,14 +39,6 @@ export type FakeInteraction = {
   fetchReply: () => Promise<{ id: string; createdTimestamp: number }>;
 };
 
-/**
- * Creates a minimal fake interaction that records every acknowledgement-related
- * call. The `calls` array grows in call order so tests can assert exact
- * sequences with `calls.map(c => c.method)`.
- *
- * @param overrides - Partial FakeInteraction values merged after default setup.
- *                    Use this to supply guild, channel, options, etc.
- */
 export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
   interaction: FakeInteraction;
   calls: FakeCall[];
@@ -102,30 +77,25 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       },
     },
 
-    // reply: sets replied=true so subsequent calls route to editReply
     reply: async (...args: unknown[]) => {
       calls.push({ method: "reply", args });
       interaction.replied = true;
     },
 
-    // deferReply: sets deferred=true; represents the initial deferred ack
     deferReply: async (...args: unknown[]) => {
       calls.push({ method: "deferReply", args });
       interaction.deferred = true;
     },
 
-    // showModal: the acknowledgement path for modal commands; does NOT set
-    //    replied=true in Discord.js, but the interaction IS consumed.
+    // Leave replied=false because discord.js does not set it on showModal even though the interaction is consumed.
     showModal: async (...args: unknown[]) => {
       calls.push({ method: "showModal", args });
     },
 
-    // editReply: only valid after deferReply() or reply()
     editReply: async (...args: unknown[]) => {
       calls.push({ method: "editReply", args });
     },
 
-    // followUp: only valid after any acknowledgement
     followUp: async (...args: unknown[]) => {
       calls.push({ method: "followUp", args });
     },
@@ -138,25 +108,18 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       calls.push({ method: "update", args });
     },
 
-    // fetchReply: not an acknowledgement; returns a fake message so ping-style
-    // commands that measure latency don't throw.
+    // Returns a fake message without acknowledging so latency checks do not throw.
     fetchReply: async () => ({
       id: "fake_reply_id",
       createdTimestamp: Date.now(),
     }),
   };
 
-  // Apply caller-supplied overrides after all defaults are set so partial
-  // objects (e.g. only guild) merge cleanly without breaking method closures.
   Object.assign(interaction, overrides);
 
   return { interaction, calls };
 }
 
-/**
- * Convenience helper: extract just the method names from a calls array.
- * Useful for `expect(callMethods(calls)).toEqual(["deferReply", "editReply"])`.
- */
 export function callMethods(calls: FakeCall[]): string[] {
   return calls.map((call) => call.method);
 }

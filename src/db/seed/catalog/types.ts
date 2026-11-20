@@ -1,45 +1,27 @@
 import type { LocaleCode } from "@/constants/locales";
 
-// Input types for the human-authored seed catalogs (`*.ts`).
-//
-// These are deliberately *narrower* than the DB row schemas in
-// `src/types/db/schema.ts`: boolean flags are optional and default to `false`,
-// so an author only ever writes the flags that are `true`. The catalog seeders
-// expand these into INSERT … ON CONFLICT upserts and seed them at startup.
+// Catalog input types omit required DB defaults so optional boolean flags default to false during seeding.
 
-/**
- * One commented group of rows in a table's seed.
- * @property comment Section header rendered as a SQL `--` comment above the rows.
- *   A string array renders as consecutive comment lines.
- * @property rows The model rows belonging to this section, in file order.
- */
 export interface CatalogSection<T> {
   comment: string | string[];
   rows: T[];
 }
 
-/** Backward-compatible alias for the existing model catalog imports. */
 export type ModelSection<T> = CatalogSection<T>;
 
-/** Fields shared by every model table. */
 interface CommonInput {
-  /** Provider key (e.g. "google", "openrouter"). */
   provider: string;
-  /** Provider-specific model codename used at the API layer. */
   codename: string;
-  /** English description; `null` emits SQL `NULL`. */
   desc: string | null;
-  /** Optional localized descriptions; English comes from `desc`. */
   i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
-  /** Marks the provider's default model. Exactly one per provider (see validator). */
+  // Must be set on exactly one row per provider because the catalog validator requires a single unambiguous default.
   isDefault?: boolean;
-  /** Hides the model from selection; deprecated rows are split into a separate INSERT. */
   isDeprecated?: boolean;
 }
 
-/** A row in the `llms` (text/chat) table. */
 export interface LlmInput extends CommonInput {
-  /** Marks the provider's most capable active model. Exactly one non-deprecated row per provider. */
+  // Must be set on exactly one non-deprecated row per provider so the catalog validator can resolve an active
+  // flagship model.
   isSmartest?: boolean;
   isReasoning?: boolean;
   isFree?: boolean;
@@ -49,53 +31,36 @@ export interface LlmInput extends CommonInput {
   seesYoutube?: boolean;
   isUncensored?: boolean;
   supportsStructoutput?: boolean;
-  /**
-   * Requires strict role alternation (merge consecutive same-role turns + leading user turn).
-   * Required for anthropic; enforced by the check-seed-catalogs per-provider invariant.
-   */
+  // Required for anthropic (enforced by check-seed-catalogs) because the API needs consecutive same-role turns merged
+  // and a leading user turn.
   strictRoleAlternation?: boolean;
-  /**
-   * Supports assistant prefix-completion (`prefix: true` on the trailing prefill turn).
-   * Required for deepseek/zai/zaicoding; enforced by the check-seed-catalogs per-provider invariant.
-   */
+  // Required for deepseek, zai, and zaicoding (enforced by check-seed-catalogs) so trailing prefill turns receive
+  // prefix: true.
   supportsPrefixCompletion?: boolean;
-  /**
-   * Continues a trailing assistant turn instead of rejecting it or restarting the answer. Measured
-   * per model with `plans/prefill-probe.ts`; leave unset for moving aliases, because the model
-   * behind one can drop support without the row changing.
-   */
+  // Moving aliases must leave this unset because the underlying model can drop trailing assistant prefill support
+  // without the row changing.
   supportsAssistantPrefill?: boolean;
-  /**
-   * Official uncached input price in USD per million tokens. Omit for OpenRouter (priced live from its
-   * API) and free/non-metered models, so the column stays NULL and the cost command falls back.
-   */
+  // Unit is USD per million uncached tokens, omitted for OpenRouter (live API pricing) and free models so SQL NULL
+  // triggers cost fallback.
   inputPricePerMillion?: number;
-  /** Official uncached output price in USD per million tokens. See {@link inputPricePerMillion}. */
   outputPricePerMillion?: number;
-  /**
-   * Official context window in tokens. Omit for OpenRouter (its live capability cache answers), NovelAI
-   * (subscription-tier windows), and custom endpoints (their `num_ctx` is the window).
-   */
+  // Omitted for OpenRouter (live capability cache), NovelAI (tier-based limits), and custom endpoints (uses num_ctx)
+  // so runtime sources govern.
   contextWindow?: number;
-  /**
-   * The model's own output ceiling in tokens, not the smaller budget TomoriBot requests by default.
-   * Clamps every request so a server override above it is not rejected. See {@link contextWindow}.
-   */
+  // Hard provider output ceiling rather than TomoriBot's default budget, used to clamp server overrides so requests
+  // are not rejected.
   maxOutputTokens?: number;
 }
 
-/** A row in the `image_diffusion_models` table. */
 export interface ImageInput extends CommonInput {
   isFree?: boolean;
   isUncensored?: boolean;
 }
 
-/** A row in the `video_generation_models` table. */
 export interface VideoInput extends CommonInput {
   isFree?: boolean;
 }
 
-/** A predicate-capable row in the decision catalog. */
 export interface DecisionInput extends CommonInput {
   inputTokenLimit: number;
   seesImages?: boolean;
@@ -103,21 +68,13 @@ export interface DecisionInput extends CommonInput {
   outputPricePerMillion?: number;
 }
 
-/** A row in the `embedding_models` table. */
 export interface EmbeddingInput extends CommonInput {
-  /** Embedding family key (groups codenames that share vector dimensionality). */
+  // Key grouping codenames that share vector dimensionality so models with different dimensions stay separate.
   family: string;
 }
 
-/**
- * One official preset sprite, authored in the persona catalog.
- * The image file lives inside the persona's `avatarPath` directory and is
- * uploaded once to shared storage at seed time; pointer personas resolve it live.
- * @property name Display label / lookup label, e.g. `"mad"` (normalized to a key).
- * @property file Image path relative to the persona's `avatarPath` dir, e.g. `"sprites/mad.png"`.
- * @property usageInstructions Optional prompt guidance for when to use this sprite.
- * @property isIdentity When true, renders the decorated `sprite (Persona)` name (DID alter style).
- */
+// Sprite file paths resolve relative to avatarPath so pointer personas share uploaded assets, while isIdentity
+// renders "sprite (Persona)" names.
 export interface PresetSpriteInput {
   name: string;
   file: string;
@@ -125,7 +82,6 @@ export interface PresetSpriteInput {
   isIdentity?: boolean;
 }
 
-/** A row in the `persona_presets` seed catalog. */
 export interface PersonaInput {
   name: string;
   desc: string;
@@ -137,27 +93,18 @@ export interface PersonaInput {
   triggerWords: string[];
   lineageId: number;
   namingConfig: import("@/types/personaNaming").PersonaNamingConfig;
-  /**
-   * Optional official sprite set for this preset. Seeded into `preset_sprites`
-   * and resolved live by pointer personas. Omit (or leave empty) and the persona
-   * simply has no default sprites, so a graceful no-op.
-   */
   sprites?: PresetSpriteInput[];
-  /**
-   * Optional full-body character reference image, relative to `avatarPath` (e.g. `"character-reference/front.png"`).
-   * Kept in a subfolder because the avatar seed takes the first image directly inside `avatarPath`.
-   */
+  // Character reference files must live in a subfolder under avatarPath because the avatar seed takes the first image
+  // directly inside avatarPath.
   characterReference?: string;
-  /** Hides the preset from `/persona default`; only the age-restricted `/nsfw persona default` lists it. */
   isNsfw?: boolean;
 }
 
-/** A row in the `system_prompt_presets` seed catalog. */
 export interface SystemPromptInput {
   name: string;
   desc: string;
   i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
-  /** Picker labels per locale; `name` stays the stored identity and the en-US label. */
+  // Localized picker labels only, because name remains both the stored identity and the en-US label.
   names?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   promptText: string;
 }
@@ -166,7 +113,6 @@ export type NaiModelTarget = "kayra" | "erato" | "xialong";
 
 type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
 
-/** NovelAI sampling parameter JSON stored in `nai_presets.parameters`. */
 interface NaiSamplingParameters {
   order?: number[];
   temperature?: number;
@@ -188,7 +134,6 @@ interface NaiSamplingParameters {
   mirostat_tau?: number;
 }
 
-/** A row in the `nai_presets` seed catalog. */
 export interface NaiPresetInput {
   name: string;
   modelTarget: NaiModelTarget;

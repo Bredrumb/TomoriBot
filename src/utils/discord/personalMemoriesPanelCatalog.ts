@@ -121,11 +121,6 @@ const nonceField: RouteFieldCodec<"nonce", string> = {
   decode: (v) => parseNonce(v),
 };
 
-/**
- * Authoritative codec table for all personal-memories routes.
- * Keyed by semantic action to guarantee compile-time exhaustiveness.
- * Preserves the exact v1 wire format: wire token, locale, and ordered field serialization.
- */
 export const PERSONAL_MEMORIES_ROUTE_CODECS: PersonalMemoriesRouteCodecs = {
   "add-submit": {
     wireToken: "add-submit",
@@ -185,16 +180,10 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<PersonalMemoriesAction, Pers
   PERSONAL_MEMORIES_ROUTE_CODECS,
 );
 
-/**
- * Encodes a typed route object through the authoritative codec table into route segments.
- */
 export function buildPersonalMemoriesRouteSegments(route: PersonalMemoriesPanelRoute): string[] {
   return buildRouteSegments(PERSONAL_MEMORIES_ROUTE_CODECS[route.action], route);
 }
 
-/**
- * Builds a custom ID from a typed route object using the authoritative codec table.
- */
 export function buildPersonalMemoriesRouteId(route: PersonalMemoriesPanelRoute): string {
   return buildInteractionRouteId(
     PERSONAL_MEMORIES_ROUTE_NAMESPACE,

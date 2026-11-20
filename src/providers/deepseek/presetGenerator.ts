@@ -1,11 +1,3 @@
-/**
- * AI-Powered Preset Generation for the DeepSeek provider.
- *
- * Uses json_object response mode with the preset schema injected into
- * the system prompt, since DeepSeek does not support json_schema strict
- * mode. Includes a full tool-calling loop for models with web-search
- * tools enabled (has_tools=true).
- */
 import { log } from "@/utils/misc/logger";
 import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import { executeTool } from "@/tools/toolRegistry";
@@ -35,11 +27,8 @@ interface DeepseekPresetGenerationOptions {
   maxToolRounds?: number;
 }
 
-/**
- * Build a system prompt that steers the model toward the preset JSON schema.
- * DeepSeek does not support json_schema strict mode, so the schema is injected
- * into the system message and response_format: json_object is used instead.
- */
+// DeepSeek lacks json_schema strict mode, so the schema is injected into the system message alongside
+// response_format: json_object.
 function buildDeepseekPresetSystemPrompt(): string {
   const schema = buildPresetResponseSchema();
   return [
@@ -52,11 +41,6 @@ function buildDeepseekPresetSystemPrompt(): string {
   ].join("\n\n");
 }
 
-/**
- * Generate preset data from user prompts using the DeepSeek API.
- *
- * @param _locale - User's locale (reserved for future error localisation)
- */
 export async function generatePresetFromPromptDeepseek(
   apiKey: string,
   params: GeneratePresetParams,
@@ -72,7 +56,6 @@ export async function generatePresetFromPromptDeepseek(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildDeepseekPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },

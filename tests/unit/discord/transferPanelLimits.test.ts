@@ -59,7 +59,7 @@ function buttonIds(value: unknown): string[] {
   return ids;
 }
 
-/** Stricter than the shared check, which only inspects a markdown fence body. */
+// Not redundant with expectSafePanelPayload because the shared helper only inspects markdown fence bodies.
 function expectNoAdjacentBacktickRun(payload: unknown, label: string): void {
   for (const content of collectTextDisplays(payload)) {
     expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);
@@ -244,9 +244,7 @@ describe("transfer panel Components V2 limits", () => {
   });
 
   it("renders both config previews as one compact block of quoted rows", () => {
-    // Exact shape per kind: a bold lead line, then each heading immediately followed by its own quote rows. A blank
-    // line between a heading and its rows reads as a separate panel, and the marker applies per line. Both kinds
-    // share one builder, so each gets its own pinned block rather than one standing in for the other.
+    // Headings must abut their per-line quote rows with no blank line, pinned for both kinds despite sharing a builder.
     const expectedBlocks: Record<keyof typeof SECTION_NAMES, string[]> = {
       workspace_config: [
         "### Review Configuration Import",

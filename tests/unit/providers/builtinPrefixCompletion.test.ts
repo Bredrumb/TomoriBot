@@ -1,15 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { applyAssistantPrefixCompletion, providerRequiresPrefixCompletion } from "@/providers/utils/strictChatCompat";
 
-// Golden-body regression for the assistant prefix-completion seam that deepseek/zai/zaicoding now
-// delegate to OpenAICompatibleStreamAdapter. The adapter resolves:
-//   enablePrefix = providerRequiresPrefixCompletion(provider) || (llm.supports_prefix_completion ?? false)
-//   if (enablePrefix) applyAssistantPrefixCompletion(requestBody, outputPrefill)
-// This proves the three built-ins still emit `prefix: true` on the trailing prefill turn (ON via
-// the safety net even with the column unread), byte-identical to their previous inline blocks,
-// while a non-prefix provider with the column OFF emits no prefix.
+// Mirrors OpenAICompatibleStreamAdapter's prefix-completion seam so built-ins default to `prefix: true` even when
+// the column is false.
 
-/** Reproduce the adapter seam: build a representative body and apply the resolved prefix flag. */
 function buildBody(
   provider: string,
   llmFlag: boolean,
@@ -59,9 +53,8 @@ describe("built-in prefix-completion golden bodies", () => {
   });
 
   it("deepseek (only, via requiresReasoningContentReplay) also stamps reasoning_content on the prefix turn", () => {
-    // Regression for HTTP 400 "The reasoning_content in the thinking mode must be passed back to
-    // the API": DeepSeek's thinking-mode backend rejects a prefix:true turn missing the key. zai
-    // and zaicoding do not set requiresReasoningContentReplay, so they stay byte-identical.
+    // DeepSeek thinking mode rejects a `prefix: true` turn missing `reasoning_content` (HTTP 400), so only DeepSeek
+    // sets requiresReasoningContentReplay.
     const deepseekBody = buildBody("deepseek", false, prefill, true);
     expect(deepseekBody).toEqual({
       model: "m",

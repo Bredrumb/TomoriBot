@@ -1,62 +1,28 @@
 import { spawnSync } from "node:child_process";
 import * as ts from "typescript";
 
-/**
- * Per-key translation provenance, derived from Git history rather than a committed manifest.
- *
- * The sibling question ("is this value byte-identical to English?") answers whether a string was
- * ever translated. This module answers a different one: a string that reads as a real translation
- * can still be stale, because the English it was written against has moved since. Nothing in the
- * working tree records that relationship, so it has to be recovered from history.
- *
- * The baseline for one locale key is the commit that last changed that key's own translated line,
- * which `git blame` reports exactly. The English file at that commit is therefore the English the
- * translator was looking at, and comparing it against the current English file separates a
- * translation that is merely old from one that matched English all along.
- *
- * File-level last-touch dates were tried first and rejected: they report zero drift in this
- * repository because most locale commits move both trees at once. Per-key provenance survives that
- * shape, since a key the translator did not touch keeps its older line commit when a neighbour in
- * the same file is retranslated.
- */
+// Per-key git blame is required because most locale commits touch both English and translation trees, so file-level
+// dates falsely report zero drift.
 
-/** A leaf key in a locale tree, with the inclusive line range its value spans. */
 export interface LocaleKeyLocation {
   key: string;
-  /** First line of the value, 1-based. */
   startLine: number;
-  /** Last line of the value, 1-based. Equal to {@link startLine} for a single-line value. */
   endLine: number;
 }
 
-/**
- * One translation whose English source moved after the key's own last edit.
- *
- * `englishAtBaseline` is what the translator saw, and `english` is what the key now falls back to
- * while the value stays untranslated. Both are reported together because the reviewer's decision
- * needs the before and after, not just the fact that they differ.
- */
 export interface DriftedEntry {
   key: string;
   locale: string;
-  /** The translated value, retranslate this one. */
   target: string;
-  /** English the translation was written against. */
   enAtBaseline: string;
-  /** English the key falls back to until it is retranslated. */
   en: string;
-  /** The commit that last changed this key's translated line. */
   baselineRevision: string;
-  /** Commit date of `baselineRevision`, `YYYY-MM-DD`. */
   baselineDate: string;
 }
 
-/** Aggregate for one repository-wide drift scan. */
 export interface DriftReport {
   entries: DriftedEntry[];
-  /** Locale files that contributed at least one drifted key, with their newest baseline commit. */
   files: DriftFileSummary[];
-  /** Locales that were scanned, whether or not they contributed findings. */
   scannedLocales: string[];
 }
 
@@ -64,50 +30,27 @@ export interface DriftFileSummary {
   file: string;
   locale: string;
   count: number;
-  /** Earliest baseline among this file's findings, by commit time. */
   oldestBaselineRevision: string;
   oldestBaselineDate: string;
-  /** Latest baseline among this file's findings, by commit time. */
   newestBaselineRevision: string;
   newestBaselineDate: string;
 }
 
-/** Provenance for one line of a file: the commit that last changed it. */
 export interface LineProvenance {
-  /** 1-based line number in the file, from the blame header. */
   line: number;
   revision: string;
-  /**
-   * Committer time in epoch seconds, which is what orders baselines.
-   *
-   * A commit id is a hash, so comparing revisions as strings orders them arbitrarily. Selecting the
-   * "newest" baseline that way can pick a commit from months ago and silently compare against the
-   * wrong English.
-   */
+  // Committer time in epoch seconds, not milliseconds, used to order baselines because commit hashes are arbitrary
+  // strings rather than chronological.
   committedAt: number;
 }
 
-/**
- * Seam for repository access so the drift comparison can be tested against fixtures without a real
- * checkout or a real history. Production uses {@link createGitDriftSource}.
- */
 export interface DriftGitSource {
-  /** Repository-relative locale files, POSIX separated, from the committed tree. */
   listLocaleFiles(locale: string): string[];
-  /** Authored translation locales, excluding `en-US`, sorted. */
   listTranslationLocales(): string[];
-  /**
-   * One entry per line of the file at `HEAD`, in file order.
-   *
-   * Blame runs against the committed revision rather than the working tree, because every other
-   * input to the comparison is read from `HEAD`. Blaming the working tree would let an uncommitted
-   * edit renumber the lines and move a key's provenance while the report still displays the
-   * committed translation.
-   */
+  // Blame must target HEAD rather than the working tree, because uncommitted edits would renumber lines while other
+  // inputs read committed HEAD values.
   blameFile(path: string): LineProvenance[];
-  /** Reads many `(revision, path)` blobs at once, keyed by `revision:path`. */
   readBlobs(pairs: Array<{ revision: string; path: string }>): Map<string, string>;
-  /** True when the checkout lacks the history this analysis needs. */
   isShallow(): boolean;
 }
 
@@ -137,15 +80,8 @@ export function blobKey(revision: string, path: string): string {
   return `${revision}${BLOB_KEY_SEPARATOR}${path}`;
 }
 
-/**
- * Reads many `(revision, path)` blobs in one `git cat-file --batch` call.
- *
- * One `git show` per blob costs seconds across a repository this size, while the batch protocol
- * answers the same set in one process. Objects the revision does not carry come back as a
- * `<spec> missing` line and are skipped, which is what a file added after that revision looks like.
- * Object ids are resolved first, because resolving by name would make the batch reread the same
- * blob once per path that reaches it.
- */
+// git cat-file --batch with resolved object IDs avoids seconds of per-blob git show spawns and prevents rereading
+// identical blobs across paths.
 export function batchReadBlobs(specs: string[], cwd = process.cwd()): Map<string, string> {
   const blobs = new Map<string, string>();
   if (specs.length === 0) return blobs;
@@ -207,14 +143,8 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
     },
 
     blameFile(path: string): LineProvenance[] {
-      // Blame is pinned to HEAD rather than left to default to the working tree. Every value the
-      // report prints is read from HEAD, so blaming the working tree would let an uncommitted edit
-      // renumber these lines and move a key's baseline while the report shows the committed string.
-      //
-      // `--porcelain` without `--line-porcelain` emits the commit header once per run of lines that
-      // share a commit and `\t`-prefixed content lines, which is all this needs and several times
-      // smaller to parse. `raw` keeps the header fields byte-stable: the human format aligns them
-      // with padding, which would break the trailing-field parse below.
+      // Use --porcelain --raw on HEAD to match readBlobs' committed line numbers and keep header fields unpadded without
+      // --line-porcelain overhead.
       const provenance: LineProvenance[] = [];
       let revision = "";
       let committedAt = 0;
@@ -226,9 +156,7 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
           continue;
         }
 
-        // A header is `<sha> <origLine> <finalLine> [<groupSize>]`, and a shallow boundary prefixes
-        // the sha with `^`. Without that prefix in the pattern a truncated checkout parses as zero
-        // baselines and reports every key as clean, which is the opposite of the truth.
+        // Match optional `^` on blame headers so shallow-clone boundary commits do not parse as zero baselines.
         const header = /^\^?([0-9a-f]{40}) \d+ (\d+)(?: \d+)?$/.exec(line);
         if (header) {
           revision = header[1];
@@ -268,17 +196,12 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
   };
 }
 
-/**
- * Walks a locale file's default export and records every leaf's dot path with the line it starts on.
- *
- * Parent object keys are skipped deliberately. They carry no value, and blaming the line a nested
- * object opens on would attribute every one of its children to whichever commit moved a brace.
- */
+// Parent object keys are skipped intentionally because blaming an opening brace line would attribute all nested keys
+// to whichever commit moved that brace.
 export function collectLocaleKeyLocations(source: string, filePath = "locale.ts"): LocaleKeyLocation[] {
   return walkLocaleObject(source, filePath, (path, startLine, endLine) => ({ key: path, startLine, endLine }));
 }
 
-/** Every leaf key in a locale file, mapped to the text of its value after runtime normalization. */
 export function extractLocaleValues(source: string, filePath = "locale.ts"): Map<string, string> {
   const values = new Map<string, string>();
   for (const { key, value } of walkLocaleLeaves(source, filePath)) values.set(key, value);
@@ -308,12 +231,7 @@ function walkLocaleObject<T>(
         continue;
       }
 
-      // Arrays are locale-specific by design (`general.defaults.base_trigger_words`), so they are a
-      // leaf here the same way they are for the identical-value check.
-      //
-      // The end line matters as much as the start: a wrapped value can have its closing lines
-      // changed by a later commit than the one that opened it, and blaming only the first line
-      // would attribute the whole value to the older commit.
+      // Stop at arrays as leaves (e.g. base_trigger_words) and track endLine because wrapped strings span commits.
       const startLine = sourceFile.getLineAndCharacterOfPosition(initializer.getStart(sourceFile)).line + 1;
       const endLine = sourceFile.getLineAndCharacterOfPosition(initializer.getEnd()).line + 1;
       results.push(map(path, startLine, endLine));
@@ -370,31 +288,16 @@ function findDefaultExportObject(sourceFile: ts.SourceFile): ts.ObjectLiteralExp
   return search(sourceFile);
 }
 
-/**
- * The text of a locale value, without the quotes that happen to be around it.
- *
- * Locale files use template literals and quoted strings interchangeably, and both mean the same
- * string to the runtime, so reading raw source would make a delimiter change look like a value
- * change.
- *
- * Escapes inside a template are left literal: `\{` reaches the localizer as a backslash and a brace,
- * so preserving it keeps that difference visible.
- */
+// AST node.text is used instead of raw source because quoted strings and template literals are equivalent at runtime,
+// so delimiter changes are ignored.
 function literalText(node: ts.Expression): string | undefined {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return normalizeLocaleValue(node.text);
   if (ts.isNumericLiteral(node)) return node.text;
   return undefined;
 }
 
-/**
- * Normalizes a value to what the runtime actually stores, which is the runtime's own dedent rule.
- *
- * `initializeLocalizer` dedents every loaded string, removing the common indent that locale file
- * layout adds and changing nothing else. Before this, the comparison collapsed all whitespace, which
- * treated a reflowed sentence and a rewritten one as equal and hid deliberate layout changes:
- * Markdown hard line breaks, fenced blocks, and the `-#` panel markers all survive the runtime
- * dedent, so a change to any of them is a real change to what a reader sees.
- */
+// Dedenting matches initializeLocalizer instead of collapsing all whitespace, because Markdown line breaks, fences,
+// and -# markers survive runtime dedent.
 export function normalizeLocaleValue(value: string): string {
   if (!value.includes("\n")) return value;
 
@@ -419,17 +322,8 @@ function propertyNameText(name: ts.PropertyName, sourceFile: ts.SourceFile): str
   return undefined;
 }
 
-/**
- * Orders revisions by when they were committed, and dates them.
- *
- * Commit ids are hashes, so ordering them as strings is arbitrary: in this repository the lexically
- * largest revision of one locale file is two weeks older than the newest. Anything that needs
- * "newest" has to go through here rather than compare revision strings.
- */
 export interface DriftChronology {
-  /** True when `candidate` was committed after `reference`. */
   isNewer(candidate: string, reference: string): boolean;
-  /** Commit date as `YYYY-MM-DD`. */
   date(revision: string): string;
 }
 
@@ -445,33 +339,18 @@ export function createChronology(committedAt: Map<string, number>): DriftChronol
   };
 }
 
-/**
- * English values for the revisions a comparison needs, loaded on demand.
- *
- * The first pass supplies the current English and the locale's own baseline revisions. Only then is
- * a revision's English worth reading, and only for the keys that survived the first pass. Reading
- * every revision's whole tree up front costs one parse per file per revision, which is the
- * difference between a second and several minutes on a tree this size.
- */
+// Baseline English values load on demand per needed revision, because parsing every revision's full tree up front
+// turns a one-second scan into minutes.
 export interface DriftValueLookup {
-  /** Committed `en-US` values, by key. */
   current(key: string): string | undefined;
-  /** `en-US` value of one key at one baseline revision, or undefined when that revision had no such key. */
   atBaseline(revision: string, key: string): string | undefined;
 }
 
-/**
- * Compares one locale against the English it was translated from, key by key.
- *
- * A key is reported when English differs from the value it had at that key's own baseline commit.
- * Keys absent from the locale are skipped: `check-locales` owns parity, and reporting them here
- * would double-count every new English key as drift.
- */
+// Keys absent from localeValues are skipped rather than reported, because check-locales owns parity and reporting
+// them would double-count new English keys.
 export function findDriftedKeys(input: {
   locale: string;
-  /** Keys the locale currently defines, mapped to their translated value. */
   localeValues: Map<string, string>;
-  /** Baseline revision per key, from this locale's own blame. */
   baselineByKey: Map<string, string>;
   english: DriftValueLookup;
   chronology: DriftChronology;
@@ -502,14 +381,8 @@ export function findDriftedKeys(input: {
   return entries.sort((a, b) => a.key.localeCompare(b.key));
 }
 
-/**
- * Splits a `git blame` result into per-key baselines.
- *
- * Blame reports one entry per final line, and the locale file's AST gives each key an inclusive line
- * range. Every line in that range is considered, and the key takes the newest revision among them,
- * because any one of those edits means the translator touched that key. Blaming only the opening
- * line would miss a later edit to the closing lines of a wrapped value.
- */
+// Every line in a key's range is checked for the newest revision rather than only startLine, because wrapped values
+// can be edited on later lines.
 export function mapLinesToBaselines(
   locations: LocaleKeyLocation[],
   provenance: LineProvenance[],
@@ -532,14 +405,6 @@ export function mapLinesToBaselines(
   return baselines;
 }
 
-/**
- * Runs one locale's drift analysis end to end.
- *
- * Returning the per-file summaries alongside the entries lets the caller print what was and was not
- * comparable. A locale whose files carry no history at all produces no entries rather than an
- * every-key-is-drifted avalanche, which is the failure mode a missing baseline would otherwise
- * create.
- */
 export function analyzeLocaleDrift(input: { locale: string; source: DriftGitSource; englishFiles: string[] }): {
   entries: DriftedEntry[];
   files: DriftFileSummary[];
@@ -624,14 +489,8 @@ export function analyzeLocaleDrift(input: { locale: string; source: DriftGitSour
     return readEnglishAt(revision, path).get(key);
   };
 
-  /**
-   * Reads and parses one English file at one revision, once per pair.
-   *
-   * Only the file the key itself lives in is read: a revision usually touches several locale files,
-   * so reading everything that revision touched to answer a question about one key would pull in
-   * keys that can never match. The pair count is bounded by the distinct baseline revisions, which
-   * `git blame` keeps in the low hundreds even on a tree this size.
-   */
+  // Only the single matching file is read per revision rather than the whole commit, because unrelated locale files
+  // add parsing cost without matching keys.
   const readEnglishAt = (revision: string, path: string): Map<string, string> => {
     const cacheKey = blobKey(revision, path);
     const cached = revisionCache.get(cacheKey);
@@ -654,14 +513,8 @@ export function analyzeLocaleDrift(input: { locale: string; source: DriftGitSour
   return { entries, files: summarizeDriftFiles(entries, relativeFileByKey, chronology) };
 }
 
-/**
- * Groups findings by file.
- *
- * Each summary carries the oldest and newest baseline in the group rather than one representative
- * revision. A file's findings can come from several baselines months apart, and naming only one of
- * them would misstate what the reader is looking at. The newest is chosen by commit time, not by
- * comparing revision strings.
- */
+// Both oldest and newest baselines are kept per file rather than a single revision, because findings in one file
+// often span commits months apart.
 function summarizeDriftFiles(
   entries: DriftedEntry[],
   relativeFileByKey: Map<string, string>,
@@ -700,17 +553,8 @@ function summarizeDriftFiles(
   return [...summaries.values()].sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
 }
 
-/** Keys shown per file before the remainder is summarized rather than listed. */
 const DRIFT_DISPLAY_LIMIT = 12;
 
-/**
- * Renders the drift appendix.
- *
- * The heading states the accuracy limit rather than implying a census. The baseline is per file and
- * per key as blame reports it, so when a translator retranslates one key in a file the keys they did
- * not touch keep their own older baselines. The count is a floor on outstanding debt, and a reader
- * who assumes otherwise will under-estimate the queue.
- */
 export function formatDriftReport(report: DriftReport): string[] {
   const lines: string[] = [];
   lines.push("");
@@ -765,12 +609,6 @@ function truncate(value: string, limit = 80): string {
   return singleLine.length > limit ? `${singleLine.slice(0, limit)}...` : singleLine;
 }
 
-/**
- * One file's baseline span, collapsed to a single date when every finding shares a baseline.
- *
- * A file's findings routinely come from several baselines months apart, so naming one of them would
- * imply the whole group was compared against that commit.
- */
 function formatBaselineRange(summary: DriftFileSummary): string {
   if (summary.oldestBaselineRevision === summary.newestBaselineRevision) {
     return `${summary.newestBaselineDate} ${summary.newestBaselineRevision.slice(0, 9)}`;
@@ -781,7 +619,6 @@ function formatBaselineRange(summary: DriftFileSummary): string {
   );
 }
 
-/** One-line summary for the console header. */
 export function summarizeDrift(report: DriftReport): string {
   if (report.entries.length === 0) return "no drifted translations";
   return `${report.entries.length} drifted keys in ${report.files.length} files`;

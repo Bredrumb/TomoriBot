@@ -188,8 +188,7 @@ export async function importStPreset(
   try {
     rawPreset = JSON.parse(downloadResult.buffer.toString("utf-8"));
   } catch (error) {
-    // The actor's file rather than an incident. The parser message is the only trace of why once
-    // the uploaded bytes are gone, so it is kept for whoever reproduces the report.
+    // Warn with the parser message: bad uploads are user input and the message is the only trace after bytes are gone.
     log.warn(
       `SillyTavern preset upload is not valid JSON: ${error instanceof Error ? error.message.slice(0, 200) : "unknown"}`,
     );

@@ -67,10 +67,8 @@ interface DependencyOptions {
   deliveryFails?: boolean;
 }
 
-/**
- * The repository and delivery seams only. `replyInfoEmbed` is deliberately absent so a test can leave the real
- * interaction sink in place and observe where each receipt actually lands.
- */
+// replyInfoEmbed is deliberately omitted from these dependencies so tests can use the real interaction sink and
+// observe where receipts land.
 function makeCoreDependencies(options: DependencyOptions): {
   deps: Partial<ConfigExportDependencies>;
   calls: DependencyCalls;
@@ -143,8 +141,7 @@ describe("config export operation", () => {
   });
 
   it("still refuses when the guild is absent from the client cache", async () => {
-    // guildId arrives in the payload while guild is a cache lookup. A guard reading guild would take its DM branch
-    // here while the export key still named this guild.
+    // guildId arrives in the payload while guild is a cache lookup, so reading guild would misroute this to DMs.
     const interaction = makeWorkspaceInteraction({ inGuild: true, canManageGuild: false });
     interaction.guild = null;
     const { deps, calls } = makeDependencies();

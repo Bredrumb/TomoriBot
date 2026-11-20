@@ -6,13 +6,6 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
-/**
- * Sends a cooldown notification to the user via DM, with fallback to ephemeral channel reply
- * @param locale - User's locale for localization
- * @param footerKey - Optional localization key for embed footer
- * @param interaction - Optional interaction for ephemeral fallback (slash commands only)
- * @param ephemeralFlags - Optional MessageFlags for ephemeral replies
- */
 export async function sendCooldownDM(
   user: User,
   locale: string,
@@ -34,16 +27,13 @@ export async function sendCooldownDM(
       cooldownEmbed.setFooter({ text: localizer(locale, footerKey) });
     }
 
-    // Attempt to send DM
     await user.send({ embeds: [cooldownEmbed] });
     log.info(`Sent cooldown DM to user ${user.id} (${descriptionKey})`);
   } catch (error) {
-    // DM failed (user has DMs disabled or blocked the bot)
     log.info(
       `Could not send cooldown DM to user ${user.id}: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
 
-    // Fallback to ephemeral reply if interaction is provided
     if (interaction) {
       try {
         await replyInfoEmbed(

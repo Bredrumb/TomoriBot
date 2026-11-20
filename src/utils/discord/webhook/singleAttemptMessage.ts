@@ -24,15 +24,12 @@ import {
   type WebhookIdentitySelection,
 } from "@/utils/discord/webhook/webhookCore";
 
-/**
- * Never retries a sent POST (no nonce guards against a duplicate) and rejects every rate limit, so
- * it stays private to this module and each POST runs inside {@link postWithRateLimitWait}.
- */
+// Single-attempt REST clients disable retries (no duplicate-guard nonce) and reject all rate limits, so callers must
+// stay inside postWithRateLimitWait.
 const singleAttemptClients = new WeakMap<REST, REST>();
 const SINGLE_ATTEMPT_RATE_LIMIT_BUDGET_MS = 30_000;
 const SINGLE_ATTEMPT_STOP_CHECK_INTERVAL_MS = 100;
 
-/** Marks a POST that ran out of rate-limit budget as definite non-delivery: no attempt was accepted. */
 class SingleAttemptRateLimitTimeoutError extends DiscordDeliveryError {
   constructor() {
     super("definite_refusal", new Error("Single-attempt POST rate-limit budget exhausted"));
@@ -51,12 +48,8 @@ function getSingleAttemptRest(client: Client): REST {
   return rest;
 }
 
-/**
- * Retrying a rate-limited POST cannot duplicate, since Discord or the client refused it.
- *
- * @param beforePost - Runs immediately before every attempt and throughout each wait; throwing from
- *   it cancels the send with nothing posted
- */
+// Rate-limited POST retries cannot duplicate because refusal precedes delivery; beforePost runs before each attempt
+// and during waits to abort cleanly.
 async function postWithRateLimitWait(
   client: Client,
   beforePost: () => void,
@@ -87,7 +80,8 @@ async function postWithRateLimitWait(
   }
 }
 
-// A per-send client view preserves discord.js serialization and message reconstruction without mutating its readonly client.
+// A per-send client view preserves discord.js serialization and message reconstruction without mutating its readonly
+// client.
 async function withPostRest<T extends { client: Client }, R>(
   target: T,
   beforePost: () => void,
@@ -147,7 +141,6 @@ export function sendChannelMessageOnce(
   );
 }
 
-/** Posts a prebuilt request body as the bot, for payloads `channel.send` cannot express. */
 export function postChannelMessageOnce(
   channel: SendableChannel,
   request: RequestData,
@@ -168,15 +161,8 @@ export function postChannelMessageOnce(
   );
 }
 
-/**
- * Executes one webhook message without transport retries, for sends where a duplicate is worse
- * than an unconfirmed outcome. Applies the same identity and avatar handling as
- * `sendWebhookMessageWithIdentity`.
- *
- * @param beforePost - Runs after the avatar is settled and immediately before every POST attempt;
- *   throwing from it cancels the send with nothing posted
- * @returns The created message's id and webhook id
- */
+// Transport retries stay disabled to avoid duplicates, and beforePost runs after avatar setup settles so throwing
+// aborts cleanly before any POST.
 export async function sendWebhookMessageOnce(
   webhook: Webhook,
   payload: WebhookMessageCreateOptions,

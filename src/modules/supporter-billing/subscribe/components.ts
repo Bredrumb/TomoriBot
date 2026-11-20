@@ -319,7 +319,7 @@ async function withPatreonAuthorizationLink(
   }
 }
 
-/** Maps select and pagination controls onto the view they open, so each control keeps a unique custom ID. */
+// Each control needs a unique custom ID so select and pagination controls map to their own views.
 function resolveRequestedView(route: SubscriptionRoute, interaction: GlobalRoutableInteraction): SubscriptionRoute {
   if (interaction.isStringSelectMenu()) {
     const [value] = interaction.values;

@@ -180,7 +180,8 @@ async function sendNativeVoice(
     const form = voiceForm(options, author);
     assertCanDispatch(target);
     dispatched = true;
-    // Bot REST needs passThroughBody because JSON serialization would corrupt the multipart boundary and drop native waveform metadata.
+    // Bot REST needs passThroughBody because JSON serialization would corrupt the multipart boundary and drop native
+    // waveform metadata.
     const message = requireMessage(
       await postChannelMessageOnce(
         target.channel,

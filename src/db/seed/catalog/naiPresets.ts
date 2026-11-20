@@ -1,5 +1,3 @@
-// Typed NovelAI sampling preset catalog: generated from the former 03_nai_presets.sql seed.
-
 import type { CatalogSection, NaiPresetInput } from "./types";
 
 export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [

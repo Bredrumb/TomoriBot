@@ -4,11 +4,8 @@ import { DISCORD_SELECT_VALUES_MAX } from "@/utils/discord/ui/componentsV2Limits
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { localizer } from "@/utils/text/localizer";
 
-/**
- * Optional Channel Select that limits an item to the chosen channels.
- *
- * @param channelScope - Stored scope to preselect, or null outside a server, where the field is omitted
- */
+// A null channelScope signals a non-server context so the channel select is omitted instead of rendering an empty
+// selection.
 export function buildChannelScopeField(
   locale: string,
   customId: string,

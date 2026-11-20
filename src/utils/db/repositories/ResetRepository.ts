@@ -1,45 +1,23 @@
-/**
- * Reset-domain classification and SQL.
- *
- * The reset family restores configuration to its database defaults. The classification below is
- * the specification for what a reset touches: every column of every classified table is either
- * reset, preserved, or identity/audit metadata, and a database gate proves that against
- * `information_schema.columns` after migrations rather than against the `CREATE TABLE` text.
- *
- * Reset statements assign SQL `DEFAULT` rather than literal values. A hand-copied default list is
- * what left the legacy reset writing `llm_temperature = 1.2` long after the schema moved to `1.0`,
- * so the live DDL stays authoritative at execution time.
- */
+// Reset statements assign SQL DEFAULT rather than literal values so live schema defaults stay authoritative across
+// migrations.
 
 import type { SQL } from "bun";
 import { sql } from "@/utils/db/client";
 
-/**
- * Columns a server singleton reset never assigns. `updated_at` is excluded because the reset
- * writes it to the current time as an audit record rather than restoring its default.
- */
+// Identity columns stay untouched and updated_at is excluded from DEFAULT because reset sets it to the current time
+// as an audit record.
 export const SERVER_IDENTITY_AUDIT_COLUMNS = ["server_id", "created_at", "updated_at"] as const;
 
-/** Columns a personal reset never assigns, for the same audit and identity reasons. */
 export const PERSONAL_IDENTITY_AUDIT_COLUMNS = ["user_id", "user_disc_id", "created_at", "updated_at"] as const;
 
-/** One classified singleton table: a row that is upserted back to its DDL defaults. */
 export interface SingletonResetClassification {
   readonly table: string;
-  /** Columns assigned SQL `DEFAULT` by the reset. */
   readonly reset: readonly string[];
-  /** Columns deliberately carried through the reset unchanged. */
   readonly preserved: readonly string[];
 }
 
-/**
- * The 19 singleton configuration rows a server reset restores.
- *
- * Enumerated rather than derived. The natural derivation ("the in-scope `server_*` tables, less the
- * junction, plus the quota configuration tables") is arithmetic, and arithmetic that drops a table
- * inside a destructive transaction fails silently: the reset simply under-resets and reports
- * success. The cardinality is asserted in the database gate for the same reason.
- */
+// Tables are enumerated explicitly rather than derived dynamically because a missed table during reset would fail
+// silently and report success.
 export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassification[] = [
   {
     table: "server_chat_configs",
@@ -80,10 +58,8 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
   {
     table: "server_model_configs",
     reset: ["llm_temperature", "thinking_level", "llm_disabled_params", "fallback_llm_ids", "hide_respond_embed"],
-    // Clearing any of these takes the bot offline or destroys something the database cannot
-    // restore: `api_key` is the only copy of a credential whose plaintext exists nowhere else,
-    // and the model and endpoint ids are the active identity the runtime reads. The other-model
-    // capability cache is bound to `other_model_codename`, so it survives with it.
+    // Active model/endpoint ids, plaintext-irrecoverable api_key, and the capability cache bound to other_model_codename
+    // must survive reset so the bot stays configured.
     preserved: [
       "llm_id",
       "embedding_model_id",
@@ -273,12 +249,8 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
   },
 ];
 
-/**
- * The 13 collection tables a server reset empties for the server.
- *
- * `server_auto_trigger_persona_overrides` belongs here rather than among the singletons: it is the
- * junction the auto-trigger row's channel ids point through, so it is cleared by delete.
- */
+// server_auto_trigger_persona_overrides belongs in the delete list rather than singletons because it is a channel
+// junction table cleared by deletion.
 export const SERVER_COLLECTION_RESET_TABLES = [
   "server_auto_trigger_persona_overrides",
   "stm_categories",
@@ -295,13 +267,8 @@ export const SERVER_COLLECTION_RESET_TABLES = [
   "server_natural_nudge_persona_scopes",
 ] as const;
 
-/**
- * The two singleton rows a personal reset restores.
- *
- * `registration_locale` is preserved because it records the locale the account was created under
- * and is account history rather than a setting the owner edits. `natural_nudge_opt_out` is preserved
- * because a reset must never silently make someone pingable again.
- */
+// registration_locale stays preserved as account history, and natural_nudge_opt_out stays preserved so a personal
+// reset never makes someone pingable again.
 export const PERSONAL_SINGLETON_RESET_TABLES: readonly SingletonResetClassification[] = [
   {
     table: "users",
@@ -331,27 +298,11 @@ export const PERSONAL_SINGLETON_RESET_TABLES: readonly SingletonResetClassificat
   },
 ];
 
-/**
- * Cross-domain reset SQL.
- *
- * Every statement is written out rather than generated from the classification above. `SET column =
- * DEFAULT` is SQL syntax, not a bindable value, so a generated form would have to concatenate
- * identifiers into the statement text. The two lists are kept honest by the schema-parity gate
- * instead, which fails by table and column when they drift apart.
- *
- * Each singleton is an upsert. Setup does not seed every split row, so a plain UPDATE would leave a
- * missing row missing, and every later panel write against that table reports a write failure while
- * reads silently succeed on Zod defaults.
- */
+// Hand-written SQL avoids identifier concatenation for DEFAULT (schema-parity tests catch drift); singletons upsert
+// because setup omits some split rows.
 class ResetRepository {
-  /**
-   * Restores one server's configuration to its database defaults in a single transaction.
-   *
-   * Throws on the first failed statement so the whole reset rolls back: a partial reset is worse
-   * than none, because the owner is told configuration was restored while some of it was not.
-   * Cache invalidation and the scheduler nudge are deliberately not done here; they belong to the
-   * caller, after this resolves.
-   */
+  // Must throw on any failure so the reset rolls back atomically; callers handle cache invalidation and scheduler
+  // nudges after this resolves.
   async resetServerConfiguration(serverId: number): Promise<void> {
     await sql.begin(async (tx: SQL) => {
       await tx`
@@ -390,8 +341,7 @@ class ResetRepository {
           updated_at = NOW()
       `;
 
-      // Model identities and credentials are absent from this SET on purpose. See the preserve set
-      // on SERVER_SINGLETON_RESET_TABLES for why each one survives.
+      // Active model identities and credentials stay omitted here (see SERVER_SINGLETON_RESET_TABLES.preserved).
       await tx`
         INSERT INTO server_model_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
@@ -549,8 +499,7 @@ class ResetRepository {
           updated_at = NOW()
       `;
 
-      // Quota settings only. The per-user and server-wide usage tables record consumption that
-      // already happened, so they are not part of a configuration reset.
+      // Reset quota settings only because usage tables record historical consumption.
       await tx`
         INSERT INTO image_quota_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
@@ -599,8 +548,7 @@ class ResetRepository {
       `;
 
       await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
-      // Deletes the category definitions only. Persisted short_term_memories carry their own
-      // categories payload and render from it, so STM data survives a configuration reset.
+      // Delete category definitions only because persisted short_term_memories carry their own categories payload.
       await tx`DELETE FROM stm_categories WHERE server_id = ${serverId}`;
       await tx`DELETE FROM random_triggers WHERE server_id = ${serverId}`;
       await tx`DELETE FROM channel_llm_overrides WHERE server_id = ${serverId}`;
@@ -616,15 +564,8 @@ class ResetRepository {
     });
   }
 
-  /**
-   * Restores one user's personal configuration to its database defaults in a single transaction.
-   *
-   * Resets language, privacy, and message-proxy selection in users, resets all portable personalization
-   * settings in user_personalization_configs via upsert (repairing missing rows), removes persona
-   * naming preferences, and deletes personal spotlights owned by the user across all servers.
-   * Returns the user's Discord ID and distinct server IDs whose spotlights were deleted so the
-   * caller can perform scoped cache invalidations after commit.
-   */
+  // Deliberately omits cache invalidation: callers use the returned user Discord ID and spotlight server IDs to
+  // invalidate caches after commit.
   async resetPersonalConfiguration(userId: number): Promise<PersonalResetResult | null> {
     return await sql.begin(async (tx: SQL) => {
       const [user] = await tx<Array<{ user_disc_id: string }>>`

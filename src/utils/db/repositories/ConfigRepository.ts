@@ -1,13 +1,3 @@
-/**
- * ConfigRepository: manages the 13 split server config tables and preset tables.
- *
- * All config reads and writes route through typed split-table methods.
- * The legacy `tomori_configs` god table was dropped by migration 008 (Task F2).
- * Persona identity fields (nickname, lineage) live in PersonaRepository.
- *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition.
- */
 import type { SQL } from "bun";
 import { presetFallbackLanguages, selectPresetsForLocale } from "@/utils/persona/presetLocale";
 import type {
@@ -73,7 +63,6 @@ function toPostgresTextArrayLiteral(values: readonly unknown[]): string {
   return `{${values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
-/** Row shape for server_capabilities_configs (Phase 6). */
 export type ServerCapabilitiesConfigsRow = {
   response_drafting_enabled: boolean;
   emoji_usage_enabled: boolean;
@@ -92,7 +81,6 @@ export type ServerCapabilitiesConfigsRow = {
   tool_use_enabled: boolean;
 };
 
-/** Row shape for server_novelai_imagegen_configs (Phase 6). */
 export type ServerNovelaiImagegenConfigsRow = {
   nai_preset_name: string | null;
   image_default_positive_tags: string[];
@@ -105,14 +93,12 @@ export type ServerNovelaiImagegenConfigsRow = {
   nai_diffusion_model_id: number | null;
 };
 
-/** Row shape for server_nsfw_configs (Phase 6). */
 export type ServerNsfwConfigsRow = {
   uncensor_injection_enabled: boolean;
   uncensor_unicode_space_enabled: boolean;
   uncensor_sanitize_enabled: boolean;
 };
 
-/** Row shape for server_speech_configs (Phase 6). */
 export type ServerSpeechConfigsRow = {
   speech_design_endpoint_id: number | null;
   speech_clone_endpoint_id: number | null;
@@ -125,15 +111,10 @@ export type ServerSpeechConfigsRow = {
   chatterbox_exaggeration: number;
 };
 
-/** Row shape for server_byok_configs (Phase 6). */
 export type ServerByokConfigsRow = {
   user_byok_mode: boolean;
 };
 
-/**
- * Composite export shape for ConfigRepository's Phase 6 tables.
- * Replaces the old Partial<AssembledServerConfig> stub.
- */
 export type ConfigExportShape = {
   capabilities: ServerCapabilitiesConfigsRow | null;
   novelai_imagegen: ServerNovelaiImagegenConfigsRow | null;
@@ -149,10 +130,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     const presets = await this.loadNaiPresets(target);
     return presets.find((preset) => preset.preset_name === presetName) ?? presets.find((preset) => preset.is_default);
   }
-  /**
-   * Loads NAI sampling presets available for a given NAI model target.
-   *
-   */
   async loadNaiPresets(target: "kayra" | "erato" | "xialong"): Promise<NaiPresetRow[]> {
     try {
       const rows = await sql`
@@ -177,11 +154,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Loads preset option rows with an optional max description length.
-   *
-   * @param maxDescriptionLength - Truncate descriptions to this length (default 100)
-   */
   async loadPresetOptions(maxDescriptionLength?: number): Promise<Array<{ name: string; description: string }> | null> {
     try {
       const descriptionLength = maxDescriptionLength ?? 100;
@@ -217,10 +189,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Loads the preset rows for one locale in the most preferred fallback language that has a preset
-   * on the requested NSFW side, so a locale with any preset on that side never sees its untranslated ones.
-   */
+  // Locale selection picks a single fallback language per NSFW side, so a locale with any preset on that side never
+  // mixes in untranslated ones.
   async loadPresetRowsByLocale(locale: string, options: { nsfw: boolean }): Promise<TomoriPresetRow[] | null> {
     try {
       const rows = await sql<TomoriPresetRow[]>`
@@ -242,7 +212,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /** Loads the exact localized preset referenced by a persona, without locale substitution. */
   async loadPresetByReference(lineageId: number, language: string): Promise<TomoriPresetRow | null> {
     const [preset] = await sql<TomoriPresetRow[]>`
       SELECT * FROM persona_presets
@@ -252,7 +221,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return preset ?? null;
   }
 
-  /** Loads all preset rows regardless of locale. */
   async loadAllPresets(): Promise<TomoriPresetRow[] | null> {
     try {
       const presets = await sql`
@@ -293,13 +261,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Loads a single preset row by exact name match.
-   * Used by setup to validate and retrieve preset metadata after modal submission.
-   *
-   * @param presetName - Exact preset name to look up
-   * @returns Preset row, or null if not found
-   */
   async loadPresetByName(presetName: string): Promise<TomoriPresetRow | null> {
     try {
       const [row] = await sql`
@@ -316,13 +277,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Loads model-selection and BYOK columns from the split config tables for a server.
-   * Used by credentialResolver to resolve provider for each capability without
-   * bypassing the TomoriState cache (this is an intentional fresh DB read).
-   *
-   * @param serverId - Internal server DB ID
-   */
   async loadModelCapabilityIds(
     serverId: number,
   ): Promise<Pick<
@@ -337,9 +291,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     | "subscription_capabilities"
   > | null> {
     try {
-      // Join the three split tables that own capability-selection columns.
-      //    server_model_configs anchors (always present post-E0 backfill);
-      //    the other two are LEFT JOINs for migration-window safety.
+      // LEFT JOIN secondary config tables so servers missing optional split rows still resolve.
       const [row] = await sql`
         SELECT
           smc.llm_id,
@@ -382,17 +334,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Applies a NovelAI preset's sampling parameters to a server's config.
-   * Writes through typed split-table methods. Because these writes are not
-   * transactional, invalidates the tomori state cache when any write succeeds,
-   * including a partial failure.
-   *
-   * @param serverId     - Internal server DB ID
-   * @param preset       - NaiPresetRow to apply
-   * @param serverDiscId - Discord server snowflake used for cache invalidation
-   * @returns true on success, false if any write failed
-   */
+  // Cache invalidation runs if any parallel write succeeds, including partial failures, because these writes are not
+  // transactional.
   async applyNaiPreset(
     serverId: number,
     preset: NaiPresetRow | null,
@@ -409,7 +352,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     );
     const llm_disabled_params = enableNovelAIPresetSamplers(saved.llm_disabled_params);
 
-    // Write sampling params across their owning split tables in parallel.
     const [modelOk, chatOk, naiOk, savedOk] = await Promise.all([
       this.updateModelConfig(serverId, { llm_temperature, llm_disabled_params }),
       this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
@@ -435,14 +377,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return ok;
   }
 
-  /**
-   * Increments the auto-chat counter for a Tomori and rolls a new target if needed.
-   * Does NOT invalidate the tomori state cache (counter is a hot-path write).
-   *
-   * @param personaId     - Internal tomori DB ID
-   * @param minThreshold - Minimum auto-chat threshold from config
-   * @param maxThreshold - Maximum auto-chat threshold from config
-   */
+  // TomoriState cache invalidation is intentionally omitted here because counter increments are hot-path writes.
   async incrementTomoriCounter(
     personaId: number,
     minThreshold: number,
@@ -465,7 +400,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         return parsed.success ? parsed.data : null;
       }
 
-      // Threshold mode; read current state, compute next, write back atomically.
       const updatedRuntime = await sql.transaction(async (tx) => {
         const [currentRuntime] = await tx`
           SELECT *
@@ -547,17 +481,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Atomically updates the shared auto-chat threshold range and resets the
-   * persona's runtime cycle counter in a single transaction.
-   *
-   * @param serverId     - Internal server DB ID
-   * @param personaId    - Internal persona DB ID whose cycle is being reset
-   * @param threshold    - Minimum (or fixed) auto-chat threshold; 0 = always-reply
-   * @param maxThreshold - Maximum auto-chat threshold (>= threshold)
-   * @param nextTarget   - Next cycle target to seed the runtime row with
-   * @returns Updated runtime state row, or null on failure (config row missing, etc.)
-   */
+  // Sentinel threshold 0 means always-reply, and maxThreshold must stay >= threshold so the auto-chat cycle range
+  // stays valid.
   async setAutoChatThreshold(
     serverId: number,
     personaId: number,
@@ -644,28 +569,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   * Replaces the fallback LLM list for a server (legacy integer-ID form).
-   * Invalidates the tomori state cache after write.
-   *
-   * @param serverId     - Internal server DB ID
-   * @param llmIds       - Ordered list of fallback LLM IDs
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
-   */
   async setFallbackLlms(serverId: number, llmIds: number[], serverDiscId: string): Promise<boolean> {
     const ok = await this.setFallbackLlmRows(serverId, llmIds);
     if (ok) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
 
-  /**
-   * Replaces the fallback model reference list for a server (provider+codename form).
-   * Invalidates the tomori state cache after write.
-   *
-   * @param serverId     - Internal server DB ID
-   * @param refs         - Ordered list of FallbackModelRef objects
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
-   */
   async setFallbackModelRefs(serverId: number, refs: FallbackModelRef[], serverDiscId: string): Promise<boolean> {
     const ok = await this.setFallbackModelRefRows(serverId, refs);
     if (ok) invalidateTomoriStateCache(serverDiscId);
@@ -784,15 +693,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_speech_configs", serverId, patch);
   }
 
-  /**
-   * Atomically updates `server_auto_trigger_configs` columns and replaces junction rows in
-   * `server_auto_trigger_persona_overrides`. Both writes are wrapped in a single transaction
-   * so a failure never leaves the config row and junction in an inconsistent state.
-   *
-   * @param serverId - Internal server DB ID
-   * @param patch    - Partial auto-trigger config; `autoch_persona_overrides` is routed to the
-   *                   junction table while all other keys update the config row directly.
-   */
   async updateAutoTriggerConfig(serverId: number, patch: Partial<ServerAutoTriggerConfigRow>): Promise<boolean> {
     const { autoch_persona_overrides: overrides, ...tableColumns } = patch;
     const columnEntries = Object.entries(tableColumns).filter(([, v]) => v !== undefined);
@@ -826,7 +726,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           );
         }
 
-        // Replace junction rows atomically (DELETE + INSERT to handle removals).
         if (hasOverrides) {
           await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
           for (const override of overrides) {
@@ -885,20 +784,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_welcome_configs", serverId, patch);
   }
 
-  /**
-   * Delete every config-table row owned by this server across the 13 split tables.
-   * Used by `/setup` to recover from the orphaned-alters state.
-   * Wiping all configs frees the constraint without touching `personas` rows, so
-   * alters survive the reset.
-   *
-   * @param serverId - Internal server DB ID
-   * @param txClient - Optional transaction SQL client
-   */
+  // Wiping only config rows frees the /setup orphaned-alters constraint without touching personas rows, so alters
+  // survive reset.
   async resetAllServerConfigs(serverId: number, txClient?: SQL): Promise<void> {
     if (txClient) {
-      // Bun SQL transactions operate over a single dedicated database connection.
-      // Issuing concurrent statements via Promise.all on one transaction connection
-      // can interleave or corrupt protocol frames, so queries must run sequentially.
+      // Run queries sequentially on txClient because Bun SQL transactions share one connection and concurrent
+      // Promise.all calls can interleave protocol frames.
       await txClient`DELETE FROM server_model_configs WHERE server_id = ${serverId}`;
       await txClient`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`;
       await txClient`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`;
@@ -1002,9 +893,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       values.push(serverId);
       const serverIdIndex = values.length;
 
-      // sql.unsafe is intentional: tableName is dynamic (13 split-config tables) and cannot
-      // be expressed as a typed sql`` identifier; sql(patch) for SET also requires a static
-      // template tag so mixing both with a dynamic table name forces sql.unsafe here.
+      // sql.unsafe is required because tableName is dynamic across split-config tables and Bun's sql(patch) helper
+      // cannot mix with a dynamic table identifier.
       const result = await sqlClient.unsafe(
         `UPDATE ${tableName} SET ${setClause} WHERE server_id = $${serverIdIndex} RETURNING server_id`,
         values,
@@ -1042,12 +932,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     values.push(value as never);
   }
 
-  /**
-   * Reads capabilities, NAI imagegen, NSFW, speech, and BYOK configs for the given server.
-   * Returns null if the server has no config row (i.e., not yet set up).
-   *
-   * @param ownerId - Discord server snowflake
-   */
   async toExportShape(ownerId: string | number): Promise<ConfigExportShape | null> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -1066,11 +950,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return { capabilities: caps, novelai_imagegen: nai, nsfw, speech, byok };
   }
 
-  /**
-   * Restores ConfigRepository-owned table rows for a server.
-   * @param ownerId - Discord server snowflake
-   * @param data    - Previously exported ConfigExportShape
-   */
   async fromExportShape(ownerId: string | number, data: ConfigExportShape): Promise<boolean> {
     const serverDiscId = String(ownerId);
     const serverId = await this.resolveServerId(serverDiscId);
@@ -1325,7 +1204,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async setFallbackModelRefRows(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
     try {
       const legacyIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-      // Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
+      // Sync fallback_llm_ids so legacy readers keep working.
       const [refsOk, idsOk] = await Promise.all([
         this.updateChatConfig(serverId, { fallback_model_refs: refs }),
         this.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),
@@ -1346,5 +1225,4 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const configRepository = new ConfigRepository();

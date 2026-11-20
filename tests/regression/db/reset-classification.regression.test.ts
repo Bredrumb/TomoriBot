@@ -1,14 +1,3 @@
-/**
- * Regression harness: reset classification against the migrated schema.
- *
- * The reset family assigns SQL `DEFAULT` to every column it restores, so the classification in
- * `ResetRepository` has to agree with the database rather than with the `CREATE TABLE` text. This
- * suite reads `information_schema.columns` after `initializeDatabase()` has replayed schema and
- * migrations, which is the only view that includes columns added by later `ALTER` blocks such as
- * `users.privacy_level`.
- *
- * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
- */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import {
@@ -28,14 +17,10 @@ interface ColumnRow {
   is_nullable: "YES" | "NO";
 }
 
-/** Every public column of every table named by the classification, keyed by table. */
 const columnsByTable = new Map<string, ColumnRow[]>();
 
-/**
- * A `DEFAULT` assignment resolves to NULL for a nullable column with no explicit default, which is
- * a valid reset. The unassignable case is a NOT NULL column with no default: the reset statement
- * would fail at execution time on a row that has to exist.
- */
+// PostgreSQL resolves `DEFAULT` to `NULL` on nullable columns without an explicit default, so only `NOT NULL` columns
+// without a default fail reset at runtime.
 function isDefaultAssignable(column: ColumnRow): boolean {
   return column.column_default !== null || column.is_nullable === "YES";
 }
@@ -159,12 +144,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Reset classification: regression", () => {
     expect(languagePref?.column_default).toContain("en-US");
   });
 
-  /**
-   * A fresh database takes the default from `schema.sql` and records migrations without replaying
-   * them, so the assertion above never executes migration 079. Every deployed database is an
-   * existing one where the `CREATE TABLE` is a no-op and the migration is the only thing that moves
-   * the default, which is the path this exercises in both directions.
-   */
+  // Fresh databases take defaults from schema.sql without replaying migrations, so only this test exercises migration
+  // 079 for existing databases.
   it("migrates the users.language_pref default in both directions", async () => {
     const readDefault = async (): Promise<string | null> => {
       const [row] = await testSql<Array<{ column_default: string | null }>>`
@@ -177,9 +158,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Reset classification: regression", () => {
 
     const migrationsDir = join(import.meta.dir, "..", "..", "..", "src", "db", "migrations");
 
-    // Every DB regression file shares one disposable database, and sibling fixtures insert `users`
-    // rows that rely on this default. Re-applying the up migration from `finally` keeps a failed
-    // assertion here from surfacing as an unrelated failure in a later file.
+    // Re-apply the up migration from finally because sibling suites on the shared database rely on this default.
     await executeTestSqlFile(join(migrationsDir, "079_language_pref_default_en_us.down.sql"));
     try {
       const rolledBack = await readDefault();

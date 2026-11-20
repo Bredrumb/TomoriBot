@@ -1,9 +1,3 @@
-/**
- * Base provider interface for LLM services
- * This interface defines the contract that all LLM providers must implement
- * to work with TomoriBot's modular architecture.
- */
-
 import type {
   BaseGuildTextChannel,
   BaseGuildVoiceChannel,
@@ -23,7 +17,6 @@ import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "openai-compatible" | "anthropic";
 
-/** LLM generation parameters that providers may support via DB config. */
 export type SupportedParam = SupportedParamValue;
 
 type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
@@ -45,19 +38,13 @@ interface ProviderFeatureSupport {
 
 export type ProviderFeatureName = keyof ProviderFeatureSupport;
 
-/**
- * Provider-owned implementation key for shared optional features.
- * Values are declared in each provider's providerInfo.ts so core code does not
- * maintain a central provider-name union.
- */
+// Kept as string rather than a central union, because each provider declares its feature keys in providerInfo.ts to
+// avoid core coupling.
 export type ProviderFeatureImplementation = string;
 
-/**
- * Result of API key validation with structured error information
- */
 export interface ApiKeyValidationResult {
   valid: boolean;
-  error?: ProviderError; // Detailed error info if validation failed
+  error?: ProviderError;
 }
 
 export type StreamStopReason =
@@ -82,12 +69,11 @@ export interface ThoughtLogPayload {
   summary?: string;
   raw?: string;
   iterations?: Array<{ summary?: string; raw?: string }>;
-  /** Formatted text content fetched via the fetch MCP tool, rendered as code blocks in thought-log embeds. */
   fetchedContent?: string;
   firstReplyUrl?: string;
-  /** Total provider streaming time represented by this thought log, in milliseconds. */
   generationDurationMs?: number;
-  /** OpenRouter-only: upstream serving backend (e.g. "minimax-cn"), shown in the footer. */
+  // OpenRouter-only: holds OpenRouter's upstream serving backend (such as "minimax-cn") for footer display, not
+  // Tomori's provider key.
   servingProvider?: string;
 }
 
@@ -100,40 +86,25 @@ export interface StreamResult {
     | "stopped_by_user"
     | "empty_response"
     | "follow_up_interrupt";
-  data?: unknown | Error; // Function call data or error details
+  data?: unknown | Error;
   providerFailureReported?: boolean;
   pendingResponse?: import("@/types/stream/pendingResponse").PendingStreamResponse;
-  accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
-  /** Discord ID of the first message this segment delivered. */
+  // Delivered Discord text only (feeds short-term memory).
+  accumulatedText?: string;
   firstMessageId?: string;
-  /** Extracted <details> block body text (with <summary> stripped), for routing to STM. */
+  // Stores <details> block body with <summary> stripped rather than full tag markup, because it feeds directly into
+  // STM.
   detailsContent?: string;
-  stopReason?: StreamStopReason; // Specific stop source for debugging/logging
-  thoughtLog?: ThoughtLogPayload; // Reasoning/thought text captured separately from visible output
-  /**
-   * Sprite labels delivered during this stream segment, in render order (one entry
-   * per delivered sprite message, so repeats are kept). Surfaced from StreamState so
-   * the post-turn stat recorder can attribute `sprite_shown` / `sprite_emotion` to the
-   * triggerer's user scope (the stream layer itself has no internal user id). Each
-   * entry carries `isIdentity` so identity sprites are excluded from `sprite_emotion`.
-   * Omitted when empty.
-   */
+  stopReason?: StreamStopReason;
+  thoughtLog?: ThoughtLogPayload;
+  // Keeps render-ordered repeats (one per delivered sprite) because post-turn stats attribute counts to the triggerer
+  // and exclude isIdentity from sprite_emotion.
   spritesShown?: SpriteShownEntry[];
-  /**
-   * Real, provider-reported token usage for this stream segment, normalized by
-   * the orchestrator from the adapter's native usage shape. Present only when
-   * the provider surfaced usage (OpenRouter, OpenAI-compatible, Anthropic,
-   * Gemini); absent for providers that report no usage, in which case the
-   * post-turn recorder falls back to the character estimate. One segment per
-   * tool-loop request, so a turn's true usage is the sum across segments.
-   */
+  // Scoped to one tool-loop request so turn totals must sum across segments, while omission signals
+  // character-estimate fallback when providers omit usage.
   usage?: TokenUsage;
 }
 
-/**
- * Generic provider configuration
- * Each provider can extend this with their specific configuration
- */
 export interface ProviderConfig {
   model: string;
   apiKey: string;
@@ -144,13 +115,10 @@ export interface ProviderConfig {
   logitBias?: Record<string, number>;
 }
 
-/**
- * Provider information and metadata
- */
 export interface ProviderInfo {
   name: string;
   displayName: string;
-  aliases?: string[]; // Optional aliases for provider name (e.g., ["gemini"] for "google")
+  aliases?: string[];
   supportedModels: string[];
   defaultVisionModel?: string;
   requiresApiKey: boolean;
@@ -162,47 +130,27 @@ export interface ProviderInfo {
   featureSupport: ProviderFeatureSupport;
   featureImplementations?: Partial<Record<ProviderFeatureName, ProviderFeatureImplementation>>;
   usageCostMode?: "metered" | "none" | "unknown";
-  /** Generation parameters this provider reads from DB config and sends to its API. */
   supportedParams: readonly SupportedParam[];
 }
 
-/**
- * Function call representation (provider-agnostic)
- */
 export interface FunctionCall {
   id?: string;
   name: string;
   args?: Record<string, unknown>;
-  /**
-   * True when the provider's argument payload was truncated and the arguments here were
-   * recovered from an incomplete stream. They hold only the keys that arrived whole, so a
-   * dispatcher must not treat them as the call the model intended to make.
-   */
+  // Signals args were recovered from a truncated stream with only complete keys, so dispatchers must not execute this
+  // as the model's intended call.
   argumentsTruncated?: boolean;
-  /**
-   * Optional thought signature for providers that require it (e.g., Gemini).
-   * Encoded as base64 when present.
-   */
+  // Base64-encoded when present, because providers such as Gemini require this thought signature on function calls.
   thoughtSignature?: string;
-  /**
-   * Optional reasoning details for OpenRouter reasoning models (Gemini, Claude, etc.).
-   * Must be preserved when passing tool results back to maintain reasoning continuity.
-   * See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#preserving-reasoning-blocks
-   */
+  // Must be preserved when returning tool results to OpenRouter reasoning models, so reasoning continuity holds
+  // across turns.
   // biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
   reasoning_details?: any[];
-  /**
-   * DeepSeek thinking-mode continuation payload.
-   * When a DeepSeek thinking response issues a tool call, the assistant message must
-   * be replayed with its reasoning_content so the same turn can continue.
-   */
+  // Must be replayed on the assistant message when a DeepSeek thinking response issues a tool call, so the same turn
+  // can continue.
   deepseekReasoningContent?: string;
 }
 
-/**
- * Metadata about images sent to Discord by tool execution
- * Used to make LLM aware of images it sent via tools
- */
 export interface FunctionResponseImageMetadata {
   imageUrls: Array<{
     url: string;
@@ -212,81 +160,43 @@ export interface FunctionResponseImageMetadata {
   }>;
   totalSent: number;
   totalValidated: number;
-  /**
-   * Discord message IDs where these images were sent (if applicable)
-   * Allows follow-up tools to reference the original attachments via message_id
-   */
   messageIds?: string[];
 }
 
-/**
- * Base interface that all LLM providers must implement
- */
 export interface LLMProvider {
-  /**
-   * Get provider information and capabilities
-   */
   getInfo(): ProviderInfo;
 
-  /**
-   * Validate an API key by making a test request
-   * @param apiKey - The API key to validate
-   * @param ownerDiscordId - The guild (the user in DMs) or personal user the key is being saved for, for providers that gate owners.
-   * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
-   */
+  // Optional ownerDiscordId carries the guild ID (or user ID for DMs and personal keys), because some providers gate
+  // keys by owner.
   validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
 
-  /**
-   * Looks a text model up in the provider's own catalog before it is registered.
-   * @returns False only when the provider answered that it does not serve `codename`; null when
-   *          the lookup could not answer, which registration treats as unchecked.
-   */
+  // False means the provider explicitly rejected codename, whereas null signals an inconclusive lookup so
+  // registration treats it as unchecked.
   checkTextModel?(apiKey: string, codename: string): Promise<boolean | null>;
 
-  /** {@link checkTextModel} for an image model, offered only where the same catalog serves image models. */
+  // Optional because providers implement this only when their catalog also serves image models, using the same false
+  // vs null contract as checkTextModel.
   checkImageModel?(apiKey: string, codename: string): Promise<boolean | null>;
 
-  /**
-   * Create a localized provider-specific error description for user-facing embeds.
-   * This keeps formatting logic inside the provider abstraction instead of command switches.
-   */
   formatErrorDescription(error: ProviderError, locale: string): string | null;
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * @param tomoriState - The current Tomori state with configuration
-   */
   getTools(tomoriState: TomoriState, streamingContext?: StreamingContext): Promise<Array<Record<string, unknown>>>;
 
-  /**
-   * Stream LLM response directly to a Discord channel
-   * @param channel - The Discord text channel or thread to send messages to
-   * @param config - Provider-specific configuration
-   * @param currentTurnModelParts - Accumulated model parts for the current turn
-   * @param emojiStrings - Optional array of emoji strings for cleaning
-   * @param functionInteractionHistory - Optional function calling history
-   * @param initialInteraction - Optional initial interaction for error reporting
-   * @param replyToMessage - Optional message to reply to
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   * @param userLocale - User's preferred locale for error messages (defaults to en-US)
-   * @param webhook - Optional webhook for alter persona responses with custom avatars
-   * @param personaAvatarUrl - Optional avatar URL for current persona (used with webhook)
-   * @param personaUsername - Optional username override for current persona (used with webhook)
-   * @param prefixStrippingName - Optional name used for prefix stripping (may differ from personaUsername for user impersonation)
-   */
+  // prefixStrippingName stays separate from personaUsername because user impersonation requires stripping a different
+  // prefix than the persona display name.
   streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,
     tomoriState: TomoriState,
     config: ProviderConfig,
     contextItems: StructuredContextItem[],
-    currentTurnModelParts: Array<Record<string, unknown>>, // Provider-specific parts
+    currentTurnModelParts: Array<Record<string, unknown>>,
     emojiStrings?: string[],
     functionInteractionHistory?: Array<{
       functionCall: FunctionCall;
       functionResponse: Record<string, unknown>;
       imageMetadata?: FunctionResponseImageMetadata;
-      /** Text parts the model generated before the function call (prevents repetition on continuation) */
+      // Replayed alongside the tool call because omitting pre-tool text causes models to repeat it on continuation.
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     initialInteraction?: CommandInteraction,
@@ -299,21 +209,11 @@ export interface LLMProvider {
     prefixStrippingName?: string,
   ): Promise<StreamResult>;
 
-  /**
-   * @returns Promise<string> - The default model codename
-   */
   getDefaultModel(): Promise<string>;
 
-  /**
-   * Convert provider-specific configuration from TomoriState
-   * @param apiKey - The decrypted API key
-   */
   createConfig(tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig>;
 }
 
-/**
- * Abstract base class that provides common functionality for all providers
- */
 export abstract class BaseLLMProvider implements LLMProvider {
   abstract getInfo(): ProviderInfo;
   abstract validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
@@ -334,7 +234,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
       functionCall: FunctionCall;
       functionResponse: Record<string, unknown>;
       imageMetadata?: FunctionResponseImageMetadata;
-      /** Text parts the model generated before the function call (prevents repetition on continuation) */
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     initialInteraction?: CommandInteraction,
@@ -349,11 +248,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
   abstract getDefaultModel(): Promise<string>;
   abstract createConfig(tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig>;
 
-  /**
-   * Common helper method to check if a provider supports a given model
-   * @param modelCodename - The model codename to check
-   * @returns True if the model is supported by this provider
-   */
   protected supportsModel(modelCodename: string): boolean {
     return this.getInfo().supportedModels.includes(modelCodename);
   }

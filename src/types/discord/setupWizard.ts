@@ -111,10 +111,8 @@ export const setupDraftRecordSchema = z
     providerAccess: setupDraftProviderAccessSchema.nullable(),
     startingSettings: setupDraftStartingSettingsSchema.nullable(),
     policiesAccepted: z.boolean(),
-    /**
-     * Captured once when the draft is created, not re-read per action, so an environment flip mid-wizard cannot
-     * retroactively add or remove a required step from a draft already in progress.
-     */
+    // Captured once at draft creation rather than per action, so an environment flip mid-wizard cannot retroactively
+    // add or remove required steps.
     requiresPolicies: z.boolean(),
   })
   .strict();

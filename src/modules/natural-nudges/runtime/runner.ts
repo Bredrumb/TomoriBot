@@ -43,7 +43,6 @@ import { ensureDiscordUserMention, sendPersonaMention } from "@/utils/discord/me
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 import { log } from "@/utils/misc/logger";
 
-/** Messages scanned after the anchor when a tool delivered the opener and no stream reported its ID. */
 const OPENER_LOOKUP_LIMIT = 10;
 const LATEST_IDLE_NUDGE_ROWS = 1;
 
@@ -83,10 +82,6 @@ function sample(
   });
 }
 
-/**
- * The cheap checks again, read fresh, right before sending. Any doubt resolves to saying nothing,
- * so each failing check names the reason and the caller aborts.
- */
 async function recheckBeforeSend(
   attempt: SelectedIdleNudgeAttempt,
   target: NudgeChannel,
@@ -201,10 +196,8 @@ export function systemContextItem(sentences: readonly string[]): StructuredConte
   };
 }
 
-/**
- * Says what the persona sets out to do rather than "nobody asked", which personas echoed back; the turn
- * borrows the channel's last message as its trigger, so the lead must still mark it as unprompted.
- */
+// Leads avoid "nobody asked" (which personas echoed) while marking the turn unprompted, because it borrows the
+// channel's last message as its trigger.
 const OPENER_LEADS: Record<NaturalNudgeCategory, (name: string) => string> = {
   start_topic: (name) => `${name} decided to bring up a new topic in this channel on their own.`,
   revive_topic: (name) => `${name} decided to pick an earlier conversation in this channel back up on their own.`,
@@ -222,11 +215,9 @@ function toolSentence(name: string, tools: readonly string[]): string {
   return tools.length > 0 ? `If it fits, ${name} may use: ${tools.join(", ")}.` : "";
 }
 
-/** A goal stated outright reads as an interview, so every private goal travels with the instruction to work it in sideways. */
 const GOAL_PURSUIT_NOTE =
   "Work toward the goal through natural conversation. Do not announce it, and do not simply ask it outright.";
 
-/** Rides on every scene turn: the script can run 8 turns, and unbounded turns turn it into a monologue exchange. */
 const SCENE_TURN_BREVITY_NOTE =
   "This is a quick back-and-forth: keep this message to one or two short sentences and leave the rest for later turns.";
 
@@ -265,10 +256,8 @@ function buildPartnerContextItem(
   ]);
 }
 
-/**
- * The scripted scene for a Play Scene plan. Each partner's goal also rides on its first turn, so the
- * partner still has it when the opener's agenda rows could not be written or anchored.
- */
+// Each partner's goal also rides on its first scene turn, so the partner keeps it even if opener agenda rows fail to
+// write or anchor.
 function buildNudgeScene(
   attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
@@ -296,7 +285,6 @@ function buildNudgeScene(
   };
 }
 
-/** One agenda row per speaker, all anchored to the opener. */
 function idleNudgeAgendas(
   attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
@@ -311,10 +299,8 @@ function idleNudgeAgendas(
   ];
 }
 
-/**
- * Last message to borrow as the turn's trigger; only a channel read as empty gets the placeholder
- * reminders use, so a failed read never posts a stray one.
- */
+// Failed channel reads return `null` rather than calling `seedTurnAnchor`, so a read error never posts a stray
+// placeholder in an active channel.
 async function resolveAnchorMessage(
   channel: GuildTextBasedChannel,
   work?: ScheduledWorkContext,
@@ -350,10 +336,8 @@ export function isGenerationFailure(result: GenerationTurnResult): boolean {
   return result.status === "error" || result.status === "timeout" || result.status === "empty_response";
 }
 
-/**
- * Phases B and C for one attempt. Runs detached from the coordinator cycle so model calls never
- * delay reminders; a restart mid-flight loses only this attempt, and the idle nudge stays due.
- */
+// Detached from the coordinator cycle so model calls never delay reminders; a mid-flight restart drops only this
+// attempt and leaves the nudge due.
 export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<AttemptResult> {
   if (!canRunScheduledWork(input.work)) return "aborted";
   if (!(await readNaturalNudgeGate(input.serverDiscId))) return "aborted";

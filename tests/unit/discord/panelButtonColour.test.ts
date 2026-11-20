@@ -28,10 +28,8 @@ function findColourViolations(colour: "Primary" | "Success"): string[] {
     const relPath = relative(SRC_DIR, filePath).replace(/\\/g, "/");
     const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
     for (const [index, line] of lines.entries()) {
-      // A style union in a property type and a `{@link}` in JSDoc both name a colour without
-      // painting a button, so a source-text scan reads them as uses. Narrowing such a union to
-      // exclude a banned colour would otherwise trip this gate, which pushes the next author to
-      // widen the type instead of narrowing it.
+      // Type annotations and comments can name ButtonStyle without rendering a button, so
+      // skipping them prevents a source scan from punishing narrowed style types.
       const isTypePosition = line.includes("?:");
       const isComment = /^\s*(\/\/|\/?\*)/.test(line);
       if (isTypePosition || isComment) continue;

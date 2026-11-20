@@ -1,8 +1,4 @@
 import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
-// Runtime model seeding from the typed catalog (`models.ts`), the single source of truth for
-// seeded models: the catalog is rendered into INSERT … ON CONFLICT statements and executed
-// directly during database initialization (see `seedModelsFromCatalog`). There is no generated
-// .sql file to keep in sync, and seeding stays an idempotent upsert on every startup.
 
 import type { SQL } from "bun";
 import {
@@ -26,10 +22,9 @@ import type {
   VideoInput,
 } from "./types";
 
-/** Providers exempt from the default/smartest invariants (bootstrap placeholders). */
+// Custom stays exempt from default and smartest model invariants because it is only a bootstrap placeholder.
 const INVARIANT_EXEMPT = new Set<string>(["custom"]);
 
-/** Minimal shape the renderer/validator needs from every catalog row. */
 interface RowLike {
   provider: string;
   codename: string;
@@ -46,20 +41,15 @@ function localizedDescriptions(row: RowLike): Record<string, string> {
 
 interface TableSpec<T extends RowLike> {
   table: string;
-  /** Column list inside `INSERT INTO <table> (...)`, in tuple order. */
   columns: string;
-  /** Positional value tuple for one row, without the surrounding parentheses. */
   tuple: (m: T) => string;
-  /** `ON CONFLICT ...` block (no trailing semicolon: executed via client.unsafe). */
   onConflict: string;
-  /** Whether this table has an is_smartest column (only `llms`). */
   hasSmartest: boolean;
-  /** Key whose rows share one is_default; defaults to the provider. */
   defaultGroup?: (m: T) => string;
   sections: ModelSection<T>[];
 }
 
-// Per-table specs (column order MUST match the column list)
+// tuple() value order must match columns.
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
@@ -89,12 +79,8 @@ const llmSpec: TableSpec<LlmInput> = {
       num(m.contextWindow),
       num(m.maxOutputTokens),
     ].join(", "),
-  // The trailing WHERE guard is the key protection for scoped OpenRouter registrations:
-  // a row that a server/user has promoted to a scoped registration (is_scoped_registration = true)
-  // is user-owned, not a curated catalog entry, so the per-boot reseed must leave it untouched.
-  // Without this guard the reseed would reset is_scoped_registration = false and re-apply
-  // is_deprecated, silently reverting a user's deprecated-model registration on every restart.
-  // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
+  // Trailing WHERE skips user-owned scoped OpenRouter rows unless the catalog re-activates them, so reseeding does not
+  // revert deprecated user registrations on restart.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   descriptions = EXCLUDED.descriptions,
@@ -138,8 +124,7 @@ const imageSpec: TableSpec<ImageInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter image registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   descriptions = EXCLUDED.descriptions,
@@ -169,8 +154,7 @@ const videoSpec: TableSpec<VideoInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter video registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   descriptions = EXCLUDED.descriptions,
@@ -199,8 +183,7 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
-  // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
-  // See the llmSpec onConflict note for the full rationale.
+  // Preserves user-owned scoped OpenRouter embedding registrations across reseeds (see llmSpec).
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
@@ -294,7 +277,6 @@ export function collectSmartestInvariantViolations(
   return [`${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`];
 }
 
-/** Collect every per-provider/uniqueness violation for one table. */
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
 
@@ -330,21 +312,14 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
   }
 }
 
-// Providers whose llms rows MUST carry a strict chat-completion flag. Kept in lockstep with the
-// request-time safety net in src/providers/utils/strictChatCompat.ts (providerRequires*). Defined
-// locally so the seed catalog stays independent of the provider runtime layer.
+// Defined locally so the seed catalog stays independent of the provider runtime layer (keep in lockstep with
+// src/providers/utils/strictChatCompat.ts).
 export const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
 export const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
 export const MODEL_DRIFT_TODO = "MODEL_DRIFT_TODO";
 
-/**
- * Enforce that every llms row whose provider requires a strict chat-completion normalization has
- * the corresponding flag set. Because the runtime resolves the flag from the active model's column
- * (D4), a single un-flagged model would silently emit an invalid body for that backend.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
+// Runtime reads strictRoleAlternation from the model row rather than the provider, so missing the flag silently sends
+// an invalid request body.
 export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -362,12 +337,8 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-// Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
-// providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
-// unpriced row makes resolveModelPricing (src/utils/provider/modelPricing.ts) return null and the command
-// reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
-// API cache, with any catalog price acting only as a cache-miss fallback. Its llms rows are still filled in at
-// startup by syncOpenrouterCatalogPricing (src/init/loaders.ts), which SQL-computed cost surfaces read.
+// First-party metered providers without live pricing caches, so unpriced active rows break `/tool estimate cost`;
+// OpenRouter is excluded because live API sync fills its prices.
 const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "google",
   "vertex",
@@ -378,22 +349,11 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "zaicoding",
 ]);
 
-// Active first-party rows whose provider has not published a price yet. A codename belongs here only
-// until its official rate lands in models.ts or the row is deprecated.
+// Temporary exemptions for active metered rows without published rates until priced in models.ts or deprecated.
 const PRICING_PENDING_CODENAMES = new Set<string>();
 
-/**
- * Enforce that every billable first-party llms row carries explicit per-million input/output prices.
- * With the env price fallback gone, an unpriced active row would surface "pricing unavailable" in
- * `/tool estimate cost`, so this invariant catches the next added model that forgets its catalog price.
- *
- * Excluded: deprecated rows (may predate verified pricing), Gemma codenames (open model, no first-party
- * paid tier), and {@link PRICING_PENDING_CODENAMES} (provider has not published a rate yet). A free-tier
- * row of a metered provider keeps its paid rates for cost reads, so is_free does not exempt it.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
+// Unpriced rows surface "pricing unavailable" in /tool estimate cost, and is_free does not exempt metered-provider
+// rows because cost reads use their paid rates.
 function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -412,9 +372,8 @@ function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-// Providers whose token limits come only from the catalog (or the catalog backs a live lookup), so an
-// active row without them silently loses history truncation and output clamping. NVIDIA model cards
-// publish a context window but rarely an output ceiling, so it is held to the window alone.
+// Catalog-backed providers where missing token limits disable history truncation or output clamping (NVIDIA cards omit
+// output ceilings, so it only requires contextWindow).
 const LIMIT_REQUIRED_PROVIDERS = new Set<string>([
   "google",
   "vertex",
@@ -426,8 +385,7 @@ const LIMIT_REQUIRED_PROVIDERS = new Set<string>([
 ]);
 const WINDOW_ONLY_LIMIT_PROVIDERS = new Set<string>(["nvidia"]);
 
-// Active rows whose vendor documents a context window but no output ceiling. A codename leaves this set
-// once its vendor publishes one.
+// Active rows whose vendor publishes a context window without an output ceiling, until one is published.
 const OUTPUT_CEILING_UNPUBLISHED = new Set<string>([
   "gemma-4-31b-it",
   "gemma-4-26b-a4b-it",
@@ -437,14 +395,6 @@ const OUTPUT_CEILING_UNPUBLISHED = new Set<string>([
   "zai/glm-4.6v-flash",
 ]);
 
-/**
- * Enforce that every active first-party llms row carries its official token limits.
- * Deprecated rows are excluded because they may predate verified limits, and
- * {@link OUTPUT_CEILING_UNPUBLISHED} rows owe only the window.
- *
- * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @returns A list of violation messages (empty when valid).
- */
 export function collectTokenLimitViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
@@ -461,10 +411,6 @@ export function collectTokenLimitViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
-/**
- * Validate every model table against the per-provider invariants.
- * @returns A list of human-readable violation messages (empty when valid).
- */
 export function validateModels(): string[] {
   const errors: string[] = [];
   validateSpec(llmSpec, errors);
@@ -495,19 +441,12 @@ export function validateModels(): string[] {
   return errors;
 }
 
-/**
- * Discord caps a String Select at 25 options. Twenty curated rows leave room for the user's scoped
- * registrations and a None entry, so a provider's whole catalog fits one select without paging.
- */
+// Capped at 20 because Discord limits String Selects to 25 options, leaving room for user registrations and a None
+// entry without paging.
 export const MAX_ACTIVE_ROWS_PER_PROVIDER = 20;
 
-/**
- * Find catalog work a model drift review must finish: placeholder descriptions and providers grown
- * past {@link MAX_ACTIVE_ROWS_PER_PROVIDER}.
- * Kept out of {@link validateModels} because both are unfinished review, not malformed rows: seeding
- * must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
- * @returns One violation per unfinished row or over-limit provider table.
- */
+// Kept separate from validateModels because drift-review todos and over-limit counts must not block seeding while a
+// drift PR is still in progress.
 export function validateModelDriftReview(): string[] {
   return [llmSpec, imageSpec, videoSpec, decisionSpec].flatMap((spec) => [
     ...collectModelDriftTodoViolations(spec.table, rowsOf(spec)),
@@ -546,10 +485,6 @@ function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   return `INSERT INTO ${spec.table} (${spec.columns})\nVALUES\n${values}\n${spec.onConflict}`;
 }
 
-/**
- * Build one `INSERT … ON CONFLICT` statement per model table from the catalog.
- * Exposed for tests / inspection; runtime seeding uses {@link seedModelsFromCatalog}.
- */
 export function buildModelSeedStatements(): string[] {
   return [
     renderStatement(llmSpec),
@@ -562,11 +497,6 @@ export function buildModelSeedStatements(): string[] {
   ];
 }
 
-/**
- * Seed all model tables from the typed catalog. Validates invariants first and
- * throws before touching the database if the catalog is malformed, then runs the
- * idempotent upsert for each table.
- */
 export async function seedModelsFromCatalog(client: SQL): Promise<void> {
   const violations = validateModels();
   if (violations.length > 0) {

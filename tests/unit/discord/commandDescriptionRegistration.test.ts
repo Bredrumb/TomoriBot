@@ -4,9 +4,6 @@ import { loadCommandData } from "@/utils/discord/commandLoader";
 
 const UNRESOLVED_LOCALE_KEY_PATTERN = /^commands\.[a-zA-Z0-9_.-]+$/;
 
-/**
- * Known unresolved descriptions scheduled for dissolution in the current wave.
- */
 const DISSOLUTION_ALLOWLIST = new Set<string>();
 
 type OffendingDescription = {

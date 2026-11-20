@@ -173,10 +173,8 @@ describe("buildDegradationAttempts", () => {
   });
 
   it("probes declared injected keys before the user's samplers", () => {
-    // Without the declaration, reasoning_budget and custom_option are indistinguishable, so the
-    // key the backend actually rejected sorts into the tail behind unrelated junk. Ordering is
-    // pure latency (the ladder stops at the first success, so the winning rung ships the same
-    // payload either way), and a key the user never asked for is the better first hypothesis.
+    // Priority keys probe provider-injected fields before user samplers because the ladder stops on the first
+    // winning rung.
     const attempts = buildDegradationAttempts(
       {
         model: "nvidia/example",
@@ -456,8 +454,7 @@ describe("classifyDegradableError", () => {
   });
 
   it("fails a descriptive 5xx fast instead of walking the ladder", () => {
-    // A genuine outage says so. Degrading against a dead endpoint burns every rung and delays
-    // the key-rotation and model-fallback paths that can actually recover the turn.
+    // Descriptive outages must fail fast because walking every rung delays key rotation and model fallback.
     expect(
       classifyDegradableError({
         statusCode: 503,

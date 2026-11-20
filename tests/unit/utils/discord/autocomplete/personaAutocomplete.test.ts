@@ -1,9 +1,3 @@
-/**
- * The persona autocomplete list is not "every persona": it is filtered by whitelist and personal
- * spotlight exactly as a trigger would be. That filter is a privacy boundary, because a suggestion
- * reveals that a persona exists in a channel where the actor cannot use it. These tests pin the
- * filter, the ranking, and the 25-result ceiling Discord enforces.
- */
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { AutocompleteInteraction, Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";

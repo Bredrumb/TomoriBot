@@ -4,10 +4,7 @@ import type { PendingLegacyChannelScope } from "@/utils/db/repositories/ServerMe
 
 type CachedGuild = Pick<Guild, "available" | "channels">;
 
-/**
- * Resolves legacy `#name` channel tags against a guild's cached channels. A name keeps every text or
- * announcement channel that carries it, because the old name filter matched all of them.
- */
+// Each tag name keeps every matching text or announcement channel because the legacy name filter matched all of them.
 function resolveLegacyChannelTags(channelTags: readonly string[], guild: Pick<Guild, "channels">): string[] {
   const channelIdsByName = new Map<string, string[]>();
   for (const channel of guild.channels.cache.values()) {
@@ -27,14 +24,8 @@ function resolveLegacyChannelTags(channelTags: readonly string[], guild: Pick<Gu
   return [...channelIds];
 }
 
-/**
- * Converts the `#name` channel scopes migration 111 moved aside into channel IDs. An unmatched row stays
- * pending, which readers treat as active in every channel. The unfiltered run first drops rows whose item
- * was deleted, so a deletion cannot leave an unmatched count behind.
- *
- * @param findGuild - Looks up a cached guild by Discord ID; a guild it cannot return stays pending
- * @param serverDiscId - Limits the run to one server
- */
+// Unmatched rows stay pending (active in all channels), and unfiltered runs prune deleted-item rows first so
+// deletions do not leave fake unmatched counts.
 export async function backfillLegacyChannelScopes(
   findGuild: (guildDiscId: string) => CachedGuild | undefined,
   serverDiscId?: string,

@@ -143,11 +143,8 @@ function createMessage(
   };
 }
 
-/**
- * Creates the deterministic Phase 0 fixture and replaces only the repository
- * methods reached by the legacy participant builder. Call `restoreRepositories`
- * in a `finally` block so the shared Bun test process cannot retain the fakes.
- */
+// Callers must invoke restoreRepositories in a finally block because Bun shares module state across tests and would
+// retain the repository fakes.
 export function createParticipantContextFixture(): ParticipantContextFixture {
   clearUserCache();
   const counters: ParticipantFixtureCounters = {

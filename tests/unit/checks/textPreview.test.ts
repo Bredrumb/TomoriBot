@@ -105,9 +105,8 @@ describe("flattenLocale", () => {
 });
 
 describe("text-preview conventions — real source tree", () => {
-  // The audit globs and reads every source file, so it runs ONCE and both
-  // assertions share the result. This file sits in `bun run vl`'s shared unit
-  // lane, where a second full scan would be pure added wall-clock time.
+  // Run the source-tree audit once and share it across assertions so vl's unit lane does not pay for two
+  // full-repo scans.
   const auditOnce = auditTextPreview();
 
   it("has no locale string claiming truncation that did not happen", async () => {

@@ -1,11 +1,3 @@
-/**
- * Type definitions for the Crawl4AI Docker REST API.
- *
- * TomoriBot uses the `/md` endpoint normally and falls back to `/crawl` when
- * CRAWL4AI_COOKIES_JSON is configured (cookie injection requires browser_config,
- * which only the /crawl endpoint supports).
- */
-
 export type Crawl4aiFilterMode = "raw" | "fit" | "bm25" | "llm";
 
 export interface Crawl4aiCookie {
@@ -46,13 +38,9 @@ export interface Crawl4aiCrawlResponse {
 }
 
 export interface Crawl4aiMarkdownRequest {
-  /** Absolute http/https URL to fetch. */
   url: string;
-  /** Content filter strategy. `fit` is the default for LLM-friendly output. */
   f: Crawl4aiFilterMode;
-  /** Optional query used by bm25/llm filters. Not used by fetch_url v1. */
   q?: string;
-  /** Optional cache-bust/revision counter accepted by Crawl4AI. */
   c?: string;
 }
 
@@ -66,11 +54,8 @@ export interface Crawl4aiMarkdownResponse {
 }
 
 export interface Crawl4aiRequestConfig {
-  /** Override global base URL. Mainly useful for tests. */
   baseUrl?: string;
-  /** Per-request timeout in ms. Defaults to FETCH_URL_TIMEOUT_MS. */
   timeoutMs?: number;
-  /** External abort signal from the tool execution context. */
   signal?: AbortSignal;
 }
 

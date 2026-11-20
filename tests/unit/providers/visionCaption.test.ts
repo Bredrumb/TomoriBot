@@ -22,11 +22,6 @@ afterEach(() => {
   else process.env.OPENROUTER_APP_ATTRIBUTION_ENABLED = originalAttributionSetting;
 });
 
-/**
- * The shared vision module is the only place a provider's image transport is chosen, so a
- * provider that supports vision but has no transport here fails at request time rather than
- * at review time. These tests pin both the resolution rules and the coverage gap.
- */
 describe("vision api model name resolution", () => {
   test("translates zai codenames to the backend model string", () => {
     expect(resolveVisionApiModelName("zai", "zai/glm-4.6v", "ignored-by-zai")).toBe("glm-4.6v");
@@ -101,8 +96,8 @@ describe("vision chat-completions transport coverage", () => {
   });
 
   test("never falls back to an OpenAI URL for a foreign provider", () => {
-    // The previous tool-level map had no nvidia entry and fell through to an OpenAI default,
-    // which would have sent a foreign bearer key to the wrong host.
+    // Unknown providers must never fall back to an OpenAI URL because that would send a foreign bearer key to the
+    // wrong host.
     expect(resolveChatCompletionsUrl("nvidia")).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
     expect(resolveChatCompletionsUrl("nonexistent-provider")).toBeNull();
   });
@@ -120,7 +115,6 @@ describe("vision chat-completions transport coverage", () => {
       "http://127.0.0.1:5001/v1/chat/completions",
     );
     expect(resolveChatCompletionsUrl("custom:17", "   ")).toBeNull();
-    // The canonical name alone has no connection to resolve an endpoint from.
     expect(resolveChatCompletionsUrl("custom", "http://127.0.0.1:5001/v1")).toBeNull();
   });
 });

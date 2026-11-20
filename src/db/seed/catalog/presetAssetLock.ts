@@ -1,9 +1,7 @@
 import type { SQL } from "bun";
 
-// The bot can upload an older content-addressed key before its catalog row is written. A sweep
-// must not delete that key during the gap, so both operations hold this transaction-scoped lock.
-// The catalog is small enough to keep one transaction open across its storage uploads. If uploads
-// approach the database's idle-transaction timeout, use a dedicated reserved session connection.
+// Advisory xact lock prevents asset sweeps from deleting newly uploaded catalog keys before their rows commit (switch
+// to a session lock if uploads ever approach the idle-transaction timeout).
 const PRESET_ASSET_LOCK_NAMESPACE = 1872156021;
 const PRESET_ASSET_LOCK_KEY = 1;
 

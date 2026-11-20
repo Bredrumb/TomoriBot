@@ -56,30 +56,20 @@ import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 
-/** Hard ceiling on provider round trips in one turn; the loop exits with `buildResult("timeout")`. */
 export const MAX_FUNCTION_CALL_ITERATIONS = 100;
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
-/** Consecutive tool failures before the loop gives up and surfaces a tool-error embed. */
 export const MAX_CONSECUTIVE_TOOL_ERRORS = 5;
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
   STREAM_SDK_CALL_TIMEOUT_MS,
   DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS,
 );
-// After the SDK-call watchdog aborts a stalled stream, how long to wait for the abandoned
-// `streamToDiscord` promise to actually settle before returning. `Promise.race` does not cancel the
-// loser and `abort()` only tears down the HTTP request, so a Discord send it already dispatched can
-// still be in flight; waiting for it lands that send in the settled `accumulatedText` before the
-// fallback attempt builds its continuation prefill and starts sending its own messages.
+// Bounded wait after watchdog abort so in-flight Discord sends land in `accumulatedText` before fallback builds a
+// continuation prefill.
 const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = 5000;
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 const TOOL_FAILURE_NOTICE_LIMIT = 1800;
-/**
- * Fed back to the model when a provider cut a tool call's arguments short. It names the
- * cause and the outcome so the retry is a fresh attempt rather than a repeat of the same
- * call, and so the model does not assume the update landed.
- */
 const TOOL_ARGUMENTS_TRUNCATED_REASON =
   "The provider truncated this tool call's arguments mid-payload, so the call was not executed and nothing was updated. Reissue the call with the complete arguments in one message.";
 
@@ -266,8 +256,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     }
 
     if (review) {
-      // Stopping at the held ceiling ends the stream before providers send trailing usage. Ordinary
-      // turns fall back to the same estimates, so the cut pass is not recorded as free.
+      // Stopping at the held ceiling skips trailing provider usage, so estimate it here instead of recording the
+      // cut pass as free.
       const usage =
         streamResult.usage ??
         (streamResult.pendingResponse?.truncation
@@ -316,10 +306,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           if (completed) return completed;
           continue;
         }
-        // The turn-level retry regenerates the whole reply, so after delivered text it posts a second
-        // reply under the first. It is skipped only when the empty follow-up is the model having
-        // nothing to add; a lookup result still waiting to be presented, or a failure the retry
-        // handles specifically, keeps it.
+        // After delivered text, skip the turn-level retry only when the empty follow-up means nothing remains to
+        // add (avoiding a duplicate reply).
         const deliveredText = streamResults.findLast((result) => result.accumulatedText?.trim())?.accumulatedText;
         if (
           (deliveredText || toolResponseDelivered) &&
@@ -424,9 +412,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         functionHistory.push(toolOutcome.historyEntry);
         lastToolName = toolOutcome.functionName;
         toolResponseDelivered ||= toolOutcome.responseDelivered;
-        // Visible text emitted before the tool call now lives on that history
-        // entry's assistant tool-call turn. Remove the same buffered parts from
-        // the trailing prefill so providers do not receive it a second time.
+        // Clear buffered parts already saved on the history entry so providers do not receive pre-tool text twice.
         accumulatedModelParts.length = 0;
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
@@ -523,13 +509,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   );
 }
 
-/**
- * Sends the SDK-call timeout notice for an attempt.
- *
- * Usually sent while the attempt is still running. It is exported because a suppressed attempt
- * defers it, and the generation-turn loop is the only caller that knows whether the model fallback
- * it was suppressed for ever materialized.
- */
+// Suppressed attempts defer this notice to the generation-turn loop because only it knows whether the model fallback
+// ever materialized.
 export async function sendStreamTimeoutNotice(params: {
   channel: Parameters<typeof sendStandardEmbed>[0];
   locale: string;
@@ -592,8 +573,7 @@ async function streamOnce(
     : undefined;
   let timeoutId: NodeJS.Timeout | null = null;
 
-  // Unified kill: aborts the HTTP request AND rejects the Promise.race.
-  // Stored on the lock entry so /kill and stale-lock release can trigger it externally.
+  // Aborts the HTTP request and rejects Promise.race so /kill and stale-lock release stop stalled streams externally.
   let killStream: ((reason: Error) => void) | null = null;
 
   const armTimeout = (budgetMs: number) => {
@@ -619,9 +599,6 @@ async function streamOnce(
     ? params.context.message
     : undefined;
 
-  // Keep a handle to the provider call so the timeout branch can await it settling. Under
-  // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
-  // by race's internal handlers, so holding this reference does not create an unhandled rejection.
   const correction = params.context.responseReview && responseRevisionInstruction(params.context.responseReview);
   const preToolNarration = functionHistory.some((entry) => entry.preToolCallTextParts?.length)
     ? {
@@ -659,6 +636,7 @@ async function streamOnce(
     params.tomoriState.persona_id,
   );
   recordFirstChunk = recordChatProviderDispatch(params.tomoriState.llm.llm_provider);
+  // Hold `streamPromise` so timeout recovery can await its settle; Promise.race still observes any rejection.
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,
@@ -697,9 +675,8 @@ async function streamOnce(
     return result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop request (e.g. /kill) makes this a terminal stop; no fallback runs, so
-      // nothing continues from in-flight sends. Return immediately; settling here would just make
-      // the kill wait out the abandoned stream for no benefit.
+      // Return immediately on a pending stop (such as /kill) because no fallback runs to continue in-flight
+      // sends.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         const settled = params.context.responseReview ? await settleAbandonedStream(streamPromise) : undefined;
         return { status: "stopped_by_user", usage: settled?.usage };
@@ -761,14 +738,8 @@ async function streamOnce(
   }
 }
 
-/**
- * Waits for an aborted-but-abandoned `streamToDiscord` promise to settle, bounded by
- * {@link STREAM_ABANDONED_SETTLE_TIMEOUT_MS} so a genuinely hung send cannot block the fallback path
- * indefinitely. After `abortController.abort()` the provider generator throws promptly, so in the
- * common (stalled-provider) case this resolves almost immediately; the wait only matters when a
- * Discord send was mid-flight when the watchdog fired, and it exists so that send is part of the
- * delivered text a fallback continues from. Reported usage survives a timed-out or cancelled attempt.
- */
+// A bounded settle wait is required so mid-flight Discord sends join delivered text for fallback continuation without
+// blocking on hung sends.
 async function settleAbandonedStream(streamPromise: Promise<StreamResult>): Promise<StreamResult | undefined> {
   if (STREAM_ABANDONED_SETTLE_TIMEOUT_MS <= 0) {
     return;
@@ -866,9 +837,6 @@ async function executeToolCall(
     isExecutionCancelled: params.context.responseReview ? () => responseReviewCancelled(params.context) : undefined,
   };
 
-  // Deliberate-tool-mode allowlist enforcement. When mode is active and
-  // the model attempts a tool that wasn't exposed for this turn, short-circuit
-  // with a synthetic failure response (visible to the model) so it can adapt.
   const families: Record<string, string> = {};
   const requestedNames = params.context.streamingContext.deliberateToolAllowedNames;
   if (
@@ -888,15 +856,10 @@ async function executeToolCall(
   const isBlockedByDeliberateAllowlist =
     params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
 
-  // A truncated argument payload recovered by the adapter holds only the keys that arrived
-  // whole. Dispatching with that subset is worse than not dispatching at all: a tool whose
-  // arguments replace stored state (a category map, for instance) would write the surviving
-  // keys and silently drop the rest. No tool's semantics survive a partial call, so the
-  // model gets a synthetic failure instead and can retry with a complete one.
+  // Never dispatch truncated args because partial subsets on state-replacing tools silently drop omitted keys.
   if (functionCall.argumentsTruncated) {
-    // `log.error` rather than `log.warn`, which is filtered out whenever RUN_ENV=production,
-    // the only environment this truncation happens in. The error sink is also how the
-    // incident that prompted this path was found.
+    // Log at error level because `log.warn` is suppressed when RUN_ENV=production, where argument truncation
+    // occurs.
     await log.error(
       `Tool call "${functionName}" was not dispatched: the provider truncated its argument payload`,
       undefined,
@@ -1109,20 +1072,15 @@ async function executeToolCall(
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
-  // Record tool usage at the single tool-dispatch chokepoint (covers every
-  // built-in / REST / MCP tool). metric_key is the tool name, so per-tool
-  // breakdowns (web search, sticker, memory, reminder, …) fall out for free.
-  // Only successful, non-blocked calls count. Fire-and-forget so stat tracking
-  // never adds latency; DMs are skipped (server_id is a NOT NULL FK).
+  // Record tool_used fire-and-forget here for all built-in/REST/MCP tools, skipping DMs because
+  // stat_counters.server_id is NOT NULL.
   if (toolResult.success && !isBlockedByDeliberateAllowlist && !params.context.isDMChannel) {
     const serverId = params.tomoriState.server_id;
     const userId = params.context.triggererUserId;
     if (serverId && userId) {
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
-      // userId is carried on the context (resolved once at turn planning), so no
-      // per-tool-call DB lookup: recordStat just buffers in memory.
-      // `sticker_used` is not recorded here: a successful call can be a repeat that sent
-      // nothing, so the per-sticker count belongs to `deliverExpression` at Discord acceptance.
+      // `sticker_used` is recorded in `deliverExpression` at Discord acceptance rather than here because a repeat
+      // call can send nothing.
       try {
         statRepository.recordStat({
           serverId,
@@ -1137,7 +1095,6 @@ async function executeToolCall(
     }
   }
 
-  // When a tool call fails, surface a hidden thought-log notice explaining why.
   if (!toolResult.success) {
     await emitFailedToolCallThoughtLog(
       toolContext,
@@ -1147,8 +1104,6 @@ async function executeToolCall(
     );
   }
 
-  // When deliberate-tool-mode admitted the tool via a specific trigger,
-  // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
     const safeTrigger = deliberateToolTriggerMatch.trigger.replace(/`/g, "'");
@@ -1201,7 +1156,6 @@ async function executeToolCall(
         },
       };
 
-  // Preserve pre-tool narration for continuity. Collection keeps it pending until review.
   const preToolCallTextParts = buildPreToolCallTextParts(streamResult);
   if (preToolCallTextParts) {
     log.info(
@@ -1230,14 +1184,6 @@ function buildSuccessfulFunctionResponse(toolResult: ToolResult, functionName: s
   return { functionResponse: { name: functionName, response } };
 }
 
-/**
- * Builds the pre-tool-call text parts for a function-call history entry.
- *
- * `streamResult.accumulatedText` is this stream iteration's visible text at the
- * function-call boundary (each iteration gets a fresh stream state, so earlier
- * iterations' text is carried by their own history entries). Provider adapters
- * merge these parts into the synthetic assistant tool-call turn on the next call.
- */
 function buildPreToolCallTextParts(streamResult: StreamResult): Array<Record<string, unknown>> | undefined {
   const text = streamResult.pendingResponse?.text ?? streamResult.accumulatedText;
   return text?.trim() ? [{ type: "text", text }] : undefined;
@@ -1337,10 +1283,6 @@ async function handleEnhancedContextRestart(params: ToolLoopParams, data: unknow
   return true;
 }
 
-/**
- * Resolves the enrichment payload from either transport: inline `enhanced_context_item`,
- * or `pending_context_key` for tools whose payload is too heavy to sit in `ToolResult.data`.
- */
 function resolveEnhancedContextItem(record: Record<string, unknown>, type: string): unknown {
   const pendingContextKey = typeof record.pending_context_key === "string" ? record.pending_context_key : undefined;
   if (!pendingContextKey) return record.enhanced_context_item;
@@ -1366,12 +1308,8 @@ async function shouldEndAfterPreToolText(
   return !(await ToolRegistry.requiresFollowUp(functionName, serverId));
 }
 
-/**
- * Whether an empty stream after a tool means the model had nothing to add. A held NovelAI fragment,
- * an output-token cap (the retry trims context for it), and a speaker-guard discard (the retry
- * injects the speaker directive) are failures. A tool that requires follow-up returned data only
- * the follow-up can present, so an empty one lost the answer.
- */
+// Held NovelAI fragments, token-cap truncations, speaker-guard discards, and follow-up tools return false because a
+// retry or follow-up must recover them.
 async function isSettledAfterTool(
   params: ToolLoopParams,
   emptyResult: StreamResult,
@@ -1427,7 +1365,6 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
   );
 }
 
-/** Matches the notice ordinary streaming posts when a reply reaches its length cap. */
 async function emitHeldResponseLimitNotice(context: ChatTurnContext): Promise<void> {
   if (!context.shouldSurfaceUserErrors) return;
   await sendStandardEmbed(
@@ -1464,7 +1401,8 @@ function queueStopResponseIfPresent(context: ChatTurnContext): void {
   });
 }
 
-/** `prependDeliveredOutput` splits a composed response on this exact string. */
+// Exact separator that prependDeliveredOutput splits composed responses on, so changing this string breaks response
+// splitting.
 const SCENE_METADATA_SEPARATOR = "\n\n[Scene Metadata]\n";
 
 function buildResult(
@@ -1514,14 +1452,12 @@ function buildPersonaResponses(context: ChatTurnContext, text: string): Generati
     : [];
 }
 
-/** Output failed attempts of this turn left in the channel, which the next attempt continues. */
 export interface DeliveredTurnOutput {
   text: string;
   details: string;
   streamResults: StreamResult[];
 }
 
-/** Every iteration's delivered text, including text sent before a tool call. */
 function joinDeliveredText(streamResults: StreamResult[]): string {
   return streamResults
     .map((result) => result.accumulatedText?.trim())
@@ -1529,11 +1465,8 @@ function joinDeliveredText(streamResults: StreamResult[]): string {
     .join("\n");
 }
 
-/**
- * Adds a superseded invocation's delivered output to the turn's carried output. Its stream results
- * ride along so post-turn stats count emoji and sprites from the messages that stayed; their usage
- * is dropped because post-turn stats attribute all usage to the model that finished the turn.
- */
+// Superseded stream results stay so post-turn stats count stayed emoji and sprites, while their usage is dropped
+// because finishing models own all usage.
 export function carryDeliveredOutput(carried: DeliveredTurnOutput, superseded: GenerationTurnResult): void {
   const text = joinDeliveredText(superseded.streamResults);
   if (!text) return;
@@ -1546,7 +1479,6 @@ export function carryDeliveredOutput(carried: DeliveredTurnOutput, superseded: G
   }
 }
 
-/** Prefixes the attempt that continued the carried output with it, so the result holds the whole visible reply. */
 export function prependDeliveredOutput(
   result: GenerationTurnResult,
   context: ChatTurnContext,

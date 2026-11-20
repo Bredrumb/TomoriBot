@@ -3902,7 +3902,6 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits[0])).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
-    /** One submitted triple per bound the quota modal must refuse, with the field it violates. */
     const INVALID_QUOTA_VALUES: ReadonlyArray<readonly [string, string, string, string]> = [
       ["a daily quota below zero", "-1", "100", "30"],
       ["a daily quota above its cap", "101", "100", "30"],
@@ -3914,7 +3913,6 @@ describe("moderation whitelist role routes", () => {
       ["a reset window beyond a year", "10", "100", "366"],
     ];
 
-    /** The quota modal submit the table drives, carrying one submitted triple and its edit sink. */
     function quotaSubmitInteraction(
       daily: string,
       serverwide: string,
@@ -4096,10 +4094,6 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits.at(-1))).toContain("Image Generation quotas updated");
     });
 
-    /**
-     * A `recordAction` that flattens each recorded action, so one case asserts exactly the one
-     * panel_action its own route writes rather than a shared transcript of three routes.
-     */
     function collectPanelActions(): {
       recorded: string[];
       recordAction: (input: { action: string; serverId: number; userDiscId: string }) => void;
@@ -4439,7 +4433,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     expect([...handlerActions].sort()).toEqual(sortedAccepted);
   });
 
-  /** Actions a compatibility surface renders no button for; the allowlist the union check closes over. */
   const PRODUCERLESS_ACTIONS = [
     "page",
     "user-blacklist-remove-prompt",
@@ -4447,11 +4440,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     "whitelist-role-remove-prompt",
   ] as const;
 
-  /**
-   * Every custom ID the production modal builders and panel renderers emit, collected from the modal
-   * surfaces and from one panel payload per category, page, and removal state. The cases below share
-   * this collection so a new surface is still added in one place.
-   */
   function collectPanelSurfaceCustomIds(): string[] {
     const customIds: string[] = [];
 
@@ -4668,7 +4656,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     return customIds;
   }
 
-  /** The actions the collected custom IDs decode to, ignoring the pagination indicator's own ID. */
   function collectedProducedActions(customIds: string[]): Set<string> {
     const producedActions = new Set<string>();
     for (const id of customIds) {
@@ -4739,7 +4726,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     }
   });
 
-  /** Route objects the router would accept but the panel codec must refuse on identity alone. */
   const REJECTED_ROUTE_OBJECTS: Array<{ label: string; route: ParsedInteractionRoute }> = [
     {
       label: "a foreign namespace",
@@ -4751,10 +4737,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     },
   ];
 
-  /**
-   * Every string the router parses into segments but the panel codec must still refuse, paired with
-   * the field that makes it invalid. Each row is one arity or enum case: a new action adds one row.
-   */
   const REJECTED_WIRE_STRINGS: ReadonlyArray<readonly [string, string]> = [
     ["moderation:v2:category:invalid-locale:member-access", "an unknown locale"],
     ["moderation:v2:unknown-action:en-US", "an action no codec declares"],

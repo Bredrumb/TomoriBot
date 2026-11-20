@@ -1,4 +1,3 @@
-/** Unit tests for the 9:16 Personal Wrapped infographic. */
 import { beforeAll, describe, expect, it } from "bun:test";
 import sharp from "sharp";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";

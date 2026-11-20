@@ -2,10 +2,8 @@ import type { AppEnvironment } from "@/types/config";
 import { runAutomaticDataBackupIfNeeded } from "@/utils/backup/dataBackup";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Runs the non-production startup backup gate before schema initialization can
- * apply migrations or seed changes.
- */
+// Startup backup must run before schema initialization so migrations and seed changes cannot alter the database
+// first.
 export async function initStartupBackup(environment: AppEnvironment): Promise<void> {
   if (environment === "production") {
     return;

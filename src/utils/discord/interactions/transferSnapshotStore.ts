@@ -19,15 +19,9 @@ export interface TransferSnapshotRecord {
   strategy?: "merge" | "replace";
   mapping?: Record<string, number | "skip">;
   selectedBucket?: string;
-  /**
-   * Records that the destructive Replace preview has been shown for this snapshot. The write path requires it, so
-   * a Replace cannot be committed by a client that skipped the confirmation screen.
-   */
+  // Write paths require `replaceConfirmed` so a client cannot commit a destructive Replace by skipping the
+  // confirmation preview.
   replaceConfirmed?: boolean;
-  /**
-   * Records that one interaction has claimed this snapshot to write it. A claimed snapshot is never consumed by a
-   * failed write, so the claim is what keeps a repeated confirmation from writing the imported memories twice.
-   */
   writeClaimed?: boolean;
 }
 
@@ -150,9 +144,7 @@ export function createTransferSnapshotStore(now: () => number = Date.now): Trans
 
     // State updates never extend expiresAt, so an active mapping session still ends at its original deadline.
     const updatedSnapshot = { ...result.snapshot, ...patch };
-    // The destructive preview describes one exact plan, so any patch that moves the strategy or the mapping on
-    // invalidates a recorded confirmation. Enforcing it here rather than at each call site is what keeps a future
-    // mapping action from re-opening a Replace whose confirmation the reader gave for different destinations.
+    // Clear Replace confirmation whenever strategy or mapping changes so prior consent never applies to a new plan.
     if (patch.strategy !== undefined || patch.mapping !== undefined) {
       updatedSnapshot.replaceConfirmed = false;
     }
@@ -160,14 +152,8 @@ export function createTransferSnapshotStore(now: () => number = Date.now): Trans
     return { status: "ok", snapshot: updatedSnapshot };
   };
 
-  /**
-   * Claims the snapshot for the interaction that is about to write it.
-   *
-   * The read and the write happen in one synchronous step, so no second interaction can pass the check in between:
-   * that is the whole point of the claim, because the import transaction itself is awaited and a duplicate
-   * confirmation arriving during it would otherwise validate against the same unclaimed snapshot and import the
-   * same memories again.
-   */
+  // Reading and setting `writeClaimed` must stay synchronous with no `await` so a duplicate confirmation cannot
+  // import memories twice while a commit is awaited.
   const claim = (
     nonce: string,
     actorDiscId: string,
@@ -183,7 +169,6 @@ export function createTransferSnapshotStore(now: () => number = Date.now): Trans
     return { status: "claimed", snapshot: claimedSnapshot };
   };
 
-  /** Releases a claim whose write did not commit, so the pending import stays retryable. */
   const releaseClaim = (
     nonce: string,
     actorDiscId: string,

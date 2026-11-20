@@ -78,9 +78,7 @@ export class Crawl4aiEngine implements FetchEngine {
     let toolData = result.data;
     let sliced = sliceMarkdown(toolData.markdown, opts);
 
-    // When the fit filter returns empty on an initial (non-paginated) fetch, retry with
-    // raw filter. fit's PruningContentFilter skips NavigableString nodes, so plain-text
-    // responses (e.g. raw.githubusercontent.com) always yield empty fit_markdown.
+    // Crawl4AI's PruningContentFilter skips NavigableString nodes, so plain-text pages yield empty fit_markdown.
     if (!sliced.text.trim() && !opts.raw && (opts.startIndex ?? 0) === 0) {
       log.info("crawl4ai fit filter returned empty; retrying with raw filter");
       const rawResult = await crawl4ai_fetch_url({ url, raw: true }, context);

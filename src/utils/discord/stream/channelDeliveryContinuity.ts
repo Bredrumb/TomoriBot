@@ -3,27 +3,8 @@ import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { log } from "@/utils/misc/logger";
 import { toGroupBreakName } from "@/utils/text/groupBreakName";
 
-/**
- * Cross-turn Discord delivery continuity, keyed by channel.
- *
- * Discord groups consecutive webhook messages by `webhook_id` + `username` and ignores the
- * per-message avatar. Two things depend on that, and both need state that outlives a single
- * stream: `StreamState` is rebuilt for every SDK call, so anything held there is reset at
- * every turn boundary (queued chain, follow-up, persona job, tool-loop continuation):
- *
- * - **Sprite group-break alternation**: adjacent *different* sprites must not share a
- *    username, or the second renders under the first one's avatar. Held per channel because
- *    grouping spans turns, and reset whenever a foreign message lands between our own
- *    deliveries, since Discord only ever groups a message with the one directly above it.
- *
- * Every webhook send that can sit next to a sprite must take part, including tool notices and media
- * sent outside the stream (`utils/discord/webhook/personaPost.ts`): an unrecorded send looks like a
- * foreign message to the adjacency test, so the sprite after it restarts on the clean name and
- * merges under that post's avatar.
- *
- * Entries expire once messages are far enough apart that Discord would not group them anyway.
- * Runtime-authoritative state with no database behind it: mirrors `utils/chat/selfReplyState.ts`.
- */
+// Held outside per-call StreamState because Discord groups webhooks by webhook_id and username across turns, so all
+// webhook callers must record sends here.
 
 // Discord stops grouping consecutive same-author messages after a few minutes, so continuity
 // beyond that window is pointless, so an expired entry is equivalent to a fresh channel.
@@ -40,7 +21,7 @@ const SWEEP_SIZE_THRESHOLD = 2000;
 type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
 
 export interface DeliveredSpeaker {
-  /** Null when the speaker cannot be tied to one persona, which never matches another speaker. */
+  // Sentinel null means the speaker has no single persona, so two null deliveries never match as the same speaker.
   personaId: number | null;
   kind: DeliveredSpeakerKind;
 }
@@ -50,22 +31,13 @@ export type ChannelLastDelivery =
   | { via: "bot"; speaker: DeliveredSpeaker | null };
 
 interface ChannelDeliveryState {
-  /** Sprite key of the most recent non-identity sprite delivered in this channel. */
   lastSpriteKey: string | null;
-  /** Current half of the clean/group-break username alternation. */
   groupParity: boolean;
-  /**
-   * The actual adjacent webhook identity, cleared by a bot delivery.
-   */
   lastWebhookIdentity: ResolvedWebhookIdentity | null;
   lastWebhookId: string | null;
-  /**
-   * Message id of the most recent WEBHOOK delivery, or null when the last delivery was an
-   * ordinary bot message. Null blocks adjacency outright: a bot-user message is a different
-   * Discord author, so no webhook group can continue through it.
-   */
+  // Holds only webhook message IDs so null after a bot message blocks adjacency, because a bot message breaks any
+  // Discord webhook group.
   lastDeliveredMessageId: string | null;
-  /** Null on a fresh entry, which is what separates "nothing recorded" from a bot-user delivery. */
   lastDeliveryVia: "webhook" | "bot" | null;
   lastSpeaker: DeliveredSpeaker | null;
   updatedAt: number;
@@ -81,11 +53,8 @@ function sweepExpiredEntries(now: number): void {
   }
 }
 
-/**
- * Returns the channel's live entry, creating a fresh one when absent or stale. A stale entry is
- * discarded rather than revived: past the grouping window nothing collides, so the channel
- * should start over on the clean name with no inherited identity.
- */
+// Stale entries are discarded rather than refreshed so the channel restarts on the clean username once Discord's
+// grouping window has passed.
 function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
   if (channelDeliveryStates.size >= SWEEP_SIZE_THRESHOLD) {
     sweepExpiredEntries(now);
@@ -110,17 +79,8 @@ function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
   return fresh;
 }
 
-/**
- * Reports whether a message from someone else landed after our last webhook delivery, which
- * means Discord has already broken the group and the next sprite cannot collide with anything.
- *
- * Compares snowflake magnitude rather than equality because `channel.lastMessageId` is
- * maintained from the gateway `MESSAGE_CREATE` dispatch, which can lag a send we just made: an
- * equality check would read our own back-to-back segments as non-adjacent and drop the group
- * break that keeps them from merging. Snowflakes are time-ordered, so only a strictly greater
- * id proves a later message exists; a lagging (smaller) read falls through to "adjacent", whose
- * worst case is a redundant suffix rather than two sprites collapsing under one avatar.
- */
+// Compares snowflake order instead of equality because channel.lastMessageId can lag REST sends, so lagged reads stay
+// adjacent and prevent merged avatars.
 function hasForeignMessageSinceDelivery(
   deliveredMessageId: string | null,
   channelLastMessageId: string | null,
@@ -136,21 +96,8 @@ function hasForeignMessageSinceDelivery(
   }
 }
 
-/**
- * Advances the channel's sprite alternation for a sprite about to be delivered, and reports
- * which username representation it must use.
- *
- * Parity flips only when the sprite differs from the previous one delivered in this channel, so
- * same-sprite runs keep an identical username and still group naturally, while adjacent
- * different-sprite messages are guaranteed to differ.
- *
- * The run restarts whenever anything else spoke since our last delivery (a user, another
- * persona's webhook, our own bot-user fallback). Discord groups a message only with the one
- * directly above it, so a broken group means the decorated name would be noise rather than a
- * collision break.
- *
- * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
- */
+// Parity flips only when spriteKey changes and resets after any intervening message because Discord only groups
+// directly adjacent messages.
 export function advanceChannelSpriteGroupParity(
   channelId: string,
   spriteKey: string,
@@ -174,18 +121,8 @@ export function advanceChannelSpriteGroupParity(
   return entry.groupParity;
 }
 
-/**
- * Returns `identity` with its webhook username chosen to avoid Discord's consecutive-message
- * grouping collapsing different appearances under one avatar.
- *
- * Discord strips zero-width/blank characters from usernames, so two adjacent appearances need names
- * that differ in a character Discord keeps. The "true" half of the parity uses the lookalike-letter
- * variant from {@link toGroupBreakName}, which reads as the clean name; only a name with no
- * swappable letter (kana, hanzi, very short words) falls back to `fallbackDecoratedUsername`.
- *
- * @param groupKey - Sprite key of the appearance, or the neutral key for the base appearance
- * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
- */
+// Discord strips zero-width/blank characters from webhook usernames, so group breaks substitute lookalike letters and
+// fall back to fallbackDecoratedUsername.
 export function resolveChannelGroupBreakIdentity(
   channelId: string,
   identity: ResolvedWebhookIdentity,
@@ -200,12 +137,6 @@ export function resolveChannelGroupBreakIdentity(
   return { ...identity, username: groupBreakName ?? fallbackDecoratedUsername };
 }
 
-/**
- * Base appearance counterpart of the sprite alternation, for lines that show the persona's own
- * avatar under the same clean username its sprites use.
- *
- * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
- */
 export function resolveChannelBaseAppearanceIdentity(
   channelId: string,
   baseIdentity: ResolvedWebhookIdentity,
@@ -242,19 +173,8 @@ export function getAdjacentPersonaIdentity(
   return null;
 }
 
-/**
- * Records the identity a webhook message was just delivered under, so later sends in the same
- * channel can reuse it verbatim and group with it.
- *
- * The stored username is the one actually sent, which may be the lookalike-letter group-break
- * name (or its `Persona (sprite)` fallback) chosen by the alternation. Re-resolving the sprite from
- * scratch would produce the clean name instead and split the group, which is exactly what this
- * avoids.
- *
- * @param identity - Identity used for the send
- * @param messageId - Id of the sent message, which anchors the sprite alternation's adjacency test
- * @param speaker - Who the message presented, or null when unknown
- */
+// Stores the exact delivered username (including any group-break variant) because re-resolving the clean name on
+// later segments would split the Discord group.
 export function recordChannelDeliveredWebhookIdentity(
   channelId: string,
   identity: ResolvedWebhookIdentity,
@@ -272,13 +192,6 @@ export function recordChannelDeliveredWebhookIdentity(
   entry.updatedAt = now;
 }
 
-/**
- * Records that the channel's most recent delivery was an ordinary bot message, clearing any
- * remembered webhook identity. Without this a stale identity would be reused after the persona
- * had already reverted to the bot, putting artifacts under a name nothing else is using.
- *
- * @param speaker - Who the message presented, or null when unknown
- */
 export function recordChannelDeliveredBotMessage(channelId: string, speaker: DeliveredSpeaker | null = null): void {
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
@@ -290,10 +203,6 @@ export function recordChannelDeliveredBotMessage(channelId: string, speaker: Del
   entry.updatedAt = now;
 }
 
-/**
- * Returns how the channel's most recent message was delivered and who it presented, or null when
- * nothing is recorded in the current window.
- */
 export function getChannelLastDelivery(channelId: string): ChannelLastDelivery | null {
   const entry = channelDeliveryStates.get(channelId);
   if (!entry || Date.now() - entry.updatedAt >= CONTINUITY_TTL_MS) {
@@ -313,7 +222,6 @@ export function getChannelLastDelivery(channelId: string): ChannelLastDelivery |
   return null;
 }
 
-/** Test seam: drops all continuity state. */
 export function clearAllChannelDeliveryContinuity(): void {
   const cleared = channelDeliveryStates.size;
   channelDeliveryStates.clear();

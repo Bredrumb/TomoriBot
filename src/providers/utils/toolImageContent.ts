@@ -8,13 +8,8 @@ export type OpenAIToolImageContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-/**
- * Resolves a tool-produced Discord attachment locally before provider replay.
- *
- * Provider-side fetchers cannot reliably access Discord's signed media proxy URLs. Local
- * resolution also lets the shared image pipeline correct misleading MIME labels before the
- * payload is encoded as a data URI.
- */
+// Local resolution is required because provider fetchers fail on Discord's signed media URLs and local decoding lets
+// the image pipeline fix wrong MIME labels.
 export async function inlineToolResponseImage(
   image: ToolImage,
   adapterName: string,

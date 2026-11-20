@@ -1,11 +1,3 @@
-/**
- * Covers the shared fallback-persona chain used by /respond and the conditioning commands:
- * most recent speaker, then the channel's auto-trigger persona, then the main persona.
- *
- * The resolver takes a fetch callback rather than a Discord channel, so these tests drive every
- * tier without constructing Discord objects, and can assert that the callback is not invoked at
- * all when a single eligible persona makes the answer independent of history.
- */
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
@@ -18,7 +10,6 @@ type PersonaOverrides = {
   autochPersonaOverrides?: { channel_disc_id: string; persona_id: number }[];
 };
 
-/** The resolver reads only the config tiers, so the persona and its config share one fixture row. */
 function makeTomoriState(overrides: PersonaOverrides = {}): TomoriState {
   return createPersona({
     config: {
@@ -91,7 +82,6 @@ describe("resolveFallbackPersona", () => {
   });
 
   it("falls through when the last speaker is no longer eligible for this actor", async () => {
-    // ALTER_B spoke last but is excluded by whitelist or spotlight, so it must not be revived here.
     lastActiveSpy = spyOn(personaTurnDetection, "findLastActivePersona").mockReturnValue(ALTER_B);
 
     const result = await resolveFallbackPersona({

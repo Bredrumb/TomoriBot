@@ -1,23 +1,9 @@
-/**
- * Locks in /tool's and /generate's registration restrictions across the command modernization.
- *
- * Both roots are members of neither GUILD_ONLY_CATEGORIES nor MANAGER_ONLY_CATEGORIES
- * (commandLoader.ts), so both are DM-capable and unrestricted today. `/generate` now owns both
- * direct prompt image generation and the contextual Auto image flow alongside `/generate scene`;
- * those capabilities are meant to remain available in DMs. A move that silently added a context
- * or permission default to either root would take DM support away from the members already there,
- * and nothing in check, lint, or check-locales would notice.
- *
- * The members each root keeps are asserted elsewhere: /tool's by configRegistration.test.ts's
- * RETAINED_KEYS_BY_ROOT, /generate's by dissolvedBotRegistration.test.ts.
- */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
-/** The raw snake_case permission field the registration payload carries onto the wire. */
 type RegistrationRestrictions = { default_member_permissions?: string };
 
 describe("/tool and /generate root registration restrictions", () => {

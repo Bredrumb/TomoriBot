@@ -1,17 +1,3 @@
-/**
- * Seed catalog invariant check.
- *
- * Validates src/db/seed/catalog/*.ts WITHOUT touching the database. The same
- * checks run at startup in the catalog seeders; this script lets CI /
- * pre-commit catch malformed seed data before it reaches a running bot.
- *
- * Exits non-zero if any invariant is violated.
- *
- * Usage:
- *   bun run check-seed-catalogs
- *   bun run check-seed-catalogs --defer-drift-review
- *   bun run scripts/checks/checkSeedCatalogs.ts
- */
 import { readFileSync } from "node:fs";
 import { personaSections } from "../../src/db/seed/catalog/personas";
 import { validateNaiPresets } from "../../src/db/seed/catalog/naiSeed";
@@ -62,11 +48,8 @@ function validateStartupSeedOrder(): string[] {
   return errors;
 }
 
-/**
- * Validates catalog-authored preset sprites without touching storage: each
- * sprite needs a non-empty name (<= 64 chars) and image file, and names must be
- * unique within a persona (they collapse to a unique sprite_key at seed time).
- */
+// Sprite names must be unique per persona (case-insensitive) because they collapse to a unique sprite_key in the DB
+// at seed time.
 function validatePresetSprites(): string[] {
   const errors: string[] = [];
   for (const section of personaSections) {
@@ -94,7 +77,8 @@ function validatePresetSprites(): string[] {
   return errors;
 }
 
-/** A reference beside the avatar would be picked up as the avatar, because the avatar seed takes the first image in `avatarPath`. */
+// A reference beside the avatar would be picked up as the avatar, because the avatar seed takes the first image in
+// avatarPath.
 function validatePresetCharacterReferences(): string[] {
   return personaSections.flatMap((section) =>
     section.rows

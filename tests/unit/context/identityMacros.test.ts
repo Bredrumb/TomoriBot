@@ -8,9 +8,7 @@ import { buildSampleDialogueContextItems } from "@/utils/text/context/templates"
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
-// These fixtures contain no Discord mentions and always pass an explicit bot nickname, so
-// convertMentions never touches the client or the persona repository. That keeps the suite free of
-// module mocks (which are process-wide in Bun and leak into later test files).
+// Explicit bot nicknames and mention-free fixtures keep convertMentions off client/DB lookups, so no mocks are needed.
 const CLIENT = {} as Client;
 
 describe("convertMentions — identityMacroMode", () => {
@@ -120,7 +118,6 @@ function makeTomoriState(): TomoriState {
   });
 }
 
-/** Runs the real convertMentions through the dialogue-history builder for a single message. */
 async function buildHistoryText(
   msg: SimplifiedMessageForContext,
   naming?: Pick<
@@ -213,11 +210,7 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
   });
 });
 
-// Sample dialogues are authored content stored once and rendered per turn, so they keep the
-// default "resolve" mode. They sit next to dialogue history in the assembled prompt but take a
-// different code path, and crucially pass the *real* triggerer as `triggererName` which is why
-// they never suffered the persona-name collapse. Pinned here so widening "preserve" cannot
-// silently turn stored macros into literal braces in the prompt.
+// Sample dialogues pass the real triggererName and keep "resolve" mode, so widening "preserve" must not break them.
 describe("buildSampleDialogueContextItems — identity macros still resolve", () => {
   async function buildSamples(inputs: string[], outputs: string[]): Promise<string[]> {
     const items = await buildSampleDialogueContextItems({

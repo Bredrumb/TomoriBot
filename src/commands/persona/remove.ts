@@ -1,8 +1,3 @@
-/**
- * Persona Remove Command
- * Removes an alter persona from the server
- */
-
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
@@ -24,7 +19,7 @@ function isDuplicateTaggedName(name: string): boolean {
   return /\[dup-\d+\]\s*$/i.test(name.trim());
 }
 
-/** Duplicate-tagged rows from schema migration cleanup stay removable even when marked as main. */
+// Schema migration cleanup can leave duplicate rows marked as main, so duplicate-tagged rows stay removable.
 function isRemovablePersona(persona: Pick<TomoriState, "is_alter" | "persona_nickname">): boolean {
   return persona.is_alter || isDuplicateTaggedName(persona.persona_nickname);
 }
@@ -44,10 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 export const autocomplete = async (_client: Client, interaction: AutocompleteInteraction): Promise<void> =>
   respondWithPersonaChoices(interaction, interaction.guild?.id, isRemovablePersona);
 
-/**
- * Executes the 'remove' command
- * Removes an alter persona from the server
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -55,7 +46,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Check if command is run in a guild (not DMs)
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -66,7 +56,6 @@ export async function execute(
       return;
     }
 
-    // Check permissions (ManageGuild required)
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (!hasPermission) {
@@ -108,7 +97,6 @@ export async function execute(
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // For non-alter duplicate-tagged rows, ensure at least one main persona remains.
     if (!personaToRemove.is_alter) {
       const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);
       if (mainCount <= 1) {
@@ -137,7 +125,6 @@ export async function execute(
       await deletePersonaAvatarFromStorage(personaToRemove.webhook_avatar_url);
     }
 
-    // Invalidate cache
     invalidateTomoriStateCache(interaction.guild.id);
 
     await replyInfoEmbed(interaction, locale, {

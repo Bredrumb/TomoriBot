@@ -1,9 +1,3 @@
-/**
- * Guards the shared fixture factories. These tests assert the factory contract rather than app
- * behavior, so a change to {@link BASE_CONFIG} or a schema default surfaces here instead of as an
- * unexplained failure in an unrelated suite.
- */
-
 import { describe, expect, it } from "bun:test";
 import {
   PrivacyLevel,
@@ -21,7 +15,6 @@ import {
   createNaiPreset,
 } from "../../helpers/fixtures";
 
-/** As `loadServerState` reads them after setup with nothing changed. */
 function schemaConfigDefaults() {
   return assembledServerConfigSchema.parse({
     llm_id: 1,
@@ -71,8 +64,7 @@ describe("shared fixture factories", () => {
   });
 
   it("keeps the identity defaults a migrated suite would silently inherit", () => {
-    // A migration that swaps a hand-written row for this factory also swaps these values, and a
-    // suite that pins an actor snowflake in an assertion goes red far from here. Pin them.
+    // Suites migrating from hand-written rows depend on these defaults, so changing them silently breaks assertions.
     const persona = createPersona();
     expect({
       server_id: persona.server_id,
@@ -156,8 +148,8 @@ describe("shared fixture factories", () => {
   });
 
   it("resolves every capability flag on the default model row", () => {
-    // A flag left undefined reads as false only by accident of coercion. Production reads the
-    // column, so the fixture must carry that same boolean for every flag the schema declares.
+    // Production reads every capability column directly, so the fixture must provide explicit booleans
+    // for each schema flag.
     const row = createLlmRow() as Record<string, unknown>;
     const flags = Object.keys(row).filter((key) => typeof row[key] === "boolean");
 

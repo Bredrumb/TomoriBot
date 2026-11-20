@@ -1,11 +1,3 @@
-/**
- * Image processing utilities for TomoriBot
- * Handles image manipulation tasks like cropping, resizing, and format conversion,
- * as well as optimizing images before sending to LLM providers.
- */
-
-// sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
-//    rather than a member of a merged `sharp` namespace.
 import sharp from "sharp";
 import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { log } from "../misc/logger";
@@ -16,23 +8,16 @@ import { safeDownload } from "@/utils/security/safeDownload";
 // Images exceeding these limits are downscaled before being sent to providers
 // to prevent stream timeouts (especially on slower models like Qwen via OpenRouter).
 
-/** Raw byte-size threshold that triggers dimension inspection (default 2 MB) */
 const IMAGE_CONTEXT_MAX_BYTES = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_BYTES ?? "2097152", 10);
 
-/** Maximum pixel dimension on the longest side before downscaling (default 2048 px) */
 const IMAGE_CONTEXT_MAX_DIMENSION = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_DIMENSION ?? "2048", 10);
 
-/** JPEG quality used when an image is downscaled */
 const IMAGE_CONTEXT_JPEG_QUALITY = 85;
 
-/** Timeout in milliseconds for fetching images for LLM context (default 20 s) */
 const IMAGE_FETCH_TIMEOUT_MS = Number.parseInt(process.env.IMAGE_FETCH_TIMEOUT_MS ?? "20000", 10);
 
-/** Result of fetching and optionally optimizing an image for LLM context */
 export interface OptimizedImage {
-  /** Raw base64-encoded image data (no data-URI prefix) */
   data: string;
-  /** MIME type of the resulting image (may change to image/jpeg after optimization) */
   mimeType: string;
 }
 
@@ -144,22 +129,8 @@ function normalizeMimeType(mimeType: string | undefined): string | undefined {
   return normalized || undefined;
 }
 
-/**
- * Fetch an image from a URL and conditionally downscale it for LLM context use.
- *
- * Uses a three-tier cost check to avoid unnecessary work:
- * 1. **Buffer byte length** (O(1)) if under threshold, return as-is.
- * 2. **Sharp metadata** (header-only read, <1 ms): check pixel dimensions.
- * 3. **Sharp resize** (decode + encode); only runs when the image actually exceeds
- *    the maximum dimension, converting to JPEG for significantly smaller payloads.
- *
- * This prevents multi-MB base64 payloads from causing provider stream timeouts
- * while adding near-zero overhead for normally-sized images.
- *
- * @param sourceMimeType - Original MIME type hint (used as fallback if no optimization needed)
- * @returns Optimized base64 image data and final MIME type
- * @throws Error if the fetch itself fails
- */
+// Byte-size and header-only metadata checks gate JPEG downscaling so large images do not time out provider streams
+// while small ones avoid decoding.
 export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string): Promise<OptimizedImage> {
   const image = await fetchCachedImage(url);
   return {
@@ -183,8 +154,7 @@ async function fetchImage(url: string): Promise<FetchedImage> {
 
   const buffer = downloadResult.buffer;
   const rawSize = buffer.byteLength;
-  // Discord filenames and remote headers can disagree with the payload bytes. Provider APIs use
-  // the data-URI MIME label while decoding, so prefer recognizable file signatures.
+  // Prefer payload signatures over filenames or headers because Discord can mislabel formats providers decode strictly.
   const finalMimeType = detectImageMimeType(buffer);
   const contentType = normalizeMimeType(downloadResult.contentType);
 
@@ -206,7 +176,7 @@ async function fetchImage(url: string): Promise<FetchedImage> {
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
         height: IMAGE_CONTEXT_MAX_DIMENSION,
-        fit: "inside", // Maintains aspect ratio, fits within the box
+        fit: "inside",
         withoutEnlargement: true,
       })
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
@@ -217,8 +187,6 @@ async function fetchImage(url: string): Promise<FetchedImage> {
       mimeType: "image/jpeg",
     };
   } catch (sharpError) {
-    // Sharp failed (corrupt image, unsupported format, etc.), so fall back to raw data
-    // so the provider can still attempt to process it
     log.warn(
       `Image optimization failed, sending raw (${(rawSize / 1024 / 1024).toFixed(1)} MB): ${sharpError instanceof Error ? sharpError.message : String(sharpError)}`,
     );
@@ -226,14 +194,6 @@ async function fetchImage(url: string): Promise<FetchedImage> {
   }
 }
 
-/**
- * Optimize an already-fetched image buffer for LLM context use.
- * Same tiered logic as {@link fetchAndOptimizeImage} but skips the HTTP fetch step.
- *
- * @param buffer - Raw image buffer
- * @param sourceMimeType - Original MIME type of the image
- * @returns Optimized base64 image data and final MIME type
- */
 export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string): Promise<OptimizedImage> {
   const rawSize = buffer.byteLength;
 
@@ -290,16 +250,6 @@ function selectClosestNaiReferenceCanvas(width: number, height: number): { width
   });
 }
 
-/**
- * Center-crop an image to a 1:1 square aspect ratio
- * This is ideal for Discord avatar images which display best as squares
- *
- * @returns Promise<Buffer> - Output PNG buffer cropped to square
- *
- * @example
- * const squareImage = await centerCropToSquare(imageBuffer);
- * // Image is now 1:1 aspect ratio, centered from original
- */
 export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
   try {
     const metadata = await sharp(buffer).metadata();
@@ -310,8 +260,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
 
     const squareSize = Math.min(metadata.width, metadata.height);
 
-    // Calculate the extraction position to center the crop
-    // For a 1920x1080 image, we want to extract a 1080x1080 square from the center
     const left = Math.floor((metadata.width - squareSize) / 2);
     const top = Math.floor((metadata.height - squareSize) / 2);
 
@@ -322,7 +270,7 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
         width: squareSize,
         height: squareSize,
       })
-      .png() // Convert to PNG format for consistency
+      .png()
       .toBuffer();
 
     return croppedBuffer;
@@ -332,16 +280,8 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
   }
 }
 
-/**
- * Normalize a NovelAI character/director reference image onto one of the
- * accepted canvases using black padding.
- *
- * NovelAI's reference pipeline fits images into 1024x1536, 1472x1472, or
- * 1536x1024. This helper mirrors that preprocessing so API requests don't send
- * arbitrary image dimensions directly.
- *
- * @returns Promise<Buffer> - PNG buffer normalized to a supported NAI canvas
- */
+// NovelAI's reference pipeline expects black-padded canonical canvases rather than arbitrary dimensions, so this
+// mirrors its preprocessing.
 export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer> {
   try {
     const metadata = await sharp(buffer).metadata();
@@ -370,11 +310,6 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
   }
 }
 
-/**
- * Convert an image buffer to PNG format
- *
- * @returns Promise<Buffer> - PNG buffer
- */
 export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
   try {
     const pngBuffer = await sharp(buffer).png().toBuffer();

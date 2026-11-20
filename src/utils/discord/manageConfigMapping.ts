@@ -41,27 +41,20 @@ export type CapabilitiesManageConfigState = Pick<
 
 interface PermissionDefinitionBase {
   page: "available-tools" | "context-additions";
-  /** Value used as the checkbox option identifier */
   value: string;
-  /** Locale key for the option label */
   labelKey: string;
-  /** Locale key for the short option description shown in the checkbox */
   descKey: string;
-  /** Extracts current state from a config row */
   getState: (config: CapabilitiesManageConfigState) => boolean;
-  /** If true, this option is only shown when an ElevenLabs key is configured */
   requiresElevenLabs?: boolean;
 }
 
 export type CapabilitiesManagePermissionDefinition =
   | (PermissionDefinitionBase & {
       table: "memberPermissions";
-      /** The server_member_permissions_configs column to update */
       dbColumn: CapabilitiesManageMemberPermissionColumn;
     })
   | (PermissionDefinitionBase & {
       table: "capabilities";
-      /** The server_capabilities_configs column to update */
       dbColumn: CapabilitiesManageCapabilityColumn;
     });
 

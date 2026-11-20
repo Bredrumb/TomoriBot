@@ -1,4 +1,3 @@
-/** Reads the switch on each call, enabling decay unless its value is the literal false. */
 export function isMemoryDecayEnabled(): boolean {
   return process.env.MEMORY_DECAY_ENABLED !== "false";
 }
@@ -10,7 +9,8 @@ export const MEMORY_RECALL_TIMEOUT_MS = 1_500;
 
 export type MemoryStage = 1 | 2;
 
-/** Dormancy requires every retrieval prerequisite, so unavailable embeddings leave memories active. */
+// Stage 2 dormancy requires RAG and resolved embeddings so memories stay active instead of vanishing when retrieval
+// is unavailable.
 export function getMemoryStage(
   switchEnabled: boolean,
   ragAvailable: boolean,

@@ -110,11 +110,8 @@ interface WebhookPost {
 type WebhookTransport = (url: string, init: { body?: unknown }) => Promise<Response>;
 let webhookTransport: WebhookTransport | null = null;
 
-/**
- * Routes the single-attempt webhook client's network layer through `respond`. That client copies a
- * webhook's REST options once and keeps them, so each test webhook's transport reads this at request
- * time instead, which exercises the client's real retry and error handling.
- */
+// Single-attempt webhook clients copy REST options once, so webhookTransport is read at request time to swap
+// responders and keep real retry and error handling.
 function interceptWebhookPosts(respond: () => Response): { posts: WebhookPost[]; restore: () => void } {
   const posts: WebhookPost[] = [];
   webhookTransport = async (url, init) => {
@@ -124,7 +121,6 @@ function interceptWebhookPosts(respond: () => Response): { posts: WebhookPost[];
   return { posts, restore: () => (webhookTransport = null) };
 }
 
-/** Discord's 429, with a Retry-After short enough to keep the test fast. */
 function rateLimited(retryAfter = 0.01): Response {
   return Response.json(
     { message: "You are being rate limited.", retry_after: retryAfter, global: false },
@@ -139,7 +135,8 @@ function created(): Response {
   return Response.json({ id: "900000000000000099", webhook_id: "123456789012345679" });
 }
 
-/** A real `Webhook` instance, since discord.js only sends identity fields for one. */
+// discord.js only sends webhook identity fields for a real Webhook instance, so makeWebhook uses
+// Object.create(Webhook.prototype) instead of a plain mock.
 function makeWebhook(edit: () => void = () => undefined): Webhook {
   const webhook = Object.assign(Object.create(Webhook.prototype), {
     id: "123456789012345679",
@@ -272,7 +269,6 @@ describe("expression delivery at tool invocation", () => {
       });
       expect(metricKeys("custom_expression_used")).toEqual([row.custom_expression_id]);
       expect(metricKeys("sticker_used")).toEqual([]);
-      // The model never learns the transport or the stored identity.
       const visible = JSON.stringify(buildExpressionToolResult(outcome as never, row.name));
       expect(visible).not.toContain(row.custom_expression_id);
       expect(visible).not.toContain(row.original_link ?? "");
@@ -348,7 +344,6 @@ describe("expression delivery at tool invocation", () => {
         Object.assign(context.channel, { isThread: () => true });
         context.currentPersona.is_alter = true;
         context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
-        // The channel's last delivery: this turn's sprite line, or an earlier turn's other speaker.
         recordChannelDeliveredWebhookIdentity(
           context.channel.id,
           { username: "Mirri (joy)" },
@@ -537,7 +532,6 @@ describe("expression delivery at tool invocation", () => {
 
       expect([first.status, retry.status]).toEqual(["unconfirmed", "unconfirmed"]);
       expect(webhookPosts.posts).toHaveLength(1);
-      // An unconfirmed webhook send must not fall back to a second transport either.
       expect(sendCalls(context)).toBe(0);
       expect(metricKeys("sticker_used")).toEqual([]);
     } finally {

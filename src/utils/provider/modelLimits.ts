@@ -13,7 +13,8 @@ import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { withStoredCredentialUsage } from "@/utils/security/apiKeyRetention";
 
-/** Null means unknown: an unknown window skips history truncation, an unknown ceiling skips clamping. */
+// Null means unknown: an unknown contextWindow skips history truncation and an unknown maxOutputTokens skips output
+// clamping.
 export interface ModelLimits {
   contextWindow: number | null;
   maxOutputTokens: number | null;
@@ -27,10 +28,8 @@ function isLiveLimitsProvider(provider: string): provider is LiveLimitsProvider 
   return provider === "anthropic" || provider === "google";
 }
 
-/**
- * Starts a background lookup with the key this request would use. The current call keeps the
- * catalog limits, so no message waits on the provider's models API.
- */
+// Background refresh is unawaited so the current chat turn keeps catalog limits instead of blocking on the provider
+// models API.
 function scheduleLiveModelLimitsLookup(tomoriState: TomoriState, provider: LiveLimitsProvider): void {
   const codename = tomoriState.llm.llm_codename;
   const encryptedKey = tomoriState.config.api_key;
@@ -42,10 +41,8 @@ function scheduleLiveModelLimitsLookup(tomoriState: TomoriState, provider: LiveL
     .catch(() => log.metric("live_model_limits_key_unavailable", { provider, codename }));
 }
 
-/**
- * Limits a provider reports at runtime, which outrank the catalog because they track model changes
- * the catalog has not been reviewed for yet, and they cover scoped registrations the catalog never lists.
- */
+// Live provider limits outrank the static catalog because they reflect unreviewed model changes and cover scoped
+// registrations.
 function resolveLiveModelLimits(
   tomoriState: TomoriState,
   provider: string,
@@ -66,12 +63,8 @@ function resolveLiveModelLimits(
   return {};
 }
 
-/**
- * The active model's context window and output ceiling: a live provider value first, then the
- * catalog column, each field on its own. A custom endpoint's window is the `num_ctx` its request
- * sends, so an unset `num_ctx` stays unknown. NovelAI windows depend on the subscription tier and are
- * resolved by its own capability cache instead.
- */
+// NovelAI is excluded here because its context windows depend on subscription tier and come from its own capability
+// cache.
 export async function resolveModelLimits(tomoriState: TomoriState, refreshLiveLimits = true): Promise<ModelLimits> {
   const provider = normalizeProviderName(tomoriState.llm.llm_provider);
   if (provider === "custom") {
@@ -86,14 +79,8 @@ export async function resolveModelLimits(tomoriState: TomoriState, refreshLiveLi
   };
 }
 
-/**
- * The `max_tokens` a chat request sends, shared by the provider request builders and the prompt
- * snapshot so the snapshot shows what is actually sent.
- *
- * Undefined only for an OpenRouter model with no reported ceiling (`other-model` or a cache miss):
- * the request omits max_tokens so the model self-manages. An explicit `/model parameters` override
- * is still sent there, because the "lower output tokens" tip on 402/400 errors depends on it.
- */
+// Shared with the prompt snapshot; OpenRouter omits max_tokens when no ceiling is known unless overridden, since
+// 402/400 tips rely on overrides.
 export async function resolveRequestMaxOutputTokens(
   tomoriState: TomoriState,
   refreshLiveLimits = true,

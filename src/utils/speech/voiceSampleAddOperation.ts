@@ -5,22 +5,15 @@ import { log } from "@/utils/misc/logger";
 import { safeDownload, type SafeDownloadResult } from "@/utils/security/safeDownload";
 import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
 
-/** Default max upload size in MB (overridden by SPEECH_SAMPLE_MAX_MB env var). */
 export const SPEECH_SAMPLE_MAX_MB = Math.max(1, Number.parseInt(process.env.SPEECH_SAMPLE_MAX_MB ?? "10", 10) || 10);
 
-/**
- * Default max clip duration in seconds (overridden by SPEECH_SAMPLE_MAX_DURATION_SECS env var).
- *
- * The cap is deliberately looser than any single clone engine accepts: engines differ on how much
- * reference audio they condition on, and the per-engine limit is enforced where the audio is sent,
- * so a clip that one engine rejects may be useful to another.
- */
+// Looser than any single clone engine limit because engines differ on conditioning length and enforce their own caps
+// at send time.
 export const SPEECH_SAMPLE_MAX_DURATION_SECS = (() => {
   const parsed = Number.parseInt(process.env.SPEECH_SAMPLE_MAX_DURATION_SECS ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 130;
 })();
 
-/** Accepted audio MIME types and file extensions for reference samples. */
 const ACCEPTED_MIME_TYPES = new Set([
   "audio/wav",
   "audio/wave",
@@ -58,7 +51,6 @@ export function validateVoiceSampleUpload(upload: VoiceSampleUpload): VoiceSampl
   return "ok";
 }
 
-/** Converts an audio buffer to mono WAV at 22050 Hz. */
 export function normalizeVoiceSampleToWav(
   inputBuffer: Buffer,
   signal?: AbortSignal,
@@ -129,8 +121,7 @@ export async function addVoiceSample(
     knownSize: input.upload.size,
   });
   if (!downloadResult.success || !downloadResult.buffer) {
-    // A refused or failed attachment download is the only reason a valid upload never reaches
-    // storage. The receipt shows a generic failure, so the reason has to survive here.
+    // Log the download failure reason here because the user receipt only shows a generic failure.
     log.error("Voice sample attachment download failed", undefined, {
       errorType: "VoiceSampleDownloadFailed",
       metadata: {

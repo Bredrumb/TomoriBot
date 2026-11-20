@@ -4,15 +4,8 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import eventHandler from "@/handlers/eventHandler";
 import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
-/**
- * Mirrors the live OpenRouter rates into the llms catalog so SQL-computed cost surfaces
- * (`/stats` estimated cost and its per-model and per-persona breakdowns) can price OpenRouter
- * usage. Those queries join llms and cannot reach the in-memory pricing cache, so without this
- * step every OpenRouter token reports as $0.00.
- *
- * Runs after the capability cache is populated and refreshes the LLM cache when rows changed,
- * because that cache was loaded from the pre-sync catalog earlier in startup.
- */
+// OpenRouter rates mirror into llms after capability warmup because SQL cost queries skip memory caches, and changed
+// rows refresh the pre-sync LLM cache.
 async function syncOpenrouterCatalogPricing(): Promise<void> {
   if (!isPrimaryProcess()) return;
   try {
@@ -51,12 +44,6 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
   }
 }
 
-/**
- * Initializes all application subsystems that must be ready before the bot
- * starts responding: tool registry, localizer, LLM caches, preset avatar cache,
- * and the event handler (which registers all Discord event listeners).
- *
- */
 export async function initLoaders(client: Client): Promise<void> {
   const { initializeRawModalInterception } = await import("@/utils/discord/ui/modals");
   initializeRawModalInterception(client);

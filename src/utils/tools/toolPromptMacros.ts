@@ -133,10 +133,8 @@ const DYNAMIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(DYNAMIC_TOOL_PROMPT_MACROS);
 // Names no tool, because a model shown a tool it cannot call tends to write the call out as chat text.
 export const UNAVAILABLE_TOOL_TEXT = "an unavailable tool";
 
-/**
- * @param hasTools - The active model's narrowed flag, which carries the Deliberate Tool Mode kill switch that
- *   `tool_use_enabled` alone does not.
- */
+// The hasTools flag must be the active model's narrowed value because it carries the Deliberate Tool Mode kill switch
+// unlike tool_use_enabled.
 export function resolvePromptCapabilityValues(
   config: AssembledServerConfig,
   hasTools: boolean,
@@ -419,10 +417,8 @@ function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames:
   return null;
 }
 
-/**
- * A resolver scoped to one generation attempt's provider and config. Macros are provider-specific,
- * so a fallback attempt must not reuse the primary model's resolver.
- */
+// Macros are provider-specific, so fallback attempts must create a fresh resolver instead of reusing the primary
+// model's.
 export function createToolPromptMacroResolverForState(
   tomoriState: TomoriState,
   deliberateToolAllowedNames?: readonly string[],

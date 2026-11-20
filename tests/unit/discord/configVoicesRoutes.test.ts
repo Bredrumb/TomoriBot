@@ -91,9 +91,7 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   modals: unknown[];
-  /** Payloads the current interaction has edited. */
   readonly edits: unknown[];
-  /** Payloads the current interaction has replied or followed up with. */
   readonly replies: unknown[];
   operationCalls: string[];
   fileUploadCalls: { value: number };
@@ -271,8 +269,8 @@ function makeInteraction(options: {
     values: options.values,
     overrides: { id: "interaction-1" },
   });
-  // The harness counts acknowledgements, which the shared factory records without a hook. The
-  // wrapper keeps the factory's method as the receiver so the recorded call still lands.
+  // Wrapping the bound deferUpdate keeps the factory's receiver so the harness can count
+  // acknowledgements without dropping the factory's own call log.
   const deferUpdate = interaction.deferUpdate.bind(interaction);
   interaction.deferUpdate = async (payload?: unknown) => {
     options.harness.deferCalls.value += 1;

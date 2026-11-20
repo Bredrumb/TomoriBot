@@ -1,14 +1,3 @@
-/**
- * AI-Powered Preset Generation for the Z.ai provider (shared with Zaicoding).
- *
- * Uses json_object response mode with the preset schema injected into
- * the system prompt (Z.ai uses prompt-steered JSON output, similar to
- * DeepSeek). Includes a full tool-calling loop for models with web-search
- * tools enabled (has_tools=true).
- *
- * Both the endpoint URL and tool adapter are configurable so this generator
- * can be reused by both the Z.ai and Zaicoding providers.
- */
 import { log } from "@/utils/misc/logger";
 import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
@@ -29,23 +18,18 @@ import {
 } from "@/providers/utils/presetCommon";
 import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
-/** Options for Z.ai preset generation. */
 interface ZaiPresetGenerationOptions {
   model: string;
   temperature?: number;
   tools?: Array<Record<string, unknown>>;
   toolContext?: ToolContext;
   maxToolRounds?: number;
-  /** Override endpoint URL: used by Zaicoding to point to its coding endpoint. */
   endpointUrl?: string;
-  /** Override tool adapter: used by Zaicoding to supply its own adapter. */
   toolAdapter?: OpenAICompatibleToolAdapter;
 }
 
-/**
- * Build a system prompt that steers the model toward the preset JSON schema.
- * Z.ai uses prompt-steered json_object mode (no native json_schema support).
- */
+// Z.ai lacks native json_schema support, so preset generation injects the schema into the system prompt to steer
+// json_object mode.
 function buildZaiPresetSystemPrompt(): string {
   const schema = buildPresetResponseSchema();
   return [
@@ -58,13 +42,6 @@ function buildZaiPresetSystemPrompt(): string {
   ].join("\n\n");
 }
 
-/**
- * Generate preset data from user prompts using the Z.ai API.
- *
- * @param _locale - User's locale (reserved for future error localisation)
- * @param options - Z.ai-specific options (model, tools, temperature, endpointUrl, toolAdapter)
- * @returns Generated preset or a typed error result
- */
 export async function generatePresetFromPromptZai(
   apiKey: string,
   params: GeneratePresetParams,
@@ -100,7 +77,7 @@ export async function generatePresetFromPromptZai(
       stream: false,
     };
 
-    // Skip temperature for reasoning models (they don't support it)
+    // Omit temperature because Z.ai reasoning models reject it.
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = options.temperature ?? 1.0;
     }

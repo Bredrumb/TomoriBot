@@ -58,11 +58,8 @@ type ModelsPage = "switch" | "parameters" | "fallbacks" | "image" | "voices";
 
 export type ConfigPage = PersonaPage | BehaviorPage | PluginsPage | ChannelsPage | ModelsPage;
 
-/**
- * Page identifiers are namespaced by category, so `general` names both a Persona page and a
- * Behavior page. The decoder resolves a page against the category that precedes it in the same
- * custom ID, which is why the category field must stay ahead of the page field in every codec.
- */
+// Page IDs are namespaced by category (such as `general`), so the category field must precede the page field in every
+// custom ID codec for decoding.
 export const CONFIG_PAGES_BY_CATEGORY: Record<ConfigCategory, readonly ConfigPage[]> = {
   persona: [
     "general",
@@ -109,29 +106,19 @@ export const DEFAULT_PAGE_FOR_CONFIG_CATEGORY: Record<ConfigCategory, ConfigPage
 export const CONFIG_LANDING_CATEGORY: ConfigCategory = "persona";
 export const CONFIG_LANDING_PAGE: ConfigPage = "general";
 
-/** Discord rejects a String Select carrying more than 25 options. */
+// Capped at 25 because Discord rejects a String Select carrying more than 25 options.
 export const CONFIG_PERSONA_SELECT_PAGE_SIZE = 25;
 
-/**
- * Collection selectors reserve one of Discord's 25 options for the add action, leaving 24 records
- * on each page so every page can keep that action first.
- */
+// Page size is 24 because collection selectors reserve one of Discord's 25 String Select options for the add action
+// so every page keeps it first.
 export const CONFIG_PERSONA_COLLECTION_PAGE_SIZE = 24;
 
-/**
- * Sprites are addressed in a route by list position plus a fingerprint rather than by
- * `sprite_key`. A key may be 64 characters, which pushes an edit route past the 100-character
- * custom-ID limit `buildInteractionRouteId` throws on, and route segments cannot carry a colon.
- * One select option is reserved for adding a sprite.
- */
+// Page size is 24 because one option is reserved for adding a sprite, and routes use position plus fingerprint to
+// stay under the 100-char custom-ID limit.
 export const CONFIG_PERSONA_SPRITE_PAGE_SIZE = 24;
 
-/**
- * Trigger words one removal modal can present: five checkbox groups of ten is the whole modal.
- * Beyond this the modal presents the first fifty and the rest stay untouched, because a select-based
- * overflow cannot work here: a String Select caps at 25 options, which is fewer than the checkbox
- * capacity it would be relieving.
- */
+// Discord modals hold five checkbox groups of 10 (50 total), and no String Select overflow is used because a select
+// caps at 25 options.
 export const CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE = 10;
 const CONFIG_TRIGGER_CHECKBOX_GROUP_COUNT = 5;
 export const CONFIG_TRIGGER_CHECKBOX_CAPACITY =
@@ -147,11 +134,8 @@ const CONFIG_RANDOM_TRIGGER_CHECKBOX_GROUP_COUNT = 5;
 export const CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY =
   CONFIG_RANDOM_TRIGGER_CHECKBOX_GROUP_SIZE * CONFIG_RANDOM_TRIGGER_CHECKBOX_GROUP_COUNT;
 
-/**
- * Binds a trigger removal to the exact list presented when the modal opened. Unchecked-means-remove
- * derives the removal set from positions in that list, so a concurrent add or remove must invalidate
- * the continuation rather than silently delete a different word.
- */
+// Unchecked-means-remove derives deletions from list positions, so concurrent changes must invalidate this
+// fingerprint rather than delete a different word.
 export function computeTriggerRemoveFingerprint(personaId: number, triggerWords: readonly string[]): string {
   const normalized = triggerWords.map((word) => normalizeTriggerWord(word)).join("\u0000");
   return createHash("sha256")
@@ -160,10 +144,8 @@ export function computeTriggerRemoveFingerprint(personaId: number, triggerWords:
     .slice(0, 8);
 }
 
-/**
- * Binds random-trigger removal to the exact rows shown in its modal. Trigger IDs identify the
- * delete targets while the other persisted fields detect an edit that reused an existing ID.
- */
+// Persisted fields are hashed alongside trigger IDs because IDs alone would miss a concurrent edit that reused an
+// existing ID.
 export function computeRandomTriggerRemoveFingerprint(
   serverId: number,
   triggers: readonly (RandomTriggerRow & { trigger_id: number })[],
@@ -186,7 +168,6 @@ export function computeRandomTriggerRemoveFingerprint(
     .slice(0, 8);
 }
 
-/** Binds an auto-trigger modal to the channel selection and persona assignments it rendered. */
 export function computeAutoTriggerFingerprint(
   serverId: number,
   availableChannelIds: readonly string[],
@@ -208,7 +189,6 @@ export function computeAutoTriggerFingerprint(
 
 export type ConfigChannelRulesCollection = "private" | "roleplay" | "blocklist";
 
-/** Binds a Rules modal to the channel universe and membership state it rendered. */
 export function computeChannelRulesFingerprint(
   serverId: number,
   collection: ConfigChannelRulesCollection,
@@ -269,19 +249,14 @@ export function computeDialogueFingerprint(personaId: number, index: number, inp
   return computePersonaRecordFingerprint(personaId, "dialogue", index, [input, output]);
 }
 
-/**
- * Binds a sprite route to the exact key that sat at that list position when the control rendered,
- * so a concurrent add, rename, or removal invalidates the continuation instead of resolving the
- * position to a different sprite.
- */
+// Position-based sprite routes bind to the rendered `spriteKey` because concurrent edits would otherwise resolve
+// `index` to a different sprite.
 export function computeSpriteFingerprint(personaId: number, index: number, spriteKey: string): string {
   return computePersonaRecordFingerprint(personaId, "sprite", index, [spriteKey]);
 }
 
-/**
- * Binds conditioning removal to the exact ordered groups shown in its modal. Removal derives from
- * checkbox positions, so a concurrent conditioning event must invalidate the continuation.
- */
+// Group order is hashed because conditioning removal derives from checkbox positions, so concurrent conditioning
+// events must invalidate the continuation.
 export function computeConditioningRemoveFingerprint(
   personaId: number,
   groups: readonly { conditioningType: string; actionKey: string; reasonNormalized: string }[],
@@ -292,16 +267,8 @@ export function computeConditioningRemoveFingerprint(
     .slice(0, 8);
 }
 
-/**
- * The wire-facing model capabilities on Models > Switch Models.
- *
- * `image` and `nai-image` are two slots over one absorbed command: `/model image` picks its target
- * column from the chosen provider's `featureSupport.imageGeneration`, so the panel has to carry the
- * slot on the wire instead of re-deriving it, or a custom provider picked in the NovelAI slot would
- * write the standard column.
- *
- * TTS Design, TTS Clone, and STT each list hosted models and registered connections as providers.
- */
+// Wire capability separates image and nai-image because deriving from featureSupport would write custom NovelAI-slot
+// picks to the standard column.
 export type ConfigModelCapability =
   | "text"
   | "vision"
@@ -327,13 +294,8 @@ export const CONFIG_MODEL_CAPABILITY_ORDER: readonly ConfigModelCapability[] = [
   "stt",
 ];
 
-/**
- * Slots whose absorbed command offers a clear path. `/model vision` carries a clear sentinel and
- * `/model image` a clear option per column; `/model embedding`, `/model video`, and the Text
- * primary have none, so offering one there would broaden the command surface. Decision has no
- * command, and no Decision model is its default state. A server may run without either speech mode
- * or without transcription.
- */
+// Text, embedding, and video are excluded because their /model commands offer no clear path, so allowing clear here
+// would widen the command surface.
 export const CONFIG_CLEARABLE_MODEL_CAPABILITIES: ReadonlySet<ConfigModelCapability> = new Set([
   "vision",
   "decision",
@@ -344,18 +306,17 @@ export const CONFIG_CLEARABLE_MODEL_CAPABILITIES: ReadonlySet<ConfigModelCapabil
   "stt",
 ]);
 
-/** Sentinel the model select carries for the clear path of a nullable slot. */
 export const CONFIG_MODEL_CLEAR_VALUE = "__clear__";
 
-/** Discord rejects a String Select carrying more than 25 options. */
+// Discord rejects any String Select carrying more than 25 options, so model pages cap at 25.
 export const CONFIG_MODEL_PAGE_SIZE = 25;
 
-/** A preset page leaves room for explicit previous and next entries in one String Select. */
+// Preset pages cap at 23 instead of Discord's 25-option limit because two slots are reserved for previous and next
+// entries in the same String Select.
 export const CONFIG_NAI_PRESET_PAGE_SIZE = 23;
 export const CONFIG_NAI_PRESET_PREVIOUS_VALUE = "__nai-preset-prev__";
 export const CONFIG_NAI_PRESET_NEXT_VALUE = "__nai-preset-next__";
 
-/** Binds a preset selection to its target and ordered catalog names as rendered. */
 export function computeNaiPresetFingerprint(
   target: "kayra" | "erato" | "xialong",
   presetNames: readonly string[],
@@ -366,39 +327,28 @@ export function computeNaiPresetFingerprint(
     .slice(0, 8);
 }
 
-/**
- * Provider entries one Switch Models select renders directly. A clearable slot spends one of
- * Discord's 25 option slots on its None entry, so the renderer subtracts that before slicing and
- * the pagination row beneath reaches the rest.
- */
+// Discord limits a select to 25 options, so the renderer must subtract one before slicing when a clearable slot adds
+// its None entry.
 export const CONFIG_MODEL_PROVIDER_DIRECT_LIMIT = 25;
 
-/**
- * The fallback modal reserves one option for its clear entry, so a provider page holds 24 models.
- * The five slot selects share one option list, which is why the range is chosen before the modal
- * opens rather than paged inside it.
- */
+// Paged at 24 because one of Discord's 25 options is reserved for clearing, and the range is picked before opening
+// since all five slots share one list.
 export const CONFIG_FALLBACK_PAGE_SIZE = 24;
 
 export const CONFIG_FALLBACK_SLOT_COUNT = 5;
 
-/** Logit-bias entries one removal modal can present: five checkbox groups of ten. */
 export const CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_SIZE = 10;
 const CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_COUNT = 5;
 export const CONFIG_LOGIT_BIAS_PAGE_SIZE =
   CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_SIZE * CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_COUNT;
 
-/** Stop strings one management modal can present beside its speaker-pattern checkbox. */
 export const CONFIG_STOP_STRING_CHECKBOX_GROUP_SIZE = 10;
 const CONFIG_STOP_STRING_CHECKBOX_GROUP_COUNT = 4;
 export const CONFIG_STOP_STRING_CAPACITY =
   CONFIG_STOP_STRING_CHECKBOX_GROUP_SIZE * CONFIG_STOP_STRING_CHECKBOX_GROUP_COUNT;
 
-/**
- * Binds a stop-string removal to the exact list its modal presented. Unchecked-means-remove derives
- * the removal set from positions, so a concurrent add must invalidate the continuation rather than
- * delete a different string.
- */
+// List fingerprint prevents deleting the wrong string on concurrent adds because unchecked-means-remove derives
+// removals by position.
 export function computeStopStringFingerprint(serverId: number, stopStrings: readonly string[]): string {
   return createHash("sha256")
     .update(`config-stop-strings:${serverId}:${JSON.stringify(stopStrings)}`)
@@ -406,7 +356,6 @@ export function computeStopStringFingerprint(serverId: number, stopStrings: read
     .slice(0, 8);
 }
 
-/** Binds a logit-bias removal to the exact page of entry ids its modal presented. */
 export function computeLogitBiasFingerprint(serverId: number, entryIds: readonly string[]): string {
   return createHash("sha256")
     .update(`config-logit-bias:${serverId}:${JSON.stringify(entryIds)}`)
@@ -829,7 +778,8 @@ const pageField: RouteFieldCodec<"page", ConfigPage> = {
   decode: (v, r) => (r.category ? parseConfigPage(r.category as ConfigCategory, v) : null),
 };
 
-/** Optional because selectors rendered before it existed are still open in clients and mean the first page. */
+// Optional because selectors rendered before this field existed may still be open in Discord clients and must default
+// to the first page.
 const optionalPersonaPageField: RouteFieldCodec<"page", ConfigPage> = {
   key: "page",
   optional: true,
@@ -984,10 +934,6 @@ const requiredChannelIdField: RouteFieldCodec<"channelId", string> = {
   decode: (v) => parseSnowflake(v),
 };
 
-/**
- * Authoritative codec table for every `/config` panel route, keyed by semantic action so a new
- * action is a compile error until it has a wire token.
- */
 export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "nudge-talk-select": { wireToken: "nn-talk", fields: [personaIdField] },
   "nudge-interest-select": { wireToken: "nn-int-select", fields: [personaIdField] },

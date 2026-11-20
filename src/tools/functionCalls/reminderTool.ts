@@ -1,8 +1,3 @@
-/**
- * Reminder Tool
- * Allows the AI to set reminders for users, causing TomoriBot to mention them at the specified time
- */
-
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
@@ -23,9 +18,6 @@ import { resolveChannelTarget, resolveTriggererDiscordId, resolveUserTarget } fr
 import { MAX_REMINDERS_PER_SERVER, ReminderLimitError } from "@/utils/db/repositories/ServerScheduleRepository";
 import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
-/**
- * Tool for creating scheduled tasks that trigger messages at specific times
- */
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
@@ -99,29 +91,17 @@ export class ReminderTool extends BaseTool {
     required: ["reminder_purpose", "repetition_interval_hours"],
   };
 
-  /**
-   * Check if reminder tool is available for the given provider
-   * @returns True if provider supports reminder functionality
-   */
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  /**
-   * Context-aware availability check: disabled during non-task reminder-triggered turns
-   * to prevent the AI from scheduling new reminders while executing an existing one.
-   * Self-reminder (task) turns are exempt so tasks can spawn follow-up tasks.
-   * @param context - Optional tool context containing streaming flags
-   */
+  // Non-task reminder turns disable this tool so the AI cannot schedule reminders mid-execution, while self-reminder
+  // turns stay exempt to spawn follow-ups.
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
     if (context?.streamContext?.disableReminderTool) return false;
     return true;
   }
 
-  /**
-   * Execute reminder creation
-   * @param args - Arguments containing reminder details
-   */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
@@ -157,10 +137,8 @@ export class ReminderTool extends BaseTool {
     const tomoriState = context.tomoriState;
     const resolvedUserId = resolveTriggererDiscordId(context);
 
-    // Matrix relay messages arrive via Discord webhook (author = webhook bot).
-    // The webhook bot has no users table record, so loadUserRow returns null.
-    // Detect this case so we can relax the requestingUserRow guard below and
-    // store created_by_user_id = null (the column is nullable for this reason).
+    // Matrix relay webhooks have no users table row, so detect them here to allow a null requestingUserRow and store
+    // created_by_user_id = null.
     if (context.message) await verifyMessageWebhook(context.message);
     const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
 
@@ -172,8 +150,6 @@ export class ReminderTool extends BaseTool {
 
     if (
       !tomoriState ||
-      // Allow null requestingUserRow for Matrix relay webhooks, so they have no
-      // users table entry, so created_by_user_id will be stored as null
       (!requestingUserRow && !isMatrixRelayRequester) ||
       (requestingUserRow && !requestingUserRow.user_id) ||
       !tomoriState.server_id ||
@@ -314,21 +290,16 @@ export class ReminderTool extends BaseTool {
       resolvedChannelLabel = `#${context.channel.name}`;
     }
 
-    // Determine which time method to use and calculate the final reminder time
     let finalReminderTime: Date | null = null;
     let timeCalculationMethod = "";
 
-    // Get the server's configured timezone offset (default to 0/UTC if not set)
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
 
     if (reminderTimeArg && typeof reminderTimeArg === "string" && reminderTimeArg.trim()) {
-      // Absolute time: parse in the offset the model labeled the time with (utc_offset),
-      // falling back to the server's configured timezone. The model passes wall-clock time as
-      // spoken and labels the frame instead of converting it, so deterministic code does the
-      // offset arithmetic here.
+      // The model passes wall-clock time and labels its timezone frame via utc_offset instead of converting it, so
+      // deterministic code applies the offset here.
       timeCalculationMethod = "absolute";
 
-      // Validate utc_offset only when it will actually be used (absolute path)
       if (utcOffsetArg !== undefined && !isValidUtcOffset(utcOffsetArg)) {
         return {
           success: false,
@@ -361,7 +332,6 @@ export class ReminderTool extends BaseTool {
         (typeof daysFromNowArg === "number" && daysFromNowArg > 0) ||
         (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0);
 
-      // Default to 1 minute if no time parameters provided (immediate message use case)
       let effectiveMinutesFromNow = minutesFromNowArg;
       if (!hasRelativeParams) {
         effectiveMinutesFromNow = 1;
@@ -492,7 +462,7 @@ export class ReminderTool extends BaseTool {
         server_id: tomoriState.server_id,
         channel_disc_id: resolvedChannelId,
         user_discord_id: resolvedTargetUserId,
-        user_nickname: actualNicknameInDB, // Use the verified nickname from DB
+        user_nickname: actualNicknameInDB,
         reminder_purpose: reminderPurpose,
         reminder_time: finalReminderTime,
         repetition,
@@ -514,7 +484,6 @@ export class ReminderTool extends BaseTool {
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
         const localizedTimeRemaining = formatLocalizedDuration(timeRemainingMs, context.locale);
 
-        // Format the reminder time in the server's configured timezone
         const timeFormatOptions: Intl.DateTimeFormatOptions = {
           year: "numeric",
           month: "long",
@@ -540,8 +509,8 @@ export class ReminderTool extends BaseTool {
               : { repetition_interval_hours: repetition.interval };
         const reminderPurposeText =
           reminderPurpose.length > 200 ? `${reminderPurpose.substring(0, 197)}...` : reminderPurpose;
-        // Show both clocks when the target has a personal timezone differing from
-        // the server's, so lets the user immediately spot a mislabeled/misconverted time
+        // Show both clocks when the target's personal timezone differs from the server's so the user spots misconverted
+        // times.
         const reminderTimeText =
           targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
             ? localizer(context.locale, "reminders.dual_time_display", {

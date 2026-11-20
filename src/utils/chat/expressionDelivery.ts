@@ -27,28 +27,18 @@ import { log } from "@/utils/misc/logger";
 import { EXPRESSION_MEDIA_MAX_BYTES } from "@/utils/storage/expressionMedia";
 import { loadExpressionMedia } from "@/utils/storage/expressionStorage";
 
-/** Discord acceptance of one expression message. Internal only: the model sees the name alone. */
 interface ExpressionDeliveryReceipt {
-  /** Native sticker id or custom expression id, which is what a repeated call is compared by. */
   expressionKey: string;
   name: string;
   messageId: string;
 }
 
-/**
- * The one-expression-per-turn allowance. It lives on the persona turn rather than the stream state,
- * because the stream state is rebuilt for every SDK request and the allowance must survive tool-loop
- * continuations, context restarts, model fallbacks, and the empty-response retry.
- *
- * The single-expression ceiling is a product choice, not a Discord limit. A demonstrated need for
- * several distinct reactions in one reply is what would justify a bounded multi-delivery policy.
- */
+// Stored on the persona turn because stream state resets per SDK request and the one-expression cap (product choice)
+// spans retries and fallbacks.
 export interface ExpressionDeliveryState {
   delivered: ExpressionDeliveryReceipt | null;
-  /**
-   * Set while a send is in flight and kept when Discord never confirmed the outcome. It blocks every
-   * later send this turn, since the earlier message may already be visible and a resend would double it.
-   */
+  // Retained when a Discord send is in flight or unconfirmed so later calls do not double-post a message that may
+  // already be visible.
   unconfirmedKey: string | null;
 }
 
@@ -64,25 +54,16 @@ type PreparedExpression =
 
 type DeliveryRoute = PersonaPostAuthor & { reply: boolean };
 
-/** A stop observed immediately before a POST, so nothing was posted. */
 class ExpressionSendCancelled extends Error {}
 
-/** The fields delivery reads from either transport's created message. */
 type SentExpressionMessage = Pick<Message, "id" | "webhookId"> & { channelId?: string };
 
 export function createExpressionDeliveryState(): ExpressionDeliveryState {
   return { delivered: null, unconfirmedKey: null };
 }
 
-/**
- * Sends the resolved expression as its own message and records the turn's receipt.
- *
- * Eligibility, whitelist, and stored media are rechecked here because
- * resolution happened earlier and an edit can land in between.
- *
- * @param isCancelled - Checked immediately before each outbound POST, after webhook resolution and any
- *   avatar update, so a stop raised while those are in flight prevents the send instead of racing it
- */
+// Eligibility, media, and isCancelled are rechecked right before the POST because concurrent edits or a stop during
+// webhook setup would otherwise race.
 export async function deliverExpression(
   context: ChatTurnContext,
   selection: StickerSelection,
@@ -133,10 +114,8 @@ export async function deliverExpression(
   return { status: "delivered", receipt: state.delivered };
 }
 
-/**
- * Translates a delivery outcome into the tool result the model reads. Only the ordinary name and
- * the outcome are exposed: never the media kind, storage reference, source link, or ids.
- */
+// Model-facing tool results expose only the ordinary name and status so internal IDs, storage refs, media kind, and
+// source links stay private.
 export function buildExpressionToolResult(outcome: SettledExpressionDelivery, requestedName: string): ToolResult {
   switch (outcome.status) {
     case "delivered":
@@ -382,10 +361,8 @@ function recordDeliveryContinuity(
   context.streamingContext.deliveryReceipts?.push(receipt);
 }
 
-/**
- * Records one verified use at acceptance, so a later stop or failed model request does not erase a
- * reaction that stays visible. DMs are skipped because `stat_counters.server_id` is a NOT NULL FK.
- */
+// Recorded at acceptance so later stops do not erase a visible reaction, skipping DMs because stat_counters.server_id
+// is a NOT NULL FK.
 function recordExpressionUsage(context: ChatTurnContext, prepared: PreparedExpression): void {
   const serverId = context.tomoriState.server_id;
   const userId = context.triggererUserId;

@@ -21,10 +21,8 @@ export type MessageProxyHostProtection =
       hostUserDiscId: string;
     };
 
-/**
- * The identity's own synthetic row is checked by normal memory code; this helper
- * adds the authorization side of the message-proxy identity split.
- */
+// Normal memory code already checks the synthetic identity row, so this helper enforces only the host-account
+// authorization side of the proxy identity split.
 export async function getMessageProxyHostProtection(
   targetUserDiscId: string,
   serverDiscId: string | null | undefined,

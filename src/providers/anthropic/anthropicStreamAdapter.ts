@@ -1,17 +1,3 @@
-/**
- * Anthropic-specific streaming adapter
- *
- * Implements the StreamProvider interface for Anthropic's Messages API.
- * Uses raw fetch + SSE parsing (no SDK) for consistency with other providers.
- *
- * Key Anthropic API differences from OpenAI:
- * - System prompt is a top-level `system` parameter, not a message
- * - Messages use content blocks: [{type: "text", ...}, {type: "image", ...}]
- * - Tool results are wrapped in user messages as tool_result content blocks
- * - Strict user/assistant alternation is enforced
- * - SSE uses named events: content_block_start, content_block_delta, etc.
- */
-
 import { applyAnthropicCacheBreakpoints, relocateCacheContextItems } from "@/providers/utils/anthropicCache";
 import { buildTargetedAttempt, extractRejectedParams } from "@/providers/utils/paramDegradation";
 import { mapWithConcurrency } from "@/utils/async/bounded";
@@ -47,18 +33,12 @@ import type {
   StreamContext,
 } from "../../types/stream/interfaces";
 
-/**
- * Anthropic-specific stream configuration extending the base StreamConfig
- */
 export interface AnthropicStreamConfig extends StreamConfig {
   seesImages?: boolean;
   topP?: number;
   topK?: number;
 }
 
-/**
- * Anthropic content block types used in messages and streaming
- */
 interface AnthropicTextBlock {
   type: "text";
   text: string;
@@ -104,9 +84,6 @@ interface AnthropicMessage {
   content: string | AnthropicContentBlock[];
 }
 
-/**
- * Accumulated tool call data across streaming chunks
- */
 interface AccumulatedToolCall {
   id?: string;
   name: string;
@@ -123,9 +100,6 @@ type AnthropicSseEventType =
   | "ping"
   | "error";
 
-/**
- * Parsed SSE event with both event type and data payload
- */
 interface ParsedSseEvent {
   eventType: AnthropicSseEventType;
   data: unknown;
@@ -150,9 +124,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  /**
-   * Initialize and start the streaming process with Anthropic's Messages API
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     this.toolCallAccumulator.clear();
     this.thinkingAccumulator = "";
@@ -162,9 +133,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
-    // Strict role alternation is resolved from the active llms column (D4 column-is-truth);
-    //    providerRequiresAlternation("anthropic") is the request-time safety net that keeps it
-    //    ON even if a row were mis-seeded, so a mis-seeded row can never emit an invalid body.
+    // Keep providerRequiresAlternation as a request-time safety net so a mis-seeded row never emits an invalid body.
     const enforceAlternation =
       providerRequiresAlternation("anthropic") || (context.tomoriState.llm?.strict_role_alternation ?? false);
     const { systemPrompt, messages } = await this.assembleAnthropicContext(
@@ -187,7 +156,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       messages,
     };
 
-    // Add system prompt as top-level parameter (not in messages)
     if (systemPrompt) {
       requestBody.system = systemPrompt;
     }
@@ -208,7 +176,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       requestBody.output_config = thinkingRequest.output_config;
     }
 
-    // Add sampling parameters when thinking mode does not suppress them
     if (!thinkingRequest.omitSampling) {
       const samplingSelection = selectAnthropicSamplingParams({
         temperature: config.temperature,
@@ -328,7 +295,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
               continue;
             }
 
-            // Process data line (requires preceding event type)
             if (trimmedLine.startsWith("data:")) {
               const dataStr = trimmedLine.slice(5).trim();
               if (!dataStr) {
@@ -375,8 +341,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           }
         }
       } finally {
-        // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
-        // connection. A consumer that stops iterating this generator early would otherwise leak them.
+        // Cancel rather than releaseLock on early exit because releaseLock leaves the response body, buffers, and socket open.
         if (!completed) {
           await reader.cancel().catch(() => undefined);
         }
@@ -385,9 +350,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Convert a raw Anthropic SSE event into a normalized ProcessedChunk
-   */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     if (
       typeof chunk.data === "object" &&
@@ -474,7 +436,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         if (delta.type === "thinking_delta" && delta.thinking) {
           this.thinkingAccumulator += delta.thinking;
           thoughts.push({ kind: "raw", content: delta.thinking });
-          // Emit thinking as metadata, not visible text
           return { type: "text", content: "", thoughts, metadata };
         }
 
@@ -536,8 +497,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         }
 
         if (this.stopReason === "tool_use") {
-          // The function call should have been emitted by content_block_stop
-          // Just signal completion here
           return { type: "done", thoughts: [], metadata };
         }
 
@@ -558,7 +517,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
 
       case "ping": {
-        // Keepalive, skip
         return { type: "text", content: "", thoughts: [], metadata };
       }
 
@@ -589,9 +547,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Convert provider-specific errors into normalized ProviderError format
-   */
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -603,7 +558,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         const jsonMatch = errorMessage.match(/\{.*\}/s);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          // Anthropic wraps errors: {type: "error", error: {type: "...", message: "..."}}
           if (parsed.error?.type && parsed.error?.message) {
             anthropicError = parsed.error;
           } else if (parsed.type && parsed.message) {
@@ -676,9 +630,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Create provider-specific error description for display in embeds
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
     const errorCode = formatProviderErrorCodeForDisplay(error.code);
     const isTemperatureTopPConflict =
@@ -698,10 +649,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     return error.code ? `Error Code ${errorCode}: ${message}` : message;
   }
 
-  /**
-   * Assemble context items into Anthropic message format.
-   * Returns the system prompt (top-level) and messages array separately.
-   */
   private async assembleAnthropicContext(
     contextItems: StructuredContextItem[],
     currentTurnModelParts: Array<Record<string, unknown>>,
@@ -730,7 +677,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      // Check if this should go to system prompt (top-level parameter)
       if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) {
           systemParts.push(itemTextContent);
@@ -746,7 +692,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
               text: part.text,
             });
           } else if (part.type === "image") {
-            // Anthropic only allows image blocks on user messages
             const imageTargetBlocks = role === "assistant" ? pendingBotImageBlocks : contentBlocks;
 
             if (!seesImages) {
@@ -805,7 +750,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
               }
             }
           }
-          // Note: video not supported by Anthropic, skip silently
+          // Anthropic Messages API rejects video inputs, so video parts are skipped.
           return { contentBlocks, pendingBotImageBlocks };
         });
         const contentBlocks = partsByInput.flatMap((parts) => parts.contentBlocks);
@@ -813,8 +758,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
         if (contentBlocks.length > 0 || pendingBotImageBlocks.length > 0) {
           if (role === "assistant") {
-            // Anthropic doesn't allow images in assistant messages.
-            // Emit text as string, then inject a synthetic user turn for images.
             const textContent = contentBlocks
               .filter((b) => b.type === "text")
               .map((b) => (b as AnthropicTextBlock).text)
@@ -825,8 +768,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
             }
 
             if (pendingBotImageBlocks.length > 0) {
-              // Anthropic forbids media on assistant turns; relocate it into a synthetic user turn
-              // using the shared canonical wording (consolidated across all providers).
+              // Anthropic forbids media on assistant turns, so relocate it into a synthetic user turn.
               messages.push({
                 role: "user",
                 content: [
@@ -839,8 +781,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
               });
             }
           } else {
-            // User message - can include both text and images
-            // Flatten to string if text-only for cleaner API calls
             const allTextOnly = contentBlocks.every((b) => b.type === "text");
             if (allTextOnly && pendingBotImageBlocks.length === 0) {
               const textContent = contentBlocks.map((b) => (b as AnthropicTextBlock).text).join("\n");
@@ -927,7 +867,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Append current turn model parts as assistant prefill
     if (currentTurnModelParts.length > 0) {
       const prefillText = currentTurnModelParts
         .map((part) => (part as { text?: string }).text)
@@ -940,10 +879,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Merging consecutive same-role messages and prepending a leading user turn is delegated
-    //    to the shared strict-chat helpers, so a fix there reaches every adapter that needs
-    //    it. The resolved flag gates the merge and is always ON for anthropic via the safety
-    //    net, so this stays byte-identical to the inline implementation it replaced.
     const mergedMessages = enforceAlternation ? this.enforceStrictAlternation(messages) : messages;
 
     log.info(`AnthropicStreamAdapter: Assembled ${mergedMessages.length} messages (after alternation merge)`);
@@ -954,15 +889,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Anthropic requires strict user/assistant alternation. Merges consecutive same-role messages
-   * into single messages with combined content blocks and guarantees a leading user turn, via the
-   * shared {@link mergeConsecutiveSameRole} / {@link ensureLeadingUserTurn} helpers.
-   */
+  // Anthropic rejects consecutive same-role turns and leading assistant turns.
   private enforceStrictAlternation(messages: AnthropicMessage[]): AnthropicMessage[] {
     const merged = mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]);
 
-    // Prepend a synthetic user turn when the conversation would otherwise start with assistant.
     const withLeading = ensureLeadingUserTurn(merged, () => ({
       role: "user",
       content: CONVERSATION_START_USER_TEXT,
@@ -974,18 +904,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     return withLeading as unknown as AnthropicMessage[];
   }
 
-  /**
-   * Log a sanitized version of the outbound Anthropic request for debugging.
-   * Mirrors the Google/OpenRouter pattern: logs the full structured request body
-   * as a single JSON object so the payload is copy-pasteable and spec-comparable.
-   * Base64 image data is redacted to keep logs readable.
-   *
-   * @param requestBody - The assembled request body (without API key)
-   */
   private logSanitizedRequest(requestBody: Record<string, unknown>): void {
     log.section("AnthropicStreamAdapter: Request Details");
 
-    // Sanitize messages: redact base64 image data in content blocks
     const sanitizedMessages = (requestBody.messages as Array<Record<string, unknown>> | undefined)?.map((msg) => {
       const content = msg.content;
       if (typeof content === "string") return msg;
@@ -1007,7 +928,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       return { ...msg, content: sanitizedContent };
     });
 
-    // Log the full request body with explicit field ordering: config → tools → system → messages
     const { tools, system, messages: _messages, ...configParams } = requestBody;
     const sanitizedBody = {
       ...configParams,
@@ -1018,13 +938,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     log.info(`Request Body: ${JSON.stringify(sanitizedBody, null, 2)}`);
   }
 
-  /**
-   * Assemble context into Anthropic message format for non-streaming use cases
-   * (e.g. token counting probe in /tool estimate cost).
-   *
-   * @param seesImages - Whether the model accepts image inputs
-   * @returns Assembled system prompt and messages array ready for the Anthropic API
-   */
   async buildProbeMessages(
     contextItems: StructuredContextItem[],
     seesImages: boolean,

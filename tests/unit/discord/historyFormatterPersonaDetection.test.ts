@@ -6,18 +6,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { verifyMessageWebhook, clearWebhookIdentityCache } from "@/utils/chat/webhookIdentity";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
-/**
- * Regression guard for `/memory history import` automatic scope.
- *
- * Detection used to fire only for `msg.webhookId`, so a server whose Tomori replied under
- * the bot's own account reported "No personas detected" and fell back to serverwide, even
- * with the persona plainly present in the fetched messages. `personaTurnDetection.ts`
- * already attributed those turns to the main persona; this formatter did not.
- */
-
 const BOT_USER_ID = "900000000000000001";
 
-/** Minimal Discord message stand-in for the formatter's read surface. */
 function makeMessage(options: { content: string; authorId: string; username: string; webhookId?: string }): Message {
   return {
     type: MessageType.Default,
@@ -73,7 +63,6 @@ describe("formatMessagesForExtraction persona detection", () => {
 
     const result = formatMessagesForExtraction(messages, personas, BOT_USER_ID);
 
-    // The non-alter persona owns the bot's own turns.
     expect(result.detectedPersonaTomoriIds).toEqual([11]);
   });
 
@@ -115,8 +104,7 @@ describe("formatMessagesForExtraction persona detection", () => {
   test("ignores the bot's own turns when no client id is supplied", () => {
     const messages = [makeMessage({ content: "Hello there!", authorId: BOT_USER_ID, username: "TomoriBot" })];
 
-    // Callers that cannot resolve the client id keep the old webhook-only behaviour
-    //    rather than guessing.
+    // Callers without a client id keep webhook-only detection rather than guessing.
     const result = formatMessagesForExtraction(messages, personas);
 
     expect(result.detectedPersonaTomoriIds).toEqual([]);

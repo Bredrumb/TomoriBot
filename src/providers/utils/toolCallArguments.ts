@@ -2,32 +2,19 @@ import { log } from "@/utils/misc/logger";
 import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 
 export interface ParseToolCallArgumentsInput {
-  /** Adapter name used as both the failure-log prefix and the metric's `adapter` field. */
   adapterName: string;
   toolName: string;
   rawArguments: string;
 }
 
 export interface ParsedToolCallArguments {
-  /** Recovered arguments, or an empty object when the payload could not be parsed or repaired. */
   args: Record<string, unknown>;
-  /** True when the payload decoded as JSON without repair. */
   parsed: boolean;
-  /** True when the endpoint cut the payload short, so the call reaches the tool loop incomplete. */
   truncated: boolean;
 }
 
-/**
- * Recover the arguments of one streamed tool call, repairing a payload the endpoint cut short.
- *
- * Endpoints can truncate the argument JSON and still report a finished tool call. The repaired
- * keys are real, so they are kept, and `truncated` travels with the call because the tool loop
- * decides whether to dispatch on that flag. An unrecoverable payload logs and yields empty
- * arguments, which is the same fallback the adapters previously took inline.
- *
- * Providers differ in how arguments stream in, but not in what a recovered payload means: the
- * adapters share this so one of them cannot approve a dispatch the others refuse.
- */
+// Endpoints can truncate argument JSON while reporting a finished tool call, so repaired keys are returned with
+// truncated set for the tool loop to gate dispatch.
 export function parseAccumulatedToolArguments({
   adapterName,
   toolName,

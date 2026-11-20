@@ -39,10 +39,6 @@ const context = {
   },
 } as StreamContext;
 
-/**
- * The real updater with only the send intercepted: the delivery calls nothing else on it, so the
- * recorded calls are exactly what production would have handed to Discord.
- */
 function makeDelivery(onPayload: (payload: StreamSendPayload, textForState: string) => void): StreamMessageDelivery {
   const uiUpdater = new StreamUiUpdater({
     hasStopRequest: () => false,
@@ -86,9 +82,8 @@ describe("StreamMessageDelivery copied-render options", () => {
       sentPayloads.push({ payload, textForState });
     });
 
-    // Sprite renders keep the webhook username clean ("Ren"); the decorated
-    // label only appears in the accumulated-text prefix, and the sprite record
-    // rides along for post-send persistence.
+    // Sprite renders keep the webhook username clean ("Ren") while only the accumulated-text prefix carries the
+    // sprite label.
     await delivery.sendSegment("grr", "period", textConfig(), typingConfig, context, createDefaultStreamState(), {
       identityOverride: {
         username: "Ren",
@@ -171,7 +166,7 @@ describe("StreamMessageDelivery copied-render options", () => {
     sentPayloads.length = 0;
     const heavyConfig = textConfig();
     heavyConfig.humanizer = humanizerSettingsFromDegree(3);
-    // Emphasis flushing in humanizeString rolls against EMPHASIS_FLUSH_PROBABILITY (0.5), so mock below the threshold for deterministic splits.
+    // Emphasis flushing rolls against EMPHASIS_FLUSH_PROBABILITY (0.5), so mock below it for deterministic splits.
     const randomSpy = spyOn(Math, "random").mockReturnValue(0);
     try {
       await delivery.sendSegment(

@@ -4,13 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registerHeapSnapshotHandler } from "@/init/heapSnapshot";
 
-/**
- * A stub serializer stands in for `Bun.generateHeapSnapshot`. Producing a real snapshot
- * is a stop-the-world pause proportional to heap size, which in the shared test process
- * runs to seconds and starves later database suites of their hook timeouts. The
- * DevTools format is the runtime's contract, not this module's, so these tests cover
- * only the wiring around it.
- */
+// A stub replaces Bun.generateHeapSnapshot because a real snapshot causes a multi-second pause that starves later DB
+// suites' hook timeouts.
 const FAKE_SNAPSHOT = JSON.stringify({ snapshot: { meta: {} }, nodes: [] });
 
 const dirs: string[] = [];
@@ -21,7 +16,6 @@ function makeDir(): string {
   return dir;
 }
 
-/** Polls for the handler's detached write instead of racing a fixed delay. */
 async function waitForFiles(dir: string, timeoutMs = 5000): Promise<string[]> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

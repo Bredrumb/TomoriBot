@@ -18,9 +18,6 @@ const CHANNEL = { id: "channel_1" } as unknown as TextChannel;
 const CLIENT = {} as Client;
 const TOMORI_STATE: TomoriState = createPersona();
 
-/**
- * Build the minimal required params, letting each test override specifics.
- */
 function makeParams(overrides: Partial<BuildStreamContextParams> = {}): BuildStreamContextParams {
   return {
     provider: "google",

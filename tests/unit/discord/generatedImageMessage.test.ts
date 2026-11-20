@@ -41,7 +41,6 @@ describe("buildGeneratedImageComponentsV2Payload", () => {
     if (!textComponent) throw new Error("Generated image payload is missing its timing text display");
     const lines = textComponent.content.split("\n");
 
-    // Timing stays on the first line; referenced users render on their own line.
     expect(lines[0]).toContain(localizedCopy("en-US", "tools.image.generated_after_seconds_line", { seconds: "4.2" }));
     expect(lines[1]).toBe(
       `-# ${localizedCopy("en-US", "tools.image.referenced_identities_line", { names: "Aphel, Miku" })}`,

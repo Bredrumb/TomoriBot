@@ -73,7 +73,6 @@ function personaDefinition(category: NaturalNudgeCategory, ownerId: number, inde
   };
 }
 
-/** The fullest view a category can hold: every built-in, the server custom limit, and persona-owned entries. */
 function fullestView(
   category: NaturalNudgeCategory,
   customs = CUSTOM_IDLE_NUDGE_LIMIT,
@@ -109,7 +108,6 @@ function fullestView(
   };
 }
 
-/** More personas than one checklist modal can present, with nicknames at Discord's display-name length. */
 function manyPersonas(count = DISCORD_MODAL_COMPONENTS_MAX * DISCORD_CHECKBOX_GROUP_OPTIONS_MAX + 5) {
   return Array.from({ length: count }, (_, index) =>
     createPersona({ persona_id: index + 1, persona_nickname: `*Juno_${index}`.padEnd(32, "*") }),

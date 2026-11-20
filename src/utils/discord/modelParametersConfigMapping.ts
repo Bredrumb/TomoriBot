@@ -1,9 +1,7 @@
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 
-/**
- * Sampler values submitted from the personal model-parameters panel.
- * null means the user cleared the field.
- */
+// Sentinel `null` on a sampler field means the user explicitly cleared it, so callers treat it differently from an
+// unsubmitted field.
 export interface ModelParameterOptions {
   temperature: number | null;
   top_p: number | null;

@@ -8,17 +8,8 @@ import { isShortTermMemoryMaintenanceDue } from "@/utils/memory/shortTermMemoryM
 
 const SHORT_TERM_MEMORY_TOOL_NAME = "update_short_term_memory";
 
-/**
- * Builds one chat-turn context while treating a due STM refresh as autonomous
- * Deliberate Tool Mode intent.
- *
- * `contextPipeline` already admits names in `endTurnAfterTools` into the DTM
- * allowlist before its fail-closed gate. We use that existing pre-context path as
- * a temporary intent carrier, then remove the temporary end-turn behavior before
- * generation starts. This keeps the resulting tool allowlist exact without making
- * STM depend on user keywords. Eligible expression tools remain available on every
- * turn; a due refresh adds `update_short_term_memory` alongside any requested task tools.
- */
+// STM rides temporarily on endTurnAfterTools because contextPipeline admits those names past the DTM fail-closed gate
+// without keyword matching.
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
   const incoming = turn.lockedTurn.admission.incoming;
   const deliberateToolModeActive = resolveTurnDeliberateToolMode(turn);
@@ -65,9 +56,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
 
   const context = await buildBaseChatTurnContext(carriedTurn);
 
-  // `endTurnAfterTools` is only the pre-context carrier here. Preserve an STM
-  // end-turn request if the caller genuinely supplied one, otherwise remove our
-  // temporary marker before tool execution.
+  // `endTurnAfterTools` is only a pre-context carrier here, so strip our temporary marker before tool execution
+  // unless the caller supplied it.
   if (!originalEndTurnAfterTools.includes(SHORT_TERM_MEMORY_TOOL_NAME)) {
     const remainingEndTurnAfterTools = context.streamingContext.endTurnAfterTools?.filter(
       (toolName) => toolName !== SHORT_TERM_MEMORY_TOOL_NAME,

@@ -36,8 +36,7 @@ describe("pool event counters", () => {
     expect(drained.pool_other_5m).toBe(1);
   });
 
-  // Only the first event of an episode is logged; the rest are counted. If this inverted, one
-  // incident would again produce thousands of lines and become a load source of its own.
+  // Only the first event of an episode is logged because logging every event during an incident creates log load.
   it("marks only the first event of an episode", () => {
     expect(recordPoolEvent("ERR_POSTGRES_IDLE_TIMEOUT", MAX_LIFETIME_S).isFirstOfEpisode).toBe(true);
     expect(recordPoolEvent("ERR_POSTGRES_IDLE_TIMEOUT", MAX_LIFETIME_S).isFirstOfEpisode).toBe(false);
@@ -64,9 +63,7 @@ describe("pool event counters", () => {
     expect(lifetimePhaseS).toBeLessThan(MAX_LIFETIME_S);
   });
 
-  // The production logger is pinned at `error`, so the per-retry `log.warn` never reached any
-  // sink and only exhausted retries were ever countable. Without this the masked-to-visible
-  // ratio, which is the whole measure of whether retrying works, cannot be recovered.
+  // Production pins logging at `error`, so separate recovered and exhausted counters preserve the retry success ratio.
   it("counts retries that recovered separately from retries that exhausted", () => {
     recordPoolRetryRecovered();
     recordPoolRetryRecovered();

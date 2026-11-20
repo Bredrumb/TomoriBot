@@ -9,10 +9,6 @@ import { clearShortTermMemoryForChannel } from "@/utils/cache/shortTermMemoryCac
 export const configureCommand = (command: SlashCommandBuilder) =>
   command.setName("refresh").setDescription(localizer("en-US", "commands.refresh.description"));
 
-/**
- * Executes the 'refresh' command.
- * Sends an embed that acts as a visual separator and triggers conversation history reset.
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -24,8 +20,8 @@ export async function execute(
     log.info(`[refreshCommand] Cleared short-term memories for channel - channelId=${interaction.channel.id}`);
   }
 
-  // This keyword is detected by the tomoriChat handler to reset context.
-  // Let helper functions manage interaction state
+  // embedProtocol matches commands.refresh.title in channel history as a reset boundary, so this reply must stay
+  // non-ephemeral.
   await replyInfoEmbed(
     interaction,
     locale,
@@ -33,8 +29,8 @@ export async function execute(
       titleKey: "commands.refresh.title",
       descriptionKey: "commands.refresh.response",
       footerKey: "commands.refresh.footer",
-      color: ColorCode.SECTION, // Use SECTION color for visual separation
+      color: ColorCode.SECTION,
     },
     MessageFlags.SuppressNotifications,
-  ); // Explicitly pass undefined to override ephemeral default
+  );
 }

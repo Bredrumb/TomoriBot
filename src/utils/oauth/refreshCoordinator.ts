@@ -10,7 +10,7 @@ import {
 interface OAuthRefreshConnection {
   accessToken: string | null;
   expiresAt: number | null;
-  /** Null when the server issued none, so the grant blocks once its access token stops being usable. */
+  // Null when the server issued none, so the grant blocks once its access token stops being usable.
   refreshToken: string | null;
   blocked: boolean;
   retryAt: number | null;
@@ -21,7 +21,8 @@ export interface OAuthTokenStore {
   withLock<T>(
     operation: (session: {
       load(): Promise<OAuthRefreshConnection | null>;
-      /** `expiresAt` is null only for a coordinator call with `optionalExpiresIn`. */
+      // `expiresAt` is null only when `optionalExpiresIn` is enabled, because tokens without a lifetime are otherwise
+      // refreshed or rejected.
       persist(token: OAuthTokenWithOptionalExpiry, refreshToken: string, expiresAt: Date | null): Promise<void>;
       fail(error: OAuthTokenError): Promise<void>;
     }) => Promise<T>,
@@ -32,10 +33,8 @@ export class OAuthRefreshCoordinator {
   private readonly tokens = new Map<string, { value: string; refreshAt: number }>();
   private readonly pending = new Map<string, Promise<string | null>>();
 
-  /**
-   * @param options.optionalExpiresIn - Admits a token without a lifetime, which is then used until the caller
-   *   reports it rejected; otherwise a stored token without an expiry is refreshed.
-   */
+  // With `optionalExpiresIn`, a token without a lifetime is used until rejected; otherwise a stored token without an
+  // expiry is refreshed.
   getAccessToken(options: {
     key: string;
     store: OAuthTokenStore;
@@ -113,7 +112,6 @@ export class OAuthRefreshCoordinator {
     if (this.tokens.get(key)?.value === rejectedToken) this.tokens.delete(key);
   }
 
-  /** Drops the cached token whatever its value, for a grant that was replaced rather than rejected. */
   forget(key: string): void {
     this.tokens.delete(key);
   }

@@ -3,8 +3,6 @@ import { parseEmbeddedJson, tryRepairIncompleteJson } from "@/utils/text/jsonRep
 
 describe("tryRepairIncompleteJson", () => {
   it("drops a value truncated mid-string and keeps the keys that arrived complete", () => {
-    // Shape of the incident payload: the stream died inside the second value, so the
-    // first key is the only one the model actually finished.
     const raw =
       '{"scene_state": "#master-bedroom, ~1:00 AM Friday. Chu, Evan, Noah on the large bed.", ' +
       '"bodies_and_wardrobe": "Noah: honey-blonde hair messy, amber eyes half-closed';
@@ -56,8 +54,6 @@ describe("tryRepairIncompleteJson", () => {
   it("drops the entry whose number was cut short without losing earlier entries", () => {
     const raw = '{"scene": "hallway", "objects": [{"id": 1}, {"id": 2}, {"id": 3';
 
-    // The third element is the ambiguous one, so it goes. The first two are complete: the
-    // array survives with the entries the token stream actually finished.
     expect(tryRepairIncompleteJson(raw)).toEqual({ scene: "hallway", objects: [{ id: 1 }, { id: 2 }] });
   });
 
@@ -117,8 +113,6 @@ describe("tryRepairIncompleteJson", () => {
   });
 
   it("keeps every key that arrived complete across a multi-category payload", () => {
-    // Mirrors the shape of a roleplay STM update: several long string categories, stream
-    // cut inside the third one. Only the first two were ever finished by the model.
     const raw =
       '{"scene_state": "#master-bedroom, ~1:00 AM Friday. Chu just returned, hugging both consorts.", ' +
       '"bodies_and_wardrobe": "Noah: honey-blonde hair messy, wearing a loose cotton sleep shirt.", ' +
@@ -137,9 +131,6 @@ describe("tryRepairIncompleteJson", () => {
   });
 
   it("never fabricates a value when repairing a truncation of valid JSON", () => {
-    // Every prefix of a real payload is a shape a dropped delta can produce. The repair
-    // must either refuse it or return a faithful prefix of the original, never a value the
-    // model did not write and never something that is not an object.
     const source = {
       scene_state: "hallway, 9:00 PM",
       bodies_and_wardrobe: "Noah: coat still on",
@@ -159,16 +150,12 @@ describe("tryRepairIncompleteJson", () => {
 
       for (const [key, value] of Object.entries(repaired ?? {})) {
         expect(Object.keys(source)).toContain(key);
-        // A repaired value must be the original or a faithful prefix of it: a list that was
-        // still being written can lose trailing members, never change them, an object can
-        // lose trailing keys, never invent one, and a number can lose trailing digits.
         expect(isPrefixOf(value, (source as Record<string, unknown>)[key])).toBe(true);
       }
     }
   });
 });
 
-/** True when `value` is `original` or a prefix of it, compared structurally. */
 function isPrefixOf(value: unknown, original: unknown): boolean {
   if (Array.isArray(original) && Array.isArray(value)) {
     return value.every((item, index) => isPrefixOf(item, original[index]));
@@ -179,7 +166,6 @@ function isPrefixOf(value: unknown, original: unknown): boolean {
     if (Object.keys(value).length === 0) {
       return true;
     }
-    // Every key present must match; keys the truncation cut off are simply absent.
     return Object.entries(value).every(([key, item]) => key in original && isPrefixOf(item, original[key]));
   }
   if (typeof original === "number" && typeof value === "number") {

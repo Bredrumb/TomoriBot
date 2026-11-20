@@ -4,7 +4,6 @@ export type OAuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promi
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
 
-/** Reads a bounded UTF-8 body under one deadline; `body` is null when the response has none. */
 export async function fetchOAuthText(
   endpoint: string,
   init: RequestInit,

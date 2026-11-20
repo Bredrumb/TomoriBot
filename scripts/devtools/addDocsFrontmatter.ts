@@ -1,10 +1,3 @@
-/**
- * One-time script: injects `title` frontmatter into every docs/*.md file
- * that doesn't already have it, derived from the first # heading.
- *
- * Run from repo root: bun run scripts/devtools/addDocsFrontmatter.ts
- */
-
 import { join } from "node:path";
 
 const docsDir = join(import.meta.dir, "../../docs");

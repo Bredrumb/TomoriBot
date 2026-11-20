@@ -59,7 +59,7 @@ describe("configVoicesPanel", () => {
       cfgWeight: 0.5,
       exaggeration: 0.5,
       samples,
-      totalSampleCount: CONFIG_VOICE_SAMPLE_PAGE_SIZE * 2, // triggers pagination row (component 7)
+      totalSampleCount: CONFIG_VOICE_SAMPLE_PAGE_SIZE * 2,
       start: 0,
       selectedIndex: 0,
     };
@@ -107,7 +107,7 @@ describe("configVoicesPanel", () => {
 
     expect(components[6].type).toBe(ComponentType.ActionRow);
     const paginationRow = components[6] as ActionRowData<ButtonComponentData>;
-    expect(paginationRow.components.length).toBe(3); // prev, indicator, next
+    expect(paginationRow.components.length).toBe(3);
     const nextRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(paginationRow.components[2])));
     expect(nextRoute?.action).toBe("voice-sample-page");
 
@@ -116,7 +116,7 @@ describe("configVoicesPanel", () => {
     expect(actionRow.components.length).toBe(1);
     const removeRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(actionRow.components[0])));
     expect(removeRoute?.action).toBe("voice-sample-remove-view");
-    expect(actionRow.components[0].disabled).toBe(false); // selectedIndex is 0 (valid)
+    expect(actionRow.components[0].disabled).toBe(false);
   });
 
   it("keeps turbo controls in the parameter summary and uses the edit button for changes", () => {
@@ -225,8 +225,6 @@ describe("configVoicesPanel", () => {
     expect(components.some((component) => component.type === ComponentType.File)).toBe(false);
   });
 
-  // TEST 3: Every select option value round-trips through the route decoder to the index and fingerprint
-  // it encodes, and an index of 0 survives (a truthiness bug drops it).
   it("every select option value round-trips to index and fingerprint, and index 0 survives", () => {
     const samples = [
       makeSample(0, { name: "First Sample" }),
@@ -268,7 +266,6 @@ describe("configVoicesPanel", () => {
       expect(decoded.index).toBe(i);
       expect(decoded.fp).toBe(computeVoiceSampleFingerprint(samples[i]));
 
-      // Also assert round-trip through the interaction route parser as vsample-rem-view segments
       const routeId = `config:v2:vsample-rem-view:en-US:${option.value}`;
       const parsed = parseConfigPanelRoute(requireRoute(routeId));
       expect(parsed).not.toBeNull();
@@ -276,7 +273,6 @@ describe("configVoicesPanel", () => {
       expect((parsed as Extract<ConfigPanelRoute, { action: "voice-sample-remove-view" }>).fp).toBe(decoded.fp);
     }
 
-    // Specific pin: an index of 0 survives and is not treated as falsy
     const zeroVal = encodeVoiceSampleOptionValue(0, "abcd1234");
     const zeroDecoded = decodeVoiceSampleOptionValue(zeroVal);
     expect(zeroDecoded).not.toBeNull();
@@ -284,8 +280,6 @@ describe("configVoicesPanel", () => {
     expect(zeroDecoded?.fp).toBe("abcd1234");
   });
 
-  // TEST 4: The pagination union covers every record: for a library several pages deep, walking every
-  // page yields each sample exactly once, with none missing and none duplicated.
   it("pagination union covers every record across multiple pages with no gaps or duplicates", () => {
     const pageSize = CONFIG_VOICE_SAMPLE_PAGE_SIZE;
     const totalCount = pageSize * 2 + 18;
@@ -335,22 +329,19 @@ describe("configVoicesPanel", () => {
         expect(decoded?.index).toBe(expectedIndex);
 
         if (decoded?.index !== undefined) {
-          expect(visitedIndices.has(decoded.index)).toBe(false); // No duplicates
+          expect(visitedIndices.has(decoded.index)).toBe(false);
           visitedIndices.add(decoded.index);
         }
         seenSampleNames.push(option.label);
       }
     }
 
-    // Every record was yielded exactly once
     expect(visitedIndices.size).toBe(totalCount);
     for (let i = 0; i < totalCount; i++) {
       expect(visitedIndices.has(i)).toBe(true);
     }
   });
 
-  // TEST 5: Content shape sweep: sample names at stored maximum length, deliberately oversized names,
-  // ref_text at 500-char limit, backtick runs of 3, 4, 5, 6, and 8, and astral-plane emoji.
   it("handles extreme content shapes without fence breakout, overflow, or crashing", () => {
     const extremeSamples: VoiceSampleRow[] = [
       makeSample(0, {
@@ -413,7 +404,6 @@ describe("configVoicesPanel", () => {
       view,
     });
 
-    // Verify all TextDisplay lengths stay bounded under Discord's 4000 limit
     for (const comp of components) {
       if (comp.type === ComponentType.TextDisplay) {
         const textComp = comp as TextDisplayComponentData;
@@ -422,7 +412,6 @@ describe("configVoicesPanel", () => {
       }
     }
 
-    // Verify through the official Components V2 protocol validator
     const payload = {
       flags: MessageFlags.IsComponentsV2,
       components: [buildPanelContainer(components)],
@@ -432,7 +421,6 @@ describe("configVoicesPanel", () => {
     expect(validation.violations).toEqual([]);
   });
 
-  // TEST 6: removeConfirm set renders the confirm pair and removes the library controls.
   it("renders confirm pair and removes library controls when removeConfirm is set", () => {
     const samples = [makeSample(0), makeSample(1), makeSample(2)];
     const view: ConfigVoicesView = {
@@ -459,15 +447,13 @@ describe("configVoicesPanel", () => {
 
     expect(components.length).toBe(5);
 
-    // Confirm text display
     const confirmTextComp = components[3] as TextDisplayComponentData;
     expect(confirmTextComp.type).toBe(ComponentType.TextDisplay);
     expect(confirmTextComp.content).toContain(
       localizedCopy("en-US", "commands.config.panel.voices.page.confirm_title"),
     );
-    expect(confirmTextComp.content).toContain("3 persona(s)"); // Ref count is present
+    expect(confirmTextComp.content).toContain("3 persona(s)");
 
-    // Confirm action row
     const confirmRow = components[4] as ActionRowData<ButtonComponentData>;
     expect(confirmRow.type).toBe(ComponentType.ActionRow);
     expect(confirmRow.components.length).toBe(2);
@@ -486,7 +472,6 @@ describe("configVoicesPanel", () => {
     const cancelRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(cancelBtn)));
     expect(cancelRoute?.action).toBe("voice-sample-remove-cancel");
 
-    // No StringSelect is present
     const hasSelect = components.some(
       (c) =>
         c.type === ComponentType.ActionRow &&

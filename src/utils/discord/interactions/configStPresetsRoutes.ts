@@ -76,11 +76,6 @@ type StFallbackResolution =
   | { status: "missing-scope" }
   | { status: "missing-persona" };
 
-/**
- * Resolves the workspace a fallback repaint needs. The two failures are reported apart because a
- * workspace that resolved without a persona is a panel that fell behind, while an unresolved scope
- * is a setup question.
- */
 async function resolveFallbackStScope(
   interaction: GlobalRoutableInteraction,
   dependencies: ConfigRouteDependencies,
@@ -156,11 +151,6 @@ async function repaintConfigStPresets(
   });
 }
 
-/**
- * Routes the config-hosted panel through the standalone handler so operations, snapshots, modal
- * timing, and receipts remain one implementation. Every write re-resolves the config scope and
- * policy immediately before calling the canonical ST operation.
- */
 export async function handleConfigStPresetsRoute(
   client: Client,
   interaction: GlobalRoutableInteraction,

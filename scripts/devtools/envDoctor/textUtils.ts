@@ -5,7 +5,6 @@ export function emptyScanResult(): ScanResult {
   return { consumers: [], declarations: [], dynamicPatterns: [], unresolved: [], aliases: [], parseFailures: [] };
 }
 
-/** Returns a function mapping a character offset to its 1-based line number. */
 export function lineIndexer(text: string): (offset: number) => number {
   const starts = [0];
   for (let i = 0; i < text.length; i++) {
@@ -34,12 +33,8 @@ export function stripQuotes(value: string): string {
   return value;
 }
 
-/**
- * Blanks comments while preserving every offset, so later matches still report the right line.
- * Quote tracking keeps a `#` inside a string (a color, a URL fragment) from hiding the rest of the
- * line. With `hashNeedsSpace`, a `#` only starts a comment after whitespace, as in shell and YAML,
- * where `${#NAME}` and `a#b` are not comments.
- */
+// Comments become spaces so line offsets stay intact, and hashNeedsSpace skips unspaced `#` (shell `${#NAME}`, YAML
+// `a#b`).
 export function blankHashComments(text: string, options: { tripleQuotes: boolean; hashNeedsSpace: boolean }): string {
   const chars = [...text];
   let quote: string | null = null;
@@ -80,7 +75,6 @@ export function blankHashComments(text: string, options: { tripleQuotes: boolean
   return chars.join("");
 }
 
-/** Splits a call's argument list starting at its `(`, honoring nesting and quotes. */
 export function splitArguments(text: string, openIndex: number): { args: string[]; end: number } {
   const args: string[] = [];
   let depth = 0;
@@ -109,7 +103,6 @@ export function splitArguments(text: string, openIndex: number): { args: string[
   return { args, end: text.length };
 }
 
-/** Evaluates `10 * 1024 * 1024` style defaults without executing code. */
 export function evaluateArithmetic(expression: string): string | undefined {
   const cleaned = expression.replaceAll("_", "").trim();
   if (!/^[\d.\s*+\-/()]+$/.test(cleaned) || !/\d/.test(cleaned)) return undefined;
@@ -153,15 +146,9 @@ export interface Expansion {
   raw: string;
   fallback?: Fallback;
   hasDefaultOperator: boolean;
-  /** Name whose expansion is the entire default, as in `${A:-${B}}`. */
   aliasOf?: string;
 }
 
-/**
- * Finds `${NAME...}` and `$NAME` expansions, including ones nested in a default. A default that
- * is exactly another expansion (`${A:-${B:-x}}`) makes the two names aliases; a default that
- * merely contains one (`${A:-${DIR}/x}`) does not, and its value is reported as unrecoverable.
- */
 export function findExpansions(text: string, options: { dollarEscape: boolean }): Expansion[] {
   const expansions: Expansion[] = [];
   for (let i = 0; i < text.length; i++) {
@@ -218,7 +205,6 @@ export function findExpansions(text: string, options: { dollarEscape: boolean })
   return expansions;
 }
 
-/** Converts expansions into interpolation consumers and alias sites. */
 export function pushExpansions(
   expansions: Expansion[],
   lineOf: (offset: number) => number,
@@ -253,10 +239,8 @@ export function pushExpansions(
   }
 }
 
-/**
- * Records quoted env-shaped strings not already read in the same file. The analyzer keeps only
- * those matching a known variable, so a literal can hold a variable open but never invent one.
- */
+// The analyzer filters these against known declared variables, so quoted literals can hold a variable open without
+// ever inventing a new variable.
 export function collectStringLiterals(
   text: string,
   file: SourceFile,

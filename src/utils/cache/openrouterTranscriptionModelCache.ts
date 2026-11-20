@@ -23,7 +23,7 @@ const transcriptionCatalog = createOpenRouterCatalog({
   keyOf: (entry) => entry.id,
 });
 
-/** Rechecks the live catalogue, because a codename typed at registration is often one published minutes ago. */
+// Registration rechecks the live catalog with `fresh: true` because newly typed codenames are often just published.
 export async function validateOpenRouterTranscriptionModel(codename: string): Promise<boolean> {
   try {
     return Boolean(await transcriptionCatalog.getOrFetch(normalizeOpenRouterCodename(codename), { fresh: true }));

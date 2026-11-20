@@ -1,54 +1,28 @@
 import { LOCALE_ALIASES } from "@/constants/locales";
 
-/**
- * Locale configuration for the docs site and for every docs destination the bot builds.
- *
- * This module is the single source of truth shared by the bot runtime and the Astro docs build, so
- * it must stay dependency-free. An import of any Node built-in or `@/` module other than the
- * Discord locale registry would break at least one of them.
- *
- * Publishing rule: a locale appears in `DOCS_LOCALES` with `docsTree: true` only after its
- * translated page tree exists under `docs/<id>/`. Discord clients can report a locale the site
- * has no content for, and a published locale root is a real route with a sidebar, a sitemap
- * entry, and an hreflang alternate. `tests/unit/docs/docsLocaleConfig.test.ts` fails when this
- * table and the `docs/` directory disagree.
- */
-/** Notice copy a translated or generated page renders above its content. */
+// Shared by the bot runtime and Astro docs build, so this module must stay free of Node built-ins and other @/
+// imports.
 export interface DocsLocaleNotices {
-  /** Page is still an unreviewed generated draft. */
   draftsTitle: string;
   draftsBody: string;
-  /** Page is a generated translation of a human-written source page. */
   translatedTitle: string;
-  /** Visible text of the link to the default-locale page, which the locale owns. */
   englishLinkText: string;
-  /**
-   * `{english}` is replaced with a link to the default-locale page. The surrounding sentence stays
-   * in the template because a language may need different wording or a different link position.
-   */
+  // Full sentence template with {english} placeholder is kept intact because link position and wording vary across
+  // languages.
   translatedBody: string;
 }
 
 export interface DocsLocaleDefinition {
-  /** Path segment and Starlight locale key, which are the same value by design. */
   id: string;
-  /** Discord locale key that selects this tree, which differs from `id` for `en-US`. */
   botLocaleCode: string;
-  /** Value Starlight uses for `hreflang` and for sidebar `translations` keys. */
   lang: string;
-  /** Endonym shown in language pickers and used as the switcher label. */
   label: string;
-  /** True only once the translated page tree exists under `docs/<id>/`. */
   docsTree: boolean;
-  /** Snippet budget for auto-derived meta descriptions, in characters. */
+  // Measured in characters because auto-derived meta descriptions truncate by character budget rather than bytes or
+  // words.
   descriptionMaxLength: number;
 }
 
-/**
- * Per-locale prose the docs renderer shows for unreviewed pages. The default-locale copy is also
- * the notice shown on any page whose locale has no entry of its own, which keeps a newly
- * published locale readable while its notices are still being authored.
- */
 const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
   en: {
     draftsTitle: "Disclaimer",
@@ -116,19 +90,8 @@ function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinitio
   return { ...definition, notices: LOCALE_NOTICES[definition.id] ?? LOCALE_NOTICES.en };
 }
 
-/**
- * Every locale the project knows about, in the one display order each picker uses.
- *
- * The order is the product decision, not an alphabetization: English first, then the locales
- * grouped the way a reader scanning the switcher expects to find them. `LOCALE_DISPLAY_ORDER`
- * below re-exports it as Discord codes, so the docs language switcher, the repository README
- * row, and the bot's own `/personal language` picker all reorder together from this one edit.
- *
- * `docsTree: false` keeps a locale out of the published route set and out of bot URLs, so a planned
- * locale is safe to list here before its content exists.
- * Flipping the flag is what publishes the locale, and the flip must land in the same change as
- * the page tree plus the entries listed in docs/en/contributing/localization/docs-site.md.
- */
+// Order is preserved because every language picker reads it directly, and docsTree must stay false until docs/<id>/
+// and docs-site.md entries land.
 export const DOCS_LOCALES = [
   defineDocsLocale({
     id: "en",
@@ -214,12 +177,8 @@ export const DOCS_LOCALES = [
   }),
 ] as const;
 
-/**
- * Display order for every language picker, keyed by Discord locale code.
- *
- * Exported as codes rather than docs ids because the bot's picker, its locale registry, and the
- * Discord localization maps all speak Discord codes, and `en` is the only id that differs.
- */
+// Exported as Discord locale codes rather than docs IDs because the bot picker, locale registry, and Discord maps
+// require Discord codes such as en-US.
 export const LOCALE_DISPLAY_ORDER: readonly string[] = DOCS_LOCALES.map((locale) => locale.botLocaleCode);
 
 export type DocsLocaleId = (typeof DOCS_LOCALES)[number]["id"];
@@ -228,28 +187,20 @@ export type DocsLocaleConfig = (typeof DOCS_LOCALES)[number];
 
 const DEFAULT_DOCS_LOCALE: DocsLocaleId = "en";
 
-/** Locales whose page tree exists, so they are real routes rather than redirect-only entries. */
 export const PUBLISHED_DOCS_LOCALES: readonly DocsLocaleId[] = DOCS_LOCALES.filter((locale) => locale.docsTree).map(
   (locale) => locale.id,
 );
 
 const DOCS_LOCALE_IDS: readonly DocsLocaleId[] = DOCS_LOCALES.map((locale) => locale.id);
 
-/**
- * Discord keys that reuse another locale's docs tree, inverted from the bot's alias registry so a
- * single alias decision covers runtime strings and docs destinations. Spanish is authored once in
- * neutral Latin American register, and an `es-ES` client must land on the same pages.
- *
- * Keys are lowercased because every lookup normalizes the caller's tag first, and object property
- * access would otherwise miss `es-ES` entirely.
- */
+// Keys are lowercased and inverted from LOCALE_ALIASES because lookups normalize tags first and case-sensitive
+// property access would miss es-ES.
 export const DOCS_LOCALE_ALIASES: Readonly<Record<string, DocsLocaleId>> = Object.fromEntries(
   Object.entries(LOCALE_ALIASES)
     .filter(([alias, source]) => alias !== source && DOCS_LOCALE_IDS.includes(source))
     .map(([alias, source]) => [alias.toLowerCase(), source]),
 );
 
-/** Case-insensitive alias lookup, which is the only form any caller here can use. */
 function aliasTargetOf(tag: string): DocsLocaleId | undefined {
   const normalized = tag.toLowerCase();
   const alias = DOCS_LOCALE_ALIASES[normalized] ?? DOCS_LOCALE_ALIASES[normalized.split("-")[0]];
@@ -262,7 +213,6 @@ export function getDocsLocaleConfig(id: string): DocsLocaleConfig | undefined {
   return docsLocaleById.get(id);
 }
 
-/** Locale used for a page whose own locale has no docs tree. */
 export const DEFAULT_DOCS_LOCALE_ID: DocsLocaleId = DEFAULT_DOCS_LOCALE;
 
 function publishedLocaleOf(id: string): DocsLocaleId | undefined {
@@ -272,14 +222,8 @@ function publishedLocaleOf(id: string): DocsLocaleId | undefined {
   return PUBLISHED_DOCS_LOCALES.find((published) => published.toLowerCase() === normalized);
 }
 
-/**
- * Resolves any locale identifier to a published docs locale.
- *
- * Order mirrors the bot's string resolution so a user never sees one language in the docs URL and
- * another in the interface copy around it: exact match, registered alias, unambiguous base
- * language, then the default locale. Ambiguity resolves to the default rather than picking a
- * variant, because `zh` has no defensible choice between `zh-TW` and `zh-CN`.
- */
+// Resolution order mirrors bot string lookup so docs and UI languages stay aligned, falling back to default on
+// ambiguous bases because zh has multiple variants.
 export function resolveDocsLocale(locale: string): DocsLocaleId {
   const exact = publishedLocaleOf(locale);
   if (exact) return exact;
@@ -294,7 +238,6 @@ export function resolveDocsLocale(locale: string): DocsLocaleId {
   return baseMatches.length === 1 ? baseMatches[0] : DEFAULT_DOCS_LOCALE_ID;
 }
 
-/** `/en`-style path segment for a locale, already resolved to a published docs tree. */
 function resolveDocsLocalePath(locale: string): string {
   return `/${resolveDocsLocale(locale)}`;
 }
@@ -303,12 +246,8 @@ export interface DocsRouteMap {
   readonly [route: string]: string;
 }
 
-/**
- * Every docs destination the bot links to, as locale-less routes.
- *
- * Routes stay unprefixed here so `buildDocsUrl` is the only place that decides a locale prefix,
- * and `tests/unit/docs/docsRouteRegistry.test.ts` checks the whole table against the docs tree.
- */
+// Routes stay unprefixed because buildDocsUrl owns locale prefixing and docsRouteRegistry.test.ts validates every
+// entry against the docs tree.
 export const DOCS_ROUTES = {
   QUICKSTART: "/introduction/quickstart/",
   FEATURES: "/features/",
@@ -353,7 +292,8 @@ export const DOCS_ROUTES = {
 
 export type DocsRoute = (typeof DOCS_ROUTES)[keyof typeof DOCS_ROUTES];
 
-/** Routes that are published only for some audiences, so callers can label an internal link. */
+// Kept separate from DOCS_ROUTES because legal routes are published only for some audiences, so callers can label
+// conditional internal links.
 export const LEGAL_DOC_ROUTES = {
   "privacy-policy": "/legal/privacy-policy/",
   "terms-of-service": "/legal/terms-of-service/",
@@ -363,14 +303,8 @@ export const DOCS_BASE_URL = "https://docs.tomoribot.app";
 
 const PAGE_EXTENSION_PATTERN = /\.mdx?$/i;
 
-/**
- * Normalizes a doc source path, relative to a locale root, into the entry id both locales share.
- *
- * `README.md`, `README.mdx`, `index.md`, and `index.mdx` all mean the directory root, and `.md` and
- * `.mdx` are interchangeable for the same page. Comparing normalized ids is what lets a counterpart
- * lookup treat `ja/x/index.md` as the translation of `en/x/README.mdx`, which a raw path comparison
- * would misread as a missing translation.
- */
+// Counterpart lookup treats index and README files as the same page across locales, so both normalize to index to
+// avoid missing translation false positives.
 export function normalizePageId(relativePath: string): string {
   return relativePath
     .replaceAll("\\", "/")
@@ -379,18 +313,10 @@ export function normalizePageId(relativePath: string): string {
     .replace(PAGE_EXTENSION_PATTERN, "");
 }
 
-/** URL path segment for a normalized page id, with the directory-root marker removed. */
 export function pageIdToRoute(pageId: string): string {
   return pageId.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
 }
 
-/**
- * Prefixes an authored locale onto a locale-less docs route.
- *
- * A locale with no docs tree falls back to the default locale, which keeps every bot link on a
- * route that exists instead of one that depends on a redirect. `path` may carry a fragment, and it
- * may be an absolute URL, which is returned untouched so a caller can pass a pre-built destination.
- */
 export function buildLocalizedDocsPath(locale: string, path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;
@@ -400,12 +326,8 @@ export function buildLocalizedDocsPath(locale: string, path: string): string {
   return `${resolveDocsLocalePath(locale)}${suffix}`;
 }
 
-/**
- * The default-locale page for a locale-less docs entry id, which the translation notice links to.
- *
- * The url is built here rather than with `buildLocalizedDocsPath` because the route for an entry id
- * ends in `/index`, which the docs route table writes as a directory root with a trailing slash.
- */
+// Entry ids can end in /index, so this builds a trailing-slash directory root directly instead of calling
+// buildLocalizedDocsPath.
 export function buildDefaultLocaleDocsPageUrl(baseId: string): string {
   const slug = baseId.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
   return `${DOCS_BASE_URL}/${DEFAULT_DOCS_LOCALE_ID}/${slug ? `${slug}/` : ""}`;

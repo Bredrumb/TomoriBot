@@ -50,7 +50,6 @@ function limitBody(limitSource: string): string {
   });
 }
 
-/** The HTTP failure shape a transport wraps, with the parsed limit kept as its cause. */
 function transportFailure(status: number, body: string, headers: Record<string, string> = {}): Error {
   return new Error(`HTTP ${status}`, {
     cause: readOpenRouterLimitError(status, new Headers(headers), body) ?? undefined,

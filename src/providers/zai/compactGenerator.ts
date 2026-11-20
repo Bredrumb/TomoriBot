@@ -1,14 +1,3 @@
-/**
- * Conversation compaction for the Z.ai provider (shared with Zaicoding).
- *
- * - Plain-text conversation summaries via direct POST to the Z.ai
- *   chat-completions endpoint.
- * - Roleplay structured summaries delegated to callZaiStructuredJSON,
- *   which handles json_object mode + prompt steering + Zod validation.
- *
- * Both functions accept an optional `endpointUrl` override so the same
- * generators can be reused by the Zaicoding provider with its own endpoint.
- */
 import { log } from "@/utils/misc/logger";
 import type {
   CompactConversationResult,
@@ -19,12 +8,6 @@ import { callZaiStructuredJSON } from "@/providers/zai/zaiStructuredOutput";
 import { toZaiApiModelName, ZAI_GENERAL_CHAT_COMPLETIONS_URL, ZAI_REASONING_MODELS } from "@/providers/zai/zaiShared";
 import { buildRoleplaySchema, CompactRoleplaySummarySchema } from "@/providers/utils/compactCommon";
 
-/**
- * Generate a plain-text conversation summary using the Z.ai API.
- *
- * @param endpointUrl - Override endpoint URL (defaults to ZAI_GENERAL_CHAT_COMPLETIONS_URL)
- * @returns Plain-text summary or an error object
- */
 export async function generateConversationSummaryZai(
   request: ProviderCompactSummaryRequest,
   endpointUrl?: string,
@@ -49,7 +32,7 @@ export async function generateConversationSummaryZai(
       stream: false,
     };
 
-    // Skip temperature for reasoning models (they don't support it)
+    // Omit temperature because Z.ai reasoning models reject it.
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = request.temperature ?? 0.7;
     }
@@ -97,15 +80,6 @@ export async function generateConversationSummaryZai(
   }
 }
 
-/**
- * Generate a structured roleplay summary using the Z.ai API.
- *
- * Delegates to callZaiStructuredJSON, which uses json_object mode with
- * schema/example injected into the system prompt and Zod validation.
- *
- * @param endpointUrl - Override endpoint URL (defaults to ZAI_GENERAL_CHAT_COMPLETIONS_URL)
- * @returns Structured roleplay summary or an error object
- */
 export async function generateRoleplaySummaryZai(
   request: ProviderCompactSummaryRequest,
   endpointUrl?: string,

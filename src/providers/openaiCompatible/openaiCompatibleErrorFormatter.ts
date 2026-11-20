@@ -31,23 +31,14 @@ export function createOpenAICompatibleHttpError(statusCode: number, statusText: 
   return new Error(`HTTP ${statusCode}: ${message}`);
 }
 
-/** Normalized type/code/retryable triple derived from one upstream failure. */
 export interface OpenAICompatibleErrorClassification {
   type: ProviderError["type"];
   code: string;
   retryable: boolean;
 }
 
-/**
- * Map an HTTP-or-SSE status code plus its message onto a {@link ProviderError} type.
- *
- * Shared by `normalizeOpenAICompatibleProviderError` (thrown fetch failures) and the adapter's
- * `processChunk` (errors injected mid-SSE after a 200) so both paths agree. They previously
- * disagreed: the SSE path hardcoded a non-retryable `api_error`, which reported a transient
- * mid-stream 500 to the user as a permanent request error.
- *
- * @param statusCode - Upstream status, or null when the failure carried none.
- */
+// Thrown fetch failures and mid-SSE errors after HTTP 200 must share this classifier so transient mid-stream statuses
+// remain retryable.
 export function classifyOpenAICompatibleStatus(
   statusCode: number | null,
   message: string,
@@ -64,8 +55,8 @@ export function classifyOpenAICompatibleStatus(
     return { type: "api_error", code, retryable: false };
   }
   if (statusCode === 429) {
-    // Some providers (e.g. Z.ai) use 429 for billing/plan/access denial, not just rate limiting.
-    // Detect these by checking the error message for subscription or balance keywords.
+    // Providers such as Z.ai return 429 for balance or plan denial, so match those keywords before classifying as rate
+    // limit.
     const lowerMessage = message.toLowerCase();
     const isBalanceDenial =
       lowerMessage.includes("insufficient balance") ||
@@ -163,12 +154,8 @@ export function normalizeOpenAICompatibleProviderError(
   };
 }
 
-/**
- * Normalizes a failed API key check and reports it, so a rejected or unfunded key that a user typed
- * stays out of `error_logs`.
- *
- * @param summary - Stable log prefix, such as "DeepSeek API key validation failed".
- */
+// User-typed rejected or unfunded keys are reported through this validation path so expected key failures stay out of
+// error_logs.
 export async function reportOpenAICompatibleKeyValidationFailure(
   error: unknown,
   provider: string,
@@ -219,10 +206,7 @@ export function createOpenAICompatibleErrorDescription(
       break;
   }
 
-  // A 5xx that names a request parameter is a rejection wearing an outage's status code, so a
-  // namespace may define remediation copy for exactly that case. Gating it on the upstream text
-  // is the point: asserting a parameter cause on every 5xx sends users to change settings the
-  // failing payload never carried.
+  // Gate 5xx parameter remediation copy on upstream parameter names so genuine outages do not blame user settings.
   const parameterMessage =
     (error.type === "api_error" || error.type === "provider_overloaded") &&
     errorMessageNamesRejectableParam(error.message)
@@ -239,10 +223,8 @@ export function createOpenAICompatibleErrorDescription(
     }
   } else {
     if (message === localeKey && error.type === "provider_overloaded") {
-      // A namespace with no entry for this 5xx still knows the provider is overloaded, so borrow its
-      // 503 string when it has one and otherwise the shared cross-provider string. Without the shared
-      // step, a namespace carrying no 5xx entries at all (deepseek, custom, zai) renders every
-      // overload as "An unexpected error occurred", which reads as a bug on our side.
+      // Fall back from missing 5xx keys to 503 and shared overload copy so namespaces without 5xx keys avoid generic
+      // unexpected-error copy.
       message =
         resolveLocalizedOrNull(locale, `${options.localeNamespace}.503_default_message`) ??
         resolveLocalizedOrNull(locale, "genai.stream.provider_overloaded_description") ??
@@ -261,9 +243,6 @@ export function createOpenAICompatibleErrorDescription(
   return `Error Code ${errorCode}: ${message}`;
 }
 
-/**
- * Localizes a key, returning null instead of the key itself when no string is defined for it.
- */
 function resolveLocalizedOrNull(locale: string, key: string): string | null {
   const value = localizer(locale, key);
   return value === key ? null : value;

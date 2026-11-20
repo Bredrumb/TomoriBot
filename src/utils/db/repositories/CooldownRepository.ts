@@ -1,15 +1,3 @@
-/**
- * CooldownRepository: manages the `cooldowns` table.
- *
- * Consolidates cooldownManager.ts, messageCooldown.ts, and cooldownsCleanup.ts
- * into a single repository. Callers import the `cooldownRepository` singleton.
- *
- * Public API surface:
- *   - checkMessageTriggerCooldownWithWhitelist / setMessageTriggerCooldownWithWhitelist
- *   - checkMessageTriggerCooldown / setMessageTriggerCooldown  (Message-object overloads)
- *   - getCooldownTypeFooterKey
- *   - cleanupExpiredCooldowns / clearAllCooldowns
- */
 import { PermissionFlagsBits, type GuildMember, type Message } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { CooldownType, type AssembledServerConfig } from "@/types/db/schema";
@@ -21,9 +9,7 @@ interface CooldownCheckResult {
   isOnCooldown: boolean;
   remainingSeconds: number;
   cooldownType: CooldownType;
-  /** True when whitelist restrictions block this trigger */
   blockedByWhitelist?: boolean;
-  /** Which whitelist rule blocked the trigger when blockedByWhitelist is true */
   whitelistBlockReason?: WhitelistBlockReason;
 }
 
@@ -34,12 +20,6 @@ interface CooldownsCleanupResult {
 }
 
 class CooldownRepository {
-  /**
-   * Checks whether a slash-command category cooldown is active for a user.
-   *
-   * @param userId   - Discord user ID
-   * @param category - Slash-command category
-   */
   async hasCommandCategoryCooldown(userId: string, category: string): Promise<boolean> {
     const now = Date.now();
     const [cooldown] = await sql`
@@ -53,12 +33,6 @@ class CooldownRepository {
     return Boolean(cooldown);
   }
 
-  /**
-   * Returns remaining slash-command category cooldown seconds for a user.
-   *
-   * @param userId   - Discord user ID
-   * @param category - Slash-command category
-   */
   async getRemainingCommandCategoryCooldownSeconds(userId: string, category: string): Promise<number> {
     const now = Date.now();
     const [cooldown] = await sql`
@@ -74,13 +48,6 @@ class CooldownRepository {
     return Math.ceil((Number(cooldown.expiry_time) - now) / 1000);
   }
 
-  /**
-   * Upserts a slash-command category cooldown for a user.
-   *
-   * @param userId     - Discord user ID
-   * @param category   - Slash-command category
-   * @param durationMs - Cooldown duration in milliseconds
-   */
   async setCommandCategoryCooldown(userId: string, category: string, durationMs: number): Promise<void> {
     const expiryTime = Date.now() + durationMs;
 
@@ -102,13 +69,6 @@ class CooldownRepository {
     `;
   }
 
-  /**
-   * Checks if a user is exempt from cooldowns based on type and permissions.
-   * Server managers are exempt from cooldown types 1-3; only STRICT_SERVER_WIDE (4) has no exemptions.
-   *
-   * @param member       - Guild member to check
-   * @returns True if the user is exempt
-   */
   isExemptFromCooldown(member: GuildMember | null, cooldownType: CooldownType): boolean {
     if (cooldownType === CooldownType.OFF || cooldownType === CooldownType.STRICT_SERVER_WIDE) {
       return false;
@@ -116,10 +76,6 @@ class CooldownRepository {
     return Boolean(member?.permissions.has(PermissionFlagsBits.ManageGuild));
   }
 
-  /**
-   * Checks whether an active cooldown record exists for the given scope.
-   * Returns fail-open (not on cooldown) if the DB query fails.
-   */
   private async checkCooldownDb(
     serverId: string,
     userId: string,
@@ -193,10 +149,7 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Upserts a cooldown record for the given scope.
-   * Logs but does not throw on failure so cooldown errors never block message handling.
-   */
+  // DB write failures are logged and swallowed intentionally so cooldown errors never block message handling.
   private async setCooldownDb(
     serverId: string,
     userId: string,
@@ -235,7 +188,6 @@ class CooldownRepository {
         `[Cooldown Set] Successfully set cooldown - type: ${cooldownType}, server: ${serverId}, user: ${userDiscIdParam}, channel: ${channelDiscIdParam}, expires in ${cooldownLengthSeconds}s (expiryTime: ${expiryTime})`,
       );
 
-      // Read-back verification to confirm the write committed
       const [verification] = await sql`
         SELECT expiry_time FROM cooldowns
         WHERE cooldown_type = ${cooldownType}
@@ -260,18 +212,6 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Checks cooldown for message triggers with whitelist awareness.
-   * Resolves effective cooldown type from channel-specific overrides before querying.
-   *
-   * @param serverId             - Discord server/guild ID
-   * @param userId               - Discord user ID
-   * @param channelId            - Discord channel ID
-   * @param globalCooldownType   - Global cooldown type from config
-   * @param member               - Guild member (for exemption check)
-   * @param bypassWhitelistGate  - Skip whitelist block for autochat-override channels
-   * @returns CooldownCheckResult with cooldown status and remaining time
-   */
   async checkMessageTriggerCooldownWithWhitelist(
     serverId: string,
     userId: string,
@@ -320,17 +260,6 @@ class CooldownRepository {
     return this.checkCooldownDb(serverId, userId, channelId, effectiveCooldownType, member);
   }
 
-  /**
-   * Sets cooldown for message triggers with whitelist awareness.
-   * Resolves effective cooldown type and length from channel-specific overrides.
-   *
-   * @param serverId             - Discord server/guild ID
-   * @param userId               - Discord user ID
-   * @param channelId            - Discord channel ID
-   * @param globalCooldownType   - Global cooldown type from config
-   * @param globalCooldownLength - Global cooldown length from config
-   * @param member               - Guild member (for exemption context)
-   */
   async setMessageTriggerCooldownWithWhitelist(
     serverId: string,
     userId: string,
@@ -369,13 +298,6 @@ class CooldownRepository {
     await this.setCooldownDb(serverId, userId, channelId, effectiveCooldownType, effectiveCooldownLength);
   }
 
-  /**
-   * Checks cooldown for a message event. Derives IDs and effective settings from
-   * the Message object and AssembledServerConfig.
-   *
-   * @param message - The Discord message that triggered the bot
-   * @param config  - The Tomori config containing cooldown settings
-   */
   async checkMessageTriggerCooldown(message: Message, config: AssembledServerConfig): Promise<CooldownCheckResult> {
     const serverDiscId = message.guildId ?? message.author.id;
     const memberRoleDiscIds = message.member ? message.member.roles.cache.map((role) => role.id) : undefined;
@@ -467,13 +389,6 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Sets cooldown after a successful message event response.
-   * Derives IDs and effective settings from the Message object and AssembledServerConfig.
-   *
-   * @param message - The Discord message that triggered the bot
-   * @param config  - The Tomori config containing cooldown settings
-   */
   async setMessageTriggerCooldown(message: Message, config: AssembledServerConfig): Promise<void> {
     const serverDiscId = message.guildId ?? message.author.id;
     const memberRoleDiscIds = message.member ? message.member.roles.cache.map((role) => role.id) : undefined;
@@ -579,12 +494,6 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Cleans up expired cooldowns from the database via the stored PostgreSQL function.
-   * Safe to call at startup and via pg_cron.
-   *
-   * @returns CooldownsCleanupResult with success flag and deleted count
-   */
   async cleanupExpiredCooldowns(): Promise<CooldownsCleanupResult> {
     try {
       log.info("Starting cooldowns cleanup...");
@@ -608,12 +517,6 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Clears ALL cooldowns from the database.
-   * WARNING: Destructive. use only in development or when explicitly resetting all cooldowns.
-   *
-   * @returns CooldownsCleanupResult with success flag and deleted count
-   */
   async clearAllCooldowns(): Promise<CooldownsCleanupResult> {
     try {
       log.warn("Clearing ALL cooldowns from database...");
@@ -632,5 +535,4 @@ class CooldownRepository {
   }
 }
 
-/** Singleton instance: import this in callers. */
 export const cooldownRepository = new CooldownRepository();

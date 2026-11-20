@@ -31,22 +31,8 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
   };
 }
 
-/**
- * Collects the extra names the active persona answers to beyond its current display name, so the
- * output cleaner can strip a leaked multi-name opening label chain (e.g. "Tomori: Lilya: ...").
- *
- * A bundled persona such as "Shy Tomori (Lilya)" carries its lore/default name ("Tomori") in its
- * description and its configured `trigger_words`, while its webhook nickname is "Lilya". The model
- * then prefixes its turn with *both* labels; only the active name ("Lilya") is otherwise stripped.
- *
- * Sources: the deployment default bot name plus the persona's own trigger words. The active display
- * name (`botName`) is excluded because the cleaner handles it directly. Matching is case-insensitive
- * to avoid emitting a redundant alias.
- *
- * @param botName - The persona's current display name (already handled by the cleaner)
- * @param impersonatedSpeakerLabel - The label a user-impersonation prompt asked the model to open with
- * @returns De-duplicated alias names (excluding the active display name)
- */
+// Default bot names and persona trigger words are included so the output cleaner strips multi-name label chains when
+// a persona's nickname differs.
 export function collectPersonaNameAliases(
   tomoriState: TomoriState,
   botName: string,
@@ -129,11 +115,6 @@ function applyForcedMentions(
   }
 }
 
-/**
- * Builds the static handle→user-ID lookup from `KNOWLEDGE_USERS_IN_CONVERSATION` context items.
- * Shared by the stream text pipeline and message-interaction tools so both resolve @mentions
- * from the same conversation context.
- */
 export function buildMentionLookup(contextItems: StructuredContextItem[]): {
   mentionMap: Map<string, string[]>;
   mentionIdSet: Set<string>;

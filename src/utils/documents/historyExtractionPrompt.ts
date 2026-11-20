@@ -1,10 +1,3 @@
-/**
- * Prompt builders for channel history extraction (SimpleMem-style).
- * Adapted from SimpleMem's semantic structured compression approach:
- * extract atomic, self-contained facts with resolved references for
- * precise vector retrieval.
- */
-
 import type { RetrievedDocumentChunk } from "./documentService";
 import { formatRetrievedChunksForPrompt } from "./documentService";
 
@@ -38,13 +31,8 @@ Finally, look for clear through-lines in the entire chat - are characters clearl
 
 Don't add analysis beyond what's necessary for context - let the original chat do the talking where possible.`;
 
-/**
- * In-character extraction framing template. Shown in the modal pre-filled with
- * {persona_nickname} already substituted, then runtime context blocks (attributes,
- * existing memories, retrieved document chunks) are appended after submit. The
- * user can edit the framing freely without losing the dynamic context, so those
- * blocks are always appended by composeInCharacterSystemPrompt.
- */
+// User-editable modal framing stays separate from runtime context blocks because composeInCharacterSystemPrompt
+// appends them after submit so edits cannot drop them.
 export const EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT = `You are {persona_nickname}. The conversation log you're about to read is happening in your world — read it as yourself, not as a neutral observer.
 
 Below this framing you'll find:
@@ -64,25 +52,10 @@ Skip what wouldn't stick with you. Don't restate what you already remember — t
 
 Each extracted memory should still stand on its own (someone reading just that one line should grasp what happened), but the voice and what you choose to record are entirely yours.`;
 
-/**
- * Substitutes {persona_nickname} in the in-character framing template.
- * Used before displaying the modal so the user sees the persona's name baked in.
- */
 export function substituteInCharacterFraming(template: string, personaNickname: string): string {
   return template.replace(/\{persona_nickname\}/g, personaNickname);
 }
 
-/**
- * Composes the full in-character system prompt by appending dynamic context
- * blocks to the (possibly user-edited) framing template. Blocks are appended
- * in a fixed order regardless of framing edits so the LLM always receives the
- * persona's context.
- *
- * @param params.personaPrompt - The persona's stored character prompt (may be null)
- * @param params.attributes - Persona attribute list (may be empty)
- * @param params.existingMemoryLines - Pre-formatted server memory bullet lines (channel-filtered)
- * @param params.retrievedChunks - Document chunks retrieved via per-window RAG (may be empty)
- */
 export function composeInCharacterSystemPrompt(params: {
   framingTemplate: string;
   personaNickname: string;
@@ -108,7 +81,6 @@ export function composeInCharacterSystemPrompt(params: {
   }
   sections.push(identityLines.join("\n"));
 
-  // Existing memories block: what the persona already knows, so it can avoid duplicating.
   if (existingMemoryLines.length > 0) {
     const memoryBlock = [
       "\n---",
@@ -135,11 +107,6 @@ export function composeInCharacterSystemPrompt(params: {
   return sections.join("\n");
 }
 
-/**
- * Includes optional context from previous windows to avoid duplication.
- *
- * @param formattedMessages - The formatted message text for this window
- */
 export function buildExtractionUserPrompt(formattedMessages: string, previousRestatements: string[] = []): string {
   let prompt = "";
 

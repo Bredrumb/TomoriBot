@@ -1,10 +1,3 @@
-/**
- * Persona avatar storage utilities.
- *
- * Production stores avatars in GCS (if AVATAR_GCS_BUCKET is set) or S3 (if AVATAR_S3_BUCKET is set).
- * Non-production stores avatars on the local filesystem under data/avatars.
- */
-
 import { Storage } from "@google-cloud/storage";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promises as fs } from "node:fs";
@@ -16,12 +9,8 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { extractCloudObjectKeyFromUrl } from "@/utils/storage/cloudObjectStorage";
 import { log } from "@/utils/misc/logger";
 
-/**
- * Shared object-storage prefix segment for official preset assets (e.g. preset
- * sprites). Everything under this segment is uploaded once and referenced by
- * many servers' pointer personas, so it is treated as IMMUTABLE and is never
- * deleted by the per-persona cleanup paths (see {@link isSharedPresetAssetReference}).
- */
+// Shared preset assets under this prefix are immutable and excluded from per-persona cleanup because many servers'
+// pointer personas reference them.
 const SHARED_PRESET_SEGMENT = "presets";
 
 type AvatarUploadOptions = {
@@ -49,7 +38,6 @@ function getAvatarStorageConfig(): AvatarStorageConfig | null {
     return null;
   }
 
-  // GCS takes priority when AVATAR_GCS_BUCKET is set
   const gcsBucket = process.env.AVATAR_GCS_BUCKET?.trim();
   if (gcsBucket) {
     const prefix = (process.env.AVATAR_GCS_PREFIX || process.env.AVATAR_S3_PREFIX || "avatars")
@@ -59,7 +47,6 @@ function getAvatarStorageConfig(): AvatarStorageConfig | null {
     return { backend: "gcs", bucket: gcsBucket, prefix, publicBaseUrl };
   }
 
-  // S3 fallback
   const s3Bucket = process.env.AVATAR_S3_BUCKET?.trim();
   if (!s3Bucket) {
     log.warn(
@@ -159,20 +146,13 @@ function getNonProductionPublicBaseUrl(): string | null {
   return baseUrl && baseUrl.length > 0 ? baseUrl.replace(/\/+$/, "") : null;
 }
 
-/**
- * Whether a URL lives in this deployment's avatar storage, so the path-only preset check cannot be
- * satisfied by an imported URL on another host.
- */
 export function isAvatarStorageUrl(url: string): boolean {
   const config = getAvatarStorageConfig();
   return config !== null && extractKeyFromAvatarUrl(config, url) !== null;
 }
 
-/**
- * Loads shared preset art for a caller that skips per-owner checks, so the reference must really sit
- * in this deployment's `presets/` storage: a remote URL on the avatar storage host, or a local path
- * that still resolves under `data/avatars/presets/` after `..` segments.
- */
+// Reference must verify the deployment storage host or stay under the local presets directory because callers skip
+// per-owner checks.
 export async function loadSharedPresetAssetBuffer(reference: string): Promise<Buffer | null> {
   const target = reference.trim();
   if (!isSharedPresetAssetReference(target)) {
@@ -298,7 +278,6 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new PutObjectCommand({
@@ -321,10 +300,7 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
     }
   }
 
-  // Non-production: store under data/avatars/ and return the normalized local path.
-  // Callers store this path in webhook_avatar_url; downstream code resolves it to
-  // a public URL (if AVATAR_PUBLIC_BASE_URL is set) or loads the buffer directly
-  // to mutate the shared webhook avatar before each send.
+  // Store normalized data/avatars/ paths in non-production so downstream senders resolve URLs or read local buffers.
   const storedPath = buildLocalStoredPath(options);
   const absolutePath = resolveLocalAvatarPath(storedPath);
   if (!absolutePath) {
@@ -351,28 +327,15 @@ export async function uploadPersonaSpriteToStorage(
   });
 }
 
-/**
- * Builds the deterministic, content-addressed filename for a preset sprite image.
- * Including the content hash means identical art yields the same name (so a
- * re-seed is a no-op) while changed art yields a new name (so the URL changes and
- * pointer personas pick it up live). The sprite key is sanitized for path safety.
- *
- * @param contentHash - Short hash of the PNG bytes
- */
+// Filename includes the content hash so identical art makes re-seeds idempotent while changed art yields a new URL
+// for pointer personas.
 export function buildPresetSpriteFilename(spriteKey: string, contentHash: string): string {
   const safeKey = sanitizeAttachmentFilenamePart(spriteKey, { fallback: "sprite", maxLength: 40 });
   return `${safeKey}-${contentHash}.png`;
 }
 
-/**
- * Build the storage-relative key/path for a shared preset sprite.
- *
- * The key carries no language segment: every locale variant of a preset declares the same
- * `avatarPath` and the same sprite files, so all of them hash to identical bytes. Keying by language
- * stored one copy per authored locale of an image that never varies. The per-language
- * `preset_sprites` row stays, because `sprite_name` and `usage_instructions` genuinely are
- * localized; only the image converges.
- */
+// Language is omitted from the storage key because all locale variants share identical image bytes while
+// preset_sprites rows remain localized.
 export function buildPresetSpriteRelativeKey(options: {
   lineageId: number;
   spriteKey: string;
@@ -382,48 +345,20 @@ export function buildPresetSpriteRelativeKey(options: {
   return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/sprites/${filename}`;
 }
 
-/**
- * Builds the deterministic, content-addressed filename for a shared preset
- * avatar image. Parallels {@link buildPresetSpriteFilename}: identical art keeps
- * the same name (re-seed is a no-op) while changed art yields a new name (so the
- * shared URL changes and pointer personas pick the new avatar up live).
- *
- * @param contentHash - Short hash of the PNG bytes
- */
 export function buildPresetAvatarFilename(contentHash: string): string {
   return `avatar-${contentHash}.png`;
 }
 
-/**
- * Build the storage-relative key/path for a shared preset character reference.
- *
- * Language-free and content-addressed like {@link buildPresetAvatarRelativeKey}, so changed art gets
- * a new URL that pointer personas pick up on the next seed.
- */
 export function buildPresetCharacterReferenceRelativeKey(options: { lineageId: number; contentHash: string }): string {
   return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/character-reference-${options.contentHash}.png`;
 }
 
-/**
- * Build the storage-relative key/path for a shared preset avatar.
- *
- * Language-free for the same reason as {@link buildPresetSpriteRelativeKey}: the avatar art is
- * identical across a preset's locale variants.
- */
+// Preset avatar keys omit language because the avatar art is identical across all locale variants of a preset.
 export function buildPresetAvatarRelativeKey(options: { lineageId: number; contentHash: string }): string {
   const filename = buildPresetAvatarFilename(options.contentHash);
   return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/${filename}`;
 }
 
-/**
- * Uploads a buffer to a relative key under the immutable shared `presets/`
- * prefix, picking the configured backend (GCS → S3 → local filesystem). Shared
- * by the preset sprite and preset avatar uploaders so the three storage paths
- * stay identical. Returns a public URL in production, or the local stored path
- * in non-production.
- *
- * @returns The stored reference (URL or local path), or null on failure
- */
 async function uploadSharedPresetObject(relativeKey: string, buffer: Buffer, logLabel: string): Promise<string | null> {
   if (IS_PRODUCTION) {
     const config = getAvatarStorageConfig();
@@ -493,16 +428,6 @@ async function uploadSharedPresetObject(relativeKey: string, buffer: Buffer, log
   }
 }
 
-/**
- * Uploads a shared preset sprite image to the immutable `presets/` storage prefix.
- *
- * The image is shared across every server whose pointer persona resolves this
- * preset, so the key is deterministic (lineage/language/key + content hash) and
- * the upload is overwrite-safe and idempotent. Returns a public URL in
- * production, or the local stored path in non-production.
- *
- * @returns The stored reference (URL or local path), or null on failure
- */
 export async function uploadPresetSpriteToStorage(options: {
   lineageId: number;
   spriteKey: string;
@@ -514,16 +439,6 @@ export async function uploadPresetSpriteToStorage(options: {
   return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
 }
 
-/**
- * Uploads a shared preset avatar image to the immutable `presets/` storage prefix.
- *
- * Mirrors {@link uploadPresetSpriteToStorage}: one content-addressed copy is
- * referenced by every server whose pointer persona resolves this preset, so an
- * alter avatar never needs a per-server upload. Lives at
- * `presets/{lineage}/{language}/avatar-{hash}.png`.
- *
- * @returns The stored reference (URL or local path), or null on failure
- */
 export async function uploadPresetAvatarToStorage(options: {
   lineageId: number;
   contentHash: string;
@@ -534,11 +449,6 @@ export async function uploadPresetAvatarToStorage(options: {
   return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
 }
 
-/**
- * Uploads a shared preset character reference image to the immutable `presets/` storage prefix.
- *
- * @returns The stored reference (URL or local path), or null on failure
- */
 export async function uploadPresetCharacterReferenceToStorage(options: {
   lineageId: number;
   contentHash: string;
@@ -549,14 +459,8 @@ export async function uploadPresetCharacterReferenceToStorage(options: {
   return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
 }
 
-/**
- * Detects whether a stored reference points at a SHARED preset asset (under the
- * immutable `presets/` prefix). Such assets are referenced by many servers'
- * pointer personas, so per-persona delete paths must never remove them.
- *
- * @param reference - A stored avatar/sprite reference (URL or local path)
- * @returns true when the reference is a shared preset asset
- */
+// Shared preset assets are referenced by pointer personas across many servers, so per-persona delete paths must check
+// this and never remove them.
 export function isSharedPresetAssetReference(reference?: string | null): boolean {
   const trimmed = reference?.trim();
   if (!trimmed) {
@@ -589,9 +493,7 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
     return false;
   }
 
-  // Shared preset assets are immutable and referenced by many servers' pointer
-  // personas. A per-persona delete (sprite replace/remove, re-default reset)
-  // must never remove them or it would break every other server. Skip silently.
+  // Shared preset assets are immutable across pointer servers, so per-persona delete paths skip them silently.
   if (isSharedPresetAssetReference(target)) {
     log.info(`[Avatar Storage] Skipping delete of shared preset asset ${target}`);
     return false;
@@ -626,7 +528,6 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
       }
     }
 
-    // S3 path
     try {
       await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({

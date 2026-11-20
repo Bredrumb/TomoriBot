@@ -1,15 +1,3 @@
-/**
- * The synthesis dispatcher is the artifact the extraction claim rests on: the ladder's branch
- * conditions are part of the contract being moved, not incidental details of where they used to
- * sit. The bug this file exists to prevent was a predicate substitution during extraction: the old
- * design branch selected on `shouldUseVoiceDesignForPersona` (voice-design mode, or `auto` with the
- * `VoiceDesign` sentinel) and the new dispatcher re-derived the same guard from
- * `isVoiceDesignEndpoint` (voice-design mode only). One mode apart, and voice design was silently
- * dead on every `auto` deployment.
- *
- * The adapters are network clients, so they are stubbed: what is under test is which backend a
- * given (endpoint, source shape) pair selects, and what it refuses without reaching a backend.
- */
 import { describe, expect, it, mock } from "bun:test";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import type { TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
@@ -22,13 +10,9 @@ import { synthesizeVoiceMessage, type ResolvedVoiceSource } from "@/utils/speech
 
 type VoiceMode = "clone" | "voice-design" | "auto";
 
-/** Backends the dispatcher reached, in call order. */
 const backendCalls: string[] = [];
-/** Request bodies the clone adapters received, for asserting what shape was posted. */
 const cloneRequests: Array<Record<string, unknown>> = [];
-/** Request bodies the design adapter received. */
 const designRequests: Array<Record<string, unknown>> = [];
-/** ElevenLabs `voiceSettings` values seen, including `undefined` when the field was omitted. */
 const elevenLabsSettings: Array<Record<string, unknown> | undefined> = [];
 
 const OK_RESULT: TtsCloneResult = {
@@ -66,9 +50,8 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/providers/custom/styles/elevenLabsAdapter": realElevenLabsAdapter,
 });
 
-// The mocked specifiers are ESM namespaces, so each override is a plain own property in the factory
-// object; `createScopedModuleMocker` swaps the factory's function for the real one when the scope
-// closes, so later files in the same process still see the genuine adapters.
+// Overrides stay plain own properties on ESM namespace factories so createScopedModuleMocker can restore real
+// adapters when the scope closes.
 scopedMock.module("@/providers/custom/styles/ttsCloningAdapter", () => ({
   ...realTtsCloningAdapter,
   synthesizeSpeechViaTtsClone: cloneMock,
@@ -103,7 +86,6 @@ function makeEndpoint(options: {
   } as unknown as CustomEndpointRow;
 }
 
-/** Runs one dispatch with a fresh call record. */
 async function dispatch(
   endpoint: CustomEndpointRow | null,
   source: ResolvedVoiceSource,
@@ -315,8 +297,8 @@ describe("synthesizeVoiceMessage ElevenLabs sources", () => {
 
 describe("design-shape capability", () => {
   it("is true for auto, exactly where the dedicated-endpoint predicate is false", () => {
-    // The pair of predicates that got swapped during extraction. This assertion is the reminder
-    // that they answer different questions and only one of them belongs in a dispatch guard.
+    // Dedicated-endpoint predicates exclude `auto` endpoints, so dispatch guards must check `acceptsDesignShape`
+    // instead.
     const auto = makeEndpoint({ voiceMode: "auto" });
 
     expect(resolveVoiceSourceCapabilities(auto).acceptsDesignShape).toBe(true);

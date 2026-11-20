@@ -150,11 +150,6 @@ const nonceField: RouteFieldCodec<"nonce", string> = {
   decode: (v) => parseNonce(v),
 };
 
-/**
- * Authoritative codec table for all provider routes across workspace and personal namespaces.
- * Keyed by semantic action to guarantee compile-time exhaustiveness.
- * Preserves the exact v1 wire format: wire token, locale, and ordered field serialization.
- */
 export const PROVIDERS_ROUTE_CODECS: ProvidersRouteCodecs = {
   "add-submit": {
     wireToken: "add-submit",
@@ -240,16 +235,10 @@ export const PROVIDERS_ROUTE_CODECS: ProvidersRouteCodecs = {
 
 const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ProvidersAction, ProvidersPanelRoute>(PROVIDERS_ROUTE_CODECS);
 
-/**
- * Encodes a typed route object through the authoritative codec table into route segments.
- */
 export function buildProvidersRouteSegments(route: ProvidersPanelRoute): string[] {
   return buildRouteSegments(PROVIDERS_ROUTE_CODECS[route.action], route);
 }
 
-/**
- * Builds a custom ID from a typed route object and target namespace using the authoritative codec table.
- */
 export function buildProvidersRouteId(namespace: ProvidersRouteNamespace, route: ProvidersPanelRoute): string {
   return buildInteractionRouteId(namespace, PROVIDERS_ROUTE_VERSION, ...buildProvidersRouteSegments(route));
 }

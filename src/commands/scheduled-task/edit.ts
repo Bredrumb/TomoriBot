@@ -392,9 +392,8 @@ export async function execute(
       return;
     }
 
-    // Confirm which reminder will be edited.
-    // Pass selectModalInteraction directly (unacknowledged) so the confirmation becomes
-    // the one ephemeral message for this whole flow, so success will update it in-place.
+    // Passes selectModalInteraction unacknowledged so confirmation owns the single ephemeral message updated in place
+    // through completion.
     const confirmationResult = await promptWithUnacknowledgedConfirmation(selectModalInteraction, locale, {
       embedTitleKey: "commands.scheduled-task.edit.confirm_title",
       embedDescriptionKey: "commands.scheduled-task.edit.confirm_details",

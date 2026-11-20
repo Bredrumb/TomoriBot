@@ -174,17 +174,8 @@ async function runPreSchemaServerwideQuotaRenameBridge(client: SQL, migrationPat
   log.success("Pre-schema legacy image quota rename bridge applied");
 }
 
-/**
- * Count rows in a table that is already known to exist.
- *
- * Used by the pre-schema rename bridge to tell an empty rollback artifact
- * (safe to drop) apart from a populated legacy table (must not be touched).
- * `tableName` is always a hardcoded constant from this module: never user
- * input so interpolating it into the query is safe.
- *
- * @param client - Active SQL connection.
- * @param tableName - Fully-trusted, hardcoded `public`-schema table identifier.
- */
+// Interpolating tableName into client.unsafe is safe only because callers pass hardcoded module constants rather than
+// user input.
 async function countTableRows(client: SQL, tableName: string): Promise<number> {
   const [row] = (await client.unsafe(`SELECT COUNT(*)::INT AS count FROM public.${tableName}`)) as Array<{
     count: number;
@@ -192,21 +183,8 @@ async function countTableRows(client: SQL, tableName: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-/**
- * Resolve a single legacy/renamed table collision before schema init.
- *
- * When pre-rename code is run against an already-migrated database, its
- * `CREATE TABLE IF NOT EXISTS` schema re-materializes the legacy table as an
- * empty shell beside the populated renamed table. That empty shell is an
- * unambiguous rollback artifact and is safe to drop. A *non-empty* legacy table
- * coexisting with the renamed table is a genuine data fork that no automated
- * step can reconcile, so we refuse and require human review.
- *
- * No-ops when the pair does not collide (e.g. a legitimate pre-rename database
- * where only the legacy table exists (migration 016 renames it normally).
- *
- * @param client - Active SQL connection.
- */
+// Pre-rename code recreates empty legacy tables via CREATE TABLE IF NOT EXISTS on migrated DBs, so empty shells are
+// safe to drop while populated ones fail.
 async function resolveLegacyRenameCollision(
   client: SQL,
   legacyTable: string,
@@ -220,7 +198,6 @@ async function resolveLegacyRenameCollision(
 
   const legacyRows = await countTableRows(client, legacyTable);
 
-  // Populated legacy table = real data fork. Refuse to auto-resolve.
   if (legacyRows > 0) {
     throw new Error(
       `Legacy table "${legacyTable}" (${legacyRows} rows) coexists with renamed table ` +
@@ -229,8 +206,7 @@ async function resolveLegacyRenameCollision(
     );
   }
 
-  // Empty legacy table = rollback artifact. Drop it (CASCADE clears any
-  //    leftover FKs from sibling legacy tables) and continue.
+  // CASCADE clears leftover FKs from sibling legacy rollback shells before continuing.
   await client.unsafe(`DROP TABLE IF EXISTS public.${legacyTable} CASCADE`);
   log.warn(
     `Dropped empty legacy table "${legacyTable}" left behind by running pre-rename code ` +
@@ -260,11 +236,8 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     return;
   }
 
-  // Sweep an empty, deprecated `tomori_configs` first. Migration 008 drops it
-  //    on the forward path, but pre-008 code re-creates it as an empty shell on
-  //    rollback. A *populated* tomori_configs is a legitimate pre-refactor
-  //    database that migration 008 rescues + drops, so we leave it untouched.
-  //    Dropped before the tomoris pair so its FK to `tomoris` is cleared first.
+  // Drop empty rollback shells of `tomori_configs` before `tomoris` to clear its FK, while leaving populated
+  // pre-migration tables for migration 008 to rescue.
   if (state.has_tomori_configs) {
     const tomoriConfigRows = await countTableRows(client, "tomori_configs");
     if (tomoriConfigRows === 0) {
@@ -275,9 +248,6 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     }
   }
 
-  // Resolve the rename collisions: drop empty rollback artifacts, refuse
-  //    populated data forks. Empty leftovers self-heal so the bot boots; real
-  //    data forks still stop here for human review.
   await resolveLegacyRenameCollision(client, "tomoris", "personas", state.has_tomoris, state.has_personas);
   await resolveLegacyRenameCollision(
     client,
@@ -287,18 +257,12 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     state.has_persona_presets,
   );
 
-  // The idempotent migration handles the normal forward rename and becomes a
-  // no-op after the collision cases above have been resolved.
   await executeSqlFile(client, migrationPath);
   log.success("Pre-schema legacy persona rename bridge applied");
 }
 
-/**
- * Initialize all startup-managed database schemas and seed data.
- *
- * This is shared by the bot entry point and lifecycle validation so CI checks
- * the same bootstrap path a fresh install uses at runtime.
- */
+// Both the bot entry point and CI lifecycle validation share this bootstrapper so CI exercises the exact schema path
+// a fresh install uses.
 export async function initializeDatabase(options: InitializeDatabaseOptions = {}): Promise<InitializeDatabaseResult> {
   const client = options.client ?? defaultSql;
   const maxRetries = options.maxRetries ?? 3;
@@ -313,9 +277,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
   } = getSchemaPaths();
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Probed per attempt rather than once above the loop: a probe that could not reach
-      // the server reports `false`, and skipping the RAG schema on that basis would leave
-      // document features dead until the next restart.
+      // Probe inside the retry loop so a transient initial connection failure does not skip RAG schema initialization.
       const ragAvailable = includeRag === "auto" ? await detectRagAvailability(client) : includeRag;
 
       const freshDatabaseBeforeSchema = await isFreshDatabaseBeforeSchema(client);
@@ -343,7 +305,6 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       await executeSqlFile(client, stPresetSchemaPath);
       log.success("PostgreSQL ST preset schema verified");
 
-      // Seed typed catalogs in the same order the old numbered seed files ran.
       await seedModelsFromCatalog(client);
       log.success("PostgreSQL model catalog seeded");
 

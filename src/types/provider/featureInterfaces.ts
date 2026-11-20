@@ -21,10 +21,8 @@ export interface EmbeddingRequest {
   model: string;
   inputs: string[];
   taskType?: EmbeddingTaskType;
-  /**
-   * Internal embedding model id (DB primary key). Lets custom providers resolve the exact endpoint
-   * when a label hosts several embedding models. Optional; resolution falls back without it.
-   */
+  // DB primary key for custom providers so resolution can disambiguate multiple embedding endpoints under one label,
+  // falling back when omitted.
   modelId?: number;
   onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
 }
@@ -71,7 +69,6 @@ export type StructuredOutputResult<T> =
             elapsedMs: number;
             providerRequestId?: string;
           };
-      /** Why a private reply was malformed, so the caller can ask once more with the exact format problem. */
       malformed?: { reason: "empty" | "unparsable" | "schema"; issues?: string[] };
     };
 
@@ -79,7 +76,7 @@ export interface ProviderStructuredJsonRequest {
   correlationId?: string;
   abortSignal?: AbortSignal;
   onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
-  /** Private output uses one attempt and returns safe failure metadata to its caller for logging. */
+  // Private output uses one attempt and returns safe failure metadata so callers can log failures safely.
   privateOutput?: boolean;
   apiKey: string;
   model: string;
@@ -89,10 +86,8 @@ export interface ProviderStructuredJsonRequest {
   images?: ProviderImageInput[];
   temperature?: number;
   maxOutputTokens?: number;
-  /**
-   * The saved provider's `thinking_level`, applied through the same builder as a chat request.
-   * Omitted leaves the model's own default, which the one-shot utility calls rely on.
-   */
+  // Omitted leaves the model's own default, because one-shot utility calls rely on that rather than overriding
+  // thinking_level.
   thinkingLevel?: string;
   schemaName?: string;
 }
@@ -106,27 +101,15 @@ export interface GeneratePresetParams {
   imageMimeType?: string;
   useWebSearch?: boolean;
   modelName?: string;
-  /** Serialized existing card/preset data extracted from the uploaded image, used as AI reference context */
   existingPresetContext?: string;
-  /**
-   * Visual appearance text a vision model produced from the uploaded avatar.
-   *
-   * Kept separate from `existingPresetContext` because the two are different kinds of input:
-   * that field carries a structured character card the user uploaded, while this carries a
-   * description of an image the primary model cannot see. The prompt labels them separately
-   * so the model does not read a caption as extracted card data.
-   */
+  // Kept separate from existingPresetContext so the prompt labels them distinctly and the model does not read an
+  // image caption as extracted card data.
   appearanceDescription?: string;
-  /**
-   * Output-token budget for this request, already resolved by the caller.
-   *
-   * Passed through rather than re-derived in each provider so the server's configured ceiling
-   * and a known model limit apply once, and every provider asks for the same budget.
-   */
+  // Pre-resolved by the caller rather than per provider so the server ceiling and model limit apply once consistently
+  // across providers.
   maxOutputTokens?: number;
 }
 
-/** Failure classes a provider reports to the command layer, which maps each to its own copy. */
 export type PresetGenerationErrorType =
   | "RATE_LIMIT"
   | "BLOCKED_CONTENT"
@@ -265,50 +248,44 @@ export interface SupportsNativeImageGeneration {
   generateNativeImage(request: ProviderNativeImageGenerationRequest): Promise<ProviderNativeImageGenerationResult>;
 }
 
-/** Reference image input for image-to-video generation */
 interface ProviderNativeVideoReference {
   mimeType: string;
-  data: string; // Base64-encoded image data (used when url is not available)
-  url?: string; // Original source URL ; preferred over base64 for remote APIs to avoid body size limits
+  // Base64 fallback used when url is absent.
+  data: string;
+  // Preferred over base64 data for remote APIs so large images do not exceed request body size limits.
+  url?: string;
   fallbackUrl?: string;
 }
 
 export type ProviderNativeVideoResolution = "480p" | "720p" | "1080p";
 
-/** Shared across all providers. */
 export interface ProviderNativeVideoGenerationRequest {
   apiKey: string;
   model: string;
   prompt: string;
   aspectRatio?: string;
   durationSeconds?: number;
-  /**
-   * Target frames-per-second for the generated video. Optional : most hosted providers
-   * (Google, OpenRouter, Z.ai) do not expose an FPS control and silently ignore this.
-   * Primarily consumed by custom ComfyUI workflows via the `TOMORI_VIDEO_FPS` placeholder.
-   */
+  // Optional because hosted providers (Google, OpenRouter, Z.ai) ignore FPS, while custom ComfyUI workflows consume
+  // it via TOMORI_VIDEO_FPS.
   fps?: number;
   resolution?: ProviderNativeVideoResolution;
   endpointUrl?: string;
   referenceImages?: ProviderNativeVideoReference[];
-  /** Whether the provider should generate audio alongside the video. Defaults to false. */
   generateAudio?: boolean;
-  /** Optional separate prompt describing the desired audio, foley, ambience, music, or speech. */
   audioPrompt?: string;
-  /** Whether image-to-video generation should reuse the start image as the end frame for a loop. Defaults to false. */
   loop?: boolean;
-  /** Turn-level cancellation from /kill. Stops local polling; hosted jobs keep running and may still bill. */
+  // Turn-level /kill stops only local polling, because hosted video jobs keep running remotely and may still bill.
   abortSignal?: AbortSignal;
 }
 
-/** Result of a native video generation operation */
 export interface ProviderNativeVideoGenerationResult {
-  videoData: Buffer | null; // Raw MP4 bytes (not base64 : videos are too large)
+  // Raw MP4 bytes rather than base64 because video payloads are too large.
+  videoData: Buffer | null;
   mimeType: string | null;
   filename?: string;
   durationSeconds?: number;
   costUsd?: number;
-  /** The provider's job identifier, so a cost reported by repeated polling is recorded once. */
+  // Provider job identifier used to deduplicate cost tracking so repeated polling records usage only once.
   providerRequestId?: string;
 }
 
@@ -335,7 +312,8 @@ export const decisionModelReferenceSchema = z
   .object({
     provider: z.string().regex(/^(google|openrouter|custom:[1-9][0-9]*)$/),
     modelId: z.number().int().positive(),
-    /** Null for a global catalog row or custom endpoint; scoped registrations retain their exact ID. */
+    // Null sentinel represents a global catalog row or custom endpoint, since only scoped registrations carry a
+    // positive ID.
     registrationId: z.number().int().positive().nullable(),
     customEndpointId: z.number().int().positive().nullable(),
   })
@@ -359,7 +337,7 @@ interface DecisionPredicateQuestion {
   instructions: string;
 }
 
-/** One answer out of several; option IDs follow the same pattern as question IDs. */
+// Option IDs are subject to the same format constraint as question IDs: both must match the same pattern.
 interface DecisionChoiceQuestion {
   type: "choice";
   id: string;
@@ -373,7 +351,8 @@ export interface DecisionInput {
   evidence: string;
   questions: readonly DecisionQuestion[];
   abortSignal?: AbortSignal;
-  /** Report validated usage before verdict validation, including late cancelled responses. */
+  // Must fire before verdict validation and even on late cancelled responses, so provider token spend is not lost on
+  // invalid or aborted verdicts.
   onUsage?: (usage: DecisionUsage) => void;
 }
 

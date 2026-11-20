@@ -1,15 +1,14 @@
 import { z } from "zod";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
-/** Registration waits on this inside an already deferred panel submit, so a slow catalog only delays the receipt. */
+// Registration waits on this inside an already deferred panel submit, so a slow catalog lookup only delays the
+// receipt.
 export const MODEL_LOOKUP_TIMEOUT_MS = 5_000;
 
 const openAIModelListSchema = z.object({ data: z.array(z.object({ id: z.string() })) });
 
-/**
- * Records a catalog lookup that could not answer. Registration then proceeds unchecked, so this is
- * never an incident: the model's first request reports a bad codename as a model error anyway.
- */
+// Catalog lookup failures are logged as expected rather than incidents because registration proceeds unchecked and
+// the first request catches bad codenames.
 export async function reportModelLookupFailure(provider: string, error: unknown, apiKey?: string): Promise<void> {
   await reportProviderFailure({
     summary: "Model catalog lookup failed",
@@ -21,10 +20,8 @@ export async function reportModelLookupFailure(provider: string, error: unknown,
   });
 }
 
-/**
- * Whether an OpenAI-style `/models` listing includes `modelId`, or null when the listing could not
- * be read. An empty listing also answers null, because it describes the account rather than the catalog.
- */
+// Empty /models listings return null rather than false because some endpoints describe the account rather than the
+// full catalog.
 export async function isListedInOpenAIModelCatalog(params: {
   provider: string;
   url: string;

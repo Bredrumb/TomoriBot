@@ -99,66 +99,29 @@ export interface OpenAICompatibleStreamAdapterOptions {
   errorMessagePrefix: string;
   placeholderApiKey?: string;
   enableSpeakerGuard?: boolean;
-  /**
-   * Set to `false` to omit the newline-prefixed active-persona stop string from
-   * the request-level `stop` list while keeping the local speaker fallback guard.
-   *
-   * Useful for endpoints that legitimately emit `\n{persona}:` after a closed
-   * `<think>...</think>` block at the start of an assistant turn.
-   */
+  // Disabling this omits the request stop sequence while keeping the local speaker guard, so endpoints emitting
+  // \n{persona}: after <think> work.
   includePersonaSpeakerStop?: boolean;
   preserveReasoningContent?: boolean;
-  /**
-   * When `true`, replayed assistant tool-call turns always carry a `reasoning_content` key,
-   * empty string included. Separate from {@link preserveReasoningContent} (which only governs
-   * capture) because DeepSeek is so far the only endpoint proven to require the key's presence
-   * and to accept an empty value.
-   */
+  // Distinct from preserveReasoningContent because DeepSeek is the only endpoint proven to require reasoning_content
+  // on replayed tool turns and accept "".
   requiresReasoningContentReplay?: boolean;
-  /**
-   * Request-body keys the degradation ladder must never drop, on top of the shared
-   * `model`/`messages`/`stream`.
-   *
-   * The ladder assumes a dropped key only affects the attempt that drops it, which holds for
-   * sampler knobs but not for keys that change the shape of the reply. `thinking` is the case
-   * that matters: a rung that drops it still calls tools, and the resulting tool call has no
-   * `reasoning_content` to capture, which a later full-strength request then cannot replay.
-   */
+  // Body keys never dropped by degradation (beyond model/messages/stream), because dropping shape keys such as
+  // thinking omits reasoning_content needed for replay.
   mandatoryBodyKeys?: readonly string[];
-  /**
-   * Treat an opaque 5xx as a parameter-incompatibility signal rather than an outage.
-   *
-   * Off by default because a direct provider's 5xx is normally a genuine outage that degradation
-   * cannot fix. Enable it only for backends known to report an unsupported request key as an
-   * internal server error; the shared classifier still requires a content-free message, so a
-   * descriptive outage keeps failing fast into key rotation and model fallback.
-   */
+  // Off by default because 5xx usually signals an outage; enable only for backends returning content-free 5xx for bad
+  // keys so descriptive outages fail fast.
   degradeOnOpaque5xx?: boolean;
-  /**
-   * Request-body keys this adapter injects in {@link mutateRequestBody}, in probe order.
-   *
-   * The ladder sorts anything it does not recognize into the unknown tail, so an injected key was
-   * effectively unreachable: declaring it here makes the backend dropping support for that key a
-   * finding rather than a dead end.
-   */
+  // Body keys injected by mutateRequestBody in probe order, because unrecognized keys sort into the degradation tail
+  // and become unreachable during probing.
   degradationPriorityKeys?: readonly string[];
-  /** Set to `false` to disable stripping `<think>` blocks from content. Defaults to `true`. */
   stripThinkBlocksFromContent?: boolean;
-  /** Set to `false` to discard stripped `<think>` content instead of routing it to the thought log. Defaults to `true`. */
   captureThinkBlocksAsThoughts?: boolean;
   resolveApiUrl: (config: OpenAICompatibleStreamConfig) => string;
   mutateRequestBody?: (args: OpenAICompatibleRequestMutationArgs) => Promise<void> | void;
   mutateHeaders?: (args: OpenAICompatibleHeaderMutationArgs) => Promise<void> | void;
-  /** Provider-specific signal folded into the shared parameter-degradation classifier. */
   shouldRetryWithoutStop?: (statusCode: number, errorText: string) => boolean;
-  /**
-   * Return `false` to signal that this endpoint does not accept OpenAI-style
-   * `"system"` role messages and that the assembled system instruction should
-   * be injected as an in-band `"user"` turn instead.
-   *
-   * Defaults to `true` (system role is supported) when omitted.
-   * Used by the Custom provider to handle Chatmock endpoints, which strip
-   * system-role turns from the message list before forwarding to Codex CLI.
-   */
+  // Custom endpoints such as Chatmock strip system-role turns before Codex CLI, so returning false (default true)
+  // switches instructions to a user turn.
   supportsSystemRole?: (apiUrl: string, model: string) => boolean;
 }
