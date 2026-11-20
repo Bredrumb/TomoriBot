@@ -1,22 +1,25 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
-import { HumanizerDegree, type ConditioningType } from "@/types/db/schema";
+import type { ConditioningType } from "@/types/db/schema";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
   CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
   getConditioningContextPastParticiple,
 } from "@/utils/conditioning/conditioning";
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
-import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyStableHumanizer } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { buildBotSpeakerLabelPattern } from "@/utils/text/processors/regexUtils";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
+import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/defaultSystemPrompt";
 
-export const DEFAULT_SYSTEM_PROMPT =
-  "\n{bot} makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
+export { DEFAULT_SYSTEM_PROMPT };
 
 const RANDOM_CHOICE_MACRO_REGEX =
   /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;
+
+const LOREBOOK_TAGS = new Set([ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]);
 
 export type MentionConverter = (
   text: string,
@@ -26,13 +29,15 @@ export type MentionConverter = (
   tomoriNickname?: string,
   personalMemoriesEnabled?: boolean,
   snapshot?: import("@/types/misc/context").RequestSnapshot,
+  identityMacroMode?: import("./mentionNormalizer").IdentityMacroMode,
+  identityValues?: { userFormatted?: string; userTerm?: string },
 ) => Promise<string>;
 
 /**
  * Resolves ST-style random choice macros that can appear in imported presets
  * or prompt fields. Each macro occurrence is rolled independently.
  */
-export function resolveRandomChoiceMacros(text: string): string {
+function resolveRandomChoiceMacros(text: string): string {
   return text.replace(
     RANDOM_CHOICE_MACRO_REGEX,
     (
@@ -58,6 +63,9 @@ export function resolveRandomChoiceMacros(text: string): string {
 }
 
 function resolveRandomChoiceMacrosInContextItem(item: StructuredContextItem): StructuredContextItem {
+  // Lorebook content resolves identity macros only, so runtime macros in an entry stay literal.
+  if (item.metadataTag && LOREBOOK_TAGS.has(item.metadataTag)) return item;
+
   let changed = false;
   const parts = item.parts.map((part): ContextPart => {
     if (part.type !== "text") return part;
@@ -77,18 +85,35 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
 }): {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
 } {
   return {
+    memoryRecall: output.memoryRecall,
     contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
     tailDirectives: output.tailDirectives.map(resolveRandomChoiceMacros),
     lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),
     uncensorDirective:
       output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
+    nudgeItem: output.nudgeItem ? resolveRandomChoiceMacrosInContextItem(output.nudgeItem) : undefined,
+    nudgeInjectionDepth: output.nudgeInjectionDepth,
+    // Deferred STM block items get the same random-choice macro resolution the inline
+    // path applies via `contextItems.map(...)`, so out-of-band placement is identical.
+    memoryInjectionItems: output.memoryInjectionItems?.map(resolveRandomChoiceMacrosInContextItem),
+    memoryInjectionDepth: output.memoryInjectionDepth,
   };
 }
 
@@ -97,18 +122,13 @@ export async function buildPromptContextItems(params: {
   guildId: string;
   botName: string;
   tomoriAttributes: string[];
-  publicPersonaAttributes?: Array<{
-    personaId: number;
-    personaName: string;
-    attributes: string[];
-  }>;
   tomoriConfig: AssembledServerConfig;
   channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
   personaPrompt?: string | null;
   isUserImpersonation: boolean;
   impersonatedIdentityName: string | null;
   impersonatedUserPrompt?: string | null;
-  suppressDefaultSystemPrompt: boolean;
+  presetOwnsSystemPrompt: boolean;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   toolPromptMacroResolver: { expand(text: string): Promise<string> };
   convertMentions: MentionConverter;
@@ -118,113 +138,131 @@ export async function buildPromptContextItems(params: {
   if (!params.isUserImpersonation) {
     const channelOverride = params.channelPromptOverride;
 
-    // 1. Resolve the server-level system prompt (or default fallback).
-    const baseSystemPrompt =
-      params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
+    // Resolve the server-level system prompt (or default fallback).
+    const baseSystemPrompt = params.presetOwnsSystemPrompt
+      ? null
+      : params.tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
 
-    // 2. Replace mode: the channel prompt fully takes over the system-prompt slot's
+    // Replace mode: the channel prompt fully takes over the system-prompt slot's
     //    content (persona prompt + attributes below are untouched). Otherwise keep
     //    the server/default system prompt in that slot.
     const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
 
     if (systemPrompt) {
-      const humanizerText = await params.convertMentions(
-        await params.toolPromptMacroResolver.expand(systemPrompt),
-        params.client,
-        params.guildId,
-        "User",
-        params.botName,
-        params.tomoriConfig.personal_memories_enabled,
-        params.snapshot,
-      );
-      contextItems.push({
-        role: "system",
-        parts: [{ type: "text", text: humanizerText }],
-        metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
-      });
+      const expandedSystemPrompt = await params.toolPromptMacroResolver.expand(systemPrompt);
+      if (expandedSystemPrompt.trim()) {
+        const humanizerText = await params.convertMentions(
+          expandedSystemPrompt,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        );
+        contextItems.push({
+          role: "system",
+          parts: [{ type: "text", text: humanizerText }],
+          metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+        });
+      }
     }
 
-    // 3. Append mode: emit the channel prompt as its own distinct block placed
+    // Append mode: emit the channel prompt as its own distinct block placed
     //    immediately after the system prompt (and before the persona prompt).
     if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
-      const channelPromptText = await params.convertMentions(
-        await params.toolPromptMacroResolver.expand(channelOverride.prompt),
-        params.client,
-        params.guildId,
-        "User",
-        params.botName,
-        params.tomoriConfig.personal_memories_enabled,
-        params.snapshot,
-      );
-      contextItems.push({
-        role: "system",
-        parts: [{ type: "text", text: channelPromptText }],
-        metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
-      });
+      const expandedChannelPrompt = await params.toolPromptMacroResolver.expand(channelOverride.prompt);
+      if (expandedChannelPrompt.trim()) {
+        const channelPromptText = await params.convertMentions(
+          expandedChannelPrompt,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        );
+        contextItems.push({
+          role: "system",
+          parts: [{ type: "text", text: channelPromptText }],
+          metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
+        });
+      }
     }
   }
 
   if (!params.isUserImpersonation && params.personaPrompt?.trim()) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.personaPrompt.trim()),
-            params.client,
-            params.guildId,
-            "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    });
+    const expandedPersonaPrompt = await params.toolPromptMacroResolver.expand(params.personaPrompt.trim());
+    if (expandedPersonaPrompt.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedPersonaPrompt,
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
+      });
+    }
   }
 
   if (params.isUserImpersonation && params.impersonatedUserPrompt?.trim()) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.impersonatedUserPrompt.trim()),
-            params.client,
-            params.guildId,
-            params.impersonatedIdentityName || "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    });
+    const expandedImpersonatedPrompt = await params.toolPromptMacroResolver.expand(
+      params.impersonatedUserPrompt.trim(),
+    );
+    if (expandedImpersonatedPrompt.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedImpersonatedPrompt,
+              params.client,
+              params.guildId,
+              params.impersonatedIdentityName || "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      });
+    }
   }
 
   if (!params.isUserImpersonation) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.tomoriAttributes.join("\n")),
-            params.client,
-            params.guildId,
-            "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
-    });
+    const expandedAttributes = await params.toolPromptMacroResolver.expand(params.tomoriAttributes.join("\n"));
+    if (expandedAttributes.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedAttributes,
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
+      });
+    }
   }
 
   return contextItems;
@@ -257,9 +295,7 @@ export async function buildSampleDialogueContextItems(params: {
     let userSampleText = tomoriState.sample_dialogues_in[i];
     const isUnpairedSample = userSampleText === UNPAIRED_SAMPLE_DIALOGUE_SENTINEL;
     if (!isUnpairedSample) {
-      if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-        userSampleText = humanizeString(userSampleText);
-      }
+      userSampleText = applyStableHumanizer(userSampleText, params.tomoriConfig);
       contextItems.push({
         role: "user",
         parts: [
@@ -283,14 +319,10 @@ export async function buildSampleDialogueContextItems(params: {
     }
 
     const rawOut = tomoriState.sample_dialogues_out[i];
-    const escapedBotName = escapeRegExp(params.botName);
-    const namePattern = `(?:${escapedBotName}|\\{\\{?char\\}\\}?|\\{\\{?bot\\}\\}?)`;
-    const speakerPattern = new RegExp(`^\\s*${namePattern}(?:\\s*\\([^)]+\\))?\\s*[:：]`, "iu");
-
-    let modelSampleText = speakerPattern.test(rawOut) ? rawOut : `${params.botName}: ${rawOut}`;
-    if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-      modelSampleText = humanizeString(modelSampleText);
-    }
+    let modelSampleText = buildBotSpeakerLabelPattern(params.botName).test(rawOut)
+      ? rawOut
+      : `${params.botName}: ${rawOut}`;
+    modelSampleText = applyStableHumanizer(modelSampleText, params.tomoriConfig);
     contextItems.push({
       role: "model",
       parts: [
@@ -354,7 +386,10 @@ export async function buildConditioningContextItem(params: {
         : `## Punished Behaviors\nHere are past things ${params.botName} did that got punished for. Avoid doing them again:`;
 
     const lines = visibleGroups.map((group) => {
-      const users = group.userDiscIds.map((userDiscId) => `<@${userDiscId}>`).join(", ");
+      const users = [
+        ...group.userDiscIds.map((userDiscId) => (isExternalUserId(userDiscId) ? userDiscId : `<@${userDiscId}>`)),
+        ...group.personaActors.map((actor) => actor.name),
+      ].join(", ");
       const action = getConditioningContextPastParticiple(conditioningType, group.actionKey);
       const countSuffix = group.totalCount > 1 ? ` (${group.totalCount} times)` : "";
       const actionTextSuffix = group.actionText ? ` with \`${group.actionText}\`` : "";

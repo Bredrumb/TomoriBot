@@ -1,9 +1,10 @@
 import { generateConversationSummaryForProvider } from "@/providers/utils/providerFeatureExecutors";
 import type { CompactSummaryMode } from "@/types/misc/compact";
 import { log } from "@/utils/misc/logger";
+import type { TokenUsage } from "@/utils/text/tokenEstimate";
 import type { ConversationContext } from "./types";
 
-export function buildConversationPrompt(params: {
+function buildConversationPrompt(params: {
   conversationText: string;
   imageReferences: ConversationContext["imageReferences"];
   supplementaryContext: string;
@@ -12,7 +13,7 @@ export function buildConversationPrompt(params: {
   return buildPrompt({ ...params, finalInstruction: "\nPlease keep the summary under 3500 characters." });
 }
 
-export function buildRoleplayPrompt(params: {
+function buildRoleplayPrompt(params: {
   conversationText: string;
   imageReferences: ConversationContext["imageReferences"];
   supplementaryContext: string;
@@ -31,6 +32,7 @@ export async function generateCompactSummary(params: {
   supplementaryContext: string;
   systemPrompt: string;
   analyzeImages: boolean;
+  onUsage?: (usage: TokenUsage) => void;
 }) {
   const promptBuilder = params.summaryType === "conversation" ? buildConversationPrompt : buildRoleplayPrompt;
   const prompt = promptBuilder({
@@ -54,6 +56,7 @@ export async function generateCompactSummary(params: {
     systemPrompt: prompt.systemPrompt,
     userPrompt: prompt.userPrompt,
     images,
+    onUsage: params.onUsage,
   });
 }
 

@@ -1,5 +1,5 @@
 import type { Guild } from "discord.js";
-import { sql } from "../db/client";
+import { sql, withTransientDbRetry } from "../db/client";
 import { log } from "../misc/logger";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
@@ -20,30 +20,21 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
  */
 export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
-    // 1. Check when emojis were last synced for this server
-    const [lastSync] = await sql<Array<{ last_updated: Date; emoji_count: number }>>`
-			SELECT
-				MAX(updated_at) as last_updated,
-				COUNT(*) as emoji_count
-			FROM server_emojis
-			WHERE server_id = ${serverId}
-		`;
+    const lastSync = await serverRepository.getEmojiSyncStatus(serverId);
 
-    // 2. Determine if we need to fetch
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     const now = new Date();
-    const cachedEmojiCount = lastSync?.emoji_count || 0;
+    const cachedEmojiCount = lastSync.count;
 
-    // 3. Smart count mismatch detection
+    // Smart count mismatch detection
     // Check if Discord.js has emojis cached (from GUILD_CREATE or previous fetch)
     const discordCachePopulated = guild.emojis.cache.size > 0;
     let hasCountMismatch = false;
     let guildEmojiCount = guild.emojis.cache.size;
 
     if (discordCachePopulated) {
-      // Discord cache is populated - use it for comparison
       hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
-    } else if (lastSync && cachedEmojiCount > 0) {
+    } else if (cachedEmojiCount > 0) {
       // Discord cache is EMPTY but DB has emojis - suspicious!
       // This indicates bot restart/rejoin - fetch to verify count
       log.info(
@@ -54,32 +45,29 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
     }
 
-    // 4. Check if sync is needed
     const needsFetch =
       forceFetch ||
-      !lastSync ||
-      lastSync.emoji_count === 0 ||
-      !lastSync.last_updated ||
+      lastSync.count === 0 ||
+      !lastSync.lastUpdated ||
       hasCountMismatch ||
-      now.getTime() - new Date(lastSync.last_updated).getTime() > CACHE_DURATION_MS;
+      now.getTime() - new Date(lastSync.lastUpdated).getTime() > CACHE_DURATION_MS;
 
     if (!needsFetch) {
       return false;
     }
 
-    // 5. Determine refresh reason for logging
     const refreshReason = forceFetch
       ? "forced"
       : hasCountMismatch
         ? `count mismatch (guild: ${guildEmojiCount}, DB: ${cachedEmojiCount})`
-        : lastSync?.emoji_count === 0
+        : lastSync.count === 0
           ? "no emojis in DB"
           : "cache stale";
 
     log.info(`Lazy fetching emojis for guild ${guild.name} (${guild.id})... Reason: ${refreshReason}`);
     log.info(`[Emoji Lazy Sync] Using server_id: ${serverId}`);
 
-    // 6. Fetch emojis from Discord API (if not already fetched in step 3)
+    // Fetch emojis from Discord API (if not already fetched in step 3)
     if (!discordCachePopulated || (discordCachePopulated && hasCountMismatch)) {
       await guild.emojis.fetch();
     }
@@ -87,10 +75,13 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
 
     log.info(`Fetched ${currentEmojis.length} emoji(s) from Discord for guild ${guild.name}`);
 
-    // 7. Sync to database using shared helper
-    await sql.transaction(async (tx) => {
-      await serverRepository.syncEmojis(tx, serverId, currentEmojis);
-    });
+    await withTransientDbRetry(
+      () =>
+        sql.transaction(async (tx) => {
+          await serverRepository.syncEmojis(tx, serverId, currentEmojis);
+        }),
+      `lazy sync emojis for guild ${guild.id}`,
+    );
 
     log.info("[Emoji Lazy Sync] Transaction completed successfully");
 
@@ -101,7 +92,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       errorType: "EmojiLazySyncError",
       metadata: { guildId: guild.id },
     });
-    // Don't throw - allow the bot to continue with possibly stale data
     return false;
   }
 }

@@ -1,0 +1,1 @@
+-- Backfilled activity cannot be distinguished from live direct-chat writes, so rollback preserves it.

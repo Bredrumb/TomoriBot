@@ -9,11 +9,18 @@
  * To run only DB regression tests (assumes wrapper has provisioned the DB):
  *   bun run test
  *
- * To target a specific pre-existing database manually:
+ * To run one file with a disposable database, pass it to the wrapper:
+ *   bun run test tests/regression/db/<file>.regression.test.ts
+ *
+ * Bypassing the wrapper (bare `bun test`) skips these suites unless you set the variables yourself:
  *   TEST_DB_READY=1 POSTGRES_DB=<name> POSTGRES_PASSWORD=<pw> bun test tests/regression/db/
  */
 import { SQL } from "bun";
+import { readFile } from "node:fs/promises";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
+import { splitSqlStatements } from "@/utils/db/sqlSplitter";
+import { keyManager } from "@/utils/security/keyManager";
+import { resetDatabaseConnection, sql } from "@/utils/db/client";
 
 const effectiveHost = process.env.TEST_POSTGRES_HOST ?? process.env.POSTGRES_HOST ?? "localhost";
 const effectivePort = process.env.TEST_POSTGRES_PORT ?? process.env.POSTGRES_PORT ?? "5432";
@@ -38,25 +45,84 @@ if (effectivePassword) process.env.POSTGRES_PASSWORD = effectivePassword;
  */
 export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST_DB_READY === "1";
 
-/**
- * A direct SQL client for the test database, used exclusively for fixture
- * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
- * which use the global sql singleton from client.ts — those must also be pointed
- * at the test DB via POSTGRES_DB env var (set by the wrapper).
- */
-export const testSql = new SQL({
-  hostname: effectiveHost,
-  port: Number(effectivePort),
-  username: effectiveUser,
-  password: effectivePassword ?? "dummy",
-  database: effectiveDatabase,
-});
+function createFixtureClient(): SQL {
+  return new SQL({
+    hostname: effectiveHost,
+    port: Number(effectivePort),
+    username: effectiveUser,
+    password: effectivePassword ?? "dummy",
+    database: effectiveDatabase,
+    idleTimeout: 180,
+    maxLifetime: 1800,
+  });
+}
+
+let fixtureClient = createFixtureClient();
+
+// Repositories retain this client at module load, so the proxy must survive pool replacement.
+export const testSql = new Proxy(
+  ((strings: TemplateStringsArray, ...values: unknown[]) => fixtureClient(strings, ...values)) as unknown as SQL,
+  {
+    get(_target, property) {
+      const value = Reflect.get(fixtureClient, property, fixtureClient);
+      return typeof value === "function" ? value.bind(fixtureClient) : value;
+    },
+  },
+);
+
+/** Executes a migration script on one reserved transaction connection. */
+export async function executeTestSqlFile(filePath: string): Promise<void> {
+  const sqlText = await readFile(filePath, "utf-8");
+  const statements = splitSqlStatements(sqlText);
+  const executableStatements = statements.filter((statement) => {
+    const command = statement
+      .replace(/^\s*(?:--[^\r\n]*(?:\r?\n|$)\s*)*/g, "")
+      .trim()
+      .replace(/;$/, "")
+      .toUpperCase();
+    return command !== "BEGIN" && command !== "COMMIT";
+  });
+
+  await testSql.begin(async (tx) => {
+    for (const statement of executableStatements) {
+      await tx.unsafe(statement);
+    }
+  });
+}
+
+/** Memoized bootstrap, shared by every `beforeAll` in the process. */
+let bootstrapPromise: Promise<void> | null = null;
 
 /**
  * Bootstraps the test database schema (idempotent).
  * Uses the same initializeDatabase() path as the bot, so schema drift
  * between tests and production is structurally impossible.
+ *
+ * initializeDatabase() is idempotent, but replaying the schema, migrations and
+ * seed catalogs costs roughly two seconds per call. The runner now covers every
+ * regression file with a single process, so the bootstrap is memoized for the
+ * lifetime of that process instead of repeating once per `beforeAll`. The call
+ * is argument-invariant, so no cache key is needed.
  */
 export async function setupTestDb(): Promise<void> {
+  bootstrapPromise ??= bootstrap();
+  await bootstrapPromise;
+  // Schema restores invalidate prepared type and result metadata in both pools.
+  await sql.close();
+  resetDatabaseConnection();
+  await fixtureClient.close();
+  fixtureClient = createFixtureClient();
+}
+
+/**
+ * Repository writes that encrypt a credential read the key manager singleton, which the bot
+ * populates during secret loading rather than lazily. Without this the harness leaves it at
+ * version 0 and every such insert fails inside its own catch, surfacing as a null row instead
+ * of an error. The fallback keeps the suite runnable on a machine that has Postgres but no
+ * CRYPTO_SECRET; it is a disposable test value and never reaches a real database.
+ */
+async function bootstrap(): Promise<void> {
+  process.env.CRYPTO_SECRET ??= "tomoribot_regression_harness_crypto_secret";
+  keyManager.initialize();
   await initializeDatabase({ client: testSql, includeRag: false });
 }

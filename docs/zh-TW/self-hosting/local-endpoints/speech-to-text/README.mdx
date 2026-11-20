@@ -1,0 +1,42 @@
+---
+title: "語音轉文字（本機引擎）"
+sidebar:
+  label: "總覽"
+  groupLabel: "語音轉文字"
+  order: 7
+aiGenerated: true
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+在本地轉錄語音訊息和音訊附件，以便TomoriBot可以理解聊天中的語音，而無需將錄音傳送到第三方雲端API。
+
+TomoriBot將語音轉文字視為`transcription`自訂端點功能。當活動轉錄端點存在時，音訊附件會在背景轉錄並添加到對話上下文中。
+
+可見的成績單發布是單獨的。`/config` > 引擎 > 通知僅控制是否在聊天中發布語音訊息記錄；它不會啟用或停用後台STT。
+
+## 可用發動機
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/zh-TW/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="使用servers/stt下的參考WhisperX伺服器進行初學者友善的本地轉錄。" />
+  <LinkCard title="耳語.cpp" href="/zh-TW/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="當公開OpenAI相容的轉錄端點時，使用輕量級的tweet.cpp HTTP伺服器。" />
+  <LinkCard title="KoboldCPP" href="/zh-TW/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="當你的建置公開與OpenAI相容的音訊轉錄時，請使用基於Whisper的KoboldCPP STT。" />
+</CardGrid>
+
+## 設定流程
+
+1. 從上面的引擎指南啟動一台STT伺服器。
+2. 在`/providers`中，選擇`+ 新增自訂端點`（或`Add New Custom Endpoint`）並選擇`openai-compatible-transcription`（OpenAI相容轉錄）。
+3. 選擇已儲存的端點並使用其模型下拉清單新增伺服器報告的模型代碼。
+4. 開啟`/config` > `模型` > 切換型號選擇並啟動已註冊的端點。
+
+## 轉錄流程
+
+當轉錄端點處於活動狀態時，TomoriBot在後台讀取支援的音訊附件並將轉錄新增至聊天上下文。不需要人格分配。
+
+只有當你也希望這些記錄在聊天中可見時，才使用`/config` > 引擎 > 通知。
+
+ElevenLabs使用者應在`/providers`中選擇`新增供應商`和`ElevenLabs`；它會與語音一起記錄轉錄。

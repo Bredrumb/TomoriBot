@@ -4,14 +4,11 @@ import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 /**
  * Sends a cooldown notification to the user via DM, with fallback to ephemeral channel reply
- * @param user - Discord user to notify
  * @param locale - User's locale for localization
- * @param titleKey - Localization key for embed title
- * @param descriptionKey - Localization key for embed description
- * @param descriptionVars - Variables for description localization
  * @param footerKey - Optional localization key for embed footer
  * @param interaction - Optional interaction for ephemeral fallback (slash commands only)
  * @param ephemeralFlags - Optional MessageFlags for ephemeral replies
@@ -27,14 +24,12 @@ export async function sendCooldownDM(
   ephemeralFlags?: MessageFlags.SuppressEmbeds | MessageFlags.Ephemeral | MessageFlags.SuppressNotifications,
 ): Promise<void> {
   try {
-    // Build the cooldown embed
     const cooldownEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, titleKey))
+      .setTitle(localizedStatusTitle(locale, titleKey, ColorCode.WARN))
       .setDescription(localizer(locale, descriptionKey, descriptionVars))
       .setColor(ColorCode.WARN)
       .setTimestamp();
 
-    // Add footer if provided
     if (footerKey) {
       cooldownEmbed.setFooter({ text: localizer(locale, footerKey) });
     }

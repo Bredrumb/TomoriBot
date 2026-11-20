@@ -1,0 +1,298 @@
+---
+title: "IrodoriTTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Gere fala em japonês natural com clonagem de voz, VoiceDesign baseado em legendas e marcações expressivas de emojis usando o [Irodori-TTS v4.1](https://github.com/Aratako/Irodori-TTS).
+
+O Irodori-TTS v4.1 é um modelo de conversão de texto em fala focado em japonês que suporta tanto clonagem de voz quanto VoiceDesign descrito em texto em um único checkpoint. O TomoriBot conecta-se ao Irodori por meio do wrapper FastAPI local em `servers/tts/irodoritts/`, usando por padrão `Aratako/Irodori-TTS-v4.1-Small`.
+
+Checkpoints compatíveis do Hugging Face podem ser selecionados com `IRODORI_TTS_MODEL_ID`, incluindo fine-tunes da comunidade como `phasefield-audio/Irodori-TTS-v4.1-Anime`.
+
+## Configuração
+
+O Irodori utiliza [uv](https://docs.astral.sh/uv/) para o gerenciamento de dependências e do backend PyTorch. O servidor mantém seu próprio `pyproject.toml` com dependências fixadas do Irodori e `dacvae` para instalações reproduzíveis. Instale o `uv` primeiro e, em seguida, execute o script de configuração a partir da raiz do repositório do TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Para GPUs NVIDIA (`cu128`):
+
+```powershell
+.\servers\tts\irodoritts\install-irodori.ps1 cu128
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+Outros backends suportados no Windows são `cpu` e `xpu` (Intel Arc).
+
+</TabItem>
+<TabItem label="Linux">
+
+Para GPUs NVIDIA (`cu128`):
+
+```bash
+bash servers/tts/irodoritts/install-irodori.sh cu128
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+Outros backends suportados no Linux são `rocm` (AMD ROCm), `xpu` (Intel Arc) e `cpu`.
+
+</TabItem>
+<TabItem label="Mac">
+
+Instale com o extra `cpu` (`uv` resolve os pacotes padrão do PyTorch no PyPI para macOS):
+
+```bash
+bash servers/tts/irodoritts/install-irodori.sh cpu
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+Com `IRODORI_MODEL_DEVICE=auto`, o tempo de execução upstream escolhe `mps` do Apple Silicon quando disponível ou `cpu` caso contrário, e dispositivos sem CUDA definem `IRODORI_MODEL_PRECISION` como `fp32` por padrão. `cu128`, `rocm`, `xpu` e modos de compilação de baixa latência para CUDA (`IRODORI_COMPILE_MODE`) não estão disponíveis no Mac.
+
+</TabItem>
+</Tabs>
+
+Os scripts de configuração criam `servers/tts/irodoritts/.venv`, portanto `bun run launch --irodoritts` continua funcionando após a instalação.
+
+Backends disponíveis do instalador:
+
+- `cu128`: NVIDIA CUDA 12.8 no Windows e Linux
+- `cpu`: apenas CPU no Windows e Linux, ou CPU/MPS no macOS via pacotes padrão do PyPI
+- `rocm`: AMD ROCm no Linux e WSL2
+- `xpu`: Intel XPU no Windows e Linux
+
+A URL padrão do endpoint é `http://127.0.0.1:8013`.
+
+## Usando um checkpoint diferente
+
+O modelo padrão é `Aratako/Irodori-TTS-v4.1-Small`. Você pode selecionar outros checkpoints oficiais (incluindo o modelo Large de 3,29B parâmetros e suas variantes quantizadas), fine-tunes da comunidade ou arquivos locais de checkpoint por meio de variáveis de ambiente.
+
+### Checkpoints e variantes
+
+| Modelo / `IRODORI_TTS_MODEL_ID` | Parâmetros | Tamanho do checkpoint | VRAM recomendada | Notas |
+|---|---|---|---|---|
+| `Aratako/Irodori-TTS-v4.1-Small` | 766M | 1.5 GB | 4-6 GB | Modelo padrão: inferência rápida e baixo uso de memória. |
+| `Aratako/Irodori-TTS-v4-Large` | 3.29B | 12.25 GB | 10-14 GB | Modelo Large completo sem quantização com base de texto T5Gemma 2. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/float8-weight-only` | 3.29B | 3.58 GB | 6-8 GB | Pesos em FP8 com ativações em BF16: recomendado para NVIDIA Ada (série RTX 40) e mais recentes. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int8-weight-only` | 3.29B | 3.58 GB | 6-8 GB | Pesos em INT8 de uso geral com computação em BF16 no NVIDIA CUDA. |
+| `Aratako/Irodori-TTS-v4-Large-Quantized/int4-weight-only` | 3.29B | 2.75 GB | 5-6 GB | Variante Large mais compacta: requer NVIDIA Ampere (série RTX 30) ou mais recente. |
+| `phasefield-audio/Irodori-TTS-v4.1-Anime` | 766M | 1.5 GB | 4-6 GB | Fine-tune da comunidade para interpretação de fala estilo anime. |
+
+Para clonagem de voz, a versão Small oferece qualidade similar com inferência mais rápida. A Large tem um codificador de texto mais forte e segue as descrições de VoiceDesign com maior precisão. Checkpoints quantizados da variante Large visam NVIDIA CUDA em vez de CPU ou MPS do Mac.
+
+O servidor lê o `.env` da raiz do repositório ou um `.env` local em `servers/tts/irodoritts/.env`.
+
+### Via `.env` (persistente)
+
+Adicione ao seu `.env` na raiz do TomoriBot:
+
+```dotenv
+IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
+```
+
+### Via variável de ambiente por sessão
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:IRODORI_TTS_MODEL_ID = "phasefield-audio/Irodori-TTS-v4.1-Anime"
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
+  servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
+  servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+### Usando um arquivo de checkpoint local
+
+Se tiver baixado um arquivo de checkpoint (`.pt` ou `.safetensors`) localmente, aponte `IRODORI_TTS_CHECKPOINT` para o caminho dele:
+
+```dotenv
+IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
+```
+
+A versão atual do Irodori baixa o checkpoint junto com quaisquer recursos de tokenizador incluídos no repositório do Hugging Face. Variantes em subpastas do Hugging Face também são suportadas por `IRODORI_TTS_MODEL_ID` quando o repositório do modelo as disponibiliza.
+
+## Registrar no TomoriBot
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e use a compatibilidade de API de fala:
+
+- Compatibilidade de API: `Clone de TTS` (`tts-clone`)
+- `endpoint_url`: `http://127.0.0.1:8013`
+
+Depois de salvar a conexão, selecione-a e use o menu suspenso de modelos para adicionar um modelo de Fala. Para a v4.1, as configurações recomendadas são:
+
+- `Modo de Fonte de Voz`: `Automático`
+- `Estilo de Marcação de Script`: `Emoji`
+
+A opção `Automático` permite que o mesmo endpoint do Irodori atenda a ambos os modos de voz do TomoriBot, garantindo que as pistas de emoção sobrevivam ao envio:
+
+- Personas com uma amostra de voz definida em Persona > Voz enviam um clipe de referência armazenado para clonagem de voz.
+- Personas com um prompt de `VoiceDesign` definido em Persona > Voz enviam o prompt em linguagem natural salvo como condicionamento de legenda do Irodori.
+
+Você ainda pode escolher `Clone de Voz` como o Modo de Fonte de Voz se quiser apenas clonagem de voz por áudio de referência.
+
+Use `/providers` para registro do endpoint e configuração do modelo. Em seguida, abra `/config` > Modelos > Trocar Modelos para selecionar e ativar o endpoint registrado.
+
+## Configurar vozes de persona
+
+### Clonagem de voz
+
+1. Prepare um clipe de voz limpo em japonês com apenas um locutor e sem música de fundo. Cerca de 30 segundos já são suficientes: após esse ponto, o áudio extra traz pouco ganho de fidelidade de timbre enquanto aumenta o tamanho do upload e o tempo de inferência.
+2. Abra `/config` em Modelos > Parâmetros TTS e Vozes e envie o clipe.
+3. Abra `/config` em Persona > Voz, depois escolha a persona e a amostra de voz.
+
+O Irodori adota por padrão um limite de referência de 120 segundos e corta clipes mais longos. Defina `IRODORI_MAX_REF_SECONDS` para alterar o limite.
+
+O servidor codifica cada clipe de referência uma vez e mantém o resultado em `servers/tts/irodoritts/reference-cache/`, então solicitações repetidas pulam essa etapa. Substituir o clipe de uma persona cria uma nova entrada, e entradas antigas permanecem até você excluir a pasta.
+
+### VoiceDesign
+
+1. Abra `/config` em Persona > Voz.
+2. Escolha a persona.
+3. Insira uma descrição em linguagem natural da voz e entonação desejadas.
+
+O TomoriBot envia esse prompt como `instruct`; o wrapper do Irodori o mapeia para o condicionamento `caption` da v4.1. Solicitações de `VoiceDesign` não requerem um clipe de referência armazenado.
+
+O TomoriBot remove a sintaxe de emojis personalizados do Discord antes de enviar o texto ao TTS. Com `script_markup: emoji`, emojis Unicode são preservados para o condicionamento de texto do Irodori.
+
+### Controles de estilo por emoji
+
+O IrodoriTTS suporta anotações de emojis no texto de entrada para influenciar efeitos sonoros, estilos de fala e expressões emocionais. Com o `Estilo de Marcação de Script` do TomoriBot definido como `Emoji`, esses emojis Unicode são preservados e enviados ao Irodori.
+
+Para ver os emojis suportados e seus significados, consulte as [anotações de emojis do upstream](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md). Emojis funcionam como sugestões de estilo e os resultados podem variar.
+
+## Mensagens de voz longas
+
+Textos longos são divididos em blocos e retornados como uma única mensagem de voz. Solicitações longas podem exceder o tempo limite padrão de 240 segundos; ajuste `TTS_SYNTHESIZE_TIMEOUT_MS` se necessário. Defina `IRODORI_CHUNKING_ENABLED=false` para desativar a divisão ou `IRODORI_CHUNK_MIN_CHARS` para ajustar o limite de quebra.
+
+## Inferência mais rápida com amostragem sway
+{/* anchor: faster-inference-with-sway-sampling */}
+
+O padrão continua sendo a amostragem linear de 40 passos de maior qualidade do Irodori. Para menor latência em qualquer dispositivo, experimente a Amostragem Sway com menos passos:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:IRODORI_NUM_STEPS = "6"
+$env:IRODORI_T_SCHEDULE_MODE = "sway"
+$env:IRODORI_SWAY_COEFF = "-1.0"
+.\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+export IRODORI_NUM_STEPS=6
+export IRODORI_T_SCHEDULE_MODE=sway
+export IRODORI_SWAY_COEFF=-1.0
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+export IRODORI_NUM_STEPS=6
+export IRODORI_T_SCHEDULE_MODE=sway
+export IRODORI_SWAY_COEFF=-1.0
+servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+Isso é uma troca entre qualidade e velocidade de inferência, então teste com o checkpoint e as vozes escolhidos antes de tornar permanente.
+
+## Modo de baixa latência (NVIDIA)
+{/* anchor: low-latency-mode-nvidia */}
+
+O modo de baixa latência torna cada frase cerca de 3-4x mais rápida em uma GPU NVIDIA com os mesmos 40 passos e configurações de voz, então não sacrifica qualidade da forma que a Amostragem Sway faz. Ative-o no `.env`:
+
+```dotenv
+IRODORI_COMPILE_MODE="cudagraphs"
+```
+
+`cudagraphs` é o modo mais rápido. `compile` é cerca de 2x mais rápido que o padrão; experimente se `cudagraphs` se comportar mal na sua GPU. Ambos precisam do backend `cu128`, e o servidor se recusa a iniciar com qualquer um dos modos em outros backends.
+
+O que esperar no NVIDIA `cu128`:
+
+- O servidor aquece antes de relatar que está pronto. A primeira inicialização leva cerca de 2-4 minutos; inicializações seguintes levam cerca de 1-2 minutos porque os kernels compilados ficam em cache no disco. `bun run launch --irodoritts` aguarda até 5 minutos; em uma GPU mais lenta, aumente esse limite com `TOMORI_TTS_STARTUP_TIMEOUT_MS` (em milissegundos).
+- A primeira solicitação com um novo comprimento de frase ou um novo clipe de voz adiciona uma fração de segundo, uma única vez.
+- O uso de VRAM cai ligeiramente.
+- O áudio não é idêntico bit a bit ao modo padrão para a mesma seed. Nos testes soou equivalente, então ouça algumas falas com suas próprias vozes antes de depender dele.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+No Windows, o modo de baixa latência também precisa do compilador Microsoft C++ (`cl.exe`):
+
+1. Instale o [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) com a carga de trabalho **Desenvolvimento para desktop com C++**.
+2. Execute novamente `.\servers\tts\irodoritts\install-irodori.ps1 cu128` para que o pacote Triton para Windows seja instalado.
+3. Inicie o servidor (ou `bun run launch --irodoritts`) a partir do **Developer PowerShell for VS**, ou carregue o compilador em um PowerShell comum primeiro:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+  if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2] }
+}
+```
+
+Se o compilador ou o Triton estiverem ausentes, o servidor para na inicialização e informa qual falta.
+
+</TabItem>
+<TabItem label="Linux">
+
+Certifique-se de que o ambiente foi sincronizado com `cu128` (`bash servers/tts/irodoritts/install-irodori.sh cu128`) e de que um compilador C (`gcc` / `build-essential`) está instalado para compilação de kernels.
+
+</TabItem>
+<TabItem label="Mac">
+
+Sem suporte no Mac. `compile` e `cudagraphs` exigem o backend NVIDIA `cu128` e Triton; deixe `IRODORI_COMPILE_MODE` em `off` no Mac e use [Amostragem Sway](#faster-inference-with-sway-sampling) para reduzir a contagem de passos.
+
+</TabItem>
+</Tabs>
+
+## Variáveis de ambiente
+
+| Variável | Padrão | Finalidade |
+|---|---|---|
+| `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositório de modelos do Hugging Face ou origem suportada de repositório/subpasta |
+| `IRODORI_TTS_CHECKPOINT` | não definido | Checkpoint local `.pt` ou `.safetensors` opcional; sobrescreve o modelo do Hugging Face |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de vinculação do servidor; consulte [Acesso à rede](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Porta do servidor |
+| `IRODORI_MODEL_DEVICE` | `auto` | Dispositivo do modelo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
+| `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo do codec |
+| `IRODORI_MODEL_PRECISION` | `bf16` em CUDA, caso contrário `fp32` | Precisão do modelo |
+| `IRODORI_CODEC_PRECISION` | `fp32` | Precisão do codec |
+| `IRODORI_COMPILE_MODE` | `off` | `off`, `compile` ou `cudagraphs`; consulte [Modo de baixa latência](#low-latency-mode-nvidia) |
+| `IRODORI_NUM_STEPS` | `40` | Passos de amostragem de Euler |
+| `IRODORI_T_SCHEDULE_MODE` | `linear` | Cronograma de amostragem (`linear` ou `sway`) |
+| `IRODORI_SWAY_COEFF` | `-1.0` | Coeficiente sway ao usar o cronograma `sway` |
+| `IRODORI_CFG_SCALE_TEXT` | `3.0` | Escala de orientação do texto |
+| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de orientação de legenda / VoiceDesign |
+| `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de orientação do locutor de referência |
+| `IRODORI_MAX_REF_SECONDS` | padrão do checkpoint | Limite opcional na duração do áudio de referência |
+| `IRODORI_CHUNKING_ENABLED` | `true` | Divide textos longos nos limites de pontuação elegíveis e concatena os blocos gerados |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | Mínimo de caracteres sem espaço antes da divisão em limites fortes de frase; vírgulas funcionam como alternativa em cerca de 1,5x esse valor |

@@ -3,8 +3,18 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ForcedMention } from "@/types/discord/mentions";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
+import { recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { queuePersonaJobsAtFront, type ChannelLockEntry } from "@/utils/chat/channelQueue";
 import type { TextQuotaSource } from "@/utils/chat/types";
+
+const DEFAULT_MATCH_LIMIT = 3;
+const MIN_MATCH_LIMIT = 1;
+const MAX_MATCH_LIMIT = 10;
+
+export function getMatchLimit(tomoriState: TomoriState): number {
+  const rawMatchLimit = tomoriState.config.match_limit ?? DEFAULT_MATCH_LIMIT;
+  return Math.min(Math.max(rawMatchLimit, MIN_MATCH_LIMIT), MAX_MATCH_LIMIT);
+}
 
 export function queueAdditionalPersonaTurns(args: {
   lockEntry: ChannelLockEntry;
@@ -44,6 +54,7 @@ export function queueAdditionalPersonaTurns(args: {
   }
 
   if (personasToQueue.length > 0) {
+    recordChatDiagnostic({ kind: "persona_jobs_queued", count: personasToQueue.length });
     queuePersonaJobsAtFront({
       lockEntry: args.lockEntry,
       message: args.message,

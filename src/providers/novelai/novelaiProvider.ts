@@ -4,11 +4,12 @@
  *
  * NovelAI is a roleplay-focused provider that:
  * - Uses flat text prompts (no structured messages)
- * - Supports prompt-based tool calling for GLM-4.6 via manual parsing
  * - Does not support images or videos
  * - Specializes in creative storytelling and roleplay
  */
 
+import { pickHumanizerSettings } from "@/constants/humanizer";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type {
   BaseGuildTextChannel,
   BaseGuildVoiceChannel,
@@ -19,14 +20,14 @@ import type {
   AnyThreadChannel,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
-import { NovelaiStreamAdapter, type NovelaiStreamConfig } from "./novelaiStreamAdapter";
-import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
+import { buildStreamContext } from "@/utils/provider/streamContext";
+import { NovelaiStreamAdapter } from "./novelaiStreamAdapter";
+import type { ProviderError, StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
-import { getAvailableToolsWithMCP, type ToolStateForContext } from "@/tools/toolRegistry";
 import {
   BaseLLMProvider,
   type FunctionCall,
@@ -38,11 +39,9 @@ import {
 } from "@/types/provider/interfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
-import { getNovelaiToolAdapter } from "./novelaiToolAdapter";
-import { usesOpenAIEndpoint, validateNovelAIApiKey } from "./novelaiService";
+import { validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";
 import { getActiveTemperature } from "@/utils/provider/samplingControl";
-import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Gets the default NovelAI model with a robust fallback chain:
@@ -55,7 +54,6 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 async function getDefaultNovelAIModel(): Promise<string> {
   const providerName = "novelai";
 
-  // 1. Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -64,7 +62,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     }
   }
 
-  // 2. Cache not ready or no default found - query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -77,7 +74,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model from database
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -89,7 +85,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // 4. No models found - throw error
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
@@ -102,9 +97,6 @@ export interface NovelaiProviderConfig extends ProviderConfig {
   // No provider-specific config needed here
 }
 
-/**
- * NovelAI provider implementation
- */
 export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
   /**
    * Get provider information and capabilities
@@ -115,13 +107,11 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
   /**
    * Validate a NovelAI API key by making a test request
-   * @param apiKey - The API key to validate
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("NovelAI API key is too short or empty");
-      // Create a generic error for empty/short keys
       const novelaiAdapter = new NovelaiStreamAdapter();
       const error = new Error("API key is too short or empty");
       const providerError = novelaiAdapter.handleProviderError(error);
@@ -135,18 +125,23 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       log.success("NovelAI API key validation successful");
       return { valid: true };
     } catch (error) {
-      // Use NovelaiStreamAdapter to parse and format the error
       const novelaiAdapter = new NovelaiStreamAdapter();
       const providerError = novelaiAdapter.handleProviderError(error);
 
-      await log.error("API key validation failed", error, {
-        errorType: "APIKeyValidationError",
-        metadata: {
-          provider: "novelai",
-          errorCode: providerError.code,
-          errorType: providerError.type,
-        },
-      });
+      const isUserError = providerError.type === "api_error";
+
+      if (!isUserError) {
+        await log.error("API key validation failed", error, {
+          errorType: "APIKeyValidationError",
+          metadata: {
+            provider: "novelai",
+            errorCode: providerError.code,
+            errorType: providerError.type,
+          },
+        });
+      } else {
+        log.warn(`NovelAI API key validation failed (user input error): ${providerError.message}`);
+      }
       return { valid: false, error: providerError };
     }
   }
@@ -156,127 +151,11 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     return novelaiAdapter.createErrorDescription(error, locale);
   }
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * Prompt-based tool calling is supported for GLM-4.6 via manual parsing.
-   * Returns empty array when tools are disabled or the model doesn't support them.
-   * @param tomoriState - The current Tomori state
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   * @returns Promise<Array<Record<string, unknown>>> - Array of tool configs
-   */
-  async getTools(
-    tomoriState: TomoriState,
-    streamingContext?: StreamingContext,
-  ): Promise<Array<Record<string, unknown>>> {
-    if (streamingContext?.disableAllTools) {
-      log.info("NovelAI provider: Tools disabled via streaming context (disableAllTools)");
-      return [];
-    }
-
-    // Only enable tools when the model supports them and uses the OpenAI endpoint
-    if (!tomoriState.llm.has_tools) {
-      log.info("NovelAI provider: Model does not support tools (db flag has_tools=false)");
-      return [];
-    }
-
-    if (!usesOpenAIEndpoint(tomoriState.llm.llm_codename)) {
-      log.info("NovelAI provider: Tool calling is only supported on GLM-4.6 (OpenAI endpoint models)");
-      return [];
-    }
-
-    try {
-      const toolStateForContext: ToolStateForContext = {
-        server_id: tomoriState.server_id.toString(),
-        activePersonaHasElevenlabsVoice: Boolean(
-          tomoriState.speech_voice_sample_id ||
-            tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim(),
-        ),
-        activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-        activePersonaVoiceName: tomoriState.speech_voice_name,
-        diffusion_model_id: tomoriState.config.diffusion_model_id,
-        nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
-        video_model_id: tomoriState.config.video_model_id,
-        llm: {
-          llm_codename: tomoriState.llm.llm_codename,
-          has_tools: tomoriState.llm.has_tools,
-          sees_images: tomoriState.llm.sees_images,
-          sees_videos: tomoriState.llm.sees_videos,
-          sees_youtube: tomoriState.llm.sees_youtube,
-          supports_structoutput: tomoriState.llm.supports_structoutput,
-        },
-        config: {
-          sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
-          web_search_enabled: tomoriState.config.web_search_enabled,
-          self_teaching_enabled: tomoriState.config.self_teaching_enabled,
-          manage_message_enabled: tomoriState.config.manage_message_enabled,
-          imagegen_enabled: tomoriState.config.imagegen_enabled,
-          videogen_enabled: tomoriState.config.videogen_enabled,
-          voice_message_enabled: tomoriState.config.voice_message_enabled,
-          user_blocking_enabled: tomoriState.config.user_blocking_enabled,
-          thread_creation_enabled: tomoriState.config.thread_creation_enabled,
-        },
-      };
-
-      const {
-        builtInTools: availableBuiltInTools,
-        mcpFunctionNames: availableMcpFunctionNames,
-        totalCount,
-      } = await getAvailableToolsWithMCP("novelai", toolStateForContext);
-
-      let finalBuiltInTools = availableBuiltInTools;
-      let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "novelai" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState: tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("novelai", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied streaming context filtering: ${availableBuiltInTools.length} → ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
-
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
-        providerLabel: "NovelAI provider",
-        builtInTools: finalBuiltInTools,
-        mcpFunctionNames: finalMcpFunctionNames,
-        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-      }));
-
-      const novelaiAdapter = getNovelaiToolAdapter();
-      const allToolsConfig = await novelaiAdapter.getAllToolsInProviderFormat(
-        finalBuiltInTools,
-        tomoriState.server_id,
-        finalMcpFunctionNames,
-      );
-
-      log.info(
-        `NovelAI provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
-      );
-
-      return allToolsConfig;
-    } catch (error) {
-      log.error(`Failed to get tools for NovelAI provider: ${tomoriState.llm.llm_codename}`, error as Error);
-      return [];
-    }
+  async getTools(): Promise<Array<Record<string, unknown>>> {
+    return [];
   }
 
   /**
-   * Get the default model for this provider
    * Uses the robust fallback chain: cache > database
    * @returns Promise<string> - The default model codename
    */
@@ -286,19 +165,17 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
   /**
    * Convert provider-specific configuration from TomoriState
-   * @param tomoriState - The current Tomori state
-   * @param apiKey - The decrypted API key
-   * @returns Promise<NovelaiProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<NovelaiProviderConfig> {
-    const tools = await this.getTools(tomoriState);
+    const tools = await this.getTools();
 
     return {
       model: tomoriState.llm.llm_codename,
       apiKey: apiKey,
       temperature: getActiveTemperature(tomoriState.config) ?? tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
-      maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 2048,
+      maxOutputTokens:
+        tomoriState.config.llm_max_output_tokens ?? getNovelAIProfile(tomoriState.llm.llm_codename).defaultOutputTokens,
       tools: tools,
     };
   }
@@ -331,10 +208,9 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     log.info(`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      // Create streaming configuration
-      const streamConfig: NovelaiStreamConfig = {
+      const streamConfig: StreamConfig = {
         ...config,
-        // Add Discord streaming constants
+        tools: [],
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
         flushBufferSizeCodeBlock: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
@@ -342,81 +218,37 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         baseTypeSpeedMsPerChar: DISCORD_STREAMING_CONSTANTS.BASE_TYPE_SPEED_MS_PER_CHAR,
         maxTypingTimeMs: DISCORD_STREAMING_CONSTANTS.MAX_TYPING_TIME_MS,
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
-        humanizerDegree: tomoriState.config.humanizer_degree,
+        humanizer: pickHumanizerSettings(tomoriState.config),
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
       };
 
-      // Override tools with context-aware tools when streaming context is provided
-      if (streamingContext) {
-        log.info("NovelAIProvider: Reloading tools with streaming context for context-aware availability");
-        const contextAwareTools = await this.getTools(tomoriState, streamingContext);
-        streamConfig.tools = contextAwareTools;
-      }
-
-      // Create streaming context
-      const streamContext: StreamContext = {
-        // Discord context
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "novelai",
         channel,
         client,
         initialInteraction,
         replyToMessage,
-
-        // Application context
         tomoriState,
         contextItems,
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-
-        // Provider context
-        provider: "novelai",
-        locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
-
-        // Multi-persona webhook support
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
+      });
 
-        // Forced mentions (e.g., reminder recipients)
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // NAI text suppression for tool retry mode
-        suppressTextOutput: streamingContext?.suppressTextOutput,
-
-        // NAI GLM-4.6 prompt continuation: trailing fragment from previous truncated stream
-        naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
-
-      // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();
       const novelaiAdapter = new NovelaiStreamAdapter();
 
-      // Execute streaming with the modular architecture
       log.info("NovelAIProvider: Delegating to StreamOrchestrator with NovelAIStreamAdapter");
       const result = await orchestrator.streamToDiscord(novelaiAdapter, streamConfig, streamContext);
 
       log.info(`NovelAIProvider: Streaming completed with status: ${result.status}`);
 
-      // For GLM-4.6 empty responses: attach the incomplete trailing sentence so
-      // tomoriChat can use it as a prompt continuation on the retry, instead of
-      // starting a fresh generation that produces the same truncated output.
-      const pendingPrefill = novelaiAdapter.getPendingContinuationPrefill();
-      if (result.status === "empty_response" && pendingPrefill) {
-        log.info(`NovelAIProvider: Attaching continuation prefill to StreamResult (${pendingPrefill.length} chars)`);
-        return { ...result, naiContinuationPrefill: pendingPrefill };
-      }
       return result;
     } catch (error) {
       log.error(

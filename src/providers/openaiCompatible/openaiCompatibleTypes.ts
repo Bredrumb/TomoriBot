@@ -45,7 +45,7 @@ export interface OpenAICompatibleAccumulatedToolCall {
   functionArguments: string;
 }
 
-export interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
+interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
   type: ToolParameterType;
   description?: string;
   enum?: string[];
@@ -79,13 +79,13 @@ export interface OpenAICompatibleStreamConfig extends StreamConfig {
   logitBias?: Record<string, number>;
 }
 
-export interface OpenAICompatibleRequestMutationArgs {
+interface OpenAICompatibleRequestMutationArgs {
   requestBody: Record<string, unknown>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;
 }
 
-export interface OpenAICompatibleHeaderMutationArgs {
+interface OpenAICompatibleHeaderMutationArgs {
   headers: Record<string, string>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;
@@ -108,6 +108,40 @@ export interface OpenAICompatibleStreamAdapterOptions {
    */
   includePersonaSpeakerStop?: boolean;
   preserveReasoningContent?: boolean;
+  /**
+   * When `true`, replayed assistant tool-call turns always carry a `reasoning_content` key,
+   * empty string included. Separate from {@link preserveReasoningContent} (which only governs
+   * capture) because DeepSeek is so far the only endpoint proven to require the key's presence
+   * and to accept an empty value.
+   */
+  requiresReasoningContentReplay?: boolean;
+  /**
+   * Request-body keys the degradation ladder must never drop, on top of the shared
+   * `model`/`messages`/`stream`.
+   *
+   * The ladder assumes a dropped key only affects the attempt that drops it, which holds for
+   * sampler knobs but not for keys that change the shape of the reply. `thinking` is the case
+   * that matters: a rung that drops it still calls tools, and the resulting tool call has no
+   * `reasoning_content` to capture, which a later full-strength request then cannot replay.
+   */
+  mandatoryBodyKeys?: readonly string[];
+  /**
+   * Treat an opaque 5xx as a parameter-incompatibility signal rather than an outage.
+   *
+   * Off by default because a direct provider's 5xx is normally a genuine outage that degradation
+   * cannot fix. Enable it only for backends known to report an unsupported request key as an
+   * internal server error; the shared classifier still requires a content-free message, so a
+   * descriptive outage keeps failing fast into key rotation and model fallback.
+   */
+  degradeOnOpaque5xx?: boolean;
+  /**
+   * Request-body keys this adapter injects in {@link mutateRequestBody}, in probe order.
+   *
+   * The ladder sorts anything it does not recognize into the unknown tail, so an injected key was
+   * effectively unreachable: declaring it here makes the backend dropping support for that key a
+   * finding rather than a dead end.
+   */
+  degradationPriorityKeys?: readonly string[];
   /** Set to `false` to disable stripping `<think>` blocks from content. Defaults to `true`. */
   stripThinkBlocksFromContent?: boolean;
   /** Set to `false` to discard stripped `<think>` content instead of routing it to the thought log. Defaults to `true`. */
@@ -115,6 +149,7 @@ export interface OpenAICompatibleStreamAdapterOptions {
   resolveApiUrl: (config: OpenAICompatibleStreamConfig) => string;
   mutateRequestBody?: (args: OpenAICompatibleRequestMutationArgs) => Promise<void> | void;
   mutateHeaders?: (args: OpenAICompatibleHeaderMutationArgs) => Promise<void> | void;
+  /** Provider-specific signal folded into the shared parameter-degradation classifier. */
   shouldRetryWithoutStop?: (statusCode: number, errorText: string) => boolean;
   /**
    * Return `false` to signal that this endpoint does not accept OpenAI-style

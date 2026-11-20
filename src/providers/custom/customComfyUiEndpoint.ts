@@ -43,8 +43,11 @@ import {
 } from "@/providers/custom/customImageDiagnostics";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
+import { ConfiguredModelUnavailableError } from "@/utils/provider/providerToolFailure";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out" | "full_canvas";
@@ -64,6 +67,7 @@ interface ComfyUiReferenceImage {
 
 interface ComfyUiGenerationOptions {
   mode: ComfyUiGenerationMode;
+  abortSignal?: AbortSignal;
   prompt: string;
   negativePrompt?: string | null;
   aspectRatio?: string;
@@ -108,6 +112,9 @@ interface ComfyUiGenerationOptions {
 
 type WorkflowPlaceholderValue = string | number | boolean | null | Record<string, unknown> | Array<unknown>;
 type ComfyUiWorkflow = Record<string, unknown>;
+
+// Only plain model filenames qualify, which excludes sampler or scheduler choices and any value carrying markup.
+const COMFYUI_MODEL_FILE = /^[\w .()+/-]{1,160}\.(?:safetensors|ckpt|pt|pth|bin|gguf|sft|onnx)$/i;
 type ComfyUiAsset = {
   filename: string;
   subfolder?: string;
@@ -243,14 +250,18 @@ async function unloadComfyUiModelsAfterSuccessfulGeneration(
   }
 
   try {
-    const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/free`, {
-      method: "POST",
-      headers: buildCustomHeaders(apiKey),
-      body: JSON.stringify({
-        unload_models: true,
-        free_memory: true,
-      }),
-    });
+    const response = await fetchUserRemoteUrl(
+      `${endpoint.endpoint_url.replace(/\/+$/, "")}/free`,
+      {
+        method: "POST",
+        headers: buildCustomHeaders(apiKey),
+        body: JSON.stringify({
+          unload_models: true,
+          free_memory: true,
+        }),
+      },
+      getEndpointRemotePolicy(),
+    );
 
     if (!response.ok) {
       log.warn(
@@ -1216,8 +1227,12 @@ function resolveComfyUiEffectiveDenoise(options: ComfyUiGenerationOptions, inpai
   return 1;
 }
 
+// Discord interaction tokens expire 15 minutes after the defer, so `/generate` needs time left after
+// setup and polling to send its failure reply; chat tool calls end sooner under the tool timeout.
+const COMFYUI_DEFAULT_POLL_TIMEOUT_MS = 13 * 60 * 1000;
+
 function getComfyUiTimeoutMs(): number {
-  const defaultTimeoutMs = 900000;
+  const defaultTimeoutMs = COMFYUI_DEFAULT_POLL_TIMEOUT_MS;
   const parsed = Number.parseInt(process.env.COMFYUI_POLL_TIMEOUT_MS ?? `${defaultTimeoutMs}`, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultTimeoutMs;
 }
@@ -1394,9 +1409,9 @@ function resolveComfyUiVideoDurationSeconds(durationSeconds: number | undefined)
 }
 
 function resolveComfyUiVideoFps(requestedFps: number | undefined): number {
-  // 1. Honor a user-supplied FPS (from the /generate video modal) when valid,
+  // Honor a user-supplied FPS (from the /generate video modal) when valid,
   //    mirroring how resolveComfyUiVideoDurationSeconds() prioritizes the request.
-  // 2. Otherwise fall back through the operator env overrides to the built-in default.
+  // Otherwise fall back through the operator env overrides to the built-in default.
   const requested =
     typeof requestedFps === "number" && Number.isFinite(requestedFps) && requestedFps > 0
       ? requestedFps
@@ -1538,18 +1553,6 @@ function normalizeComfyUiUploadField(value: string | undefined): string | undefi
   return trimmed ? trimmed : undefined;
 }
 
-function buildDiscordDownloadInit(url: string): RequestInit | undefined {
-  if (!process.env.DISCORD_TOKEN || !/discord(?:app)?\.(?:com|net)|discordcdn\.com/i.test(url)) {
-    return undefined;
-  }
-
-  return {
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-    },
-  };
-}
-
 async function resolveComfyUiReferenceImageBuffer(referenceImage: ComfyUiReferenceImage): Promise<{
   buffer: Buffer;
   mimeType: string;
@@ -1571,7 +1574,6 @@ async function resolveComfyUiReferenceImageBuffer(referenceImage: ComfyUiReferen
     const downloadResult = await safeDownload(url, {
       maxSizeMB: COMFYUI_REFERENCE_IMAGE_DOWNLOAD_MAX_MB,
       timeoutMs: 15_000,
-      requestInit: buildDiscordDownloadInit(url),
     });
     if (downloadResult.success && downloadResult.buffer) {
       return {
@@ -1602,11 +1604,15 @@ async function uploadComfyUiReferenceImage(
 
   const headers = buildCustomHeaders(apiKey);
   delete headers["Content-Type"];
-  const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/upload/image`, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
+  const response = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/upload/image`,
+    {
+      method: "POST",
+      headers,
+      body: formData,
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!response.ok) {
     throw new Error(`ComfyUI reference image upload failed: ${response.status} ${response.statusText}`);
@@ -2292,8 +2298,8 @@ function buildComfyUiPlaceholderMap(
     ),
     TOMORI_NEGATIVE_PROMPT: buildComfyUiNegativePrompt(options, inpaint, maskMode),
     TOMORI_VIDEO_NEGATIVE_PROMPT: buildComfyUiVideoNegativePrompt(),
-    TOMORI_MODEL: endpoint.model_name ?? endpoint.display_name,
-    TOMORI_MODEL_NAME: endpoint.model_name ?? endpoint.display_name,
+    TOMORI_MODEL: endpoint.model_name ?? "",
+    TOMORI_MODEL_NAME: endpoint.model_name ?? "",
     TOMORI_MODE: options.mode,
     TOMORI_IMAGE_MODE: inpaint ? "inpaint" : hasReference ? "img2img" : "txt2img",
     TOMORI_ASPECT_RATIO: options.aspectRatio ?? (options.mode === "video" ? "16:9" : "1:1"),
@@ -2695,13 +2701,100 @@ function describeComfyUiHistoryOutputs(outputs: Record<string, unknown> | undefi
   };
 }
 
+/**
+ * Summarizes `/prompt` `node_errors`, which ComfyUI returns beside a `prompt_id` when it drops the
+ * outputs that depend on an invalid node and still runs the rest.
+ */
+function describeComfyUiNodeErrors(nodeErrors: unknown): string[] {
+  if (!isRecord(nodeErrors)) {
+    return [];
+  }
+
+  return Object.entries(nodeErrors).map(([nodeId, nodeError]) => {
+    const classType = isRecord(nodeError) && typeof nodeError.class_type === "string" ? nodeError.class_type : "node";
+    const errors = isRecord(nodeError) && Array.isArray(nodeError.errors) ? nodeError.errors : [];
+    const reasons = errors.filter(isRecord).map((error) => {
+      const rejected = describeRejectedComfyUiInput(error);
+      // ComfyUI's `details` for a rejected value lists every installed file, so naming the input and value keeps the cause from being buried.
+      const details = rejected ? `${rejected.inputName} '${rejected.value}'` : error.details;
+      return [error.message, details].filter((part) => typeof part === "string" && part).join(": ");
+    });
+    return `${classType} ${nodeId}${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`;
+  });
+}
+
+function parseComfyUiNodeErrors(body: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return isRecord(parsed) ? parsed.node_errors : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function describeRejectedComfyUiInput(error: Record<string, unknown>): { inputName: string; value: string } | null {
+  const extra = error.extra_info;
+  if (!isRecord(extra) || typeof extra.input_name !== "string" || typeof extra.received_value !== "string") {
+    return null;
+  }
+  return { inputName: extra.input_name, value: extra.received_value };
+}
+
+/**
+ * Model files a rejected prompt could not find, kept only when the workflow sent that exact value to
+ * that node input, so a tool result never repeats a string the endpoint supplied.
+ */
+function findMissingComfyUiModelFiles(nodeErrors: unknown, workflow: ComfyUiWorkflow): string[] {
+  if (!isRecord(nodeErrors)) {
+    return [];
+  }
+
+  const missing = new Set<string>();
+  for (const [nodeId, nodeError] of Object.entries(nodeErrors)) {
+    const node = workflow[nodeId];
+    if (!isRecord(nodeError) || !Array.isArray(nodeError.errors) || !isRecord(node) || !isRecord(node.inputs)) {
+      continue;
+    }
+    for (const error of nodeError.errors.filter(isRecord)) {
+      const rejected = error.type === "value_not_in_list" ? describeRejectedComfyUiInput(error) : null;
+      if (rejected && node.inputs[rejected.inputName] === rejected.value && COMFYUI_MODEL_FILE.test(rejected.value)) {
+        missing.add(rejected.value);
+      }
+    }
+  }
+  return [...missing];
+}
+
+function describeComfyUiExecutionError(messages: unknown): string | null {
+  if (!Array.isArray(messages)) {
+    return null;
+  }
+
+  for (const message of messages) {
+    if (!Array.isArray(message) || message[0] !== "execution_error" || !isRecord(message[1])) {
+      continue;
+    }
+    const { node_type: nodeType, node_id: nodeId, exception_message: exceptionMessage } = message[1];
+    return `${typeof nodeType === "string" ? nodeType : "node"} ${typeof nodeId === "string" ? nodeId : "?"}: ${
+      typeof exceptionMessage === "string" ? exceptionMessage.trim() : "execution error"
+    }`;
+  }
+  return null;
+}
+
 async function generateWithComfyUi(
   endpoint: CustomEndpointRow,
   apiKey: string,
   options: ComfyUiGenerationOptions,
 ): Promise<ComfyUiGenerationResponse> {
+  if (options.abortSignal?.aborted) {
+    throw new Error("ComfyUI generation was cancelled.");
+  }
   const workflowPath = resolveComfyUiRuntimeWorkflowPath(endpoint);
-  const savedWorkflow = workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : endpoint.extra_config.workflow;
+  // A workflow uploaded with the endpoint is its configuration of record. Static paths remain
+  // available for legacy endpoints that have no uploaded workflow.
+  const savedWorkflow =
+    endpoint.extra_config.workflow ?? (workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : null);
   if (!savedWorkflow || typeof savedWorkflow !== "object") {
     throw new Error("ComfyUI workflow JSON is missing.");
   }
@@ -2763,7 +2856,7 @@ async function generateWithComfyUi(
     throw new Error(
       [
         "This ComfyUI workflow does not have active outpainting support.",
-        "Update the stored endpoint workflow to the latest tomoribot-anima3-comfyui.json.",
+        "Update the stored endpoint workflow to the latest bundled Anima workflow (tomoribot-anima-image-turbo.json or tomoribot-anima-image-detailed.json).",
         "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders, or use TOMORI_OUTPAINT_FULL_CANVAS for full-canvas outpainting.",
       ].join(" "),
     );
@@ -2833,94 +2926,209 @@ async function generateWithComfyUi(
   delete getHeaders["Content-Type"];
   const clientId = `tomoribot-${Date.now()}`;
 
-  const promptResponse = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/prompt`, {
-    method: "POST",
-    headers: postHeaders,
-    body: JSON.stringify({
-      prompt: preparedWorkflow,
-      client_id: clientId,
-    }),
-  });
+  const promptResponse = await fetchUserRemoteUrl(
+    `${endpoint.endpoint_url.replace(/\/+$/, "")}/prompt`,
+    {
+      method: "POST",
+      headers: postHeaders,
+      body: JSON.stringify({
+        prompt: preparedWorkflow,
+        client_id: clientId,
+      }),
+    },
+    getEndpointRemotePolicy(),
+  );
 
   if (!promptResponse.ok) {
-    const errorBody = await promptResponse.text().catch(() => "");
-    const errorDetail = errorBody.trim() ? `: ${errorBody.trim().slice(0, 2000)}` : "";
-    throw new Error(`ComfyUI prompt failed: ${promptResponse.status} ${promptResponse.statusText}${errorDetail}`);
+    const errorBody = (await readProviderErrorBody(promptResponse, apiKey)).trim();
+    const nodeErrors = parseComfyUiNodeErrors(errorBody);
+    const rejectedNodes = describeComfyUiNodeErrors(nodeErrors);
+    const errorDetail = rejectedNodes.length > 0 ? rejectedNodes.join("; ") : errorBody.slice(0, 2000);
+    const message = `ComfyUI prompt failed: ${promptResponse.status} ${promptResponse.statusText}${
+      errorDetail ? `: ${errorDetail}` : ""
+    }`;
+    const missingModels = findMissingComfyUiModelFiles(nodeErrors, preparedWorkflow);
+    throw missingModels.length > 0
+      ? new ConfiguredModelUnavailableError(message, missingModels, promptResponse.status)
+      : Object.assign(new Error(message), { status: promptResponse.status });
   }
 
-  const promptPayload = (await promptResponse.json()) as { prompt_id?: string };
+  const promptPayload = (await promptResponse.json()) as { prompt_id?: string; node_errors?: unknown };
   if (!promptPayload.prompt_id) {
     throw new Error("ComfyUI did not return a prompt_id.");
   }
+  const promptId = promptPayload.prompt_id;
+  const rejectedNodes = describeComfyUiNodeErrors(promptPayload.node_errors);
 
   log.info(
     `ComfyUI prompt accepted ${JSON.stringify({
       promptId: promptPayload.prompt_id,
       mode: generationOptions.mode,
+      ...(rejectedNodes.length > 0 ? { rejectedNodes } : {}),
     })}`,
   );
 
-  const timeoutAt = Date.now() + getComfyUiTimeoutMs();
-  let loggedHistoryWithoutFinal = false;
-  while (Date.now() < timeoutAt) {
-    const historyResponse = await fetchUserRemoteUrl(
-      `${endpoint.endpoint_url.replace(/\/+$/, "")}/history/${encodeURIComponent(promptPayload.prompt_id)}`,
-      { headers: getHeaders },
-    );
+  // The listener owns the remote cancel so the loop can exit immediately; awaiting it there would
+  // let a stalled ComfyUI hold an already-cancelled turn open.
+  const abortListener = () => void cancelComfyUiPrompt(endpoint, apiKey, promptId);
+  options.abortSignal?.addEventListener("abort", abortListener, { once: true });
+  if (options.abortSignal?.aborted) abortListener();
 
-    if (historyResponse.ok) {
-      const historyPayload = (await historyResponse.json()) as Record<
-        string,
-        {
-          outputs?: Record<
-            string,
-            {
-              images?: Array<{ filename: string; subfolder?: string; type?: string }>;
-              gifs?: Array<{ filename: string; subfolder?: string; type?: string }>;
-              videos?: Array<{ filename: string; subfolder?: string; type?: string }>;
-            }
-          >;
-          status?: {
-            completed?: boolean;
-            status_str?: string;
-          };
+  try {
+    const timeoutAt = Date.now() + getComfyUiTimeoutMs();
+    let loggedHistoryWithoutFinal = false;
+    while (Date.now() < timeoutAt) {
+      if (options.abortSignal?.aborted) {
+        throw new Error("ComfyUI generation was cancelled.");
+      }
+      const historyResponse = await fetchUserRemoteUrl(
+        `${endpoint.endpoint_url.replace(/\/+$/, "")}/history/${encodeURIComponent(promptPayload.prompt_id)}`,
+        { headers: getHeaders, signal: options.abortSignal },
+        getEndpointRemotePolicy(),
+      );
+
+      if (historyResponse.ok) {
+        const historyPayload = (await historyResponse.json()) as Record<
+          string,
+          {
+            outputs?: Record<
+              string,
+              {
+                images?: Array<{ filename: string; subfolder?: string; type?: string }>;
+                gifs?: Array<{ filename: string; subfolder?: string; type?: string }>;
+                videos?: Array<{ filename: string; subfolder?: string; type?: string }>;
+              }
+            >;
+            status?: {
+              completed?: boolean;
+              status_str?: string;
+              messages?: unknown;
+            };
+          }
+        >;
+
+        const directHistoryItem = isRecord(historyPayload.outputs) ? historyPayload : null;
+        const historyItem = historyPayload[promptPayload.prompt_id] ?? directHistoryItem;
+        const outputs = isRecord(historyItem?.outputs) ? historyItem.outputs : undefined;
+        const files = collectComfyUiHistoryFiles(outputs);
+        const finalFiles =
+          generationOptions.mode === "image"
+            ? files.filter((file) => !isComfyUiDiagnosticAsset(file))
+            : files.filter((file) => file.mediaKind === "video" || file.mediaKind === "gif");
+        if (finalFiles.length > 0) {
+          if (options.abortSignal?.aborted) {
+            throw new Error("ComfyUI generation was cancelled.");
+          }
+          return { files: generationOptions.mode === "video" ? finalFiles : files, seed };
         }
-      >;
+        if (historyItem && !loggedHistoryWithoutFinal) {
+          loggedHistoryWithoutFinal = true;
+          log.warn(
+            `ComfyUI history had no final ${generationOptions.mode} files yet ${JSON.stringify({
+              promptId: promptPayload.prompt_id,
+              status: historyItem.status ?? null,
+              outputs: describeComfyUiHistoryOutputs(outputs),
+            })}`,
+          );
+        }
+        // ComfyUI writes `status` only when the prompt leaves the queue, so either flag means no
+        // further outputs will arrive; an "error" run reports completed: false.
+        const status = historyItem?.status;
+        if (status?.completed === true || status?.status_str === "error") {
+          const reasons = [
+            describeComfyUiExecutionError(status.messages),
+            rejectedNodes.length > 0 ? `rejected nodes: ${rejectedNodes.join(" | ")}` : null,
+          ].filter((reason): reason is string => reason !== null);
+          throw new Error(
+            `ComfyUI finished the ${generationOptions.mode} prompt (${status.status_str ?? "completed"}) without a final ${
+              generationOptions.mode
+            } file.${reasons.length > 0 ? ` ${reasons.join("; ")}.` : ""} Outputs: ${JSON.stringify(
+              describeComfyUiHistoryOutputs(outputs),
+            )}`.slice(0, 2000),
+          );
+        }
+      }
 
-      const directHistoryItem = isRecord(historyPayload.outputs) ? historyPayload : null;
-      const historyItem = historyPayload[promptPayload.prompt_id] ?? directHistoryItem;
-      const outputs = isRecord(historyItem?.outputs) ? historyItem.outputs : undefined;
-      const files = collectComfyUiHistoryFiles(outputs);
-      const finalFiles =
-        generationOptions.mode === "image"
-          ? files.filter((file) => !isComfyUiDiagnosticAsset(file))
-          : files.filter((file) => file.mediaKind === "video" || file.mediaKind === "gif");
-      if (finalFiles.length > 0) {
-        return { files: generationOptions.mode === "video" ? finalFiles : files, seed };
-      }
-      if (historyItem && !loggedHistoryWithoutFinal) {
-        loggedHistoryWithoutFinal = true;
-        log.warn(
-          `ComfyUI history had no final ${generationOptions.mode} files yet ${JSON.stringify({
-            promptId: promptPayload.prompt_id,
-            status: historyItem.status ?? null,
-            outputs: describeComfyUiHistoryOutputs(outputs),
-          })}`,
-        );
-      }
-      if (generationOptions.mode === "video" && historyItem?.status?.completed === true) {
-        throw new Error(
-          `ComfyUI completed video prompt without returning a video file. Outputs: ${JSON.stringify(
-            describeComfyUiHistoryOutputs(outputs),
-          ).slice(0, 2000)}`,
-        );
-      }
+      await Bun.sleep(1500);
     }
 
-    await Bun.sleep(1500);
+    throw new Error("ComfyUI generation timed out.");
+  } catch (error) {
+    // An aborted history fetch surfaces as a DOMException AbortError; callers match on the
+    // cancellation message, not the transport error.
+    if (options.abortSignal?.aborted) {
+      throw new Error("ComfyUI generation was cancelled.", { cause: error });
+    }
+    throw error;
+  } finally {
+    options.abortSignal?.removeEventListener("abort", abortListener);
+  }
+}
+
+/** Bounds each best-effort cancel request, because the ComfyUI being cancelled may be the thing that stalled. */
+const COMFYUI_CANCEL_REQUEST_TIMEOUT_MS = 5_000;
+
+/**
+ * Cancels one ComfyUI prompt without touching other prompts on a shared instance.
+ *
+ * Prefers the ID-scoped `/api/jobs/{id}/cancel` route. On servers that predate it, deletes the
+ * prompt from the queue and interrupts only when this exact prompt is the one executing, because
+ * a bodiless or legacy `/interrupt` aborts whatever is running, including another user's job.
+ * Never rejects.
+ *
+ * @internal Exported for focused cancellation regression tests.
+ */
+export async function cancelComfyUiPrompt(
+  endpoint: CustomEndpointRow,
+  apiKey: string,
+  promptId: string,
+): Promise<void> {
+  const baseUrl = endpoint.endpoint_url.replace(/\/+$/, "");
+  const headers = buildCustomHeaders(apiKey);
+  const request = async (path: string, init: RequestInit = {}): Promise<Response | null> => {
+    try {
+      return await fetchUserRemoteUrl(
+        `${baseUrl}${path}`,
+        {
+          ...init,
+          headers,
+          signal: AbortSignal.timeout(COMFYUI_CANCEL_REQUEST_TIMEOUT_MS),
+        },
+        getEndpointRemotePolicy(),
+      );
+    } catch {
+      return null;
+    }
+  };
+  const post = async (path: string, body: unknown): Promise<number | null> => {
+    const response = await request(path, { method: "POST", body: JSON.stringify(body) });
+    await response?.body?.cancel().catch(() => undefined);
+    return response?.status ?? null;
+  };
+
+  const scopedStatus = await post(`/api/jobs/${encodeURIComponent(promptId)}/cancel`, {});
+  if (scopedStatus !== null && scopedStatus >= 200 && scopedStatus < 300) {
+    log.metric("comfyui_cancel", { route: "scoped", interrupted: "n/a" });
+    return;
   }
 
-  throw new Error("ComfyUI generation timed out.");
+  await post("/queue", { delete: [promptId] });
+  const running = await isComfyUiPromptRunning(await request("/queue"), promptId);
+  if (running) {
+    await post("/interrupt", { prompt_id: promptId });
+  }
+  log.metric("comfyui_cancel", { route: "legacy", interrupted: running ? "yes" : "no" });
+}
+
+async function isComfyUiPromptRunning(queueResponse: Response | null, promptId: string): Promise<boolean> {
+  if (!queueResponse?.ok) {
+    await queueResponse?.body?.cancel().catch(() => undefined);
+    return false;
+  }
+  const payload = (await queueResponse.json().catch(() => null)) as { queue_running?: unknown } | null;
+  const running = Array.isArray(payload?.queue_running) ? payload.queue_running : [];
+  // Queue entries are positional tuples: [number, prompt_id, prompt, extra_data, outputs_to_execute].
+  return running.some((entry) => Array.isArray(entry) && entry[1] === promptId);
 }
 
 async function downloadComfyUiAsset(endpoint: CustomEndpointRow, apiKey: string, asset: ComfyUiAsset): Promise<Buffer> {
@@ -2936,7 +3144,7 @@ async function downloadComfyUiAsset(endpoint: CustomEndpointRow, apiKey: string,
   const headers = { ...buildCustomHeaders(apiKey) };
   delete headers["Content-Type"];
 
-  const response = await fetchUserRemoteUrl(url.toString(), { headers });
+  const response = await fetchUserRemoteUrl(url.toString(), { headers }, getEndpointRemotePolicy());
   if (!response.ok) {
     throw new Error(`ComfyUI asset download failed: ${response.status} ${response.statusText}`);
   }
@@ -3019,6 +3227,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
   inpaintExtendPadding?: number | null;
   clothingMode?: boolean | null;
   clothingSegmentCategories?: string[] | null;
+  abortSignal?: AbortSignal;
 }): Promise<ProviderNativeImageGenerationResult> {
   const {
     endpoint,
@@ -3055,6 +3264,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
     inpaintExtendPadding,
     clothingMode,
     clothingSegmentCategories,
+    abortSignal,
   } = params;
 
   const imageGenerationOptions = {
@@ -3091,6 +3301,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
     inpaintExtendPadding,
     clothingMode,
     clothingSegmentCategories,
+    abortSignal,
   } satisfies ComfyUiGenerationOptions;
   let comfyUiResult: ComfyUiGenerationResponse;
   try {
@@ -3406,6 +3617,7 @@ export async function generateComfyUiVideoViaEndpoint(params: {
   generateAudio?: boolean;
   audioPrompt?: string;
   loop?: boolean;
+  abortSignal?: AbortSignal;
 }): Promise<ProviderNativeVideoGenerationResult> {
   const {
     endpoint,
@@ -3419,6 +3631,7 @@ export async function generateComfyUiVideoViaEndpoint(params: {
     generateAudio,
     audioPrompt,
     loop,
+    abortSignal,
   } = params;
 
   const { files } = await generateWithComfyUi(endpoint, apiKey, {
@@ -3432,6 +3645,7 @@ export async function generateComfyUiVideoViaEndpoint(params: {
     generateAudio,
     audioPrompt,
     loop,
+    abortSignal,
   });
   const firstFile = files[0];
   log.info(

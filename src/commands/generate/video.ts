@@ -1,8 +1,23 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
+import {
+  findProviderRequestDeniedError,
+  reportProviderUsage,
+  getProviderRequestFailureCopy,
+} from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * Video Generation Command (/generate video)
- * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
+ * Allows users to generate AI videos using Google Gemini Omni, OpenRouter, or Z.ai.
  * Supports text-to-video and image-to-video via an optional reference image upload.
- * Video generation is async — takes 1-5 minutes with provider-side polling.
+ * Video generation is async: takes 1-5 minutes with provider-side polling.
  */
 
 import {
@@ -12,16 +27,24 @@ import {
   AttachmentBuilder,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
   type APIAttachment,
 } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
+import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import { safeReply } from "@/utils/discord/safeReply";
 import type { UserRow } from "../../types/db/schema";
-import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
+import {
+  checkVideoQuota,
+  releaseVideoQuota,
+  reserveVideoQuota,
+  type VideoQuotaCheckResult,
+} from "../../utils/quota/videoQuotaManager";
+import { QuotaUnavailableError } from "../../utils/quota/quotaErrors";
+import type { QuotaReservation } from "../../utils/db/repositories/QuotaRepository";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import {
@@ -31,11 +54,19 @@ import {
   resolveCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
+import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
+import {
+  isExpectedVideoFailure,
+  isVideoContentRefusal,
+  ProviderVideoFilteredError,
+} from "@/providers/utils/providerVideoErrors";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
 const ASPECT_RATIO_SELECT_ID = "aspect_ratio_select";
@@ -46,22 +77,11 @@ const FPS_INPUT_ID = "fps_input";
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
-/**
- * Parse a positive integer from an environment variable, falling back to a default.
- * @param name - Environment variable name
- * @param fallback - Value to use when unset or invalid
- * @returns A finite positive integer
- */
-function parsePositiveIntEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 // Duration/FPS bounds for the modal inputs. Kept env-configurable so operators can tune
 // limits without code changes; providers still normalize values to their own supported ranges.
-const DEFAULT_VIDEO_DURATION_SECONDS = parsePositiveIntEnv("VIDEO_GEN_DEFAULT_DURATION_SECONDS", 5);
-const MAX_VIDEO_DURATION_SECONDS = parsePositiveIntEnv("VIDEO_GEN_MAX_DURATION_SECONDS", 20);
-const MAX_VIDEO_FPS = parsePositiveIntEnv("VIDEO_GEN_MAX_FPS", 60);
+const DEFAULT_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_DEFAULT_DURATION_SECONDS) ?? 5;
+const MAX_VIDEO_DURATION_SECONDS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_DURATION_SECONDS) ?? 20;
+const MAX_VIDEO_FPS = parsePositiveIntegerEnv(process.env.VIDEO_GEN_MAX_FPS) ?? 60;
 
 /**
  * Parse and validate an integer entered into a modal text field.
@@ -73,17 +93,15 @@ const MAX_VIDEO_FPS = parsePositiveIntEnv("VIDEO_GEN_MAX_FPS", 60);
  */
 function parseModalInteger(raw: string | undefined, min: number, max: number): { value?: number; error?: true } {
   const trimmed = raw?.trim();
-  // 1. Blank input is treated as "not provided" — callers decide if that's allowed.
+  // Blank input is treated as "not provided", so callers decide if that's allowed.
   if (!trimmed) {
     return { value: undefined };
   }
 
-  // 2. Reject anything that isn't a clean integer (no decimals, units, or letters).
   if (!/^\d+$/.test(trimmed)) {
     return { error: true };
   }
 
-  // 3. Range check against the configured bounds.
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
     return { error: true };
@@ -92,16 +110,25 @@ function parseModalInteger(raw: string | undefined, min: number, max: number): {
   return { value: parsed };
 }
 
-/**
- * Configure the subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("video").setDescription(localizer("en-US", "commands.generate.video.description"));
+  addGenerationModelOption(
+    subcommand
+      .setName("video")
+      .setDescription(localizer("en-US", "commands.generate.video.description"))
+      .addBooleanOption((option) =>
+        option
+          .setName("nsfw")
+          .setDescription(localizer("en-US", "commands.generate.video.nsfw_description"))
+          .setRequired(false),
+      ),
+    "commands.generate.video.model_description",
+  );
+
+export const autocomplete = createGenerationModelAutocomplete("video");
 
 /**
- * Get the video model codename from the database.
  * @param videoModelId - Database ID of the video generation model
- * @returns The model codename string (e.g., "veo-3.1-generate-preview")
+ * @returns The model codename string (e.g., "gemini-omni-1.1-flash")
  */
 async function getVideoModelCodename(videoModelId: number): Promise<string> {
   const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
@@ -140,6 +167,57 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
   };
 }
 
+async function replyVideoQuotaExceeded(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+  quotaCheck: VideoQuotaCheckResult,
+  tipKeys: string[],
+): Promise<void> {
+  const descriptionVars: Record<string, string> = {};
+
+  if (quotaCheck.resetTime) {
+    const now = new Date();
+    const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+    if (hoursUntilReset < 24) {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
+        hours: hoursUntilReset.toString(),
+      });
+    } else {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
+        days: Math.ceil(hoursUntilReset / 24).toString(),
+      });
+    }
+  }
+
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.video.quota_exceeded_title",
+    descriptionKey:
+      quotaCheck.reason === "user_quota_exceeded"
+        ? "commands.generate.video.user_quota_exceeded_description"
+        : quotaCheck.reason === "serverwide_quota_exceeded"
+          ? "commands.generate.video.serverwide_quota_exceeded_description"
+          : "commands.generate.video.quota_exceeded_description",
+    descriptionVars,
+    footerKey: "commands.generate.video.quota_exceeded_footer",
+    tipKeys,
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function replyVideoQuotaUnavailable(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+): Promise<void> {
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.video.error_title",
+    descriptionKey: "commands.generate.video.quota_unavailable_description",
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
 /**
  * Execute the /generate video command.
  *
@@ -156,7 +234,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -167,7 +244,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load TomoriState
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const baseTomoriState = await personaRepository.loadState(serverId);
 
@@ -181,9 +257,25 @@ export async function execute(
     return;
   }
 
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    baseTomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "video",
+  );
+  if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+  const recoveryTips = async (credentialSource: "server" | "personal", tipKeys: string[] = []) => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: videoCreds?.usageContext?.credentialProvider ?? null,
+      userDiscId: interaction.user.id,
+      serverId: tomoriState.server_id,
+      credentialScope: credentialSource,
+    });
+  };
 
-  // 3. Check if video generation is enabled
   if (!tomoriState.config.videogen_enabled) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.disabled_title",
@@ -194,17 +286,41 @@ export async function execute(
     return;
   }
 
-  // 4. Resolve active video capability credentials and model selection
   let videoCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
   try {
     videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
       userId: userData.user_id ?? null,
+      modelSelection,
     });
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(interaction, locale);
+      return;
+    }
+    const denied = findProviderRequestDeniedError(error);
+    if (denied) {
+      await replyInfoEmbed(interaction, locale, {
+        ...getProviderRequestFailureCopy(denied, locale),
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     if (error instanceof PersonalProviderRequiredError) {
+      log.warn(`[Generate Video] Personal provider required for video generation`, error, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "generate video",
+        },
+      });
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.personal_provider_required_title",
         descriptionKey: "general.errors.personal_provider_required_description",
+        tipKeys: await recoveryTips("personal"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -212,10 +328,27 @@ export async function execute(
     }
 
     if (error instanceof CredentialUnavailableError) {
+      log.warn(
+        `[Generate Video] Video credentials unavailable: source=${error.source}, reason=${error.reason}`,
+        error,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "generate video",
+            source: error.source,
+            reason: error.reason,
+          },
+        },
+      );
       if (error.source === "personal") {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.personal_provider_credentials_error_title",
           descriptionKey: "general.errors.personal_provider_credentials_error_description",
+          tipKeys: await recoveryTips("personal"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
@@ -223,18 +356,24 @@ export async function execute(
       }
 
       if (error.reason === "missing_model_id") {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.generate.video.no_video_model_title",
           descriptionKey: "commands.generate.video.no_video_model_description",
+          tipKeys: await recoveryTips("server"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.generate.video.no_api_key_title",
         descriptionKey: "commands.generate.video.no_api_key_description",
+        tipKeys: await recoveryTips("server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -246,59 +385,57 @@ export async function execute(
 
   const videoModelId = getResolvedCapabilityModelId(videoCreds, "video") ?? tomoriState.config.video_model_id;
   if (!videoModelId) {
+    log.warn(`[Generate Video] No video model configured for server ${tomoriState.server_id}`, undefined, {
+      userId: userData.user_id,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
+      metadata: {
+        command: "generate video",
+      },
+    });
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.no_video_model_title",
       descriptionKey: "commands.generate.video.no_video_model_description",
+      tipKeys: await recoveryTips(videoCreds.source),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  const apiKey = videoCreds.apiKey;
+  let apiKey = videoCreds.apiKey;
   const executionProvider = videoCreds.provider;
 
-  // 7. Check video quota before showing modal
-  const quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
-  if (!quotaCheck.allowed) {
-    const descriptionVars: Record<string, string> = {};
-
-    if (quotaCheck.resetTime) {
-      const now = new Date();
-      const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-      if (hoursUntilReset < 24) {
-        descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
-          hours: hoursUntilReset.toString(),
-        });
-      } else {
-        const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-        descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
-          days: daysUntilReset.toString(),
-        });
+  // Check video quota before showing modal (personal-provider users bypass quota)
+  if (videoCreds.source === "server") {
+    let quotaCheck: VideoQuotaCheckResult;
+    try {
+      quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        await replyVideoQuotaUnavailable(interaction, locale);
+        return;
       }
+      throw error;
     }
 
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "commands.generate.video.quota_exceeded_title",
-      descriptionKey:
-        quotaCheck.reason === "user_quota_exceeded"
-          ? "commands.generate.video.user_quota_exceeded_description"
-          : quotaCheck.reason === "serverwide_quota_exceeded"
-            ? "commands.generate.video.serverwide_quota_exceeded_description"
-            : "commands.generate.video.quota_exceeded_description",
-      descriptionVars,
-      footerKey: "commands.generate.video.quota_exceeded_footer",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
+    if (!quotaCheck.allowed) {
+      await replyVideoQuotaExceeded(
+        interaction,
+        locale,
+        quotaCheck,
+        await recoveryTips("server", ["genai.tips.use_personal_providers"]),
+      );
+      return;
+    }
   }
 
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  let quotaReservation: QuotaReservation | null = null;
+  let quotaConsumed = false;
 
   try {
-    // 8. Build modal components
     const modalComponents = [
       {
         customId: PROMPT_INPUT_ID,
@@ -351,7 +488,7 @@ export async function execute(
       },
     ];
 
-    // 9. Show modal and wait for submission (auto-defer with public reply)
+    // Show modal and wait for submission (auto-defer with public reply)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -369,6 +506,13 @@ export async function execute(
     }
 
     modalSubmitInteraction = modalResult.interaction;
+    if (modelSelection) {
+      videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
+        userId: userData.user_id ?? null,
+        modelSelection,
+      });
+      apiKey = videoCreds.apiKey;
+    }
     const prompt = modalResult.values?.[PROMPT_INPUT_ID];
     const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID] ?? "16:9";
     const imageAttachment = modalResult.attachments?.[REFERENCE_IMAGE_INPUT_ID];
@@ -378,22 +522,16 @@ export async function execute(
       return;
     }
 
-    // 9a. Parse and validate duration (required) and FPS (optional).
+    // Parse and validate duration (required) and FPS (optional).
     //     Providers normalize these to their own supported ranges, so we only guard
     //     against clearly invalid entries here (non-numeric or out of configured bounds).
     const durationResult = parseModalInteger(modalResult.values?.[DURATION_INPUT_ID], 1, MAX_VIDEO_DURATION_SECONDS);
     if (durationResult.error || durationResult.value === undefined) {
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.invalid_duration_title"))
-            .setDescription(
-              localizer(locale, "commands.generate.video.invalid_duration_description", {
-                max: MAX_VIDEO_DURATION_SECONDS.toString(),
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.generate.video.invalid_duration_title",
+        descriptionKey: "commands.generate.video.invalid_duration_description",
+        descriptionVars: { max: MAX_VIDEO_DURATION_SECONDS },
+        color: ColorCode.ERROR,
       });
       return;
     }
@@ -401,23 +539,16 @@ export async function execute(
 
     const fpsResult = parseModalInteger(modalResult.values?.[FPS_INPUT_ID], 1, MAX_VIDEO_FPS);
     if (fpsResult.error) {
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.invalid_fps_title"))
-            .setDescription(
-              localizer(locale, "commands.generate.video.invalid_fps_description", {
-                max: MAX_VIDEO_FPS.toString(),
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.generate.video.invalid_fps_title",
+        descriptionKey: "commands.generate.video.invalid_fps_description",
+        descriptionVars: { max: MAX_VIDEO_FPS },
+        color: ColorCode.ERROR,
       });
       return;
     }
     const fps = fpsResult.value;
 
-    // 10. Process reference image (if provided)
     let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
 
     if (imageAttachment) {
@@ -427,29 +558,38 @@ export async function execute(
         referenceImages = [converted];
       } catch (error) {
         log.warn(`Failed to process video reference image:`, error as Error);
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.generate.video.invalid_image_title"))
-              .setDescription(localizer(locale, "commands.generate.video.invalid_image_description"))
-              .setColor(ColorCode.ERROR),
-          ],
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "commands.generate.video.invalid_image_title",
+          descriptionKey: "commands.generate.video.invalid_image_description",
+          color: ColorCode.ERROR,
         });
         return;
       }
     }
 
-    // 11. Get model codename
     const modelCodename = await getVideoModelCodename(videoModelId);
     const displayModelName = videoCreds.customEndpoint
-      ? formatCustomEndpointModelDisplay(videoCreds.customEndpoint)
+      ? formatCustomModelDisplay(videoCreds.customEndpoint)
       : modelCodename;
 
     log.info(
       `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, fps: ${fps ?? "default"}, reference: ${referenceImages ? "yes" : "no"})`,
     );
 
-    // 12. Show "generating" embed while we poll for completion
+    if (videoCreds.source === "server") {
+      const claim = await reserveVideoQuota(tomoriState.server_id, interaction.user.id);
+      if (!claim.allowed) {
+        await replyVideoQuotaExceeded(
+          modalSubmitInteraction,
+          locale,
+          claim,
+          await recoveryTips("server", ["genai.tips.use_personal_providers"]),
+        );
+        return;
+      }
+      quotaReservation = claim.reservation;
+    }
+
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -461,108 +601,108 @@ export async function execute(
 
     const startTime = performance.now();
 
-    // 13. Route to provider and generate video
     let videoData: Buffer | null = null;
     let videoFilename = `generated_${Date.now()}.mp4`;
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
     if (videoCreds.customEndpoint) {
-      const result = await generateCustomVideoViaEndpoint({
-        endpoint: videoCreds.customEndpoint,
-        apiKey,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const endpoint = videoCreds.customEndpoint;
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateCustomVideoViaEndpoint({
+          endpoint,
+          apiKey,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "google") {
       const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
-      const result = await generateGoogleNativeVideo({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateGoogleNativeVideo({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "openrouter") {
       const { generateOpenRouterNativeVideo } = await import("@/providers/openrouter/openrouterVideoGeneration");
-      const result = await generateOpenRouterNativeVideo({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
+      const result = await withProviderUsageContext(videoCreds.usageContext, async () =>
+        generateOpenRouterNativeVideo({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
+      reportProviderUsage(videoCreds.usageContext, {
+        modelCodename,
+        costUsd: result.costUsd,
+        providerRequestId: result.providerRequestId,
       });
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "zai") {
       const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
-      const result = await generateZaiNativeVideo({
-        apiKey,
-        model: modelCodename,
-        prompt,
-        aspectRatio,
-        durationSeconds,
-        fps,
-        referenceImages,
-      });
+      const result = await withProviderUsageContext(videoCreds.usageContext, () =>
+        generateZaiNativeVideo({
+          apiKey,
+          model: modelCodename,
+          prompt,
+          aspectRatio,
+          durationSeconds,
+          fps,
+          referenceImages,
+        }),
+      );
       videoData = result.videoData;
       videoFilename = result.filename ?? videoFilename;
     } else {
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.error_title"))
-            .setDescription(
-              localizer(locale, "commands.generate.video.unsupported_provider_description", {
-                provider: executionProvider,
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.generate.video.error_title",
+        descriptionKey: "commands.generate.video.unsupported_provider_description",
+        descriptionVars: { provider: executionProvider },
+        color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
 
-    // 14. Validate result
     if (!videoData) {
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.error_title"))
-            .setDescription(localizer(locale, "commands.generate.video.no_data_description"))
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.generate.video.error_title",
+        descriptionKey: "commands.generate.video.no_data_description",
+        color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
 
-    // 15. Check Discord file size limit
     if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
       const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.file_too_large_title"))
-            .setDescription(
-              localizer(locale, "commands.generate.video.file_too_large_description", { size_mb: sizeMB }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.generate.video.file_too_large_title",
+        descriptionKey: "commands.generate.video.file_too_large_description",
+        descriptionVars: { size_mb: sizeMB },
+        color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
 
-    // 16. Send video
     const elapsedMs = performance.now() - startTime;
     const elapsedSec = (elapsedMs / 1000).toFixed(1);
 
@@ -575,12 +715,12 @@ export async function execute(
 
     const attachment = new AttachmentBuilder(videoData, {
       name: videoFilename,
-    });
+    }).setSpoiler(interaction.options.getBoolean("nsfw") ?? false);
 
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.generate.video.success_title"))
+          .setTitle(localizedStatusTitle(locale, "commands.generate.video.success_title", ColorCode.SUCCESS))
           .setDescription(
             localizer(locale, "commands.generate.video.success_description", {
               model: displayModelName,
@@ -593,36 +733,79 @@ export async function execute(
       files: [attachment],
     });
 
-    // 17. Increment quota
-    await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
+    // Delivery succeeded, so the reservation is spent rather than released.
+    quotaConsumed = true;
+    // Record canonical generation telemetry; quota tables enforce limits only.
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "video_generated",
+        // Key by model codename for a per-model generation breakdown at read time.
+        metricKey: modelCodename,
+      });
+    }
     log.success(`Video generated in ${elapsedSec}s via ${displayModelName}`);
   } catch (error) {
-    log.error("Video generation command failed:", error as Error);
-
+    if (error instanceof QuotaUnavailableError) {
+      await replyVideoQuotaUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
+    const denied = findProviderRequestDeniedError(error, videoCreds?.usageContext);
+    if (!denied && !(error instanceof ProviderVideoFilteredError)) {
+      await reportProviderFailure({
+        summary: "Video generation command failed",
+        errorType: "VideoGenerationFailed",
+        error,
+        expected: isExpectedVideoFailure(
+          error instanceof Error ? error.message : String(error),
+          createProviderToolFailure(error, { locale, provider: executionProvider }).failure?.code,
+        ),
+        serverId: tomoriState.server_id,
+        userId: userData.user_id ?? null,
+        dimensions: { operation: "video-generation", provider: executionProvider },
+        metadata: { credentialSource: videoCreds.source },
+      });
+    }
+    if (denied) {
+      await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+        ...getProviderRequestFailureCopy(denied, locale),
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "commands.generate.video.error_title"))
-      .setDescription(
-        errorMessage.includes("timed out")
-          ? localizer(locale, "commands.generate.video.timeout_description")
-          : errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked")
-            ? localizer(locale, "commands.generate.video.blocked_description")
-            : localizer(locale, "commands.generate.video.generic_error_description"),
-      )
-      .setColor(ColorCode.ERROR);
+    const tipKeys = await recoveryTips(videoCreds.source);
+    const capabilityError = isOpenRouterVideoCapabilityError(error) ? error : undefined;
+    const descriptionKey = capabilityError
+      ? capabilityError.code === "last_frame_unsupported"
+        ? "commands.generate.video.loop_unsupported_description"
+        : "commands.generate.video.reference_unsupported_description"
+      : errorMessage.includes("timed out")
+        ? "commands.generate.video.timeout_description"
+        : isVideoContentRefusal(errorMessage)
+          ? "commands.generate.video.blocked_description"
+          : "commands.generate.video.generic_error_description";
 
-    if (modalSubmitInteraction) {
-      await safeReply(modalSubmitInteraction.editReply({ embeds: [errorEmbed] }), "video error embed");
-    } else {
-      await safeReply(
-        replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.generate.video.error_title",
-          descriptionKey: "commands.generate.video.generic_error_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        }),
-        "video fallback error embed",
-      );
+    await safeReply(
+      replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+        titleKey: "commands.generate.video.error_title",
+        descriptionKey,
+        descriptionVars: capabilityError ? { model: capabilityError.model } : undefined,
+        color: ColorCode.ERROR,
+        tipKeys,
+      }),
+      "video error embed",
+    );
+  } finally {
+    if (quotaReservation && !quotaConsumed) {
+      await releaseVideoQuota(tomoriState.server_id, interaction.user.id, quotaReservation);
     }
   }
 }

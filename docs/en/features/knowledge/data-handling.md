@@ -1,0 +1,141 @@
+---
+title: "Data Handling"
+sidebar:
+  order: 4
+---
+
+Export, back up, import, or delete your settings, memories, and personas using Discord slash
+commands. For service terms and privacy details for the [public deployed bot](https://discord.com/oauth2/authorize?client_id=841644102059556915), see `/legal terms-of-service` and
+`/legal privacy-policy`.
+
+:::note
+This page covers in-Discord user controls. On self-hosted instances, full database backups
+and restores are host-side operations; see [Maintenance & Backups](/self-hosting/maintenance/).
+:::
+
+## What She Stores
+
+### Stored data
+
+- Server and personal memories, their search data and recent-use records, and authored lorebooks
+- Persona profiles, traits, and dialogue examples
+- Server configuration settings
+- Encrypted provider API keys
+- Expression metadata, persona access rules, and uploaded expression media
+
+### Not stored
+
+- Discord message history (messages are not archived in a persistent message log)
+
+### Sent to your AI providers
+
+Whenever triggered, TomoriBot fetches recent messages in the channel along with relevant
+memories as context for the model. She does not read or process messages outside of those
+triggers.
+
+When an embedding model is set up, its provider receives the latest message and the document and
+memory text it searches. This can be a different provider from the one writing replies. Personal
+memories hidden by privacy settings stay out of search. Search data is deleted with its memory;
+see [Memory decay](/features/knowledge/memory/memory-decay/) for automatic resting and replacement.
+
+:::note
+Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages under their own
+privacy policy. Avoid sharing sensitive personal credentials or confidential data.
+:::
+
+## Export Your Data
+
+Settings and memory exports are delivered to your DMs as a JSON file, so your DMs keep a copy you can restore
+later. If TomoriBot can't DM you, the file is attached to a private reply instead; save it before
+the reply disappears.
+
+- `/export config`: server configuration values (excludes API keys and credentials).
+- `/export personal config`: personal profile settings (privacy, appearance tags, naming).
+- `/export memories`: server memories and persona lorebooks, scoped to the main persona, one persona,
+  or all personas, plus Serverwide lore. Channel limits are included.
+- `/export personal memories`: personal memories, scoped globally or per persona.
+- **Export Lorebook** in the `/memories` lorebook panel: one book as SillyTavern world info. Channel
+  limits and collection settings are left out.
+
+`/persona export` is meant for sharing, so it posts the persona definition, including the
+persona's lorebook, in the channel instead of your DMs. Choose `TomoriBot Card` or `Raw JSON` to
+retain all persona settings. `SillyTavern-compatible PNG` includes the avatar and supported character
+fields, excluding TomoriBot-specific settings and lorebook channel limits.
+
+In servers, `/persona export` requires `Manage Server` unless a manager enables `Persona Exports`
+in `/moderation` > `Member Access` > `Edit Permissions`. This applies to every format. Denials are
+private; successful exports are always posted publicly. `Export Sprites` is available to server
+managers through `/config`.
+The server setting does not affect exports in DMs.
+
+Choose `TomoriBot Bundle` for a ZIP with the avatar, sprites, character reference, and persona settings.
+Set `include_voice:true` to include the assigned voice reference audio and transcript too; these
+are shared publicly with the ZIP. Provider voice IDs and credentials are excluded. Import the ZIP
+with `/persona import` to restore the persona and its bundled media in one upload.
+
+Bundle exports optimize image copies and may reduce their resolution to fit the per-image budget;
+stored originals stay unchanged. A bundle that exceeds the upload or import size limit is refused
+without dropping assets. If that happens, exclude voice audio or use a PNG card and `Export Sprites`
+separately. Keep the ZIP if import reports a media restoration failure: the persona settings may
+already be saved, and an imported alter must be removed before retrying.
+
+Uploaded expression media is stored on the server host and is outside these JSON exports.
+Self-hosters must back up database storage and media assets together; see
+[custom media backups](/self-hosting/maintenance/#database-backups-and-recovery-keys).
+
+:::tip
+`/export config` is not a complete backup. It leaves out channel overrides, per-channel auto-trigger
+rules, user blacklists, and channel whitelists, which `/reset config` and `/nuke` clear. Copy the
+settings you rely on before either command.
+:::
+
+## Import Your Data
+
+Attach an exported file to restore it:
+
+- `/import config`: server configuration (requires Manage Server). Choose which sections to apply.
+- `/import personal config`: personal settings. Choose which detected sections to apply.
+- `/import memories`: server memories (requires Manage Server). Merge or replace, and map personas.
+- `/import personal memories`: personal memories. Merge or replace, and map personas.
+- `/persona import`: restore a persona. Also imports SillyTavern PNG cards, JSON cards, and `.charx`
+  archives (see [SillyTavern Support](/features/integrations/sillytavern-support/)).
+
+An included lorebook replaces that scope's complete book, including entries added locally. This
+also applies when merging memories. An empty book clears it; a file without a lorebook keeps existing
+lore. Older server backups with keyword-tagged memories convert those memories into persona lore.
+Channel-only memories stay memories, and personal memory tags are unchanged. Channel ids belong to
+their original Discord server, so review channel limits when moving a backup to another server.
+
+## Delete Your Data
+
+These actions permanently remove or reset stored data:
+
+- `/personal memories`: manage or remove personal memories.
+- `/memories`: manage or remove server memories, documents, and lorebooks. Documents and lorebooks
+  require `Manage Server`. With member teaching enabled, members can view, edit, or remove their
+  own server memories. When disabled, viewing and managing server memories requires `Manage Server`.
+- `/personal nuke`: permanently deletes all personal data across servers.
+- `/nuke`: wipes server data, including custom expressions and persona access rules. Set
+  `preserve_personas: true` to keep personas while removing custom expressions and media.
+- `/reset config`: restores server configuration to database defaults.
+  - **Preserves**: active model assignments, API keys, custom endpoints, personas, server
+    memories, and integrations.
+  - **Clears**: channel overrides, auto-trigger rules, user blacklists, and channel whitelists.
+  - Requires the Manage Server permission in servers; also available in DMs.
+- `/reset personal config`: restores personal profile settings and channel spotlights to defaults.
+  - **Preserves**: user identity, personal memories, saved provider API keys, custom endpoints,
+    and scheduled tasks.
+  - **Clears**: nickname overrides, appearance tags, pronouns, addressing style, and channel spotlights.
+  - Available to all users in servers and DMs.
+
+For exact database tables and preserved column lists, see the
+[database schema architecture](/architecture/subsystems/database-schema/#reset-domain-classifications).
+
+## Opting Out
+
+- `/personal config`: control your visibility, up to full invisibility (opting out of memory context),
+  and turn off [Pings from Personas](/features/chatting-personality/natural-nudges/#ping-user), the
+  idle nudges where a persona pings you to start a conversation.
+- `/config` > Permissions: server managers can toggle self-learning and memory features off.
+
+See [Memory](/features/knowledge/memory/long-term-memory/) for day-to-day memory management.

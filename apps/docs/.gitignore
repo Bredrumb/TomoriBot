@@ -1,5 +1,5 @@
 node_modules/
 dist/
 .astro/
-# Junction/symlink created by astro.config.mjs pointing to ../../docs
+# Junction/symlink created by astro.config.mts pointing to ../../docs
 src/content/docs

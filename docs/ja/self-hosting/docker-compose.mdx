@@ -1,0 +1,151 @@
+---
+title: "Docker Compose"
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Docker Composeは、TomoriBotとPostgreSQLをコンテナー内で一緒に実行します。これは、[セットアップウィザード](/self-hosting/setup-wizard/) および [手動セットアップ](/self-hosting/manual-setup/) と並ぶ3番目のインストールオプションです。ホストシステムにBunまたはPostgreSQLをインストールせずに、Dockerですべてを実行したい場合に選択します。対話型セットアップウィザードをバイパスし、データベース接続を自動的に構成します。
+
+## 1. コードを取得する
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## 2. 必要な`.env`の値
+
+サンプルファイルから始めます：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+これらの必須変数を`.env`に設定します。
+
+| 変数 | 値 |
+|---|---|
+| `DISCORD_TOKEN` | Discordボットトークン (`GuildMembers`、`MessageContent`、および`GuildPresences`特権インテントを有効にします)。|
+| `CRYPTO_SECRET` | 保存されたAPIキーの暗号化に使用される32文字の暗号化キー。|
+| `POSTGRES_PASSWORD` | データベースのパスワード。他のすべての`POSTGRES_*`値は自動構成されます。|
+| `ALLOW_PRIVATE_NETWORK` | `true` にするとマシンまたはLAN上のカスタムエンドポイントとMCPサーバーが動作し、`host:port` のリストはそのサーバーのみを許可し、`false` はブロックします。設定されるまでボットは起動しません。選択方法については [プライベートネットワーク](/self-hosting/setup-wizard/#private-networks) を参照してください。|
+
+Dockerを使用して`CRYPTO_SECRET`のランダムな32文字の値を生成し、それを`.env`にコピーします：
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+`POSTGRES_PASSWORD`用に別のパスワードを生成します。`.env.optional.example`からオプションのチューニング設定をコピーできます。
+
+:::note[データベース接続は自動です]
+`.env`には`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、または`POSTGRES_DB`を設定しないでください。Composeはそれらを自動的に構成します。
+:::
+
+スタックを起動する前に、ホストのバインドマウント用フォルダーを準備します：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force -Path backups, logs, data | Out-Null
+```
+
+Windows上のDocker DesktopはUnixの`chown`なしでホストディレクトリをマップします。
+
+</TabItem>
+<TabItem label="Linux">
+
+ボットコンテナーはUID 1001として実行されるため、ホストの`backups/`、`logs/`、および`data/`ディレクトリへの書き込み権限が必要です。初回起動前にこれらを作成し、所有権を割り当ててください：
+
+```bash
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
+
+すでにComposeを実行してDockerがディレクトリをrootとして作成してしまった場合は、後からこれらのコマンドを実行してください。ディレクトリ内にすでにあるファイルの所有権は変更されません。
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+mkdir -p backups logs data
+```
+
+Mac上のDocker DesktopはUnixの`chown 1001:1001`なしでバインドマウントをマップします。
+
+</TabItem>
+</Tabs>
+
+## 3. ビルドと実行
+
+```sh
+docker compose build   # first time, or after code/dependency changes
+docker compose up      # bot + database
+```
+
+後で開始する場合は、コードや依存関係を変更しない限り、`docker compose up`だけで十分です。ボットがDiscordに接続したら、任意のサーバーチャンネルで`/setup`を実行してAIプロバイダーキーを追加します。Discordのセットアップオプションについては、[クイックスタート](/introduction/quickstart/)を参照してください。
+
+`.env`シークレットとローカルHTTPエンドポイントが機能するように、サービス定義で`RUN_ENV=development`が固定されています。`http://host.docker.internal:11434`などのローカルエンドポイントを許可するには`ALLOW_PRIVATE_NETWORK`の設定が必要です（`true`、または`host.docker.internal:11434`を含むリスト）。WindowsおよびMacではDocker Desktopが`host.docker.internal`を提供し、Linuxでも`docker-compose.yaml`がホストゲートウェイへマップします。`.env`を変更した後は、コンテナーが再読み込みするように`docker compose up -d`を実行してください。コンテナーのヘルスチェックはボットプロセスが実行されているかどうかを報告しますが、Discordゲートウェイ接続はテストされません。
+
+## 単一ホストでのオプションのシャード設定
+
+デフォルトの動作では、`SHARD_COUNT` と `SHARD_IDS` を未設定のままにします。起動時にDiscordから推奨されたすべてのシャードを1つのプロセスが担当します。小規模な環境では通常1つのシャードが割り当てられます。このモードではシャードリースやキャッシュ無効化リスナーは使用されません。複数のシャードが同じプロセスを共有できます。
+
+既存のサービスで4つのシャードを実行するには、`.env` に `SHARD_COUNT=4` を追加し、`SHARD_IDS` は未設定のままにします。また、正常なシャットダウン処理が完了できるように、`compose.override.yaml` に以下のサービスオーバーライドを追加します：
+
+```yaml
+services:
+  tomoribot:
+    stop_grace_period: 40s
+```
+
+`docker compose up -d --build tomoribot` でサービスを再作成します。スクリプトから `docker stop` を呼び出す場合や独自のCompose停止タイムアウトを指定する場合は、そちらでも40秒以上の猶予を設定してください。実行中にシャード数が自動的に変更されることはありません。総数を変更するにはプロセス全体の再起動が必要です。
+
+オプションの静的サブセットを使用する場合は、同じ明示的な `SHARD_COUNT` と互いに重複しない `SHARD_IDS`（例：合計 `4` に対して `0,1` と `2,3`）を持つサービスをグループごとに個別に用意します。各サービスには固有の名前、コンテナー名、および公開ヘルスポートを設定してください。アプリケーションは各グループから安定したメトリックラベルを導出します。データベースは1つに保ち、ゲートウェイ起動前に既存のワンショットコマンド `bun run src/db/initializeCli.ts` をスキーマ管理権限で実行した上で、すべてのゲートウェイプロセスで `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false` を設定します。元の全シャード担当サービスをこれらのグループと同時に起動してはいけません。総数や分割構成を変更する前に、以前のプロセスを停止してください。
+
+サブセットモードでは、完全設定されたMatrixブリッジは拒否されます。ユーザーごとのターン制限やアップロード制限はプロセスごとに適用されるため、2つ目のプロセスを有効にする前に、制限枠が倍増することが許容されるか検討してください。releaseブランチ専用のサポーター課金を利用している環境では、複数プロセスからリクエストを処理する前に、共有の支出受付および照合の調整も必要です。安全性とヘルスの制限については、[シャーディングとプロセス所有権](/architecture/subsystems/sharding/) を参照してください。
+
+## 4. オプションのローカルサーバー（Composeプロファイル）
+
+Composeプロファイルを使用してオプションのローカルヘルパー サーバーを実行して、必要なものだけを開始できるようにします。
+
+```sh
+# SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+SearXNGを有効にする場合は、`.env`に`SEARXNG_BASE_URL=http://searxng:8080/`を設定してください。それ以外の場合は未設定のままにしてください。`SEARXNG_SECRET`をSearXNGリクエスト署名用の別のランダム値に設定します。
+
+サーバー固有の設定については、[SearXNG](/self-hosting/local-endpoints/setup-searxng/)、[Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/)、および [ローカルモニタリング](/self-hosting/local-monitoring/) を参照してください。
+
+## メンテナンス、アップデート、バックアップ
+
+更新する前にボットを停止し、データベースとメディアをバックアップしてください。[メンテナンスとバックアップ](/self-hosting/maintenance/) を参照してください。その後、新しいコードを取得してコンテナを再ビルドします：
+
+```sh
+git pull
+docker compose up -d --build
+```

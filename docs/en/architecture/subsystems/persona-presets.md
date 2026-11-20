@@ -1,0 +1,146 @@
+---
+title: "Persona Presets"
+aiGenerated: true
+---
+
+Official persona presets are seeded from typed catalog definitions under `src/db/seed/catalog/personas/` into `persona_presets`. They provide copy-on-write pointers that receive upstream catalog updates until local customization forks them into independent rows.
+
+## Data model and pointer resolution
+
+### `persona_presets`
+
+The canonical preset catalog stores character definitions keyed by `(preset_lineage_id, preset_language)`:
+
+- `preset_lineage_id`: Identifies the official character family across localized variants. Display names (`persona_preset_name`) can change in the catalog without altering lineage or requiring schema migrations. When listing presets for a user locale, `selectPresetsForLocale()` picks the highest-priority fallback language that has at least one preset on the requested NSFW side and returns only that language's rows, falling back to `en-US` only when the locale has none. A locale that has at least one preset on a side therefore never sees presets that exist only in a later fallback language. The selected rows come back in ascending `preset_lineage_id` order, so `/setup` and `/persona default` offer the same sequence in every locale.
+- `preset_attribute_public_flags`: Boolean array indicating which attributes are shared publicly in conversation participant profiles. Official presets mark their appearance attributes public; other seeded attributes stay private.
+- `preset_avatar_shared_url` and `preset_avatar_hash`: Object storage reference and content hash for the bundled character avatar.
+- `preset_char_ref_shared_url`: Object storage reference for the bundled character reference image, used by reference-based image generation.
+- `preset_naming_config`: Defines gendered and neutral address terms for the character.
+
+### Pointer personas
+
+When a server adopts an official preset via `/setup` or `/persona default`, the database creates a pointer persona with `personas.is_pointer = true`:
+
+- **Live content resolution**: Runtime state loading resolves prompt text, attributes, public attribute flags, and sample dialogues directly from `persona_presets`.
+- **Trigger deduplication**: Trigger words normally resolve live from `persona_presets` and pass through `applyTriggerWordOwnership()` to prevent collisions on shared keywords (see [Multi-Persona System](/architecture/subsystems/multi-persona/)). Resynced pointers keep their local trigger words and naming habits through `persona_configs.preserve_preset_identity`.
+- **Natural Nudges defaults**: Talkativeness, interests, and authored idle nudges resolve live from `persona_presets` until the persona has its own `persona_natural_nudge_configs` row. Editing them on the Nudges page writes that row without forking the pointer, which makes `Resync with Preset` available to delete just that row. The first idle nudge content edit copies the whole preset list into the row; switching an entry on or off only records local availability and copies nothing. `Restore Preset Nudges` returns just the list to live resolution. Materializing copies the preset values into the row, and re-pointing deletes it. See [Natural Nudges](/architecture/subsystems/natural-nudges/#pointer-personas).
+- **Lineage separation**: `preset_lineage_id` identifies the official preset row, while `persona_lineage_id` scopes server memories, personal memories, and conditioning history. Applying a preset stamps `persona_lineage_id` with the preset lineage, but memory updates never fork the pointer.
+
+## Shared assets and reconciliation
+
+Preset media is stored once and shared across servers:
+
+```mermaid
+flowchart TD
+  lock["Seeder / Sweep Lock<br/>(PostgreSQL Advisory Lock)"] --> seed["Seed Pass<br/>Uploads immutable assets to presets/{lineage}/..."]
+  seed --> av["preset_avatar_shared_url (avatars)"]
+  seed --> ref["preset_char_ref_shared_url (character references)"]
+  seed --> spr["preset_sprites (expressions)"]
+  lock --> fan["Fan-out"]
+  fan -->|"Alters"| alters["Live-resolve shared URL per webhook send<br/>(no local copy)"]
+  fan -->|"Main"| main["Reconciler PATCHes guild member avatar<br/>on hash delta"]
+```
+
+### Alter avatars
+
+Alter personas send messages via webhooks that accept an image URL per delivery. Pointer alters store `NULL` in `personas.webhook_avatar_url` and live-resolve `preset_avatar_shared_url` at load time (`PersonaRepository.resolvePointerAlterAvatarUrl`). Assets are stored under immutable paths (`presets/{lineage}/avatar-{hash}.png`), eliminating per-server storage costs.
+
+### Character references
+
+A pointer persona with no character reference of its own live-resolves `preset_char_ref_shared_url` at load time, so `char_ref_url` in its state names the shared `presets/{lineage}/character-reference-{hash}.png` image. The character reference loaders in `charrefStorage.ts` accept these shared paths for any persona, while panel display accepts a remote one only from this deployment's avatar storage.
+
+### Main avatar reconciler
+
+The main persona uses Discord's guild member identity, which cannot live-resolve per message. `reconcilePresetMainAvatars()` in `src/utils/persona/presetAvatarReconciler.ts` handles synchronization:
+
+- Runs as a background task following `clientReady`.
+- Compares `personas.applied_avatar_hash` with `persona_presets.preset_avatar_hash`.
+- PATCHes Discord guild member avatars only when content hashes differ, skipping unchanged servers.
+- Materialized (non-pointer) personas are skipped automatically.
+
+### Shared sprites (`preset_sprites`)
+
+Official sprite variations are uploaded once to immutable storage paths (`presets/{lineage}/sprites/{key}-{hash}.png`). `PersonaSpriteRepository.listForPersona()` reads from `preset_sprites` for pointer personas and from `persona_sprites` for materialized personas, exposing a uniform interface to prompts and render modifiers.
+
+### Asset protection and cleanup
+
+`deletePersonaAvatarFromStorage()` guards all paths under `presets/`, preventing server resets or persona removals from deleting shared catalog assets. Obsolete asset cleanup is handled through `bun run sweep-preset-assets`, which runs under a PostgreSQL advisory lock shared with startup seeders to prevent race conditions during deployments.
+
+## Materialization and customization
+
+The first local edit to prompt text, attributes, sprites, or naming forks the pointer into an independent copy:
+
+- `is_pointer` transitions to `false`.
+- The live preset state is copied into per-persona database tables (`personas`, `persona_attributes`, `persona_configs`, `persona_sprites`).
+- `persona_lineage_id` is preserved so existing memories and conditioning history remain intact.
+- **Reference preservation**: Sprites, alter avatars, and the character reference copy shared `presets/` URLs by reference, avoiding byte duplication while retaining protection under storage deletion guards.
+- **Avatar customization exception**: Editing an avatar forks the persona and removes preset sprites referencing shared assets (`removePresetSpritesAfterAvatarChange`), preventing expressions from the previous character from persisting alongside the new face. It also clears a character reference that is still the preset image (`clearPresetCharacterReferenceAfterAvatarChange`), so generated images stop drawing the previous character; an uploaded reference stays.
+- **Pointer restoration**: A server manager can use `Resync with Preset` in `/config` > Persona > Identity & Personality for a forked main or alter persona. It restores the live preset's prompt, attributes, sample dialogues, avatar, and sprites while preserving `persona_lineage_id`, name, trigger words, naming habits, and other persona settings. Memories, conditioning, and stats keep their existing lineage. Custom avatars, own sprite rows, and the persona's character reference are removed; shared preset images remain protected. Main personas apply the guild avatar immediately; a failed PATCH leaves the avatar hash unset so the boot reconciler retries. `/persona default type: default` also restores a pointer, but only for the main persona and with the selected preset's lineage; `type: alter` creates another persona.
+
+## Cards, imports, and vision generation
+
+- **Export access**: `server_member_permissions_configs.persona_export_enabled` defaults to false.
+  `/moderation` > Member Access controls it. `/persona export` checks fresh workspace config for
+  guild members without `ManageGuild` before reading preset or media bytes. Managers bypass the
+  member setting, and DMs use their own workspace. Denials use an ephemeral acknowledgement.
+  Successful member exports complete that acknowledgement before sending a public follow-up,
+  so Discord does not inherit its private visibility. Manager and DM exports use a public reply.
+  `/config`, including sprite previews and the `Export Sprites` action, requires `ManageGuild`
+  in guilds. Entry points, component actions, and modal submissions check the current actor before
+  loading workspace data. DM owners retain access to their own workspace.
+- **Media bundles**: `/persona export output_format:bundle` creates a ZIP with native persona data,
+  avatar, sprites and their usage metadata, and the character reference image. `include_voice:true`
+  also includes the assigned reference sample and transcript; provider voice IDs and credentials
+  stay excluded. `/persona import` and `/nsfw persona import` accept the ZIP for main and alter personas.
+  Bundle imports explicitly bypass official-preset pointer matching and restore independent copies,
+  preserving preset provenance, naming settings, and the selected memory-lineage behavior.
+  Export optimizes image copies without changing stored originals: it tries lossless PNG encoding,
+  then reduces resolution only when an image exceeds 1 MiB. Voice audio is kept as WAV and compressed
+  within the ZIP. The finished ZIP must fit both the interaction upload limit and
+  `MAX_PERSONA_IMPORT_SIZE_MB`; oversized exports fail without silently dropping media.
+  The bundle reader validates all media and bounds compressed bytes, expanded entries, image pixels,
+  and voice duration before persona writes. Restoration stages uploads, then commits sprite,
+  reference, and voice assignment changes together. A failure cleans staged uploads and reports
+  that the persona settings were imported but media restoration is incomplete; keep the ZIP to retry.
+  Main-persona imports retain the previous character reference until that media transaction succeeds,
+  so failed imports keep the reference reachable for retry cleanup.
+  Existing server voice samples and provider selections are preserved.
+- **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance. PNG and JSON exports carry the optional voice description (up to 1,000 characters) and Design/Clone priority. They also carry the effective authored idle nudges and the lineage's lorebook entries, including disabled entries. Local nudge availability, server custom nudges, local sample IDs, sample bytes, provider voice IDs, credentials, and Gemini bindings are excluded.
+  Assistant examples without matching user inputs receive the existing model-only dialogue marker
+  in the exported copy; stored examples stay unchanged. Both formats pass import validation before
+  export succeeds. An input without an assistant reply fails validation.
+- **Import**: Re-establishes a live preset pointer only when attributes, public flags, dialogues, triggers, and prompt text exactly match the seeded preset and the card's idle nudge list, when it has one, equals the preset's. Deviations produce independent materialized copies. Importing an authored voice description also
+  materializes the persona; older cards without it keep their pointer behavior. Main and alter
+  imports restore the description and priority, defaulting missing priority to Design, and need a
+  new reference assignment for Clone. Main imports retire previous Gemini bindings even when the
+  imported description matches, so the imported persona creates its own identity lazily. Retired
+  IDs stay pending for cleanup with the original credentials. Importing a card does not activate a
+  speech provider or change the workspace's Design and Clone targets.
+- **Lorebook replacement**: A present lorebook payload replaces the destination lineage's complete
+  book; an absent payload preserves it. Nonempty lore prevents official-preset matching. See
+  [Lorebooks](/architecture/subsystems/lorebooks/#import-and-export).
+- **Image captioning**: During `/persona generate`, an uploaded image is paired with the primary model. If the primary model cannot accept images, `analyzeImageWithVisionModel()` requests a description from the configured vision model and passes that text via `appearanceDescription`, keeping raw images out of text-only model requests.
+
+OpenRouter persona generation requests strict JSON output with six attributes and five dialogue
+pairs, including after successful search tool calls. A failed search tool result aborts persona
+generation before another model request. Google likewise aborts when its search stage fails.
+The command owns the failure reply and preserves the inputs with a retry hint; background tools
+suppress their public denial notices. Search engines can still fall back within one tool call.
+OpenRouter's initial model request chooses the search tool, so it can incur usage before search fails.
+Google persona search and generation report terminal overloads through the shared provider failure
+classifier, which retains warnings and metrics for transient failures and incidents for unknown failures.
+Anthropic requests omit unsupported array constraints.
+The shared schema used by other providers stays unchanged. Local validation still rejects
+noncompliant output without exporting a card; validation receipts preserve the inputs and show the
+failed requirement without suggesting an API-key problem.
+
+## Source pointers
+
+- `src/db/seed/catalog/personas/` & `src/db/seed/catalog/personaSeed.ts`: Canonical preset catalog and startup seed logic.
+- `src/db/seed/catalog/personas/naturalNudges.ts`: Per-lineage Natural Nudges defaults, including authored idle nudges.
+- `src/utils/persona/presetAvatarReconciler.ts`: Background fan-out reconciler for main persona guild avatars.
+- `src/utils/db/repositories/PersonaRepository.ts`: Live pointer state assembly and alter avatar resolution.
+- `src/utils/db/repositories/PersonaSpriteRepository.ts`: Unified sprite resolution across pointer and materialized personas.
+- `src/utils/persona/spriteArchive.ts`: Sprite package export and import serialization.
+- `src/utils/persona/personaBundleArchive.ts` and `personaBundleOperations.ts`: Media bundle validation,
+  optimization, storage staging, and restoration.

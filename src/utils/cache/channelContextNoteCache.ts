@@ -9,24 +9,13 @@
 
 import {
   type ChannelContextNote,
-  clearChannelContextNoteCache,
   getChannelContextNoteCacheEntry,
-  getChannelContextNoteCacheSize,
-  invalidateAllChannelContextNoteCacheForServer,
-  invalidateChannelContextNoteCache,
   setChannelContextNoteCache,
 } from "@/utils/cache/channelContextNoteCacheStore";
 import { channelContextNoteRepo } from "@/utils/db/repositories/ChannelContextNoteRepository";
 import { log } from "@/utils/misc/logger";
 
 export type { ChannelContextNote };
-export {
-  clearChannelContextNoteCache,
-  getChannelContextNoteCacheSize,
-  invalidateAllChannelContextNoteCacheForServer,
-  invalidateChannelContextNoteCache,
-  setChannelContextNoteCache,
-};
 
 /**
  * Gets the channel-level context note for a given server/channel pair.

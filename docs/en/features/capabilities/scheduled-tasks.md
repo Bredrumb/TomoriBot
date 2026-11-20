@@ -1,0 +1,79 @@
+---
+title: "Scheduled Tasks"
+sidebar:
+  order: 2
+---
+
+Set reminders for yourself or schedule recurring announcements without leaving chat.
+Ask the bot directly, and she creates the schedule for you. Scheduled tasks belong to
+the active persona.
+
+Reminders notify the targeted user when they fire, while self-tasks are actions the
+persona performs on its own at the scheduled time.
+
+## Creating One
+
+Tell her what to schedule in chat:
+
+```text
+remind me to submit the report at 14:30
+every Friday at 8pm, post a reminder that game night is starting
+on the 31st of every month, remind me to pay rent
+```
+
+She parses the requested time and recurrence. Reminders ping the target user when they
+fire. Tasks are silent self-actions the persona carries out when the time comes.
+
+A schedule can repeat by the minute, hour, or month. Ask for a number of deliveries or a cutoff
+time to end it automatically. For minute and hour schedules, you can also ask for a daily window
+in the server timezone, such as 09:00 to 17:00. A monthly schedule keeps the same day
+and time. In a month without that day, it runs on the month's last day (April 30 for the
+31st) and goes back to the 31st the month after.
+
+## Timezones
+
+Absolute times (such as "at 14:30" or "on Friday at 8pm") use the server's timezone
+(`/config` > Behavior > General Behavior) by default. If you set your own timezone
+with `/personal config`, the bot converts your local time automatically. "remind me at 9am"
+means your 9:00 AM, even if the server is in another timezone. Relative times (such as
+"in 2 hours") do not depend on timezones and are always safe.
+
+When a reminder targets a user whose personal timezone differs from the server's, the
+confirmation shows both clocks: the server time and the target's local time. If a time is
+mislabeled, fix it with a follow-up message or `/scheduled-task edit`.
+
+## Managing Tasks
+
+Two slash commands let you review and adjust existing schedules:
+
+- `/scheduled-task edit`: change a task's content, next trigger time, repeat interval (in
+  minutes, hours, or months), repeat limit, or reminder target. Enter an interval such as `15m`,
+  `2h`, or `1mo`. Set it to `0` for a one-time task. Clear the limit field to repeat indefinitely.
+- `/scheduled-task remove`: delete a reminder or task.
+
+Both commands open a picker listing your existing schedules by persona, time, channel,
+and recurrence.
+
+:::tip
+Members with `Manage Server` see every schedule in the server, with other members' entries
+naming their creator. Everyone else sees only their own.
+
+Asking TomoriBot in chat to delete a schedule follows the same rule: you can delete ones you
+created or ones that remind you, and members with `Manage Server` can delete any.
+:::
+
+A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot
+tells you instead of adding another; remove old ones with `/scheduled-task remove` to make room.
+
+## How Delivery Works
+
+Reminders are only marked complete after delivery succeeds. If delivery is interrupted,
+TomoriBot automatically retries without altering the recurring schedule.
+
+After three failed occurrences in a row, a recurring schedule stops retrying and goes
+straight to the warning, so a broken AI provider is not called again and again. One
+delivered occurrence returns it to normal.
+
+---
+
+For more capabilities, see [Tools & Extensions](/features/capabilities/tools-and-extensions/built-in-tools/).

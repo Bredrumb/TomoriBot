@@ -1,0 +1,82 @@
+---
+title: "セットアップ: ComfyUI"
+aiGenerated: false
+sidebar:
+  label: "ComfyUI"
+  order: 3
+---
+
+TomoriBotは、自身の [ComfyUI](https://github.com/comfyanonymous/ComfyUI) インスタンスを通じて画像や動画を生成できます。プロンプトやサイズを置換したAPIフォーマットのワークフローを送信することでComfyUIを操作し、出力の準備ができるまでComfyUIの `/history` エンドポイントをポーリングします。
+
+このガイドでは、ComfyUIのインストール、実行、および登録について説明します。TomoriBot互換のワークフロー（`{TOMORI_*}` プレースホルダー）の作成または編集については、GitHubの [ワークフローのREADME](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) を参照してください。
+
+:::note[環境変数は不要です]
+ComfyUIはDiscordのスラッシュコマンドを通じて登録され、データベースに暗号化されて保存されます。
+[ローカルエンドポイントハブ](/self-hosting/local-endpoints/) を参照してください。
+:::
+
+## ハードウェア要件
+
+画像と動画の生成はGPUに依存します。最大のコストはVRAM（システムRAMとは別の、グラフィックカードのメモリ）であり、ワークフローが読み込むモデルチェックポイントによって決まります。NVIDIAのGPUを強く推奨します。TomoriBotに同梱されている2つのワークフローは、どちらもモダンでSDXLよりも重いモデルです：
+
+| 同梱ワークフロー | ベースモデル | 実用的なVRAM | 備考 |
+|---|---|---|---|
+| Anima v1（画像） | Qwen-Image（~20B）、fp8 | 下限約16 GB・快適24 GB | テキストエンコーダーとVAEで約8-10 GBのオーバーヘッドが追加されます。16 GB未満の場合は、GGUFビルドと `--lowvram` を使用してください。 |
+| WAN i2v loop（動画） | Wan 2.2 14B、fp8 + 4ステップLightX2V LoRA | 動作可能約16 GB・快適24 GB以上 | 最も重いオプションで、1クリップあたり数分かかることを想定してください。小規模なカードでは、UMT5テキストエンコーダーをRAMにオフロード（`t5_cpu`、24 GB以上のシステムRAMが必要）してください。 |
+
+同梱されているチェックポイントはどちらも、コンシューマー向けカードに収まるようにすでにfp8量子化されています。VRAMが少ない場合は、UNETをより小さな量子化モデルに交換し、ComfyUIの `--lowvram` / CPUオフロードを有効にしてください。CPUのみでのディフュージョンは非現実的で（画像1枚に数分かかり、動画ではさらに悪化します）、TomoriBotのポーリングウィンドウを超える可能性があるため、通常の使用には実質的にGPUが必要です。
+
+:::tip[さらに軽くする：GGUF量子化を選択する]
+さらに縮小するには、Hugging FaceからモデルのGGUFビルドをダウンロードします。`Q4_K_M` や `Q5_K_M` のような名前に含まれるコードは重みあたりのビット数であり、4ビット（Q4）または5ビット（Q5）が通常のスイートスポットで、fp8/fp16の何分の一かのフットプリントでほとんどの品質を維持します。ComfyUIでGGUF UNETを読み込むには、[ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) カスタムノードが必要です。
+:::
+
+## 1. APIを有効にしてComfyUIを実行する
+
+[README](https://github.com/comfyanonymous/ComfyUI) に従ってComfyUIをインストールします。同じマシン上のボット、またはこのPC上のCloudflare Tunnelコネクタの場合は、ループバックのまま維持してください：
+
+```sh
+python main.py --listen 127.0.0.1 --port 8188
+```
+
+別ホストで稼働する本番ボットの場合は、[Cloudflare TunnelガイドのComfyUIプロファイル](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)に従ってください。これにより、ComfyUIをループバックに保ったまま公開HTTPSエンドポイントを提供できます。以下で登録する際はそのトンネルURLを使用してください。認証なしで共有する場合は、ガイドの[既知のリスク](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks)を確認してください。
+
+Docker内のボットや信頼できるLAN上のボットの場合は、`0.0.0.0` にバインドすることでボットからホストのポートに到達できるようになります。ホストファイアウォールでアクセスを制限してください。未認証のComfyUIに到達できる人は誰でもワークフローを送信できます。非本番環境のTomoriBotでも、エンドポイントのホストとポートを許可するには `ALLOW_PRIVATE_NETWORK` が必要です。ローカルAPIが応答することを確認します：
+
+```sh
+curl http://127.0.0.1:8188/system_stats
+```
+
+テストする場合は、選択したワークフローが想定するモデルチェックポイントを読み込み、ComfyUIのWeb UIで手動生成を1回実行して、TomoriBotに接続する前にエンドツーエンドで機能することを確認してください。
+
+## 2. TomoriBotのワークフローを取得する
+
+すぐに使用できるAPIフォーマットのワークフローをダウンロードします。例はリポジトリの [`assets/comfyui-workflows/`](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) の下にあります：
+
+| ワークフロー | モード |
+|----------|-------|
+| Anima v1（画像）：`tomoribot-anima-v1-comfyui.json` | `txt2img`, `img2img`, `inpaint` |
+| WAN i2v loop（動画）：`tomoribot-wan-i2v-loop-video.json` | image-to-video |
+
+これらはAPIフォーマット（ComfyUIが *Save (API Format)* でエクスポートするJSON）であり、通常のUI保存フォーマットではありません。独自に作成する場合は、TomoriBotが置換する `{TOMORI_*}` プレースホルダー（プロンプト、幅/高さ、シード、参照画像など）を含める必要があります。[ワークフローのREADME](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) および `/help` の `プロバイダー` にある `カスタムエンドポイント` ページを参照してください。
+
+## 3. Discordに登録する
+
+`/providers`（または `/personal providers`）を実行し、`+ 新しいカスタムエンドポイントを追加` を選んで、以下を入力します：
+
+| フィールド | ComfyUI用の値 |
+|-------|-------------------|
+| `endpoint_label` | 選択した名前（例：`home-comfy`） |
+| API互換性 | `ComfyUI` |
+| `endpoint_url` | 同じマシン上のボット：`http://127.0.0.1:8188`。本番トンネル：`https://engine.example.com`（ルート、`/v1` なし） |
+| `auth_token` | エンドポイントのゲートウェイがクライアントキーを要求しない限り空白のままにします |
+
+接続を保存したら、それを選択し、モデルのドロップダウンから `+ 新しい画像モデルを追加` または `+ 新しい動画モデルを追加` を選びます。チェックポイントの正確なコード名を入力し、ステップ2でダウンロードしたワークフローの `.json` を `ComfyUI ワークフロー` にアップロードしてください。モデルの機能はワークフローと一致している必要があります（画像ワークフロー → `image`、動画ワークフロー → `video`）。
+
+モデルを追加すると、自動的にアクティブな `image`/`video` モデルになります。チャットでTomoriに直接頼んで生成をトリガーしてください。何らかの理由でアクティブになっていない場合は、`/config` > モデル > モデルの切り替え を実行し、登録したComfyUIエンドポイントを選択してください。
+
+## トラブルシューティング
+
+- **追加時に到達不能になる：** 本番環境の場合は、トンネル、`/system_stats` ルート、およびゲートウェイがクライアントキーを要求する場合はそのキーを確認してください。Dockerまたは信頼できるLANの場合は、リスナー、ファイアウォール、ホストアドレス、およびTomoriBotのプライベートネットワーク許可設定を確認してください。
+- **生成が完了しない：** TomoriBotは出力が表示されるまで `/history` をポーリングします。コールドスタートやCPU上の大規模モデルは、ポーリングウィンドウを超える可能性があります。
+- **プロンプト/サイズが無視される、または出力サイズが間違っている：** ワークフローに必須の `{TOMORI_*}` プレースホルダーが欠落しているか、APIフォーマットではなくUIフォーマットのエクスポートをアップロードしました。
+- **機能が間違っている：** `video` で登録された `image` ワークフロー（またはその逆）は実行されません。一致する機能で再追加してください。

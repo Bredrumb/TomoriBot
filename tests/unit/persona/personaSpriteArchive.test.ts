@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import JSZip from "jszip";
 import type { PersonaSpriteRow } from "@/types/db/schema";
 import { buildSpriteArchive, readSpriteArchive, type SpriteArchiveReadLimits } from "@/utils/persona/spriteArchive";
 
@@ -21,6 +22,16 @@ function spriteRow(name: string, instructions: string, isIdentity: boolean): Per
 }
 
 describe("persona sprite archive", () => {
+  it("rejects an oversized compressed manifest before parsing its entries", async () => {
+    const zip = new JSZip();
+    zip.file("manifest.json", " ".repeat(1024 * 1024));
+    const result = await readSpriteArchive(
+      await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+      LIMITS,
+    );
+    expect(result).toEqual({ ok: false, reason: "invalid_manifest" });
+  });
+
   it("round-trips sprite metadata and image bytes through build -> read", async () => {
     const built = await buildSpriteArchive({
       personaNickname: "Tomori",

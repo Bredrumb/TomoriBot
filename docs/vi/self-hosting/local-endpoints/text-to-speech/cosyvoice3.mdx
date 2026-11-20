@@ -1,0 +1,129 @@
+---
+title: "CosyVoice 3"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Tổng hợp giọng nói nhân vật đa ngôn ngữ tự nhiên với cách truyền đạt cảm xúc theo chỉ dẫn bằng [CosyVoice 3](https://github.com/QwenAudio/CosyVoice) của Alibaba.
+
+CosyVoice 3 cung cấp khả năng nhân bản giọng nói zero-shot và xuyên ngôn ngữ trên 9 ngôn ngữ cùng hơn 18 phương ngữ tiếng Trung. TomoriBot bọc runtime chính thức trong `servers/tts/cosyvoice3/` để cung cấp giao diện giọng nói `POST /synthesize` tiêu chuẩn. Trình cài đặt đi kèm mặc định dùng model không lượng hóa chính thức `FunAudioLLM/Fun-CosyVoice3-0.5B-2512`, chạy vừa trong 16 GB VRAM.
+
+CosyVoice hỗ trợ 9 ngôn ngữ và các phương ngữ tiếng Trung. Nếu phát âm tiếng Nhật chưa tốt, dự án gốc khuyến nghị chuyển văn bản sang katakana.
+
+Hãy dùng kiểu định dạng kịch bản `Thuần văn bản` và cung cấp chỉ dẫn cách đọc qua `voice_instructions`. Có bản chép lời tham chiếu khớp nội dung sẽ kích hoạt nhân bản zero-shot; nếu không có, máy chủ dùng nhân bản xuyên ngôn ngữ. Phần chỉ dẫn sử dụng âm thanh tham chiếu mà không kèm bản chép lời.
+
+## Phần cứng
+
+Phần cứng khuyến nghị:
+
+- GPU NVIDIA có 16 GB VRAM
+- Python 3.10
+- Driver NVIDIA tương thích CUDA 12
+- `git`
+- `ffmpeg` để chuẩn hóa mẫu giọng nói
+- `sox` và `libsox-dev` trên Linux nếu gặp sự cố tương thích âm thanh
+
+Model 0.5B tham số vừa vặn dễ dàng trong 16 GB VRAM mà không cần lượng hóa. Gói checkpoint tải về bao gồm model flow, bộ mã hóa âm thanh, model văn bản và trọng số học tăng cường, cần khoảng 10 GB dung lượng đĩa cộng thêm các dependency Python.
+
+Dù dự án gốc có hỗ trợ suy luận trên CPU về mặt kỹ thuật, tốc độ quá chậm cho tương tác thoại trên Discord.
+
+## Cài đặt
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Windows gốc được cung cấp ở mức hỗ trợ tốt nhất có thể. **WSL2 với Ubuntu/Linux được khuyến nghị mạnh mẽ** cho máy dùng GPU NVIDIA: danh sách gói upstream cài đặt ONNX Runtime chỉ chạy CPU trên Windows, trong khi Linux và WSL2 cài các gói tăng tốc bằng GPU. Trên Windows, điều này làm yêu cầu đầu tiên cho mỗi giọng chậm hơn khoảng 1.5 giây trong lúc máy chủ mã hóa clip; các yêu cầu sau dùng lại kết quả đó cho đến khi máy chủ khởi động lại.
+
+Đảm bảo Python 3.10 có trên `PATH`, sau đó chạy từ thư mục gốc kho lưu trữ TomoriBot:
+
+```powershell
+.\servers\tts\cosyvoice3\install-cosyvoice3.ps1
+.\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Nên dùng Linux hoặc WSL2 với GPU NVIDIA. Đảm bảo đã cài đặt `python3.10`, `git`, `ffmpeg` và `sox` (`libsox-dev`), sau đó chạy từ thư mục gốc kho lưu trữ TomoriBot:
+
+```bash
+bash servers/tts/cosyvoice3/install-cosyvoice3.sh
+servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
+```
+
+Hoặc khởi động máy chủ đã cấu hình cùng với TomoriBot:
+
+```bash
+bun run launch --cosyvoice3
+```
+
+Các gói yêu cầu upstream cài đặt PyTorch 2.3.1 với gói CUDA 12.1, các gói CUDA 12 ONNX Runtime trên Linux và gói TensorRT 10.13 trên Linux. Nếu GPU của bạn yêu cầu bản dựng PyTorch mới hơn, hãy cài đặt bản PyTorch tương thích vào trong môi trường ảo sau khi hoàn tất thiết lập.
+
+</TabItem>
+<TabItem label="Mac">
+
+**Không được trình cài đặt đi kèm hỗ trợ.** CosyVoice 3 ghim các dependency Python 3.10 upstream kéo theo gói CUDA 12.1, TensorRT và GPU ONNX Runtime vốn không có đường dẫn dựng cho macOS trong `install-cosyvoice3.sh`. Hãy chạy CosyVoice 3 trên máy Linux hoặc Windows có NVIDIA phía sau một [tunnel từ xa có xác thực](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/), hoặc sử dụng engine tương thích với Mac như [VoxCPM2](/self-hosting/local-endpoints/text-to-speech/voxcpm2/) hay [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/).
+
+</TabItem>
+</Tabs>
+
+Trình cài đặt cho Windows và Linux tải về các phiên bản runtime và model đã ghim và từ chối ghi đè lên thư mục mã nguồn đang có thay đổi chưa commit.
+
+## Đăng ký trong TomoriBot
+
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và cấu hình endpoint giọng nói:
+
+- Tính năng: `Giọng nói`
+- Độ tương thích API: `tts-clone`
+- URL endpoint: `http://127.0.0.1:8017`
+- Chế độ nguồn giọng đọc: `Sao chép giọng đọc`
+- Kiểu định dạng kịch bản: `Thuần văn bản`
+- Hỗ trợ chỉ dẫn: `Có`
+
+Sau khi lưu kết nối, chọn nó và thêm một model `Giọng nói`. Một mã model rõ ràng là `Fun-CosyVoice3-0.5B-2512`.
+
+Sau đó mở `/config` > `Model` > `Chuyển đổi model` và kích hoạt endpoint giọng nói CosyVoice 3.
+
+## Gán giọng nói cho persona
+
+Để nhân bản giọng nói zero-shot:
+
+1. Chuẩn bị một đoạn âm thanh sạch dài từ 3 đến 30 giây chỉ có một người nói và ít tiếng ồn nền nhất có thể.
+2. Mở `/config`, vào `Model` > `Tham số & Giọng đọc TTS` và tải mẫu lên.
+3. Nhập bản chép lời khớp nội dung khi có. CosyVoice 3 sẽ tokenize bản chép lời này làm tiền tố prompt cho nhân bản zero-shot; nội dung phải mô tả 30 giây đầu tiên của đoạn âm thanh.
+4. Mở `/config`, vào `Persona` > `Giọng nói` và gán mẫu đó cho persona.
+
+Wrapper sẽ cắt âm thanh tham chiếu về 30 giây đầu tiên. Nhân bản xuyên ngôn ngữ có thể dùng âm thanh tham chiếu nói một ngôn ngữ khác với văn bản cần tạo.
+
+## Thử nghiệm với `/generate voice-message`
+
+Dùng `/generate voice-message` để thử tổng hợp giọng nói mà không cần chờ kích hoạt chat tự động. Bạn có thể thử với mẫu đã gán cho persona hoặc tải lên một đoạn âm thanh dùng một lần kèm bản chép lời của nó.
+
+Để hướng dẫn cảm xúc và cách đọc, hãy nhập chỉ dẫn vào modal hoặc để prompt của persona cung cấp `voice_instructions`. Giữ phần lời thoại dưới dạng đối thoại thuần văn bản; các thẻ phong cách nội tuyến sẽ bị xóa trước khi tổng hợp.
+
+## Biến môi trường
+
+| Biến | Mặc định | Mục đích |
+|---|---|---|
+| `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | Thư mục checkpoint cục bộ |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết của wrapper; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | Cổng của wrapper |
+| `COSYVOICE3_UPSTREAM_STREAM` | `0` | Bật bộ sinh streaming nội bộ của CosyVoice |
+| `COSYVOICE3_SPEED` | `1.0` | Hệ số tốc độ số toàn cục truyền vào suy luận upstream |
+| `COSYVOICE3_DEFAULT_INSTRUCT` | trống | Chỉ dẫn tùy chọn được thêm vào khi yêu cầu không cung cấp |
+| `COSYVOICE3_FP16` | `0` | Yêu cầu runtime chính thức sử dụng chế độ fp16 |
+| `COSYVOICE3_LOAD_TRT` | `0` | Bật nạp TensorRT upstream khi đã chuẩn bị đầy đủ |
+| `COSYVOICE3_LOAD_VLLM` | `0` | Bật nạp vLLM upstream khi đã cài đặt các dependency riêng của nó |
+
+Mặc định, TensorRT, vLLM và fp16 đều tắt. Trên card RTX 40-series 16 GB, fp16 không nhanh hơn mà còn tốn nhiều VRAM hơn, nên hãy để tắt trừ khi bạn tự đo đạc trên GPU của mình. Runtime PyTorch tiêu chuẩn chạy thoải mái trên các GPU 16 GB mà không cần thêm dependency runtime nào khác.
+
+## Biến thể model
+
+Để thử trọng số RL đi kèm, hãy sao chép thư mục model, đổi tên `llm.rl.pt` thành `llm.pt` trong bản sao, rồi đặt `COSYVOICE3_MODEL_DIR` trỏ tới bản sao đó. Các runtime vLLM và TensorRT tùy chọn yêu cầu cài đặt dependency riêng.
+
+## Giấy phép
+
+Mã nguồn CosyVoice và trọng số `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` được phát hành theo giấy phép Apache-2.0.
+
+Thẻ model gốc lưu ý rằng tài liệu minh họa dùng cho mục đích đánh giá học thuật. TomoriBot không phân phối trọng số model. Hãy xem xét giấy phép và điều khoản của dự án gốc cho trường hợp sử dụng cụ thể của bạn trước khi triển khai thương mại.

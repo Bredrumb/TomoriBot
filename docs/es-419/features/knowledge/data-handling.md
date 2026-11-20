@@ -1,0 +1,116 @@
+---
+title: "Manejo de datos"
+sidebar:
+  order: 4
+---
+
+Exporta, respalda, importa o elimina tus ajustes, recuerdos y personas con los comandos de barra de Discord. Para conocer las condiciones del servicio y la privacidad, consulta `/legal terms-of-service` y `/legal privacy-policy`.
+
+:::note
+Esta página cubre los controles de usuario en-Discord. En instancias autohospedadas, las copias de seguridad y restauraciones completas de la base de datos son operaciones del lado del host; consulte [Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/).
+:::
+
+## Lo que ella almacena
+
+### Datos almacenados
+
+- Memorias del servidor y personales, sus datos de búsqueda y registros de uso reciente, y lorebooks creados
+- Perfiles de personas, rasgos y ejemplos de diálogo
+- Ajustes de configuración del servidor
+- Claves de API de proveedores cifradas
+- Metadatos de expresión, reglas de acceso de personas y archivos multimedia de expresión subidos
+
+### No almacenado
+
+- Historial de mensajes de Discord (los mensajes no se archivan en un registro de mensajes persistente)
+
+### Enviado a tus proveedores de IA
+
+Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con memorias relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esas activaciones.
+
+Cuando se configura un modelo de incrustación (embedding), su proveedor recibe el mensaje más reciente y el texto de documentos y memorias en los que busca. Este puede ser un proveedor diferente al que redacta las respuestas. Las memorias personales ocultas por la configuración de privacidad quedan fuera de la búsqueda. Los datos de búsqueda se eliminan junto con su memoria; consulta [Decaimiento de memoria](/features/knowledge/memory/memory-decay/) para conocer el reposo y reemplazo automáticos.
+
+:::note
+El proveedor de IA que elijas (Google, OpenRouter, NovelAI, …) procesa los mensajes según su propia política de privacidad. Evita compartir credenciales personales confidenciales o datos sensibles.
+:::
+
+### Opciones de Revisión de respuestas
+<!-- anchor: response-drafting-selections -->
+
+`/config` > `Plugins` > `Revisión de respuestas` almacena las elecciones de revisor, modelo de decisiones, verificador de reglas opcional, prompt y elementos de revisión habilitados para ese servidor o DM. Cuando está activada, las respuestas se revisan antes de enviarse. Las solicitudes de herramientas se revisan antes de su ejecución solo con `Llamadas a herramientas` habilitado. Un verificador opcional recibe el texto de la respuesta pendiente y envía sus observaciones solo al revisor. La omisión por decisiones permanece inactiva a la espera de validación etiquetada, y las selecciones de decisiones guardadas no realizan llamadas de pago mientras falte la calibración. Desactivarla conserva las respuestas y herramientas habituales sin solicitudes de revisión.
+
+El revisor seleccionado siempre recibe la respuesta pendiente, el mensaje activador y el destino de la respuesta. `Elementos a verificar` controla qué contexto adicional ya admitido para el autor recibe: instrucciones de la persona, diálogos de ejemplo, conversación reciente, memorias y otro contexto, y llamadas a herramientas. Las instrucciones de la persona, los diálogos de ejemplo y la conversación reciente comienzan habilitados. Memorias y otro contexto incluye las relaciones visibles entre participantes y los documentos. Con `Llamadas a herramientas` habilitado, el revisor recibe los resultados completados y las definiciones de herramientas disponibles; una solicitud propuesta incluye su destino exacto y sus argumentos, incluido cualquier texto de mensaje. La revisión no agrega búsquedas de perfiles privados. Las credenciales y los argumentos de autenticación se redactan. La evidencia requerida debe caber; una cobertura incompleta de medios, argumentos de herramientas ocultos o límites de modelo ausentes hacen que la revisión no esté disponible. Una revisión no disponible mantiene las comprobaciones habituales de la aplicación; una acción previamente rechazada permanece bloqueada.
+
+La herencia utiliza el modelo y las credenciales que realmente responden, incluidos el enrutamiento personal, la rotación de claves, las excepciones y el respaldo. Un revisor fijado utiliza el registro y la clave de proveedor guardados para ese servidor o DM. Su proveedor tiene su propia política de privacidad. Elegirlo no modifica el proveedor de respuestas principal. Las respuestas pendientes y los paquetes de corrección duran solo durante el turno. Solo el diálogo aceptado por Discord ingresa a la memoria de conversación; la contabilidad de tokens incluye los intentos reales no exitosos cuando el proveedor informa el uso. Los diagnósticos contienen metadatos y recuentos, sin borradores, evidencia, correcciones, cuerpos de respuesta del proveedor ni claves.
+
+Las exportaciones de configuración incluyen estos ajustes sin claves de API ni tokens de autenticación MCP. Las importaciones conservan las referencias de modelos y verificadores solo cuando están disponibles para el servidor o DM receptor. Registra un equivalente local o borra las selecciones no disponibles antes de importar. El restablecimiento de la configuración del servidor restaura el estado desactivado, la herencia del revisor, ningún modelo de decisiones, el prompt predeterminado y ningún verificador.
+
+## Exporta tus datos
+
+Las exportaciones de ajustes y memorias se envían a tus mensajes directos como un archivo JSON, para que tus mensajes directos conserven una copia que puedas restaurar más tarde. Si TomoriBot no puede enviarte un mensaje directo, el archivo se adjunta a una respuesta privada en su lugar; guárdalo antes de que la respuesta desaparezca.
+
+- `/export config`: valores de configuración del servidor (excluye claves y credenciales de API).
+- `/export personal config`: configuración de perfil personal (privacidad, etiquetas de apariencia, nombres).
+- `/export memories`: memorias del servidor, con alcance para la persona principal, una persona o todas las personas. Los límites de canales no se exportan, por lo que las memorias importadas se aplican en todos los canales hasta que vuelvas a elegir canales.
+- `/export personal memories`: recuerdos personales, de alcance global o por persona.
+
+`/persona export` está pensado para compartir, por lo que publica la definición de la persona, incluido
+su lorebook, en el canal en lugar de tus mensajes directos. Elige `Tarjeta de TomoriBot` o `JSON sin procesar`
+para conservar todos los ajustes de la persona. `PNG compatible con SillyTavern` incluye el avatar y los campos
+de personaje compatibles, excluyendo los ajustes específicos de TomoriBot y los límites de canal del lorebook.
+
+En servidores, `/persona export` requiere `Administrar servidor` a menos que un administrador habilite `Exportaciones de persona`
+en `/moderation` > `Acceso de miembros` > `Editar permisos`. Esto aplica a todos los formatos. Las denegaciones son
+privadas; las exportaciones exitosas siempre se publican públicamente. `Exportar Sprites` está disponible para los
+administradores del servidor desde `/config`. El ajuste del servidor no afecta a las exportaciones en mensajes directos.
+
+Elige `Paquete de TomoriBot` para obtener un ZIP con el avatar, sprites, referencia de personaje y ajustes de persona.
+Establece `include_voice:true` para incluir también el audio de referencia de voz asignado y su transcripción; estos
+se comparten públicamente con el ZIP. Se excluyen los ID de voz del proveedor y las credenciales. Importa el ZIP
+con `/persona import` para restaurar la persona y su multimedia empaquetada en una sola carga.
+
+Las exportaciones de paquetes optimizan las copias de las imágenes y pueden reducir su resolución para ajustarse al límite por imagen;
+los originales guardados permanecen sin cambios. Si un paquete supera el límite de tamaño de carga o importación, se rechaza
+sin omitir recursos. Si eso ocurre, excluye el audio de voz o usa una tarjeta PNG y `Exportar Sprites` por
+separado. Conserva el ZIP si la importación informa un fallo al restaurar la multimedia: es posible que los ajustes de la
+persona ya se hayan guardado, y si se importó un alter debes eliminarlo antes de reintentar.
+
+Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/self-hosting/maintenance/#database-backups-and-recovery-keys).
+
+## Importa tus datos
+
+Adjunte un archivo exportado para restaurarlo:
+
+- `/import config`: configuración del servidor (requiere Administrar Servidor). Elige qué secciones aplicar.
+- `/import personal config`: configuración personal. Elige qué secciones detectadas aplicar.
+- `/import memories`: memorias del servidor (requiere Manage Server). Fusionar o reemplazar y asignar personas.
+- `/import personal memories`: recuerdos personales. Fusionar o reemplazar y asignar personas.
+- `/persona import`: restaurar una persona. También importa tarjetas SillyTavern PNG, tarjetas JSON y archivos `.charx` (consulte [Soporte SillyTavern](/es-419/features/integrations/sillytavern-support/)).
+
+## Elimina tus datos
+
+Estas acciones eliminan o restablecen permanentemente los datos almacenados:
+
+- `/personal memories`: gestiona o elimina recuerdos personales.
+- `/memories`: administra o elimina memorias del servidor, documentos y lorebooks. Los documentos y lorebooks
+  requieren `Administrar servidor`. Con la enseñanza de miembros habilitada, los miembros pueden ver, editar o eliminar sus
+  propias memorias del servidor. Cuando está desactivada, ver y administrar las memorias del servidor requiere `Administrar servidor`.
+- `/personal nuke`: elimina permanentemente todos los datos personales en los servidores.
+- `/nuke`: borra los datos del servidor, incluidas las expresiones personalizadas y las reglas de acceso de personas. Configura `preserve_personas: true` para conservar las personas y al mismo tiempo eliminar expresiones y medios personalizados.
+- `/reset config`: restaura la configuración del servidor a los valores predeterminados de la base de datos.
+  - **Conservas**: asignaciones de modelos activos, claves API, puntos finales personalizados, personas, memorias de servidor e integraciones.
+  - **Borrar**: anulaciones de canales, reglas de activación automática, listas negras de usuarios y listas blancas de canales.
+  - Requiere el permiso Administrar servidor en servidores; también disponible en DM.
+- `/reset personal config`: restaura la configuración del perfil personal y los focos del canal a los valores predeterminados.
+  - **Conserva**: identidad del usuario, recuerdos personales, claves API del proveedor guardadas, puntos finales personalizados y tareas programadas.
+  - **Se borra**: anulación de apodos, etiquetas de apariencia, pronombres, estilo de dirección y aspectos destacados del canal.
+  - Disponible para todos los usuarios en servidores y DM.
+
+Para obtener tablas de bases de datos exactas y listas de columnas conservadas, consulte [arquitectura de esquema de base de datos](/en/architecture/subsystems/database-schema/#reset-domain-classifications).
+
+## Optar por no participar
+
+- `/personal config`: controla tu visibilidad, hasta la invisibilidad total (excluirte del contexto de memoria), y desactiva las [Menciones de personas](/features/chatting-personality/natural-nudges/#ping-user), las intervenciones espontáneas donde una persona te menciona para iniciar una conversación.
+- `/config` > `Permisos`: los administradores del servidor pueden desactivar las funciones de memoria y autoaprendizaje.
+
+Consulta [Memoria](/features/knowledge/memory/long-term-memory/) para conocer la administración de la memoria diaria.

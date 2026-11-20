@@ -1,7 +1,6 @@
 import { log } from "@/utils/misc/logger";
 
-/** Result from a single poll attempt */
-export interface PollResult<T> {
+interface PollResult<T> {
   done: boolean;
   result?: T;
   error?: string;
@@ -19,6 +18,26 @@ export interface PollOptions<T> {
   onPoll?: (attempt: number) => void;
   /** Label for log messages (e.g. "GoogleVideoGeneration") */
   logLabel?: string;
+  /** Stops polling at the next wait or attempt boundary; the remote job itself is not cancelled. */
+  abortSignal?: AbortSignal;
+}
+
+function waitForNextPoll(intervalMs: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, intervalMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 /**
@@ -27,27 +46,26 @@ export interface PollOptions<T> {
  *   1. pollFn returns { done: true, result } → resolves with result
  *   2. pollFn returns { done: true, error } → rejects with error
  *   3. maxAttempts is exceeded → rejects with timeout error
+ *   4. abortSignal fires → rejects with a cancellation error
  *
  * @param options - Polling configuration
- * @returns The final result from the completed operation
  * @throws Error if the operation fails or times out
  */
 export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> {
-  const { pollFn, intervalMs, maxAttempts, onPoll, logLabel } = options;
+  const { pollFn, intervalMs, maxAttempts, onPoll, logLabel, abortSignal } = options;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1. Wait before polling (skip wait on first attempt)
     if (attempt > 1) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await waitForNextPoll(intervalMs, abortSignal);
+    }
+    if (abortSignal?.aborted) {
+      throw new Error(`${logLabel ?? "Poll"}: polling was cancelled`);
     }
 
-    // 2. Invoke optional callback
     onPoll?.(attempt);
 
-    // 3. Poll for status
     const pollResult = await pollFn();
 
-    // 4. Check if done
     if (pollResult.done) {
       if (pollResult.error) {
         throw new Error(pollResult.error);
@@ -58,13 +76,12 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
       return pollResult.result;
     }
 
-    // 5. Log progress periodically (every 5th attempt)
+    // Log progress periodically (every 5th attempt)
     if (attempt % 5 === 0) {
       log.info(`${logLabel ?? "Poll"}: still waiting (attempt ${attempt}/${maxAttempts})`);
     }
   }
 
-  // 6. Timeout — max attempts exceeded
   const totalWaitSec = Math.round((maxAttempts * intervalMs) / 1000);
   throw new Error(`${logLabel ?? "Poll"}: operation timed out after ${maxAttempts} attempts (~${totalWaitSec}s)`);
 }

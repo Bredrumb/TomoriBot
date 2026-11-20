@@ -1,27 +1,43 @@
-import { MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction } from "discord.js";
-import type { ConditioningType, TomoriState } from "@/types/db/schema";
+import { MessageFlags, type ChatInputCommandInteraction, type Client } from "discord.js";
+import type { UserRow } from "@/types/db/schema";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
 import { personaRepository } from "@/utils/db/repositories";
+import {
+  CONDITIONING_MODAL_CAPACITY,
+  computeConditioningAggregateFingerprint,
+} from "@/utils/discord/conditioningPanelCatalog";
+import { createNonce } from "@/utils/discord/panelRouteTokens";
+import {
+  CONDITIONING_PAGE_SELECT_MAX_ENTRIES,
+  buildConditioningPageSelectRows,
+  buildConditioningRemoveModal,
+} from "@/utils/discord/ui/conditioningPanel";
+import { showRoutedRawModal } from "@/utils/discord/ui/modals";
+import { localizer } from "@/utils/text/localizer";
+import { loadConditioningManageEntriesWithPersonas } from "@/utils/discord/interactions/conditioningRoutes";
 
-export type PersonaSelectionResult = {
-  persona: TomoriState;
-  interaction: ChatInputCommandInteraction | ButtonInteraction;
-};
-
-export function getConditioningTypeOption(interaction: ChatInputCommandInteraction): ConditioningType {
-  return interaction.options.getString("type", true) === "punish" ? "punish" : "reward";
-}
-
-export function hasManageGuildPermission(interaction: ChatInputCommandInteraction): boolean {
+function hasManageGuildPermission(interaction: ChatInputCommandInteraction): boolean {
   return interaction.memberPermissions?.has("ManageGuild") ?? false;
 }
 
-export async function selectConditioningPersona(
+export async function executeConditioningRemovalCommand(
+  _client: Client,
   interaction: ChatInputCommandInteraction,
+  _userData: UserRow,
   locale: string,
-): Promise<PersonaSelectionResult | null> {
+): Promise<void> {
+  if (!hasManageGuildPermission(interaction)) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.permission_denied_title",
+      descriptionKey: "general.errors.permission_denied_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (!interaction.guildId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -29,7 +45,7 @@ export async function selectConditioningPersona(
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
-    return null;
+    return;
   }
 
   const personas = await personaRepository.loadAllForServer(interaction.guildId);
@@ -40,40 +56,45 @@ export async function selectConditioningPersona(
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
-    return null;
+    return;
   }
 
-  if (personas.length === 1) {
-    const [persona] = personas;
-    if (!persona) return null;
-    return { persona, interaction };
-  }
-
-  const selection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-    personas,
-    color: ColorCode.INFO,
-    preserveSelectedInteraction: true,
-    onSelect: async () => {},
-    titleKey: "commands.conditioning.shared.select_persona_title",
-  });
-
-  if (!selection.success || selection.selectedIndex === undefined || !selection.interaction) {
-    return null;
-  }
-
-  const selectedPersona = personas[selection.selectedIndex];
-  if (!selectedPersona) {
-    await replyInfoEmbed(selection.interaction, locale, {
-      titleKey: "general.errors.invalid_option_title",
-      descriptionKey: "general.errors.invalid_option_description",
-      color: ColorCode.ERROR,
+  const entries = await loadConditioningManageEntriesWithPersonas(personas);
+  if (entries.length === 0) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "commands.conditioning.remove.empty_title",
+      descriptionKey: "commands.conditioning.remove.empty_description",
+      color: ColorCode.INFO,
       flags: MessageFlags.Ephemeral,
     });
-    return null;
+    return;
   }
 
-  return {
-    persona: selectedPersona,
-    interaction: selection.interaction,
-  };
+  if (entries.length <= CONDITIONING_MODAL_CAPACITY) {
+    const fp = computeConditioningAggregateFingerprint(entries, 0);
+    const nonce = createNonce();
+    const modalData = buildConditioningRemoveModal(locale, 0, fp, nonce, entries);
+    await showRoutedRawModal(interaction, modalData);
+    return;
+  }
+
+  const pageRows = buildConditioningPageSelectRows(locale, entries.length);
+  const capped = entries.length > CONDITIONING_PAGE_SELECT_MAX_ENTRIES;
+  await interaction.reply({
+    embeds: [
+      createStandardEmbed(locale, {
+        titleKey: "commands.conditioning.panel.remove_modal_title",
+        description: capped
+          ? localizer(locale, "commands.conditioning.remove.page_select_prompt_capped", {
+              total: String(entries.length),
+              shown: String(CONDITIONING_PAGE_SELECT_MAX_ENTRIES),
+            })
+          : localizer(locale, "commands.conditioning.remove.page_select_prompt", {
+              total: String(entries.length),
+            }),
+      }),
+    ],
+    components: pageRows,
+    flags: MessageFlags.Ephemeral,
+  });
 }

@@ -1,0 +1,167 @@
+---
+title: "Qwen3-TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Sintetize falas de personagens multilíngues com alta precisão usando o [Qwen3-TTS](https://github.com/QwenAudio/Qwen3-TTS) nos modos de clonagem de voz e VoiceDesign descrito em texto.
+
+O Qwen3-TTS 12Hz 1.7B oferece síntese de fala local de alta precisão. Executar `servers/tts/qwen3tts/server.py` no modo automático padrão seleciona dinamicamente o modelo Base de clonagem de voz ou o modelo VoiceDesign com base em cada solicitação recebida.
+
+## Configuração
+
+Execute estes comandos na raiz do repositório do TomoriBot, a pasta onde você clonou o TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\qwen3tts\.venv
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r servers\tts\qwen3tts\requirements.txt
+python servers\tts\qwen3tts\server.py
+```
+
+Em uma GPU NVIDIA, o backend padrão `cuda-graphs` é executado automaticamente. Em uma máquina apenas com CPU, defina `$env:QWEN3TTS_BACKEND = "transformers"` antes de iniciar o `server.py`.
+
+</TabItem>
+<TabItem label="Linux">
+
+Instale o `sox` caso ainda não esteja no sistema (`sudo apt-get install -y sox` no Debian/Ubuntu), depois crie o ambiente virtual e inicie o servidor:
+
+```bash
+python3 -m venv servers/tts/qwen3tts/.venv
+source servers/tts/qwen3tts/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r servers/tts/qwen3tts/requirements.txt
+python servers/tts/qwen3tts/server.py
+```
+
+Em uma GPU NVIDIA, o backend padrão `cuda-graphs` é executado automaticamente. Em uma CPU ou GPU AMD ROCm, defina `QWEN3TTS_BACKEND=transformers` (e instale uma compilação compatível do PyTorch para ROCm no `.venv` para GPUs AMD).
+
+</TabItem>
+<TabItem label="Mac">
+
+Instale o `sox` via Homebrew primeiro, depois crie o ambiente virtual e inicie o servidor com o backend padrão `transformers` (`cuda-graphs` exige uma GPU NVIDIA CUDA, e o `pip` usa pacotes padrão do PyTorch no PyPI no macOS):
+
+```bash
+brew install sox
+python3 -m venv servers/tts/qwen3tts/.venv
+source servers/tts/qwen3tts/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r servers/tts/qwen3tts/requirements.txt
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+Por padrão sem CUDA, o servidor roda na `cpu` em `float32`. No Apple Silicon você também pode testar `QWEN3TTS_DEVICE_MAP=mps` com `QWEN3TTS_DTYPE=float32`, embora a taxa de transferência padrão do PyTorch MPS seja bem mais lenta que NVIDIA CUDA e não seja coberta pelos testes do repositório.
+
+</TabItem>
+</Tabs>
+
+Mantenha esse terminal aberto enquanto o TomoriBot estiver usando o Qwen3-TTS (ou inicie-o depois com `bun run launch --qwen3tts`). A URL padrão do endpoint em modo automático é `http://127.0.0.1:8012`; defina `QWEN3TTS_PORT` para usar outra porta. Você também pode especificar o modo automático explicitamente com `--mode auto`.
+
+O modo automático analisa cada solicitação para `/synthesize`: solicitações com `ref_audio` usam o modelo de clonagem, enquanto solicitações com `instruct` usam o modelo VoiceDesign. Ele mantém apenas um modelo carregado por vez e troca os modelos quando o tipo de solicitação muda, portanto a primeira solicitação após uma troca pode ser mais lenta.
+
+## Backend CUDA rápido
+
+Por padrão, o servidor usa o [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts), que os requisitos já instalam. Em uma GPU NVIDIA ele sintetiza cerca de 6x mais rápido do que o backend padrão, fazendo a fala ser gerada mais rápido do que em tempo real em vez de cerca de duas vezes mais lenta. Ele não exige configuração extra, mas só roda em GPUs NVIDIA: em uma CPU, em um Mac ou em uma GPU AMD o servidor para na inicialização e orienta a trocar de backend.
+
+Esse backend reserva espaço para uma quantidade fixa de fala por solicitação, compartilhada entre o clipe de referência e o áudio gerado (cerca de 170 segundos no total). Com um clipe de 10-20 segundos sobram bem mais de dois minutos de fala. Se uma solicitação não couber, o servidor retorna um erro em vez de cortar o áudio; use um clipe ou texto mais curto, ou o backend padrão.
+
+Para usar o backend padrão em vez dele, defina `QWEN3TTS_BACKEND=transformers` antes de iniciar o servidor:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:QWEN3TTS_BACKEND = "transformers"
+python servers\tts\qwen3tts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+QWEN3TTS_BACKEND=transformers python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+## Registrar no TomoriBot
+
+Para a maioria dos usuários, registre o servidor em modo automático para que um endpoint suporte personas tanto com clonagem de voz quanto com VoiceDesign.
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e use a compatibilidade de API de fala:
+
+- Compatibilidade de API: `Clone de TTS` (`tts-clone`)
+- `endpoint_url`: `http://127.0.0.1:8012`
+
+Depois de salvar a conexão, selecione-a e use o menu suspenso de modelos para adicionar um modelo de Fala. O formulário do modelo solicita o `Modo de Fonte de Voz` e o `Estilo de Marcação de Script`; escolha `Automático` e `Simples` para o servidor em modo automático.
+
+Use `/providers` para registro do endpoint e configuração do modelo. Em seguida, abra `/config` > Modelos > Trocar Modelos para selecionar e ativar o endpoint registrado.
+
+## Configurar vozes de persona
+
+### Clonagem de voz
+
+Use esta opção para personas que devem imitar um clipe de referência:
+
+1. Prepare um clipe de voz limpo de 10 a 20 segundos com apenas um locutor e sem música de fundo.
+2. Abra `/config` em Modelos > Parâmetros TTS e Vozes e envie o clipe.
+3. Abra `/config` em Persona > Voz, depois escolha a persona e a amostra de voz.
+
+O Qwen3-TTS suporta clipes de referência a partir de 3 segundos.
+
+### VoiceDesign
+
+Use esta opção para personas que devem usar uma descrição escrita de voz em vez de uma amostra:
+
+1. Abra `/config` em Persona > Voz e escolha `VoiceDesign`.
+2. Escolha a persona.
+3. Insira um prompt de voz em linguagem natural, como idade, tom, sotaque e entonação de quem fala.
+
+## Opcional: servidor exclusivo de VoiceDesign
+
+Inicie o mesmo servidor no modo VoiceDesign ao servir `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` (adicione `QWEN3TTS_BACKEND=transformers` em hardware não NVIDIA):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
+$env:TOMORI_TTS_MODE = "voice-design"
+python servers\tts\qwen3tts\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+source servers/tts/qwen3tts/.venv/bin/activate
+TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+source servers/tts/qwen3tts/.venv/bin/activate
+QWEN3TTS_BACKEND=transformers TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
+```
+
+</TabItem>
+</Tabs>
+
+Você também pode passar `--mode voice-design` em vez de definir `TOMORI_TTS_MODE`. A URL padrão do endpoint exclusivo de VoiceDesign é `http://127.0.0.1:8014`.
+
+Registre-o da mesma forma que no modo automático, mas use a URL do endpoint `http://127.0.0.1:8014` e escolha `VoiceDesign` como o `Modo de Fonte de Voz` no modelo de Fala.

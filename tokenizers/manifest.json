@@ -1,37 +1,115 @@
 {
-	"version": 1,
-	"families": {
-		"deepseek_v3_r1": {
-			"repo": "deepseek-ai/DeepSeek-R1",
-			"files": ["tokenizer.json", "tokenizer_config.json"]
-		},
-		"gemma3": {
-			"repo": "google/gemma-3-4b-pt",
-			"files": ["tokenizer.json", "tokenizer.model", "tokenizer_config.json"]
-		},
-		"glm_zai": {
-			"repo": "zai-org/GLM-4.7",
-			"files": ["tokenizer.json", "tokenizer_config.json"]
-		},
-		"kimi_k2": {
-			"repo": "moonshotai/Kimi-K2-Instruct",
-			"files": ["tiktoken.model", "tokenizer_config.json", "config.json"]
-		},
-		"mistral_small3": {
-			"repo": "mistralai/Mistral-Small-3.1-24B-Instruct-2503",
-			"files": ["tekken.json", "config.json"]
-		},
-		"nemotron3": {
-			"repo": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
-			"files": ["tokenizer.json", "special_tokens_map.json", "tokenizer_config.json"]
-		},
-		"qwen3_5": {
-			"repo": "Qwen/Qwen3.5-27B",
-			"files": ["tokenizer.json", "tokenizer_config.json"]
-		},
-		"stepfun_step35": {
-			"repo": "stepfun-ai/Step-3.5-Flash",
-			"files": ["tokenizer.json", "tokenizer_config.json"]
-		}
-	}
+  "version": 1,
+  "families": {
+    "deepseek_v3_r1": {
+      "repo": "deepseek-ai/DeepSeek-R1",
+      "files": [
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "gemma3": {
+      "repo": "google/gemma-3-4b-pt",
+      "files": [
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json"
+      ]
+    },
+    "glm_zai": {
+      "repo": "zai-org/GLM-4.7",
+      "files": [
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "kimi_k2": {
+      "repo": "moonshotai/Kimi-K2-Instruct",
+      "files": [
+        "tiktoken.model",
+        "tokenizer_config.json",
+        "config.json"
+      ]
+    },
+    "mistral_small3": {
+      "repo": "mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+      "files": [
+        "tekken.json",
+        "config.json"
+      ]
+    },
+    "nemotron3": {
+      "repo": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+      "files": [
+        "tokenizer.json",
+        "special_tokens_map.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "qwen3_5": {
+      "repo": "Qwen/Qwen3.5-27B",
+      "files": [
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "stepfun_step35": {
+      "repo": "stepfun-ai/Step-3.5-Flash",
+      "files": [
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "novelai_nerdstash_v2": {
+      "repo": "NovelAI/nai-js-tokenizer",
+      "source": "github",
+      "revision": "31555452cd29f1e2a531039aeb7dc2a92319ba2d",
+      "files": [
+        "tokenizer.json",
+        "LICENSE"
+      ],
+      "paths": {
+        "tokenizer.json": "tokenizer_files/nerdstash_tokenizer_v2.json",
+        "LICENSE": "LICENSE"
+      },
+      "sha256": {
+        "tokenizer.json": "72cd726bc4bb523baede8ed0bcdd679021bf9dbe88599710f5e4559ee52497a0",
+        "LICENSE": "3c2eb6afd215fcad8bb4521d4f75698c8733cf4bf2693f01271af48650f289d7"
+      }
+    },
+    "novelai_llama3": {
+      "repo": "NovelAI/nai-js-tokenizer",
+      "source": "github",
+      "revision": "31555452cd29f1e2a531039aeb7dc2a92319ba2d",
+      "files": [
+        "tokenizer.json",
+        "LICENSE"
+      ],
+      "paths": {
+        "tokenizer.json": "tokenizer_files/llama3nai_tokenizer.json",
+        "LICENSE": "LICENSE"
+      },
+      "sha256": {
+        "tokenizer.json": "a3fa845c41d4828e67774bd1e0167922350fbe4d954138a101834f803ab29879",
+        "LICENSE": "3c2eb6afd215fcad8bb4521d4f75698c8733cf4bf2693f01271af48650f289d7"
+      }
+    },
+    "novelai_glm": {
+      "repo": "NovelAI/nai-js-tokenizer",
+      "source": "github",
+      "revision": "31555452cd29f1e2a531039aeb7dc2a92319ba2d",
+      "files": [
+        "tokenizer.json",
+        "LICENSE"
+      ],
+      "paths": {
+        "tokenizer.json": "tokenizer_files/glm45_tokenizer.json",
+        "LICENSE": "LICENSE"
+      },
+      "sha256": {
+        "tokenizer.json": "b9615a33ce0fc71400944258d24dec5721d9a21633326d8225d74357f48a3220",
+        "LICENSE": "3c2eb6afd215fcad8bb4521d4f75698c8733cf4bf2693f01271af48650f289d7"
+      }
+    }
+  }
 }

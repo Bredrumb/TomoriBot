@@ -8,6 +8,7 @@ import type {
   SupportsNativeVideoGeneration,
   SupportsPresetGeneration,
   SupportsStructuredOutput,
+  SupportsDecisions,
 } from "@/types/provider/featureInterfaces";
 import type { LLMProvider } from "@/types/provider/interfaces";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
@@ -54,6 +55,8 @@ function hasNativeVideoGenerationCapability(
 }
 
 const capabilityGuards = {
+  decisions: (provider: LLMProvider): provider is LLMProvider & SupportsDecisions =>
+    typeof (provider as Partial<SupportsDecisions>).callDecisions === "function",
   embeddings: hasEmbeddingsCapability,
   structuredOutput: hasStructuredOutputCapability,
   presetGeneration: hasPresetGenerationCapability,
@@ -65,7 +68,7 @@ const capabilityGuards = {
   [K in ProviderCapabilityName]: (provider: LLMProvider) => provider is LLMProvider & ProviderCapabilityMap[K];
 };
 
-export async function resolveProviderCapability<TCapabilityName extends ProviderCapabilityName>(
+async function resolveProviderCapability<TCapabilityName extends ProviderCapabilityName>(
   providerName: string,
   capabilityName: TCapabilityName,
 ): Promise<(LLMProvider & ProviderCapabilityMap[TCapabilityName]) | null> {
@@ -81,6 +84,10 @@ export async function resolveEmbeddingsCapability(providerName: string) {
   return resolveProviderCapability(providerName, "embeddings");
 }
 
+export async function resolveDecisionsCapability(providerName: string) {
+  return resolveProviderCapability(providerName, "decisions");
+}
+
 export async function resolveStructuredOutputCapability(providerName: string) {
   return resolveProviderCapability(providerName, "structuredOutput");
 }
@@ -91,10 +98,6 @@ export async function resolvePresetGenerationCapability(providerName: string) {
 
 export async function resolveConversationCompactionCapability(providerName: string) {
   return resolveProviderCapability(providerName, "conversationCompaction");
-}
-
-export async function resolveLiveTokenCountingCapability(providerName: string) {
-  return resolveProviderCapability(providerName, "liveTokenCounting");
 }
 
 export async function resolveNativeImageGenerationCapability(providerName: string) {

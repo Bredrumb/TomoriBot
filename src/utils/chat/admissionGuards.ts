@@ -5,16 +5,29 @@ import { CooldownType } from "@/types/db/schema";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
-import { getCachedUserRow } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCache";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
+import { configRepository } from "@/utils/db/repositories";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { checkTextQuota } from "@/utils/quota/textQuotaManager";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import { reserveTextQuota, type TextQuotaClaim } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
 import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
+import {
+  getAutochatAssignedPersonaId,
+  getAutochatRange,
+  isAutochatCounterChannelActive,
+  isAutochatOverrideChannel,
+  isAutochatQualifyingMessage,
+  isMessageProxyMessage,
+  isRealUserLikeMessage,
+} from "@/utils/chat/triggerProcessor";
+import type { ChatIncoming } from "@/utils/chat/types";
 import {
   buildTextQuotaResetInfo,
   textQuotaTriggerStates,
@@ -152,7 +165,7 @@ export async function rejectOnMessageTriggerCooldown(params: {
   return true;
 }
 
-export async function setMessageTriggerCooldownForAdmission(params: {
+async function setMessageTriggerCooldownForAdmission(params: {
   serverDiscId: string;
   userDiscId: string;
   channelId: string;
@@ -167,6 +180,85 @@ export async function setMessageTriggerCooldownForAdmission(params: {
     params.cooldownType,
     params.cooldownLength,
     params.member,
+  );
+}
+
+/**
+ * The channel a message's channel-scoped configuration applies to.
+ *
+ * A thread's messages carry their parent's scope for settings such as the auto-chat override,
+ * while reads and writes keyed on the message itself keep the thread's own id.
+ */
+export function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
+  const isThread =
+    "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread();
+  const parentChannelId = isThread && "parent" in message.channel ? message.channel.parent?.id : undefined;
+  return { effectiveChannelId: parentChannelId ?? message.channelId, parentChannelId };
+}
+
+/**
+ * Applies the server's message-trigger cooldown to a turn that answers on the server's credentials.
+ *
+ * Planning runs this for a server-sourced turn. The server route a personal turn can fall back to
+ * has to run it as well, because the server is now the one paying: without it, a personal provider
+ * that fails on every message would buy a server reply on every message for as long as the server's
+ * quota allows, and a server that leaves quota off would never stop.
+ *
+ * @returns false when the caller must not proceed, the same answer planning gives a cooldown hit.
+ */
+export async function enforceServerTriggerCooldownForAdmission(params: {
+  serverDiscId: string;
+  cooldownUserDiscId: string;
+  message: Message;
+  tomoriState: TomoriState;
+  locale: string;
+  notifyUser?: boolean;
+}): Promise<boolean> {
+  const cooldownType = params.tomoriState.config.cooldown_type ?? CooldownType.OFF;
+  const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
+    serverDiscId: params.serverDiscId,
+    userDiscId: params.cooldownUserDiscId,
+    channelId: params.message.channelId,
+    cooldownType,
+    member: params.message.member,
+    isAutochatOverride: isAutochatOverrideChannel(
+      params.tomoriState.config,
+      resolveChannelScope(params.message).effectiveChannelId,
+    ),
+    author: params.message.author,
+    locale: params.locale,
+    botName: params.tomoriState.persona_nickname,
+    notifyUser: params.notifyUser,
+  });
+  if (rejectedByCooldown) {
+    return false;
+  }
+
+  await setMessageTriggerCooldownForAdmission({
+    serverDiscId: params.serverDiscId,
+    userDiscId: params.cooldownUserDiscId,
+    channelId: params.message.channelId,
+    cooldownType,
+    cooldownLength: params.tomoriState.config.cooldown_length ?? 5,
+    member: params.message.member,
+  });
+  return true;
+}
+
+/**
+ * Whether this turn draws on a server's text quota once it runs on the server's credentials.
+ *
+ * Direct messages, system-initiated turns, reminder deliveries, and stop responses never count
+ * against a server's text quota. The caller decides the credential route separately, because a
+ * turn planned on personal credentials only reaches this quota if it falls back to the server.
+ */
+export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
+  return (
+    incoming.textQuotaSource === "user" &&
+    !isDMChannel &&
+    !incoming.isStopResponse &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder
   );
 }
 
@@ -186,21 +278,34 @@ export async function checkTextQuotaForAdmission(params: {
 
   const existingTextQuotaState = textQuotaTriggerStates.get(params.triggerKey);
 
-  if (params.isPersonaJob) {
-    return {
-      allowed: true,
-      state: existingTextQuotaState ?? null,
-    };
+  if (existingTextQuotaState?.consumed) {
+    return { allowed: true, state: existingTextQuotaState };
   }
 
-  if (existingTextQuotaState) {
-    return {
-      allowed: true,
-      state: existingTextQuotaState,
-    };
+  if (existingTextQuotaState?.reservation) {
+    return { allowed: true, state: existingTextQuotaState };
   }
 
-  const quotaCheck = await checkTextQuota(params.serverId, params.userDiscId);
+  // A persona job normally reuses its group's admission, but one whose earlier turn released the
+  // reservation still has to claim a unit before it can spend the server's model.
+  if (params.isPersonaJob && !existingTextQuotaState?.reservationReleased) {
+    return { allowed: true, state: existingTextQuotaState ?? null };
+  }
+
+  let quotaCheck: TextQuotaClaim;
+  try {
+    quotaCheck = await reserveTextQuota(params.serverId, params.userDiscId);
+  } catch (error) {
+    if (!(error instanceof QuotaUnavailableError)) throw error;
+    if (params.notifyUser !== false) {
+      await sendStandardEmbed(params.channel, params.locale, {
+        color: ColorCode.ERROR,
+        titleKey: "genai.text_quota_unavailable_title",
+        descriptionKey: "genai.text_quota_unavailable_description",
+      });
+    }
+    return { allowed: false, state: null };
+  }
 
   if (!quotaCheck.allowed) {
     const resetInfo = buildTextQuotaResetInfo(params.locale, quotaCheck);
@@ -213,6 +318,13 @@ export async function checkTextQuotaForAdmission(params: {
     }
 
     if (params.notifyUser !== false) {
+      const tipKeys = await withProviderOptionCopy(["genai.tips.use_personal_providers"], {
+        surface: "recovery",
+        managedProvider: null,
+        userDiscId: params.userDiscId,
+        serverId: params.serverId,
+        credentialScope: "server",
+      });
       await sendStandardEmbed(params.channel, params.locale, {
         color: ColorCode.ERROR,
         titleKey: "genai.text_quota_exceeded_title",
@@ -221,17 +333,24 @@ export async function checkTextQuotaForAdmission(params: {
           reset_info: resetInfo,
         },
         footerKey: "genai.text_quota_exceeded_footer",
+        tipKeys,
       });
     }
     return { allowed: false, state: null };
   }
 
-  const textQuotaStateForTrigger: TextQuotaTriggerState = {
+  const textQuotaStateForTrigger: TextQuotaTriggerState = existingTextQuotaState ?? {
     serverId: params.serverId,
     userDiscId: params.userDiscId,
     consumed: false,
+    reservation: null,
+    reservationReleased: false,
     createdAt: Date.now(),
   };
+  textQuotaStateForTrigger.serverId = params.serverId;
+  textQuotaStateForTrigger.userDiscId = params.userDiscId;
+  textQuotaStateForTrigger.reservation = quotaCheck.reservation;
+  textQuotaStateForTrigger.reservationReleased = false;
   textQuotaTriggerStates.set(params.triggerKey, textQuotaStateForTrigger);
 
   return {
@@ -315,6 +434,7 @@ export async function evaluateChatAccess(params: {
 async function resolveBlockedPersonaIdsForTrigger(params: {
   isDMChannel: boolean;
   isStopResponse: boolean;
+  guildDiscId: string;
   serverId: number;
   fallbackUserDiscId: string;
   allPersonas: TomoriState[];
@@ -323,14 +443,21 @@ async function resolveBlockedPersonaIdsForTrigger(params: {
     return new Set();
   }
 
+  const knownPersonaIds = new Set(
+    params.allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])),
+  );
+
+  // A server blacklist entry is a block on every persona, so every trigger path that already
+  // honours persona blocks refuses a blacklisted member without a separate check.
+  if (params.guildDiscId && (await getCachedBlacklistStatus(params.guildDiscId, params.fallbackUserDiscId))) {
+    return knownPersonaIds;
+  }
+
   const activeBlocks = await getCachedActiveBlocksForUser(params.serverId, params.fallbackUserDiscId);
   if (activeBlocks.length === 0) {
     return new Set();
   }
 
-  const knownPersonaIds = new Set(
-    params.allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])),
-  );
   return new Set(
     activeBlocks
       .map((block) => block.persona_id)
@@ -358,6 +485,7 @@ function filterAllowedPersonaIdsByBlocks(
 export async function validateDirectChatTrigger(params: {
   client: Client;
   message: Message;
+  referencedMessage: Message | null;
   guild: Guild | null;
   allPersonas: TomoriState[];
   tomoriState: TomoriState | null | undefined;
@@ -379,29 +507,21 @@ export async function validateDirectChatTrigger(params: {
   let isUserImpersonation = false;
   let impersonatedUserId: string | undefined;
 
-  if (params.message.reference?.messageId) {
-    try {
-      const referenceMessage = await params.message.channel.messages.fetch(params.message.reference.messageId);
-      if (referenceMessage) {
-        if (referenceMessage.author.id === params.client.user?.id) {
-          isReplyToBot = true;
-        } else if (referenceMessage.webhookId) {
-          const webhookReplyTarget = resolveReferencedWebhookTarget(referenceMessage, personaByNickname, params.guild);
+  const referenceMessage = params.referencedMessage;
+  if (referenceMessage) {
+    if (referenceMessage.author.id === params.client.user?.id) {
+      isReplyToBot = true;
+    } else if (referenceMessage.webhookId && !isMessageProxyMessage(referenceMessage)) {
+      const webhookReplyTarget = resolveReferencedWebhookTarget(referenceMessage, personaByNickname, params.guild);
 
-          if (webhookReplyTarget.replyPersona) {
-            replyPersona = webhookReplyTarget.replyPersona;
-          } else if (webhookReplyTarget.impersonatedUserId) {
-            isReplyToBot = true;
-            isUserImpersonation = true;
-            impersonatedUserId = webhookReplyTarget.impersonatedUserId;
-            log.info(
-              `Reply ${params.message.id} matched user impersonation webhook. Target user: ${impersonatedUserId}`,
-            );
-          }
-        }
+      if (webhookReplyTarget.replyPersona) {
+        replyPersona = webhookReplyTarget.replyPersona;
+      } else if (webhookReplyTarget.impersonatedUserId) {
+        isReplyToBot = true;
+        isUserImpersonation = true;
+        impersonatedUserId = webhookReplyTarget.impersonatedUserId;
+        log.info(`Reply ${params.message.id} matched user impersonation webhook. Target user: ${impersonatedUserId}`);
       }
-    } catch (fetchError) {
-      log.warn("Could not fetch reference message for reply check", fetchError);
     }
   }
 
@@ -524,5 +644,73 @@ async function sendServerRateLimitEmbed(
     log.info(`Sent rate limit embed to channel ${channel.id} (${currentCount} active messages in server)`);
   } catch (error) {
     log.warn(`Failed to send rate limit embed to channel ${channel.id}`, error);
+  }
+}
+
+export function canAdvanceAutochatCounter(params: {
+  message: Message;
+  tomoriState: TomoriState;
+  allPersonas: TomoriState[];
+  effectiveChannelId: string;
+  isSelfMessage: boolean;
+  personalAutoTriggerPersonaId?: number | null;
+  allowedPersonaIds?: ReadonlySet<number> | null;
+}): boolean {
+  if (Number.isInteger(params.personalAutoTriggerPersonaId)) return false;
+  if (
+    !isAutochatCounterChannelActive(params.tomoriState.config, params.effectiveChannelId) ||
+    !isAutochatQualifyingMessage(params.message, params.isSelfMessage)
+  ) {
+    return false;
+  }
+  const assignedPersonaId = getAutochatAssignedPersonaId(params.tomoriState.config, params.effectiveChannelId);
+  const autoReplyPersona =
+    (assignedPersonaId ? params.allPersonas.find((persona) => persona.persona_id === assignedPersonaId) : undefined) ??
+    params.allPersonas.find((persona) => !persona.is_alter);
+  return Boolean(
+    autoReplyPersona &&
+      (!params.allowedPersonaIds ||
+        (typeof autoReplyPersona.persona_id === "number" && params.allowedPersonaIds.has(autoReplyPersona.persona_id))),
+  );
+}
+
+export async function updateAutochatCounter(
+  message: Message,
+  tomoriState: TomoriState,
+  serverDiscId: string,
+): Promise<{ autoch_counter: number; autoch_next_target: number } | null> {
+  const { minThreshold, maxThreshold } = getAutochatRange(tomoriState.config);
+  const effectiveChannelId =
+    "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread()
+      ? (message.channel.parentId ?? message.channel.id)
+      : message.channel.id;
+  if (!isAutochatCounterChannelActive(tomoriState.config, effectiveChannelId) || !isRealUserLikeMessage(message)) {
+    return null;
+  }
+  if (!tomoriState.persona_id) {
+    log.error(`Tomori ID missing for server ${serverDiscId} during counter increment.`);
+    return null;
+  }
+
+  try {
+    const updatedTomoriRow = await configRepository.incrementTomoriCounter(
+      tomoriState.persona_id,
+      minThreshold,
+      maxThreshold,
+    );
+    if (!updatedTomoriRow) {
+      log.warn(`Failed to update auto-message counter for server ${serverDiscId}.`);
+      return null;
+    }
+    const snapshot = {
+      autoch_counter: updatedTomoriRow.autoch_counter,
+      autoch_next_target: updatedTomoriRow.autoch_next_target,
+    };
+    tomoriState.autoch_counter = snapshot.autoch_counter;
+    tomoriState.autoch_next_target = snapshot.autoch_next_target;
+    return snapshot;
+  } catch (error) {
+    log.error(`Error updating auto-message counter for server ${serverDiscId}`, error);
+    return null;
   }
 }

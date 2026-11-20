@@ -1,7 +1,17 @@
 export {
   acknowledgeModalSubmitForRefresh,
-  promptWithModal,
+  initializeRawModalInterception,
   promptWithPaginatedModal,
   promptWithRawModal,
+  safeModalLocalizer,
   safeSelectOptionText,
+  showRoutedRawModal,
+  takeRawModalCheckboxGroupValues,
+  takeRawModalSelectValue,
+  takeRawModalUserSelectValue,
+  takeRawModalRoleSelectValue,
+  takeRawModalChannelSelectValues,
+  takeRawModalStringSelectValues,
+  takeRawModalFileUpload,
+  takeRawModalFileUploads,
 } from "./interactionCore";

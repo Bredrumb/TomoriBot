@@ -1,0 +1,32 @@
+export default {
+  roll: {
+    description: "Tira dados para juegos de rol y partidas de mesa.",
+    dice_description: "Dados a tirar, como 3d4 o 1d20+5 (por defecto: 1d20).",
+    mode_description: "Tira normalmente o quédate con el mayor o menor de dos d20.",
+    reason_description: "Una breve etiqueta para la tirada, como Prueba de sigilo.",
+    visibility_description: "Quién puede ver el resultado, incluyendo si el bot lo recibe en el contexto del chat.",
+    normal_option: "Normal",
+    advantage_option: "Ventaja",
+    disadvantage_option: "Desventaja",
+    public_option: "Público",
+    hidden_option: "Oculto",
+    shared_option: "Público + Bot",
+    title: "🎲 Tirada de dados",
+    rolled: "**{actor}** tiró `{dice}`:",
+    rolled_with_reason: "**{actor}** tiró `{dice}` por *{reason}*:",
+    advantage_line: "Ventaja: {rolls}{modifier}",
+    disadvantage_line: "Desventaja: {rolls}{modifier}",
+    calculation_line: "Cálculo: {calculation}",
+    footer_public: "Público • No compartido con el bot",
+    footer_hidden: "Oculto • Solo tú puedes ver esto",
+    footer_shared: "Público • Compartido con el bot",
+    invalid_title: "Tirada de dados no válida",
+    invalid_input:
+      "Introduce una expresión de dados de hasta 64 caracteres, un modo válido y un motivo de hasta 100 caracteres. Ejemplo: `1d20+5`.",
+    invalid_notation: "Usa un solo grupo de dados con un modificador opcional, como `d20`, `3d4`, `2d6+3` o `1d20-2`.",
+    invalid_limits:
+      "Tira de 1 a 100 dados de 2 a 1,000 caras cada uno y un modificador entre -10,000 y +10,000. Ejemplo: `2d6+3`.",
+    invalid_mode: "La ventaja y desventaja requieren `1d20` con un modificador opcional, como `1d20+5`.",
+    invalid_visibility: "Elige Público, Oculto o Público + Bot.",
+  },
+};

@@ -1,0 +1,182 @@
+---
+title: "VoxCPM2"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Sintetize fala expressiva a 48 kHz em 30 idiomas usando o modelo de conversão de texto em fala [VoxCPM2](https://github.com/OpenBMB/VoxCPM) da OpenBMB.
+
+O VoxCPM2 é um modelo de fala multilíngue de 2B de parâmetros que suporta clonagem de voz, Ultimate Cloning assistida por transcrição e Voice Design em linguagem natural. O TomoriBot conecta-se à biblioteca oficial `voxcpm` em Python por meio do servidor em `servers/tts/voxcpm2/`, executando o checkpoint oficial em BF16 sem quantização `openbmb/VoxCPM2` confortavelmente dentro de 16 GB de VRAM.
+
+## Licença
+
+O código e os pesos do modelo VoxCPM2 são lançados sob a licença Apache-2.0, incluindo uso comercial sujeito aos termos da licença. O TomoriBot não redistribui os pesos; o instalador os baixa do repositório oficial do Hugging Face.
+
+Recursos oficiais do projeto upstream:
+
+- [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
+- [openbmb/VoxCPM2 no Hugging Face](https://huggingface.co/openbmb/VoxCPM2)
+- [Documentação do VoxCPM](https://voxcpm.readthedocs.io/)
+
+## Idiomas suportados
+
+O VoxCPM2 suporta oficialmente 30 idiomas sem exigir uma tag de idioma:
+
+Árabe, birmanês, chinês, dinamarquês, holandês, inglês, finlandês, francês, alemão, grego, hebraico, híndi, indonésio, italiano, japonês, khmer, coreano, laosiano, malaio, norueguês, polonês, português, russo, espanhol, suaíli, sueco, tagalo, tailandês, turco e vietnamita.
+
+A OpenBMB também documenta vários dialetos chineses. O TomoriBot ainda pode enviar um campo `language` para compatibilidade com o contrato comum de TTS, mas o VoxCPM2 detecta o idioma a partir do texto de síntese e o wrapper não impõe uma tag de idioma.
+
+## Modos de voz
+
+Use a marcação `Automático` e `Simples` para clonagem e design de voz. Uma transcrição de referência habilita o Ultimate Cloning; uma instrução de entonação tem precedência e omite a transcrição para essa solicitação.
+
+## Hardware e tempo de execução
+
+Ponto de partida recomendado:
+
+- Python 3.10-3.12 (exigido por ambos os instaladores)
+- GPU NVIDIA com 8 GB de VRAM ou mais para o ambiente oficial em BF16 (12 a 16 GB dão folga confortável), ou Apple Silicon com memória unificada suficiente para o modelo 2B
+- O uso de CPU é suportado como fallback, mas é substancialmente mais lento
+
+Ao rodar em CUDA, `VOXCPM2_OPTIMIZE=1` (o padrão) compila o modelo com `torch.compile` e Triton: a primeira inicialização leva cerca de 2-3 minutos enquanto o PyTorch compila o modelo, inicializações posteriores levam menos de um minuto com os kernels em cache, e a síntese fica cerca de 2,5-3x mais rápida do que sem compilação usando cerca de 2 GB a mais de memória do sistema. Se o Triton estiver ausente em uma configuração CUDA, execute o instalador novamente ou defina `VOXCPM2_OPTIMIZE=0`.
+
+Em dispositivos sem CUDA (CPU e Apple Silicon `mps`), o wrapper mantém inativa a verificação do Triton de `VOXCPM2_OPTIMIZE` para que a inicialização não exija o Triton, e `VOXCPM2_LOAD_DENOISER=0` mantém o redutor de ruído dependente de CPU desativado por padrão.
+
+## Instalação
+
+O servidor fixa o pacote estável `voxcpm` 2.0.3 atual e baixa `openbmb/VoxCPM2` para o cache normal do Hugging Face. Execute o instalador do seu sistema operacional a partir da raiz do repositório do TomoriBot:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+O instalador em PowerShell roda nativamente (WSL não é obrigatório) e instala o PyTorch 2.10 com suporte a CUDA (`cu128`) mais `triton-windows` para `VOXCPM2_OPTIMIZE=1`:
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+.\servers\tts\voxcpm2\.venv\Scripts\python.exe servers\tts\voxcpm2\server.py
+```
+
+Em uma máquina apenas com CPU sem GPU NVIDIA, passe `-Cpu`:
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
+```
+
+Se o PyTorch nativo do Windows precisar de reinstalação manual do CUDA ou realinhamento de drivers:
+
+```powershell
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install "triton-windows>=3.6,<3.7"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+Os pacotes padrão de `torch` no PyPI para Linux incluem suporte a CUDA e Triton para `VOXCPM2_OPTIMIZE=1`. Defina `VOXCPM2_OPTIMIZE=0` antes de iniciar `server.py` se você rodar sem compilação ou na CPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+Certifique-se de que Python 3.10-3.12 esteja ativo (por exemplo `PYTHON_BIN=python3.12`) e execute o instalador em shell:
+
+```bash
+bash servers/tts/voxcpm2/install-voxcpm2.sh
+servers/tts/voxcpm2/.venv/bin/python servers/tts/voxcpm2/server.py
+```
+
+Com `VOXCPM2_DEVICE=auto`, o `voxcpm` upstream usa `mps` do Apple Silicon quando disponível ou `cpu` caso contrário. Se você encontrar um operador MPS sem suporte na sua versão de macOS/PyTorch, inicie com `VOXCPM2_DEVICE=cpu` (mais lento) ou `VOXCPM2_OPTIMIZE=0`. Pode ser necessário executar `brew install ffmpeg` se as ferramentas de áudio no ambiente solicitarem.
+
+</TabItem>
+</Tabs>
+
+A primeira configuração baixa vários gigabytes de pesos do modelo. Para instalar o ambiente Python sem pré-baixar o modelo (de modo que o `voxcpm` baixe o checkpoint na primeira inicialização do servidor), defina `VOXCPM2_PREFETCH=0`:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:VOXCPM2_PREFETCH = "0"
+.\servers\tts\voxcpm2\install-voxcpm2.ps1
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+VOXCPM2_PREFETCH=0 bash servers/tts/voxcpm2/install-voxcpm2.sh
+```
+
+</TabItem>
+</Tabs>
+
+Após a configuração, `bun run launch --voxcpm2` inicia o servidor junto com o TomoriBot. O endpoint padrão é `http://127.0.0.1:8016`.
+
+## Registrar no TomoriBot
+
+Execute `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado` e configure o endpoint de Fala:
+
+- Capacidade: `Fala`
+- Compatibilidade de API: `Clone de TTS` (`tts-clone`)
+- URL do Endpoint: `http://127.0.0.1:8016`
+- Modo de Fonte de Voz: `Automático`
+- Estilo de Marcação de Script: `Simples`
+- Suporte a Instrução: `Sim`
+
+Depois de salvar a conexão, selecione-a e use o menu suspenso de modelos para adicionar um modelo de Fala. Em seguida, abra `/config` > Modelos > Trocar Modelos e selecione o modelo de fala VoxCPM2.
+
+`Automático` é recomendado porque o mesmo servidor suporta clonagem por áudio de referência e Voice Design. Você não precisa de processos separados do VoxCPM2 para os dois modos.
+
+## Clonagem de voz de persona
+
+Para uma persona que deve clonar uma voz existente:
+
+1. Prepare um clipe de referência limpo com apenas um locutor e pouca ou nenhuma música de fundo. O projeto upstream trata 5 a 30 segundos como a faixa prática.
+2. Abra `/config` em Modelos > Parâmetros TTS e Vozes e envie o clipe.
+3. Adicione a transcrição exata do clipe de referência quando disponível. O VoxCPM2 a utiliza para o Ultimate Cloning e pode reproduzir com mais fidelidade o ritmo, a emoção e o estilo da referência.
+4. Abra `/config` em Persona > Voz, escolha a persona e atribua a amostra salva.
+
+Se nenhuma transcrição for armazenada, o VoxCPM2 ainda realiza a clonagem comum por áudio de referência.
+
+## Voice Design de persona
+
+Para uma persona que deve ser criada a partir de uma descrição escrita de voz em vez de uma amostra:
+
+1. Abra `/config` em Persona > Voz e escolha `VoiceDesign`.
+2. Escolha a persona.
+3. Insira uma descrição em linguagem natural como `Young adult woman, soft warm voice, relaxed pace, slightly playful delivery`.
+
+Para uma voz clonada, instruções pontuais de entonação têm precedência sobre a transcrição de referência.
+
+## Variáveis de ambiente
+
+| Variável | Padrão | Finalidade |
+|---|---|---|
+| `VOXCPM2_MODEL_ID` | `openbmb/VoxCPM2` | ID do modelo no Hugging Face ou diretório local do modelo |
+| `VOXCPM2_DEVICE` | `auto` | Dispositivo de execução: `auto`, `cuda`, `cuda:N`, `cpu` ou `mps` |
+| `VOXCPM2_OPTIMIZE` | `1` | Compila o modelo com `torch.compile` em CUDA; precisa do Triton, e o servidor para na inicialização sem ele |
+| `VOXCPM2_LOAD_DENOISER` | `0` | Carrega o redutor de ruído opcional upstream; desativado por padrão para economizar memória |
+| `VOXCPM2_CFG_VALUE` | `2.0` | Intensidade da orientação |
+| `VOXCPM2_INFERENCE_TIMESTEPS` | `10` | Passos de inferência de flow-matching; mais passos podem melhorar a qualidade ao custo da velocidade |
+| `VOXCPM2_MAX_LEN` | `4096` | Comprimento máximo da geração |
+| `VOXCPM2_NORMALIZE` | `0` | Habilita a normalização de texto do upstream |
+| `VOXCPM2_RETRY_BADCASE` | `1` | Habilita o comportamento de repetição do upstream para gerações anômalas |
+| `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Máximo de repetições automáticas |
+| `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Limite de proporção para detecção de anomalias no upstream |
+| `VOXCPM2_PREFETCH` | `1` | Apenas instalador: baixa o modelo durante a configuração |
+| `VOXCPM2_PORT` | `8016` | Porta do servidor local do VoxCPM2 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de vinculação do servidor local; consulte [Acesso à rede](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+
+O áudio de referência deve ser um contêiner WAV não vazio de no máximo 10 MB decodificado, o que o wrapper verifica antes de gravar um arquivo temporário.

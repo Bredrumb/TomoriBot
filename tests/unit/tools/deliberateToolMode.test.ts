@@ -1,7 +1,144 @@
-import { describe, expect, it } from "bun:test";
-import { applyDeliberateToolAllowlist, getDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
+import { beforeAll, describe, expect, it } from "bun:test";
+import { getLocaleStringList, getSupportedLocales, initializeLocalizer } from "@/utils/text/localizer";
+import {
+  DELIBERATE_TOOL_PACK_KEYS,
+  EXPLICIT_MEMORY_PACK_KEY,
+  findIntentPackViolations,
+  getIntentPackEntryProblem,
+} from "@/utils/text/localeIntentPacks";
+import {
+  applyDeliberateToolAllowlist,
+  getAttachmentDeliberateToolIntentResult,
+  getAutonomousDeliberateToolNames,
+  getDeliberateToolAllowedNames,
+  matchesLocaleDeliberateToolPack,
+  resolveDeliberateToolContextTurns,
+} from "@/utils/tools/deliberateToolMode";
+
+import { createPersona } from "../../helpers/fixtures";
+
+const ALL_PACK_KEYS = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
 
 describe("deliberate tool mode", () => {
+  it("admits spontaneous stickers while retaining task restrictions", () => {
+    const state = createPersona({ config: { sticker_usage_enabled: true, conditioning_interactions_enabled: false } });
+    for (const prompt of ["hello", "search the web for cats"]) {
+      const allowed = [...getDeliberateToolAllowedNames(prompt), ...getAutonomousDeliberateToolNames(state)];
+      const result = applyDeliberateToolAllowlist({
+        providerLabel: "test",
+        builtInTools: [{ name: "select_sticker_for_response" }, { name: "web_search" }, { name: "generate_image" }],
+        mcpFunctionNames: [],
+        allowedToolNames: allowed,
+      });
+      expect(result.builtInTools.map((tool) => tool.name)).toEqual(
+        prompt === "hello" ? ["select_sticker_for_response"] : ["select_sticker_for_response", "web_search"],
+      );
+    }
+    for (const disabled of [
+      createPersona({ config: { sticker_usage_enabled: false, conditioning_interactions_enabled: false } }),
+      createPersona({ config: { sticker_usage_enabled: true, tool_use_enabled: false } }),
+      createPersona({ llm: { ...state.llm, has_tools: false }, config: { sticker_usage_enabled: true } }),
+    ])
+      expect(getAutonomousDeliberateToolNames(disabled)).toEqual([]);
+  });
+
+  it("admits only the reader for each media kind on the triggering message", () => {
+    const image = (mimeType: string, isEmoji?: boolean) => ({
+      url: "https://cdn.discordapp.com/a.png",
+      proxyUrl: "https://media.discordapp.net/a.png",
+      mimeType,
+      filename: "a",
+      ...(isEmoji && { isEmoji }),
+    });
+    const cases: Array<{
+      label: string;
+      message: Parameters<typeof getAttachmentDeliberateToolIntentResult>[0];
+      expected: string[];
+    }> = [
+      {
+        label: "file with wording no trigger matches",
+        message: { imageAttachments: [], videoAttachments: [], documentAttachments: [{ filename: "a.pdf" }] },
+        expected: ["read_file"],
+      },
+      {
+        label: "GIF",
+        message: { imageAttachments: [image("image/gif")], videoAttachments: [] },
+        expected: ["analyze_image", "process_gif"],
+      },
+      {
+        label: "YouTube link",
+        message: {
+          imageAttachments: [],
+          videoAttachments: [
+            {
+              url: "https://youtu.be/x",
+              proxyUrl: "https://youtu.be/x",
+              mimeType: null,
+              filename: "x",
+              isYouTubeLink: true,
+            },
+          ],
+        },
+        expected: ["process_youtube_video"],
+      },
+      {
+        label: "custom emoji only",
+        message: { imageAttachments: [image("image/png", true)], videoAttachments: [] },
+        expected: [],
+      },
+      { label: "no history entry", message: undefined, expected: [] },
+    ];
+
+    const failures = cases.flatMap(({ label, message, expected }) => {
+      const actual = getAttachmentDeliberateToolIntentResult(message).allowedToolNames;
+      return JSON.stringify(actual) === JSON.stringify(expected) ? [] : [`${label}: ${JSON.stringify(actual)}`];
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it("admits the Danbooru post reader for a Danbooru post link only", () => {
+    const cases: Array<[string, boolean]> = [
+      ["what are the tags on https://danbooru.donmai.us/posts/11218685?q=ryza", true],
+      ["danbooru.donmai.us/posts/11218685", true],
+      ["https://safebooru.donmai.us/posts/11218685", false],
+      ["https://danbooru.donmai.us.evil.com/posts/1", false],
+      ["https://danbooru.donmai.us/wiki_pages/ryza", false],
+    ];
+
+    const failures = cases.flatMap(([prompt, expected]) =>
+      getDeliberateToolAllowedNames(prompt).includes("danbooru_get_post") === expected ? [] : [prompt],
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it("admits the Danbooru tag lookup with image requests and the art search for existing art", () => {
+    const cases: Array<[string, { tags: boolean; posts: boolean }]> = [
+      ["draw a picture of my OC in Ryza's outfit", { tags: true, posts: false }],
+      ["can you generate an image of Juno", { tags: true, posts: false }],
+      ["show me art of Ryza", { tags: true, posts: true }],
+      ["send pics of hatsune miku", { tags: true, posts: true }],
+      ["search danbooru for reisalin stout", { tags: true, posts: true }],
+      ["show me the art you made earlier", { tags: false, posts: false }],
+      ["what's the weather like", { tags: false, posts: false }],
+    ];
+
+    const failures = cases.flatMap(([prompt, expected]) => {
+      const allowed = getDeliberateToolAllowedNames(prompt);
+      const actual = {
+        tags: allowed.includes("danbooru_search_tags"),
+        posts: allowed.includes("danbooru_search_posts"),
+      };
+      return actual.tags === expected.tags && actual.posts === expected.posts
+        ? []
+        : [`${prompt}: ${JSON.stringify(actual)}`];
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it("ignores obsolete stored sticker triggers", () => {
+    expect(getDeliberateToolAllowedNames("hello", { sticker: ["^"] })).not.toContain("select_sticker_for_response");
+  });
+
   it("allows the unified web_search tool for web-search intent", () => {
     const allowedNames = getDeliberateToolAllowedNames("can you search the web for current TypeScript news?");
 
@@ -45,6 +182,23 @@ describe("deliberate tool mode", () => {
     expect(allowedNames).toContain("unblock_user");
   });
 
+  it("allows structured user info updates for naming, identity, and timezone requests", () => {
+    for (const prompt of [
+      "call me Mirri",
+      "change my pronouns to they/them",
+      "set my UTC offset to 8",
+      "clear my honorific",
+    ]) {
+      expect(getDeliberateToolAllowedNames(prompt)).toContain("update_user_info");
+    }
+  });
+
+  it("exposes user info updates for its custom trigger target", () => {
+    expect(getDeliberateToolAllowedNames("profile settings", { "user-info": ["profile settings"] })).toContain(
+      "update_user_info",
+    );
+  });
+
   it("supports wildcard custom triggers without breaking regex triggers", () => {
     expect(getDeliberateToolAllowedNames("", { image: ["^"] })).toContain("generate_image");
     expect(
@@ -53,5 +207,98 @@ describe("deliberate tool mode", () => {
     expect(getDeliberateToolAllowedNames("hello", { image: [{ type: "literal", value: "pic" }] })).not.toContain(
       "generate_image",
     );
+  });
+
+  it("exposes capability review and docs access for self-diagnostic questions", () => {
+    const prompts = [
+      "What model are you currently using?",
+      "Is web search enabled for you?",
+      "Why can't you generate images?",
+      "Why do you forget conversations?",
+      "How does TomoriBot memory work?",
+    ];
+
+    for (const prompt of prompts) {
+      const allowedNames = getDeliberateToolAllowedNames(prompt);
+      expect(allowedNames).toContain("review_capabilities");
+      expect(allowedNames).toContain("fetch_url");
+      expect(allowedNames).not.toContain("web_search");
+    }
+  });
+
+  it("matches Japanese and Korean custom literals inside longer words", () => {
+    expect(getDeliberateToolAllowedNames("リマインドしてね", { reminder: ["リマインド"] })).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("알림을 설정해 줘", { reminder: ["알림"] })).toContain("create_task");
+  });
+
+  it("treats a trailing * as a word-start stem and keeps whole-word matching otherwise", () => {
+    expect(getDeliberateToolAllowedNames("me lembre amanhã", { reminder: ["lembr*"] })).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("vou relembrar", { reminder: ["lembr*"] })).not.toContain("create_task");
+    expect(getDeliberateToolAllowedNames("nice pictures", { image: ["pic"] })).not.toContain("generate_image");
+  });
+});
+
+describe("locale intent packs", () => {
+  beforeAll(async () => {
+    await initializeLocalizer();
+  });
+
+  it("exposes tools from an authored locale's pack regardless of the user's language", () => {
+    expect(getDeliberateToolAllowedNames("明日の朝にリマインドして")).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("この画像を分析して")).toContain("analyze_image");
+    expect(getDeliberateToolAllowedNames("hello there")).not.toContain("create_task");
+    expect(matchesLocaleDeliberateToolPack("voice", "音声で知らせて")).toBe(true);
+  });
+
+  it("keeps memory tools hidden for Japanese save and forget phrasing that is not a memory request", () => {
+    // Japanese pack entries match as substrings, so a bare save or forget verb would expose memory writes
+    // for any file, image, or setting a user asks to save.
+    for (const request of [
+      "画像を保存して",
+      "このファイル保存して",
+      "設定を保存してください",
+      "パスワード忘れてた",
+      "記憶力が悪い",
+    ]) {
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("create_long_term_memory");
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("update_long_term_memory");
+    }
+    expect(getDeliberateToolAllowedNames("これ記憶に保存して")).toContain("create_long_term_memory");
+  });
+
+  it("defines every pack as a string list in every authored locale", () => {
+    for (const locale of getSupportedLocales()) {
+      for (const key of ALL_PACK_KEYS) {
+        expect(getLocaleStringList(locale, key)).toBeDefined();
+      }
+    }
+  });
+
+  it("ships no entry that the pack validator rejects", () => {
+    expect(findIntentPackViolations(ALL_PACK_KEYS)).toEqual([]);
+  });
+
+  it("rejects regex syntax, wildcards, and single-character unspaced entries", () => {
+    expect(getIntentPackEntryProblem("^")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("a*b")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("remind (me)")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("画")).toBe("too_short");
+    expect(getIntentPackEntryProblem("알")).toBe("too_short");
+    expect(getIntentPackEntryProblem("  ")).toBe("empty");
+    expect(getIntentPackEntryProblem("lembr*")).toBeNull();
+    expect(getIntentPackEntryProblem("画像")).toBeNull();
+    expect(getIntentPackEntryProblem("don't forget")).toBeNull();
+  });
+});
+
+describe("resolveDeliberateToolContextTurns", () => {
+  it("keeps tools for four turns when the server has not chosen a value", () => {
+    expect(resolveDeliberateToolContextTurns(null)).toBe(4);
+    expect(resolveDeliberateToolContextTurns(undefined)).toBe(4);
+  });
+
+  it("clamps a server value into 0-10", () => {
+    expect(resolveDeliberateToolContextTurns(-2)).toBe(0);
+    expect(resolveDeliberateToolContextTurns(25)).toBe(10);
   });
 });

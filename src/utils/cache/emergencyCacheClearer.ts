@@ -5,12 +5,9 @@ import { clearWhitelistCache, getWhitelistCacheStats } from "@/utils/cache/chann
 import { clearEmojiStickerCache, getEmojiStickerCacheStats } from "@/utils/cache/emojiStickerCache";
 import { clearGuildMcpConfigCache, getGuildMcpConfigCacheStats } from "@/utils/cache/guildMcpConfigCache";
 import { clearNovelaiSubscriptionCache, getNovelaiSubscriptionCacheSize } from "@/utils/cache/novelaiSubscriptionCache";
-import {
-  clearOpenRouterOnDemandCapabilityCache,
-  getOpenRouterOnDemandCapabilityCacheSize,
-} from "@/utils/cache/openrouterCapabilityCache";
 import { clearPersonalSpotlightCache, getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
 import { clearPersonaSpriteCache, getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
+import { clearPersonaAppearances, getPersonaAppearanceCacheSize } from "@/utils/cache/personaAppearanceCacheStore";
 import {
   clearPersonaSpriteMessageCache,
   getPersonaSpriteMessageCacheSize,
@@ -26,16 +23,18 @@ import { clearUserCache, getUserCacheStats } from "@/utils/cache/userCache";
 import { clearWebhookIdentityCache, getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { clearWebhookCache, getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { clearPresetAvatarCache, getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
+import { clearImageCache, getImageCacheSize } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import {
   addProcessMemoryDeltaFields,
   addProcessMemorySnapshotFields,
   collectProcessMemorySnapshot,
   type ProcessMemorySnapshot,
+  runForcedGc,
 } from "@/utils/misc/processMemory";
 import { clearMarkdownTableCache, getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 
-export interface EmergencyCacheClearStep {
+interface EmergencyCacheClearStep {
   name: string;
   before: number;
   after: number;
@@ -59,6 +58,8 @@ export interface EmergencyCacheClearOptions {
   includeShortTermMemory?: boolean;
   clearDiscordVolatileCaches?: boolean;
   source?: string;
+  /** Collect before measuring the result. Disable only in tests that assert on entry counts. */
+  collectBeforeMeasuring?: boolean;
 }
 
 function parseBooleanEnv(name: string, defaultValue: boolean): boolean {
@@ -207,6 +208,7 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     };
   }
 
+  clearMeasured(steps, "personaAppearance", getPersonaAppearanceCacheSize, clearPersonaAppearances);
   clearMeasured(steps, "tomoriState", () => getTomoriStateCacheStats().cacheSize, clearTomoriStateCache);
   clearMeasured(steps, "user", () => getUserCacheStats().cacheSize, clearUserCache);
   clearMeasured(steps, "channelWhitelist", () => getWhitelistCacheStats().size, clearWhitelistCache);
@@ -218,12 +220,10 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   clearMeasured(steps, "webhook", getWebhookTotalCacheSize, clearWebhookCache);
   clearMeasured(steps, "webhookIdentity", getWebhookIdentityCacheSize, clearWebhookIdentityCache);
   clearMeasured(steps, "novelaiSubscription", getNovelaiSubscriptionCacheSize, clearNovelaiSubscriptionCache);
-  clearMeasured(
-    steps,
-    "openrouterOnDemandCapability",
-    getOpenRouterOnDemandCapabilityCacheSize,
-    clearOpenRouterOnDemandCapabilityCache,
-  );
+  // The OpenRouter catalogs are deliberately absent: they are provider metadata rather
+  // than per-guild growth, and dropping one would gate chat on database flags until the
+  // next refresh window for a few hundred KB.
+  clearMeasured(steps, "recentImages", getImageCacheSize, clearImageCache);
   clearMeasured(steps, "presetAvatar", getPresetAvatarCacheSize, clearPresetAvatarCache);
   clearMeasured(steps, "voiceTranscript", getVoiceTranscriptCacheSize, clearVoiceTranscriptCache);
   clearMeasured(steps, "markdownTable", getMarkdownTableCacheSize, clearMarkdownTableCache);
@@ -237,6 +237,18 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
 
   if (options.client && shouldClearDiscordVolatileCaches) {
     steps.push(...clearDiscordVolatileCaches(options.client));
+  }
+
+  // Dropping a cache reference frees nothing observable until a collection runs, so without
+  // this pass every `*_delta_clear` field reads exactly 0 and the report cannot show whether
+  // clearing helped. The guard's own forced GC happens after this function returns, too late
+  // to be captured here.
+  if (options.collectBeforeMeasuring ?? true) {
+    try {
+      runForcedGc();
+    } catch (error) {
+      log.warn(`[Emergency Cache Clear] Forced collection failed before measurement: ${getStepErrorMessage(error)}`);
+    }
   }
 
   const memoryAfterClear = collectProcessMemorySnapshot();

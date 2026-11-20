@@ -1,0 +1,20 @@
+export default {
+  respond: {
+    description: `手動觸發對這個頻道最新訊息的回應。`,
+    persona_description: `用來回應的人格。留空則自動選取。`,
+    reasoning_description: `使用此供應商的推理模型，並設定其最高推理預算。`,
+    prompt_description: `選填的系統提示詞，附加在脈絡最後面。`,
+    prefill_description: `選填的助理前綴，你想讓我接著寫下去。`,
+    prefill_instruction_notice: `此模型無法接著前綴繼續寫，因此我改為將其作為指示傳入。`,
+    success_title: `已手動觸發回應`,
+    success_description: `以最後一個人格身分回應這個頻道的最新訊息...`,
+    invalid_persona_description: `請從自動完成中選擇可用的人格，或輸入其完整名稱。`,
+    no_smart_model_title: `找不到推理模型`,
+    no_smart_model_description: `你目前的 AI 供應商沒有可用的推理模型。請用 \`/config\` > 模型 > 切換模型改用支援推理模型的供應商。`,
+    no_messages_title: `找不到訊息`,
+    no_messages_description: `這個頻道找不到任何訊息。請先傳一則訊息，再使用 \`/respond\`。`,
+    cooldown_active: `這個伺服器的管理員設定了冷卻。請等待 **{seconds}** 秒後，再使用 \`/respond\`。這個冷卻與訊息觸發共用。`,
+    channel_not_whitelisted: `這個伺服器啟用了白名單限制。\`/respond\` 只能在白名單頻道由具備白名單身分組的成員使用，而且只能使用這個頻道允許的人格。`,
+    persona_access_blocked: `你目前的白名單權限與個人聚光燈設定，讓這個頻道沒有可用於 \`/respond\` 的人格。`,
+  },
+};

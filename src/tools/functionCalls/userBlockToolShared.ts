@@ -2,12 +2,24 @@ import type { GuildMember } from "discord.js";
 import type { PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schema";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
+
+/** One week, the ceiling a persona may block a user for in a single tool call. */
+const BLOCK_TYPE_KEYS: Record<PersonaUserBlockType, string> = {
+  mute: "tools.user_block.type_mute",
+  block: "tools.user_block.type_block",
+};
+
+const BLOCK_EFFECT_KEYS: Record<PersonaUserBlockType, string> = {
+  mute: "tools.user_block.effect_mute",
+  block: "tools.user_block.effect_block",
+};
 
 export const DEFAULT_BLOCK_USER_MAX_DURATION_HOURS = 168;
 
@@ -48,14 +60,9 @@ export type ResolvedBlockTarget =
       candidates?: string[];
     };
 
-export function getBlockUserMaxDurationHours(): number {
-  const parsed = Number.parseInt(process.env.BLOCK_USER_MAX_DURATION_HOURS ?? "", 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_BLOCK_USER_MAX_DURATION_HOURS;
-}
-
 export function parseBlockUserArgs(
   args: Record<string, unknown>,
-  maxDurationHours = getBlockUserMaxDurationHours(),
+  maxDurationHours = DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
 ): ParsedBlockUserArgs {
   const blockedUserArg = args.blocked_user;
   if (typeof blockedUserArg !== "string" || blockedUserArg.trim().length === 0) {
@@ -119,6 +126,18 @@ export function buildFailureResult(status: string, reason: string, extraData?: R
   };
 }
 
+export async function missingBlockNoticePermission(context: ToolContext): Promise<string | null> {
+  if (!context.guildId) return null;
+  const guild = context.client.guilds.cache.get(context.guildId);
+  const member = guild?.members.me ?? (await guild?.members.fetchMe().catch(() => null));
+  const permissions = member && "permissionsFor" in context.channel ? context.channel.permissionsFor(member) : null;
+  const sendPermission = context.channel.isThread() ? "SendMessagesInThreads" : "SendMessages";
+  for (const permission of ["ViewChannel", sendPermission, "EmbedLinks"] as const) {
+    if (!permissions?.has(permission)) return permission;
+  }
+  return null;
+}
+
 export async function resolveDiscordBlockTarget(input: string, context: ToolContext): Promise<ResolvedBlockTarget> {
   const resolution = await resolveUserTarget(input, context);
   if (resolution.status === "ambiguous") {
@@ -140,7 +159,7 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
     };
   }
 
-  if (resolution.isBridgeUser) {
+  if (resolution.isBridgeUser || isMessageProxyIdentityUserId(resolution.targetId)) {
     return {
       ok: false,
       status: "user_block_failed_bridge_user",
@@ -191,33 +210,38 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
  * @returns A `[System: ...]` notice string for the simplified history.
  */
 export function formatBlockedUserNoticeContent(displayName: string, expiresAt: Date, now: Date = new Date()): string {
-  // 1. Round remaining time up to whole hours, flooring at 1 so a block that is
+  // Round remaining time up to whole hours, flooring at 1 so a block that is
   //    minutes from expiry still reads as "1 more hour" rather than "0".
   const hoursRemaining = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 3_600_000));
-  // 2. Pluralize the unit so the notice reads naturally for the persona.
+  // Pluralize the unit so the notice reads naturally for the persona.
   const hourLabel = hoursRemaining === 1 ? "hour" : "hours";
-  return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}. Use \`unblock_user\` to unblock if needed]`;
+  return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}.]`;
 }
 
-function formatExpiry(expiresAt: Date, timezoneOffset: number): string {
-  return `${formatTimeWithOffset(expiresAt, timezoneOffset, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })} (${formatUTCOffset(timezoneOffset)})`;
+function formatExpiry(expiresAt: Date, timezoneOffset: number, locale: string): string {
+  return `${formatTimeWithOffset(
+    expiresAt,
+    timezoneOffset,
+    {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+    locale,
+  )} (${formatUTCOffset(timezoneOffset)})`;
 }
 
 export function getBlockTypeLabel(locale: string, blockType: PersonaUserBlockType): string {
-  return localizer(locale, `tools.user_block.type_${blockType}`);
+  return localizer(locale, BLOCK_TYPE_KEYS[blockType]);
 }
 
 export function getBlockEffectText(locale: string, blockType: PersonaUserBlockType): string {
-  return localizer(locale, `tools.user_block.effect_${blockType}`);
+  return localizer(locale, BLOCK_EFFECT_KEYS[blockType]);
 }
 
-export async function sendUserBlockedEmbed(params: {
+export async function sendUserBlockedNotice(params: {
   context: ToolContext;
   targetDisplayName: string;
   blockType: PersonaUserBlockType;
@@ -233,41 +257,31 @@ export async function sendUserBlockedEmbed(params: {
   const timezoneOffset = params.context.tomoriState.config.timezone_offset ?? 0;
   const locale = params.context.locale;
 
-  await sendStandardEmbed(
-    params.context.channel,
-    locale,
-    {
-      titleKey:
-        params.blockType === "mute" ? "tools.user_block.block_mute_title" : "tools.user_block.block_block_title",
-      titleVars: {
-        persona_name: personaName,
-        user_name: params.targetDisplayName,
-        duration_hours: params.durationHours,
-      },
-      descriptionKey:
-        params.blockType === "mute"
-          ? "tools.user_block.mute_success_description"
-          : "tools.user_block.block_success_description",
-      descriptionVars: {
-        user_name: params.targetDisplayName,
-        persona_name: personaName,
-        block_type: getBlockTypeLabel(locale, params.blockType),
-        effect: getBlockEffectText(locale, params.blockType),
-        duration_hours: params.durationHours,
-        expires_at: formatExpiry(params.expiresAt, timezoneOffset),
-      },
-      footerKey: "tools.user_block.block_footer",
-      color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
+  await sendToolNoticeContainer(params.context, "user_block", {
+    titleKey: params.blockType === "mute" ? "tools.user_block.block_mute_title" : "tools.user_block.block_block_title",
+    titleVars: {
+      persona_name: personaName,
+      user_name: params.targetDisplayName,
+      duration_hours: params.durationHours,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
+    descriptionKey:
+      params.blockType === "mute"
+        ? "tools.user_block.mute_success_description"
+        : "tools.user_block.block_success_description",
+    descriptionVars: {
+      user_name: params.targetDisplayName,
+      persona_name: personaName,
+      block_type: getBlockTypeLabel(locale, params.blockType),
+      effect: getBlockEffectText(locale, params.blockType),
+      duration_hours: params.durationHours,
+      expires_at: formatExpiry(params.expiresAt, timezoneOffset, locale),
     },
-  );
+    footerKey: "tools.user_block.block_footer",
+    color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
+  });
 }
 
-export async function sendUserUnblockedEmbed(params: {
+export async function sendUserUnblockedNotice(params: {
   context: ToolContext;
   targetDisplayName: string;
   removedBlock: PersonaUserBlockRow;
@@ -279,32 +293,23 @@ export async function sendUserUnblockedEmbed(params: {
     "TomoriBot";
   const locale = params.context.locale;
 
-  await sendStandardEmbed(
-    params.context.channel,
-    locale,
-    {
-      titleKey:
-        params.removedBlock.block_type === "mute"
-          ? "tools.user_block.unmute_success_title"
-          : "tools.user_block.unblock_success_title",
-      titleVars: {
-        persona_name: personaName,
-        user_name: params.targetDisplayName,
-      },
-      descriptionKey: "tools.user_block.unblock_success_description",
-      descriptionVars: {
-        user_name: params.targetDisplayName,
-        persona_name: personaName,
-        block_type: getBlockTypeLabel(locale, params.removedBlock.block_type),
-      },
-      color: ColorCode.SUCCESS,
+  await sendToolNoticeContainer(params.context, "user_block", {
+    titleKey:
+      params.removedBlock.block_type === "mute"
+        ? "tools.user_block.unmute_success_title"
+        : "tools.user_block.unblock_success_title",
+    titleVars: {
+      persona_name: personaName,
+      user_name: params.targetDisplayName,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
+    descriptionKey: "tools.user_block.unblock_success_description",
+    descriptionVars: {
+      user_name: params.targetDisplayName,
+      persona_name: personaName,
+      block_type: getBlockTypeLabel(locale, params.removedBlock.block_type),
     },
-  );
+    color: ColorCode.SUCCESS,
+  });
 }
 
 export async function upsertPersonaUserBlock(params: {

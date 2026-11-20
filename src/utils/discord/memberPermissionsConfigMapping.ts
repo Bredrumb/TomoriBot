@@ -6,12 +6,9 @@ type BooleanColumn<T> = {
 
 type ServerMemberPermissionsBooleanColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
 
-export type ServerMemberPermissionsCommandColumn = Extract<
+type ServerMemberPermissionsCommandColumn = Extract<
   ServerMemberPermissionsBooleanColumn,
-  | "server_memteaching_enabled"
-  | "attribute_memteaching_enabled"
-  | "sampledialogue_memteaching_enabled"
-  | "prompt_snapshot_enabled"
+  "server_memteaching_enabled" | "prompt_snapshot_enabled" | "persona_export_enabled"
 >;
 
 export type ServerMemberPermissionsCommandConfigState = Pick<
@@ -27,7 +24,7 @@ export interface ServerMemberPermissionDefinition {
   getState: (config: ServerMemberPermissionsCommandConfigState) => boolean;
 }
 
-export interface ServerMemberPermissionsConfigChange {
+interface ServerMemberPermissionsConfigChange {
   value: string;
   dbColumn: ServerMemberPermissionsCommandColumn;
   isEnabled: boolean;
@@ -49,25 +46,18 @@ export const SERVER_MEMBER_PERMISSION_DEFINITIONS: readonly ServerMemberPermissi
     getState: (c) => c.server_memteaching_enabled,
   },
   {
-    value: "attributelist",
-    dbColumn: "attribute_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.attributelist_option",
-    descKey: "commands.server.member-permissions.attributelist_desc",
-    getState: (c) => c.attribute_memteaching_enabled,
-  },
-  {
-    value: "sampledialogues",
-    dbColumn: "sampledialogue_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.sampledialogues_option",
-    descKey: "commands.server.member-permissions.sampledialogues_desc",
-    getState: (c) => c.sampledialogue_memteaching_enabled,
-  },
-  {
     value: "promptsnapshot",
     dbColumn: "prompt_snapshot_enabled",
     labelKey: "commands.server.member-permissions.promptsnapshot_option",
     descKey: "commands.server.member-permissions.promptsnapshot_desc",
     getState: (c) => c.prompt_snapshot_enabled,
+  },
+  {
+    value: "personaexport",
+    dbColumn: "persona_export_enabled",
+    labelKey: "commands.server.member-permissions.personaexport_option",
+    descKey: "commands.server.member-permissions.personaexport_desc",
+    getState: (c) => c.persona_export_enabled,
   },
 ];
 

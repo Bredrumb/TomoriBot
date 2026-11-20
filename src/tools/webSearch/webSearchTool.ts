@@ -1,14 +1,11 @@
 /**
- * WebSearchTool — the single LLM-visible search tool.
+ * WebSearchTool : the single LLM-visible search tool.
  *
  * Replaces the previously-LLM-visible 4-tool Brave surface (`brave_web_search`,
  * `brave_image_search`, `brave_video_search`, `brave_news_search`) with one
  * tool that takes a `category` enum. The dispatcher routes to whichever
- * engine in the chain (Brave → SearXNG → DuckDuckGo → Felo) can serve the
+ * engine in the chain (Brave → SearXNG → OpenRouter → DuckDuckGo) can serve the
  * requested category.
- *
- * Saves ~400 tokens/turn from removed tool declarations and eliminates
- * wrong-tool-name fuzzy-matching errors observed in NovelAI streams.
  */
 
 import {
@@ -29,11 +26,7 @@ function formatCategoryList(categories: SearchCategory[]): string {
   return categories.map((category) => `'${category}'`).join(", ");
 }
 
-export function buildWebSearchToolVariant(tool: Tool, capabilities: WebSearchToolCapabilities | null): Tool | null {
-  if (!capabilities || capabilities.categories.length === 0) {
-    return null;
-  }
-
+export function buildWebSearchToolVariant(tool: Tool, capabilities: WebSearchToolCapabilities): Tool {
   const categoryDescription =
     capabilities.categories.length === 1 && capabilities.categories[0] === "text"
       ? "Search category. Only 'text' is available for the active search backend this turn."
@@ -105,7 +98,10 @@ export class WebSearchTool extends BaseTool {
 
   async assembleForContext(context: ToolAssemblyContext): Promise<Tool | null> {
     const serverId = Number.parseInt(context.state.server_id, 10);
-    const capabilities = await resolveWebSearchToolCapabilities(Number.isInteger(serverId) ? serverId : undefined);
+    const capabilities = await resolveWebSearchToolCapabilities(
+      Number.isInteger(serverId) ? serverId : undefined,
+      context.provider,
+    );
     return buildWebSearchToolVariant(this, capabilities);
   }
 
@@ -115,7 +111,7 @@ export class WebSearchTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     try {
-      // 1. Feature flag gate — mirrors the previous BraveSearchTool behavior.
+      // Feature flag gate : mirrors the previous BraveSearchTool behavior.
       if (!this.isEnabled(context)) {
         return {
           success: false,
@@ -124,7 +120,6 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // 2. Validate query.
       if (typeof args.query !== "string" || args.query.trim().length === 0) {
         return {
           success: false,
@@ -133,23 +128,21 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // 3. Normalize category (default to text).
       const rawCategory = typeof args.category === "string" ? args.category : "text";
       const category: SearchCategory = SEARCH_CATEGORIES.includes(rawCategory as SearchCategory)
         ? (rawCategory as SearchCategory)
         : "text";
 
-      // 4. Normalize count — must be a positive integer, otherwise omit.
+      // Normalize count : must be a positive integer, otherwise omit.
       const rawCount = typeof args.count === "number" && args.count > 0 ? Math.floor(args.count) : undefined;
 
       log.info(
         `web_search invoked: category=${category} query="${args.query}"${rawCount !== undefined ? ` count=${rawCount}` : ""}`,
       );
 
-      // 5. Hand off to the dispatcher. The dispatcher itself emits the
-      //    per-engine Discord notice via the engine's underlying tool wrapper
-      //    (BraveEngine reuses the Internal*Tool classes that already call
-      //    sendToolNotice; DDG/Felo do it inside processWebSearch).
+      // The dispatcher emits the per-engine Discord notice through the engine's underlying
+      // tool wrapper: BraveEngine reuses the Internal*Tool classes that already call
+      // sendToolNotice, while the SearXNG and DuckDuckGo engines send it themselves.
       return await executeWebSearchWithFallback(args.query as string, category, context, rawCount);
     } catch (error) {
       log.error("Error in web_search tool:", error as Error);

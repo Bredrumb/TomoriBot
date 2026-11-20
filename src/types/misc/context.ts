@@ -1,13 +1,4 @@
 /**
- * Words and patterns that can trigger a bot response
- */
-export interface TriggerConfig {
-  autoThreshold: number;
-  words: string[];
-  regexPatterns?: RegExp[];
-}
-
-/**
  * A segment of context for the LLM conversation
  */
 export type ContextPart =
@@ -23,7 +14,6 @@ export interface MediaDescriptor {
   mediaId: string;
   isEmoji?: boolean;
   withinWindow: boolean;
-  extendBy?: number;
   isYouTubeLink?: boolean;
   filename?: string;
 }
@@ -35,14 +25,13 @@ export interface ConversationUserReference {
   mentionable: boolean; // True only when this target can be converted into a Discord mention
 }
 
-export interface ContextItemSender {
+interface ContextItemSender {
+  id: string;
   name: string;
   type: "user" | "persona";
 }
 
-// New: Define the possible metadata tags for context items (Rule 13)
 export enum ContextItemTag {
-  // System-level instructions and configurations
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
   SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
   SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
@@ -50,13 +39,16 @@ export enum ContextItemTag {
   SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
   SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions
 
-  // Knowledge base and environmental context
   KNOWLEDGE_SERVER_INFO = "knowledge_server_info",
   KNOWLEDGE_SERVER_EMOJIS = "knowledge_server_emojis",
   KNOWLEDGE_SERVER_STICKERS = "knowledge_server_stickers",
   KNOWLEDGE_PERSONA_SPRITES = "knowledge_persona_sprites",
   KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
   KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
+  KNOWLEDGE_RECALLED_MEMORIES = "knowledge_recalled_memories",
+  KNOWLEDGE_LOREBOOK_BEFORE = "knowledge_lorebook_before",
+  KNOWLEDGE_LOREBOOK_AFTER = "knowledge_lorebook_after",
+  KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS = "knowledge_verbatim_tool_definitions", // Available tool JSON schemas, injected only for a model with verbatim tool calling enabled
   KNOWLEDGE_SERVER_CONDITIONING = "knowledge_server_conditioning",
   KNOWLEDGE_PERSONA_USER_BLOCKS = "knowledge_persona_user_blocks",
   KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories", // For a block of multiple users' memories
@@ -65,41 +57,47 @@ export enum ContextItemTag {
   KNOWLEDGE_USERS_IN_CONVERSATION = "knowledge_users_in_conversation", // Combined: time, channel, user status, memories, reminders
   KNOWLEDGE_SHORT_TERM_MEMORY = "knowledge_short_term_memory", // Short-term memory for recent conversations (goes to dialogue history)
 
-  // Dialogue examples and history
   DIALOGUE_SAMPLE = "dialogue_sample", // For individual sample user/model turns
   DIALOGUE_HISTORY = "dialogue_history", // For actual conversation history turns
   CONTEXT_NOTE_INJECTION = "context_note_injection", // Author's note injected into dialogue at configurable depth
+}
 
-  // Tool/Function related (if we ever need to tag parts of tool descriptions or results)
-  // TOOL_DESCRIPTION = "tool_description",
-  // TOOL_RESULT = "tool_result",
+export interface ContextMemoryEntry {
+  id: string;
+  text: string;
+  createdAt?: number;
 }
 
 export type StructuredContextItem = {
+  personaSprites?: { personaId: number; spriteKeys: string[] };
+  completionText?: string;
+  boomerangTranscript?: boolean;
+  memoryEntries?: ContextMemoryEntry[];
+  personalMemoryItems?: StructuredContextItem[];
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
   parts: ContextPart[];
   mediaDescriptors?: MediaDescriptor[];
   metadataTag?: ContextItemTag; // Optional tag for internal processing
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
+  /**
+   * Every Discord message folded into a merged history turn, so a reply to a later chunk of a split
+   * reply still resolves. `messageId` holds only the first.
+   */
+  combinedMessageIds?: string[];
   sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
+  /** Visible participant fields before mention-rendering instructions are added. */
+  participantReviewEvidence?: {
+    participants: Array<{ name: string; fields: string[] }>;
+    channel: string;
+    currentTime: string;
+    timezone: string;
+  };
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
+  participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
+  personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
+  /** Built only when the context model can call tools, so a generation attempt that sends none drops it. */
+  requiresToolCalling?: true;
 };
-
-/**
- * Full context assembly options
- */
-export interface ContextOptions {
-  preambles: string[];
-  serverMemories: string[];
-  userMemories: Record<string, string[]>;
-  sampleDialogs: string[];
-  messageHistory: Array<{
-    author: string;
-    content: string;
-    timestamp: Date;
-  }>;
-  variables: Record<string, string>;
-}
 
 /**
  * Per-request snapshot of data used throughout context building.

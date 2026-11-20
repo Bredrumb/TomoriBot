@@ -1,15 +1,19 @@
-import { escapeMarkdown, type BaseGuildTextChannel } from "discord.js";
+import { escapeMarkdown, type BaseGuildTextChannel, type Channel } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { AssembledServerConfig } from "@/types/db/schema";
-import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
+import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS, VERBOSITY_EXEMPT_NOTICE_KEYS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
-import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
-const HIDE_NOTICE_FOOTER_KEY = "tools.tool_notice.hide_footer";
-const KILL_HINT_FOOTER_KEY = "tools.tool_notice.hide_footer_with_kill";
+// Keyed on the text rather than the locale: the description may already have fallen back to
+// English. Hangul is excluded because Korean prose ends sentences with an ASCII period.
+const FULL_WIDTH_SENTENCE_SCRIPT_END = /[぀-ヿ㐀-鿿豈-﫿＀-￯]$/;
+
+const KILL_HINT_FOOTER_KEY = "tools.tool_notice.kill_hint";
 const IMAGE_NOTICE_PROMPT_PREVIEW_LENGTH = 700;
 
 function resolveDescription(locale: string, options: StandardEmbedOptions): string {
@@ -38,22 +42,36 @@ function buildToolNoticeOptions(
 
   return {
     ...options,
+    minimal: undefined,
     description: [sourceDescription, description].filter((part) => part.length > 0).join("\n\n"),
-    footerKey: showKillHint ? KILL_HINT_FOOTER_KEY : HIDE_NOTICE_FOOTER_KEY,
+    footerKey: showKillHint ? KILL_HINT_FOOTER_KEY : undefined,
     footerVars: undefined,
+    configHint: true,
   };
 }
 
-function getWebhookContext(context: ToolContext) {
+/**
+ * Prefixes a hidden notice's body with the link back to the message that caused it, so a reader
+ * of the thought log can tell which conversation the rerouted notice belongs to.
+ */
+export function withThoughtLogSource(context: ToolContext, options: StandardEmbedOptions): StandardEmbedOptions {
+  const sourceDescription = localizer(context.locale, "genai.thought_log.description", {
+    source_line: getSourceLine(context),
+  });
+  const body = options.description
+    ? options.description
+    : options.descriptionKey
+      ? localizer(context.locale, options.descriptionKey, options.descriptionVars)
+      : "";
+
   return {
-    webhook: context.webhook,
-    personaUsername: context.personaUsername,
-    personaAvatarUrl: context.personaAvatarUrl,
+    ...options,
+    description: [sourceDescription, body.trim()].filter((part) => part.length > 0).join("\n\n"),
   };
 }
 
-function isDMBasedChannel(channel: ToolContext["channel"]): boolean {
-  return "isDMBased" in channel && typeof channel.isDMBased === "function" ? channel.isDMBased() : false;
+function getWebhookContext(context: ToolContext): WebhookEmbedContext {
+  return buildToolPersonaPostContext(context, context.tomoriState);
 }
 
 function getSourceLine(context: ToolContext): string {
@@ -110,9 +128,9 @@ function buildLabeledGenerationNoticeDescription(
   const baseWithTiming =
     trimmedTimingLine.length === 0
       ? trimmedBaseDescription
-      : /[.!?。]$/.test(trimmedBaseDescription)
+      : /[.!?。！？…]$/.test(trimmedBaseDescription)
         ? `${trimmedBaseDescription} ${trimmedTimingLine}`
-        : locale.startsWith("ja")
+        : FULL_WIDTH_SENTENCE_SCRIPT_END.test(trimmedBaseDescription)
           ? `${trimmedBaseDescription}。${trimmedTimingLine}`
           : `${trimmedBaseDescription}. ${trimmedTimingLine}`;
   const metadataLines = [
@@ -200,14 +218,26 @@ export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoti
   return isNoticeEmbedVisible(config, key);
 }
 
-export async function routeToolNoticeToThoughtLog(
-  context: ToolContext,
-  options: StandardEmbedOptions,
-  logLabel: string,
-): Promise<boolean> {
+/**
+ * Whether a notice posted in the conversation renders Minimal.
+ *
+ * Minimal notices post only their title in conversation while mirroring the full card to the
+ * thought log. Verbose notices post the full card in conversation alone to avoid redundancy.
+ */
+export function isMinimalNotice(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
+  return !VERBOSITY_EXEMPT_NOTICE_KEYS.has(key) && config.tool_notice_verbosity !== "verbose";
+}
+
+/** Where a hidden notice is rerouted, with the persona that posts it. */
+export interface ThoughtLogTarget {
+  channel: BaseGuildTextChannel;
+  webhookContext: WebhookEmbedContext;
+}
+
+async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): Promise<ThoughtLogTarget | null> {
   const thoughtLogChannelId = context.tomoriState.config.thought_log_channel_disc_id;
   if (!thoughtLogChannelId) {
-    return false;
+    return null;
   }
 
   const thoughtLogChannel = await context.client.channels.fetch(thoughtLogChannelId).catch(() => null);
@@ -220,30 +250,56 @@ export async function routeToolNoticeToThoughtLog(
       thoughtLogChannel.isDMBased())
   ) {
     log.warn(`${logLabel}: Thought log channel ${thoughtLogChannelId} is missing or unavailable. Skipping reroute.`);
+    return null;
+  }
+  if (
+    !canMirrorToThoughtLog(
+      context.channel as Channel,
+      thoughtLogChannel,
+      context.tomoriState.config.private_channel_ids ?? [],
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    channel: thoughtLogChannel as BaseGuildTextChannel,
+    webhookContext: buildToolPersonaPostContext(
+      context,
+      context.tomoriState,
+      thoughtLogChannel as BaseGuildTextChannel,
+    ),
+  };
+}
+
+/**
+ * Resolves where a hidden notice should go instead of the conversation channel.
+ *
+ * @returns `null` when the notice must be dropped: no thought log is set, it is unreachable, or
+ *   its readers are not demonstrably allowed to read the source (see `canMirrorToThoughtLog`).
+ */
+export async function resolveHiddenNoticeTarget(
+  context: ToolContext,
+  logLabel: string,
+): Promise<ThoughtLogTarget | null> {
+  return resolveThoughtLogTarget(context, logLabel);
+}
+
+export async function routeToolNoticeToThoughtLog(
+  context: ToolContext,
+  options: StandardEmbedOptions,
+  logLabel: string,
+): Promise<boolean> {
+  const target = await resolveThoughtLogTarget(context, logLabel);
+  if (!target) {
     return false;
   }
 
-  let rerouteWebhookContext: WebhookEmbedContext | undefined;
-  if (context.personaUsername && "fetchWebhooks" in thoughtLogChannel && "createWebhook" in thoughtLogChannel) {
-    const webhookResult = await getOrCreateWebhook(thoughtLogChannel as BaseGuildTextChannel);
-    if (webhookResult.webhook) {
-      rerouteWebhookContext = {
-        webhook: webhookResult.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-      };
-    } else if (context.webhook) {
-      log.warn(
-        `${logLabel}: Failed to get webhook for thought log channel ${thoughtLogChannelId}. Falling back to bot send.`,
-      );
-    }
-  }
-
   await sendStandardEmbed(
-    thoughtLogChannel as BaseGuildTextChannel,
+    target.channel,
     context.locale,
     buildToolNoticeOptions(context.locale, options, getSourceLine(context), context.showKillHint),
-    rerouteWebhookContext,
+    target.webhookContext,
   );
 
   return true;
@@ -255,26 +311,24 @@ export async function sendToolNotice(
   options: StandardEmbedOptions,
   logLabel: string,
 ): Promise<void> {
-  if (context.suppressProgressNotices) return;
+  if (context.progressNoticeState?.attempted) return;
+  if (context.progressNoticeState) context.progressNoticeState.attempted = true;
   try {
-    const finalOptions = buildToolNoticeOptions(context.locale, options, undefined, context.showKillHint);
-    if (isToolNoticeVisible(context.tomoriState.config, noticeKey)) {
-      await sendStandardEmbed(context.channel, context.locale, finalOptions, getWebhookContext(context));
+    if (context.suppressProgressNotices) {
+      if (context.mirrorSuppressedProgressNotices) await routeToolNoticeToThoughtLog(context, options, logLabel);
       return;
     }
-
-    if (isDMBasedChannel(context.channel)) {
-      return;
-    }
-
-    const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-    // Threads whose parent channel is private must also be suppressed from the thought log.
-    const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
-    if (
-      privateChannelIds.includes(context.channel.id) ||
-      (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
-    ) {
-      return;
+    const { config } = context.tomoriState;
+    const isVisible = isToolNoticeVisible(config, noticeKey);
+    const isMinimal = isVisible && isMinimalNotice(config, noticeKey);
+    if (isVisible) {
+      const visibleOptions = isMinimal
+        ? { ...options, minimal: true }
+        : buildToolNoticeOptions(context.locale, options, undefined, context.showKillHint);
+      await sendStandardEmbed(context.channel, context.locale, visibleOptions, getWebhookContext(context));
+      if (!isMinimal) {
+        return;
+      }
     }
 
     await routeToolNoticeToThoughtLog(context, options, logLabel);
@@ -288,21 +342,6 @@ export async function routeHiddenToolNotice(
   options: StandardEmbedOptions,
   logLabel: string,
 ): Promise<boolean> {
-  if (context.suppressProgressNotices) return false;
-
-  if (isDMBasedChannel(context.channel)) {
-    return false;
-  }
-
-  const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-  const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
-  if (
-    privateChannelIds.includes(context.channel.id) ||
-    (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
-  ) {
-    return false;
-  }
-
   try {
     return await routeToolNoticeToThoughtLog(context, options, logLabel);
   } catch (error) {

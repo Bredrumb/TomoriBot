@@ -1,5 +1,5 @@
 /**
- * ConfigRepository — manages the 13 split server config tables and preset tables.
+ * ConfigRepository: manages the 13 split server config tables and preset tables.
  *
  * All config reads and writes route through typed split-table methods.
  * The legacy `tomori_configs` god table was dropped by migration 008 (Task F2).
@@ -9,10 +9,12 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
 import type { SQL } from "bun";
+import { presetFallbackLanguages, selectPresetsForLocale } from "@/utils/persona/presetLocale";
 import type {
   ErrorContext,
   AssembledServerConfig,
   NaiPresetRow,
+  LlmRow,
   ServerModelConfigRow,
   ServerChatConfigRow,
   ServerMemberPermissionsConfigRow,
@@ -26,6 +28,7 @@ import type {
   ServerNovelaiImagegenConfigRow,
   ServerByokConfigRow,
   ServerMemoryConfigRow,
+  ServerStmConfigRow,
   PersonaAutochRuntimeStateRow,
 } from "@/types/db/schema";
 import { assembledServerConfigSchema, personaAutochRuntimeStateSchema, naiPresetSchema } from "@/types/db/schema";
@@ -33,11 +36,18 @@ import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
+import {
+  getNovelAIProfile,
+  getNovelAISamplerConfig,
+  enableNovelAIPresetSamplers,
+} from "@/providers/novelai/modelProfiles";
+import { llmProviderRepo } from "@/utils/db/repositories";
 
 const TEXT_ARRAY_CONFIG_COLUMNS = new Set([
+  "response_review_items",
   "autoch_disc_ids",
   "crosschannel_blocklist_ids",
   "llm_disabled_params",
@@ -50,6 +60,7 @@ const TEXT_ARRAY_CONFIG_COLUMNS = new Set([
 ]);
 
 const JSONB_CONFIG_COLUMNS = new Set([
+  "response_rule_checker_ref",
   "fallback_llm_ids",
   "fallback_model_refs",
   "llm_logit_biases",
@@ -60,19 +71,22 @@ function toPostgresTextArrayLiteral(values: readonly unknown[]): string {
   return `{${values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
-// ── config table row shapes ───────────────────────────────────────────
-
 /** Row shape for server_capabilities_configs (Phase 6). */
 export type ServerCapabilitiesConfigsRow = {
+  response_drafting_enabled: boolean;
   emoji_usage_enabled: boolean;
   sticker_usage_enabled: boolean;
   web_search_enabled: boolean;
   manage_message_enabled: boolean;
   thread_creation_enabled: boolean;
+  conditioning_interactions_enabled: boolean;
+  dice_rolling_enabled: boolean;
   imagegen_enabled: boolean;
+  danbooru_enabled: boolean;
   videogen_enabled: boolean;
   voice_message_enabled: boolean;
   user_blocking_enabled: boolean;
+  time_awareness_enabled: boolean;
   tool_use_enabled: boolean;
 };
 
@@ -98,6 +112,11 @@ export type ServerNsfwConfigsRow = {
 
 /** Row shape for server_speech_configs (Phase 6). */
 export type ServerSpeechConfigsRow = {
+  speech_design_endpoint_id: number | null;
+  speech_clone_endpoint_id: number | null;
+  speech_design_model_id: number | null;
+  speech_clone_model_id: number | null;
+  transcription_model_id: number | null;
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
   chatterbox_cfg_weight: number;
@@ -122,14 +141,17 @@ export type ConfigExportShape = {
 };
 
 export class ConfigRepository implements IRepository<ConfigExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
+  async resolveNaiPreset(model: string, presetName?: string | null): Promise<NaiPresetRow | undefined> {
+    const target = getNovelAIProfile(model).samplingPresetTarget;
+    if (!target) return undefined;
+    const presets = await this.loadNaiPresets(target);
+    return presets.find((preset) => preset.preset_name === presetName) ?? presets.find((preset) => preset.is_default);
+  }
   /**
    * Loads NAI sampling presets available for a given NAI model target.
    *
-   * @param target - "kayra" or "erato"
    */
-  async loadNaiPresets(target: "kayra" | "erato"): Promise<NaiPresetRow[]> {
+  async loadNaiPresets(target: "kayra" | "erato" | "xialong"): Promise<NaiPresetRow[]> {
     try {
       const rows = await sql`
         SELECT * FROM nai_presets
@@ -194,126 +216,38 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads preset option rows filtered by locale, with an optional max description length.
-   *
-   * @param locale               - Locale code (e.g. "en-US")
-   * @param maxDescriptionLength - Truncate descriptions to this length (default 100)
+   * Loads the preset rows for one locale in the most preferred fallback language that has a preset
+   * on the requested NSFW side, so a locale with any preset on that side never sees its untranslated ones.
    */
-  async loadPresetOptionsByLocale(
-    locale: string,
-    maxDescriptionLength?: number,
-  ): Promise<Array<{ name: string; description: string }> | null> {
+  async loadPresetRowsByLocale(locale: string, options: { nsfw: boolean }): Promise<TomoriPresetRow[] | null> {
     try {
-      const descriptionLength = maxDescriptionLength ?? 100;
-      let presetRows = await sql`
-        SELECT persona_preset_name, persona_preset_desc
-        FROM persona_presets
-        WHERE preset_language = ${locale}
-        ORDER BY persona_preset_name ASC
-      `;
-
-      if (presetRows.length === 0) {
-        const baseLanguage = locale.split("-")[0];
-        presetRows = await sql`
-          SELECT persona_preset_name, persona_preset_desc
-          FROM persona_presets
-          WHERE preset_language = ${baseLanguage}
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presetRows.length > 0) {
-          log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
-        }
-      }
-
-      if (presetRows.length === 0 && locale !== "en-US") {
-        presetRows = await sql`
-          SELECT persona_preset_name, persona_preset_desc
-          FROM persona_presets
-          WHERE preset_language = 'en-US'
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presetRows.length > 0) {
-          log.info(`No presets found for locale '${locale}', falling back to English presets.`);
-        }
-      }
-
-      if (!presetRows || presetRows.length === 0) {
-        log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
-        return null;
-      }
-
-      const presetOptions = presetRows.map((row: Record<string, unknown>) => {
-        const description = row.persona_preset_desc as string;
-        const truncatedDescription =
-          description.length > descriptionLength
-            ? `${description.substring(0, descriptionLength - 3)}...`
-            : description;
-
-        return {
-          name: row.persona_preset_name as string,
-          description: truncatedDescription,
-        };
-      });
-
-      log.info(`Found ${presetOptions.length} personality presets for locale '${locale}' (selection menu).`);
-      return presetOptions;
-    } catch (error) {
-      log.error(`Error loading preset options for locale '${locale}' from database:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Loads full preset rows for a given locale.
-   *
-   * @param locale - Locale code
-   */
-  async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
-    try {
-      let presets = await sql`
+      const rows = await sql<TomoriPresetRow[]>`
         SELECT * FROM persona_presets
-        WHERE preset_language = ${locale}
-        ORDER BY persona_preset_name ASC
+        WHERE preset_language = ANY(${sql.array(presetFallbackLanguages(locale), "TEXT")})
       `;
+      const presets = selectPresetsForLocale(rows, locale, options);
 
       if (presets.length === 0) {
-        const baseLanguage = locale.split("-")[0];
-        presets = await sql`
-          SELECT * FROM persona_presets
-          WHERE preset_language = ${baseLanguage}
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presets.length > 0) {
-          log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
-        }
-      }
-
-      if (presets.length === 0 && locale !== "en-US") {
-        presets = await sql`
-          SELECT * FROM persona_presets
-          WHERE preset_language = 'en-US'
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presets.length > 0) {
-          log.info(`No presets found for locale '${locale}', falling back to English presets.`);
-        }
-      }
-
-      if (!presets || presets.length === 0) {
         log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
         return null;
       }
 
       log.info(`Found ${presets.length} personality preset rows for locale '${locale}'.`);
-      return presets as TomoriPresetRow[];
+      return presets;
     } catch (error) {
       log.error(`Error loading preset rows for locale '${locale}' from database:`, error);
       return null;
     }
+  }
+
+  /** Loads the exact localized preset referenced by a persona, without locale substitution. */
+  async loadPresetByReference(lineageId: number, language: string): Promise<TomoriPresetRow | null> {
+    const [preset] = await sql<TomoriPresetRow[]>`
+      SELECT * FROM persona_presets
+      WHERE preset_lineage_id = ${lineageId} AND preset_language = ${language}
+      LIMIT 1
+    `;
+    return preset ?? null;
   }
 
   /** Loads all preset rows regardless of locale. */
@@ -337,7 +271,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /** Loads all system-prompt preset rows. */
   async loadSystemPromptPresets(): Promise<SystemPromptPresetRow[] | null> {
     try {
       const presets = await sql`
@@ -384,7 +317,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Loads model-selection and BYOK columns from the split config tables for a server.
    * Used by credentialResolver to resolve provider for each capability without
-   * bypassing the TomoriState cache — this is an intentional fresh DB read.
+   * bypassing the TomoriState cache (this is an intentional fresh DB read).
    *
    * @param serverId - Internal server DB ID
    */
@@ -401,7 +334,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     | "user_byok_mode"
   > | null> {
     try {
-      // 1. Join the three split tables that own capability-selection columns.
+      // Join the three split tables that own capability-selection columns.
       //    server_model_configs anchors (always present post-E0 backfill);
       //    the other two are LEFT JOINs for migration-window safety.
       const [row] = await sql`
@@ -444,35 +377,56 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Applies a NovelAI preset's sampling parameters to a server's config.
-   * Writes through typed split-table methods; invalidates the tomori state cache on success.
+   * Writes through typed split-table methods. Because these writes are not
+   * transactional, invalidates the tomori state cache when any write succeeds,
+   * including a partial failure.
    *
    * @param serverId     - Internal server DB ID
    * @param preset       - NaiPresetRow to apply
-   * @param model        - LLM codename for temperature conversion
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
+   * @param serverDiscId - Discord server snowflake used for cache invalidation
    * @returns true on success, false if any write failed
    */
-  async applyNaiPreset(serverId: number, preset: NaiPresetRow, model: string, serverDiscId?: string): Promise<boolean> {
-    const params = preset.parameters;
-    const naiTemp = typeof params.temperature === "number" ? params.temperature : 1.35;
-    const llm_temperature = this.invertNaiTemperature(naiTemp, model);
-    const llm_top_k = typeof params.top_k === "number" ? Math.round(params.top_k) : 0;
-    const llm_top_p = typeof params.top_p === "number" ? params.top_p : 1.0;
-    const llm_min_p = typeof params.min_p === "number" ? params.min_p : 0.05;
+  async applyNaiPreset(
+    serverId: number,
+    preset: NaiPresetRow | null,
+    model: LlmRow,
+    serverDiscId: string,
+  ): Promise<boolean> {
+    if (!model.llm_id || model.llm_provider !== "novelai") return false;
+    if (preset && preset.model_target !== getNovelAIProfile(model.llm_codename).samplingPresetTarget) return false;
+    const saved = await llmProviderRepo.loadSavedProviderConfig(serverId, "novelai");
+    if (!saved) return false;
+    const { nai_preset_name, llm_temperature, llm_top_k, llm_top_p, llm_min_p } = getNovelAISamplerConfig(
+      model.llm_codename,
+      preset,
+    );
+    const llm_disabled_params = enableNovelAIPresetSamplers(saved.llm_disabled_params);
 
-    // 1. Write sampling params across their owning split tables in parallel.
-    const [modelOk, chatOk, naiOk] = await Promise.all([
-      this.updateModelConfig(serverId, { llm_temperature }),
+    // Write sampling params across their owning split tables in parallel.
+    const [modelOk, chatOk, naiOk, savedOk] = await Promise.all([
+      this.updateModelConfig(serverId, { llm_temperature, llm_disabled_params }),
       this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
-      this.updateNovelaiImagegenConfig(serverId, { nai_preset_name: preset.preset_name }),
+      this.updateNovelaiImagegenConfig(serverId, { nai_preset_name }),
+      llmProviderRepo.upsertSavedProviderConfig(
+        serverId,
+        {
+          ...saved,
+          llm_id: model.llm_id,
+          nai_preset_name,
+          llm_temperature,
+          llm_top_k,
+          llm_top_p,
+          llm_min_p,
+          llm_disabled_params,
+        },
+        { serverDiscId },
+      ),
     ]);
 
-    const ok = modelOk && chatOk && naiOk;
-    if (ok && serverDiscId) invalidateTomoriStateCache(serverDiscId);
+    const ok = modelOk && chatOk && naiOk && savedOk;
+    if (modelOk || chatOk || naiOk || savedOk) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
 
@@ -494,7 +448,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const normalizedMax = Math.max(maxThreshold, normalizedMin);
 
       if (normalizedMin <= 0 || normalizedMax <= 0) {
-        // 1. Always-reply mode — reset counters to 0 in the runtime table.
         const [runtimeRow] = await sql`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, 0)
@@ -507,7 +460,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         return parsed.success ? parsed.data : null;
       }
 
-      // 2. Threshold mode — read current state, compute next, write back atomically.
+      // Threshold mode; read current state, compute next, write back atomically.
       const updatedRuntime = await sql.transaction(async (tx) => {
         const [currentRuntime] = await tx`
           SELECT *
@@ -609,7 +562,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   ): Promise<PersonaAutochRuntimeStateRow | null> {
     try {
       const result = await sql.transaction(async (tx) => {
-        // 1. Update the shared range on server_auto_trigger_configs.
         const [configRow] = await tx`
           UPDATE server_auto_trigger_configs
           SET autoch_threshold = ${threshold},
@@ -622,7 +574,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // 2. Reset the persona's runtime cycle (upsert handles first-time rows).
         const [runtimeRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, ${nextTarget})
@@ -715,8 +666,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     if (ok) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
-
-  // ── split table partial updates ──────────────────────────────────
 
   async updateModelConfig(serverId: number, patch: Partial<ServerModelConfigRow>): Promise<boolean> {
     return this.executeUpdate("server_model_configs", serverId, patch);
@@ -821,7 +770,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // 1. Update direct columns on server_auto_trigger_configs (if any provided).
         if (hasColumns) {
           const setParts: string[] = [];
           const values: SqlParameterArray = [];
@@ -835,7 +783,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           );
         }
 
-        // 2. Replace junction rows atomically (DELETE + INSERT to handle removals).
+        // Replace junction rows atomically (DELETE + INSERT to handle removals).
         if (hasOverrides) {
           await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
           for (const override of overrides) {
@@ -879,6 +827,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_memory_configs", serverId, patch);
   }
 
+  async updateStmConfig(serverId: number, patch: Partial<ServerStmConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_stm_configs", serverId, patch);
+  }
+
   async updateWelcomeConfig(
     serverId: number,
     patch: Partial<{
@@ -892,13 +844,34 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   /**
    * Delete every config-table row owned by this server across the 13 split tables.
-   * Used by `/config setup` to recover from the orphaned-alters state.
+   * Used by `/setup` to recover from the orphaned-alters state.
    * Wiping all configs frees the constraint without touching `personas` rows, so
    * alters survive the reset.
    *
    * @param serverId - Internal server DB ID
+   * @param txClient - Optional transaction SQL client
    */
-  async resetAllServerConfigs(serverId: number): Promise<void> {
+  async resetAllServerConfigs(serverId: number, txClient?: SQL): Promise<void> {
+    if (txClient) {
+      // Bun SQL transactions operate over a single dedicated database connection.
+      // Issuing concurrent statements via Promise.all on one transaction connection
+      // can interleave or corrupt protocol frames, so queries must run sequentially.
+      await txClient`DELETE FROM server_model_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_capabilities_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_notice_embeds_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_nsfw_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_speech_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_auto_trigger_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_channel_scope_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_byok_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_memory_configs WHERE server_id = ${serverId}`;
+      return;
+    }
+
     await Promise.all([
       sql`DELETE FROM server_model_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`,
@@ -916,11 +889,25 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     ]);
   }
 
-  // ── reads for split tables (used where TomoriState cache is unavailable) ──
+  async getChatConfig(serverId: number): Promise<ServerChatConfigRow | null> {
+    try {
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_chat_configs WHERE server_id = ${serverId}`,
+        "load server chat config",
+      );
+      return (row as unknown as ServerChatConfigRow) ?? null;
+    } catch (error) {
+      log.error(`Error loading server_chat_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
 
   async getModelConfig(serverId: number): Promise<ServerModelConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`,
+        "load server model config",
+      );
       return (row as unknown as ServerModelConfigRow) ?? null;
     } catch (error) {
       log.error(`Error loading server_model_configs for server ${serverId}:`, error);
@@ -930,7 +917,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   async getSpeechConfig(serverId: number): Promise<ServerSpeechConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_speech_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_speech_configs WHERE server_id = ${serverId}`,
+        "load server speech config",
+      );
       return (row as unknown as ServerSpeechConfigRow) ?? null;
     } catch (error) {
       log.error(`Error loading server_speech_configs for server ${serverId}:`, error);
@@ -999,8 +989,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     values.push(value as never);
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Reads capabilities, NAI imagegen, NSFW, speech, and BYOK configs for the given server.
    * Returns null if the server has no config row (i.e., not yet set up).
@@ -1056,8 +1044,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── config table reads ───────────────────────────────────────────
-
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
@@ -1070,7 +1056,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const [row] = await sql`
         SELECT emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
                manage_message_enabled, thread_creation_enabled, imagegen_enabled,
-               videogen_enabled, voice_message_enabled, user_blocking_enabled, tool_use_enabled
+               videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
+               tool_use_enabled, response_drafting_enabled, danbooru_enabled, conditioning_interactions_enabled, dice_rolling_enabled
         FROM server_capabilities_configs
         WHERE server_id = ${serverId}
       `;
@@ -1113,7 +1100,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlLoadSpeechConfigs(serverId: number): Promise<ServerSpeechConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT voice_transcript_chat_mode, chatterbox_turbo_enabled,
+        SELECT speech_design_endpoint_id, speech_clone_endpoint_id, speech_design_model_id, speech_clone_model_id, transcription_model_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
                chatterbox_cfg_weight, chatterbox_exaggeration
         FROM server_speech_configs
         WHERE server_id = ${serverId}
@@ -1139,19 +1126,19 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── config table upserts (new tables) ────────────────────────────
-
   private async sqlUpsertCapabilitiesConfigs(serverId: number, row: ServerCapabilitiesConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_capabilities_configs (
         server_id, emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
         manage_message_enabled, thread_creation_enabled, imagegen_enabled,
-        videogen_enabled, voice_message_enabled, user_blocking_enabled, tool_use_enabled
+        videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
+        tool_use_enabled, response_drafting_enabled, danbooru_enabled, conditioning_interactions_enabled, dice_rolling_enabled
       ) VALUES (
         ${serverId}, ${row.emoji_usage_enabled}, ${row.sticker_usage_enabled},
         ${row.web_search_enabled}, ${row.manage_message_enabled}, ${row.thread_creation_enabled},
         ${row.imagegen_enabled}, ${row.videogen_enabled}, ${row.voice_message_enabled},
-        ${row.user_blocking_enabled}, ${row.tool_use_enabled}
+        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled}, ${row.response_drafting_enabled},
+        ${row.danbooru_enabled}, ${row.conditioning_interactions_enabled ?? true}, ${row.dice_rolling_enabled}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         emoji_usage_enabled    = EXCLUDED.emoji_usage_enabled,
@@ -1163,7 +1150,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         videogen_enabled       = EXCLUDED.videogen_enabled,
         voice_message_enabled  = EXCLUDED.voice_message_enabled,
         user_blocking_enabled  = EXCLUDED.user_blocking_enabled,
+        time_awareness_enabled = EXCLUDED.time_awareness_enabled,
         tool_use_enabled       = EXCLUDED.tool_use_enabled,
+        response_drafting_enabled = EXCLUDED.response_drafting_enabled,
+        danbooru_enabled       = EXCLUDED.danbooru_enabled,
+        conditioning_interactions_enabled = EXCLUDED.conditioning_interactions_enabled,
+        dice_rolling_enabled = EXCLUDED.dice_rolling_enabled,
         updated_at             = NOW()
     `;
   }
@@ -1213,13 +1205,18 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlUpsertSpeechConfigs(serverId: number, row: ServerSpeechConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_speech_configs (
-        server_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
+        server_id, speech_design_endpoint_id, speech_clone_endpoint_id, speech_design_model_id, speech_clone_model_id, transcription_model_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
         chatterbox_cfg_weight, chatterbox_exaggeration
       ) VALUES (
-        ${serverId}, ${row.voice_transcript_chat_mode}, ${row.chatterbox_turbo_enabled},
+        ${serverId}, ${row.speech_design_endpoint_id}, ${row.speech_clone_endpoint_id}, ${row.speech_design_model_id}, ${row.speech_clone_model_id}, ${row.transcription_model_id ?? null}, ${row.voice_transcript_chat_mode}, ${row.chatterbox_turbo_enabled},
         ${row.chatterbox_cfg_weight}, ${row.chatterbox_exaggeration}
       )
       ON CONFLICT (server_id) DO UPDATE SET
+        speech_design_endpoint_id = EXCLUDED.speech_design_endpoint_id,
+        speech_clone_endpoint_id = EXCLUDED.speech_clone_endpoint_id,
+        speech_design_model_id = EXCLUDED.speech_design_model_id,
+        speech_clone_model_id = EXCLUDED.speech_clone_model_id,
+        transcription_model_id = EXCLUDED.transcription_model_id,
         voice_transcript_chat_mode = EXCLUDED.voice_transcript_chat_mode,
         chatterbox_turbo_enabled   = EXCLUDED.chatterbox_turbo_enabled,
         chatterbox_cfg_weight      = EXCLUDED.chatterbox_cfg_weight,
@@ -1236,10 +1233,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         user_byok_mode = EXCLUDED.user_byok_mode,
         updated_at     = NOW()
     `;
-  }
-
-  private invertNaiTemperature(naiTemp: number, _model: string): number {
-    return Math.min(2.0, Math.max(0.0, naiTemp));
   }
 
   private rollAutochatTarget(minThreshold: number, maxThreshold: number): number {
@@ -1279,7 +1272,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async setFallbackModelRefRows(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
     try {
       const legacyIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-      // 1. Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
+      // Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
       const [refsOk, idsOk] = await Promise.all([
         this.updateChatConfig(serverId, { fallback_model_refs: refs }),
         this.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),
@@ -1300,5 +1293,5 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const configRepository = new ConfigRepository();

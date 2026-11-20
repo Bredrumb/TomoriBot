@@ -1,0 +1,916 @@
+import { defineConfig } from "astro/config";
+import { unified } from "@astrojs/markdown-remark";
+import starlight from "@astrojs/starlight";
+import sitemap from "@astrojs/sitemap";
+import starlightLlmsTxt from "starlight-llms-txt";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import { remarkHeadingIds } from "./src/remarkHeadingIds";
+import { remarkLocaleLinks } from "./src/remarkLocaleLinks";
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_DOCS_LOCALE_ID,
+  DOCS_LOCALES,
+  PUBLISHED_DOCS_LOCALES,
+  getDocsLocaleConfig,
+  normalizePageId,
+  pageIdToRoute,
+} from "../../src/constants/docsLocales";
+
+// Starlight's autogenerate resolves pages by stripping the hardcoded
+// "src/content/docs/" prefix from each entry's filePath (relative to project
+// root). When the docs live outside the Astro project (../../docs), filePath
+// becomes "../../docs/..." and the prefix strip never matches, leaving every
+// sidebar group empty.
+//
+// Fix: create a junction/symlink at src/content/docs → ../../docs so that
+// Astro sees the files as src/content/docs/... (correct prefix). This runs
+// once at startup; on Windows it creates a directory junction (no admin
+// required); on Linux/macOS it falls back to a regular symlink.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const junctionPath = resolve(__dirname, "src/content/docs");
+const docsTarget = resolve(__dirname, "../../docs");
+const defaultLocaleTarget = resolve(docsTarget, DEFAULT_DOCS_LOCALE_ID);
+
+if (!existsSync(junctionPath)) {
+  mkdirSync(resolve(__dirname, "src/content"), { recursive: true });
+  symlinkSync(docsTarget, junctionPath, "junction");
+}
+
+/**
+ * Locale trees the sidebar reads labels from. A locale whose page tree does not exist yet has no
+ * files to read and no sidebar entries of its own, so it is deliberately absent here even though
+ * `DOCS_LOCALES` lists it as a planned target.
+ */
+const sidebarLocales = DOCS_LOCALES.filter((locale) => locale.docsTree);
+/** Locales other than the default, which are the ones needing fallback sidebar labels. */
+const translatedLocales = sidebarLocales.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID);
+
+// Sidebar source of truth:
+// - Top-level groups are discovered from the default locale's docs/*/README.md.
+// - Page links use each Markdown file's `title`.
+// - Folder groups use `sidebar.groupLabel` from that folder's README when present.
+// - Ordering uses `sidebar.order` only where filename order is not enough.
+// - Set `sidebar.hidden: true` on a top-level README to keep that folder out of main nav.
+const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+const maxOrder = Number.MAX_SAFE_INTEGER;
+
+const segmentLabelOverrides = {
+  ai: "AI",
+  api: "API",
+  db: "DB",
+  discord: "Discord",
+  ltm: "LTM",
+  mcp: "MCP",
+  novelai: "NovelAI",
+  rag: "RAG",
+  sillytavern: "SillyTavern",
+  stm: "STM",
+  stt: "STT",
+  tts: "TTS",
+};
+
+const groupDirectoryConfig = {
+  "features/capabilities/tools-and-extensions": {
+    label: "Tools & Extensions",
+    order: 1,
+  },
+  "features/capabilities/media-generation": {
+    label: "Media Generation",
+    order: 3,
+  },
+  "features/chatting-personality": {
+    label: "Chatting & Personality",
+    order: 1,
+    translations: {
+      ja: "チャットと性格",
+      "zh-TW": "聊天與人格",
+      "zh-CN": "聊天与人格",
+      "es-419": "Chat y personalidad",
+      "pt-BR": "Bate-papo & Personalidade",
+      vi: "Trò chuyện & cá tính",
+    },
+  },
+  "features/knowledge": {
+    label: "Knowledge",
+    order: 2,
+    translations: {
+      ja: "知識",
+      "zh-TW": "知識",
+      "zh-CN": "知识",
+      "es-419": "Conocimiento",
+      "pt-BR": "Conhecimento",
+      vi: "Tri thức",
+    },
+  },
+  "features/knowledge/memory": {
+    label: "Memory",
+    order: 1,
+    translations: {
+      ja: "記憶",
+      "zh-TW": "記憶",
+      "zh-CN": "记忆",
+      "es-419": "Memoria",
+      "pt-BR": "Memória",
+      vi: "Bộ nhớ",
+    },
+  },
+  "features/capabilities": {
+    label: "Capabilities",
+    order: 3,
+    translations: {
+      ja: "機能",
+      "zh-TW": "功能",
+      "zh-CN": "功能",
+      "es-419": "Capacidades",
+      "pt-BR": "Capacidades",
+      vi: "Tính năng",
+    },
+  },
+  "features/setup-administration": {
+    label: "Setup & Administration",
+    order: 4,
+    translations: {
+      ja: "設定と管理",
+      "zh-TW": "設定與管理",
+      "zh-CN": "设置与管理",
+      "es-419": "Configuración y administración",
+      "pt-BR": "Configuração & Administração",
+      vi: "Thiết lập và quản trị",
+    },
+  },
+  "features/integrations": {
+    label: "Integrations",
+    order: 5,
+    translations: {
+      ja: "連携",
+      "zh-TW": "整合",
+      "zh-CN": "集成",
+      "es-419": "Integraciones",
+      "pt-BR": "Integrações",
+      vi: "Tích hợp",
+    },
+  },
+};
+
+function buildSidebarSection(directory) {
+  const dirPath = resolve(defaultLocaleTarget, directory);
+  const readmePath = getReadmePath(dirPath);
+  const readmeData = readmePath ? readFrontmatter(readmePath) : {};
+
+  return {
+    label: getGroupLabel(readmeData, directory),
+    collapsed: true,
+    items: buildDirectoryItems(dirPath, directory).map((node) => node.item),
+    ...buildSidebarTranslations(dirPath),
+  };
+}
+
+/**
+ * Starlight's `translations` map is keyed by each locale's `lang`, so this has to emit one entry per
+ * published locale rather than the single hardcoded pair it replaced.
+ *
+ * A directory with no counterpart README keeps the default locale's label. Starlight already serves
+ * the default locale's content at that URL, so an invented label would name a translation that does
+ * not exist while the English wording stays honest about what the reader is looking at.
+ */
+function buildSidebarTranslations(dirPath, slugPrefix) {
+  const translations = {};
+  const configuredTranslations = slugPrefix ? groupDirectoryConfig[slugPrefix]?.translations : undefined;
+
+  for (const locale of translatedLocales) {
+    const localizedDir = join(docsTarget, locale.id, relative(defaultLocaleTarget, dirPath));
+    const localizedReadme = getReadmePath(localizedDir);
+    if (localizedReadme) {
+      const data = readFrontmatter(localizedReadme);
+      const label = data.sidebar?.groupLabel ?? data.groupLabel ?? data.title;
+      if (label) {
+        translations[locale.lang] = label;
+        continue;
+      }
+    }
+
+    const fallbackLabel = configuredTranslations?.[locale.id];
+    if (fallbackLabel) translations[locale.lang] = fallbackLabel;
+  }
+
+  return Object.keys(translations).length > 0 ? { translations } : {};
+}
+
+/** Same rule as a group label, applied to a single page's sidebar entry. */
+function buildPageTranslations(filePath) {
+  const translations = {};
+  const relativeStem = stripMarkdownExtension(relative(defaultLocaleTarget, filePath));
+
+  for (const locale of translatedLocales) {
+    const localizedPath = [".md", ".mdx"]
+      .map((extension) => join(docsTarget, locale.id, `${relativeStem}${extension}`))
+      .find((candidate) => existsSync(candidate));
+    if (!localizedPath) continue;
+
+    const data = readFrontmatter(localizedPath);
+    const label = data.sidebar?.label ?? data.title;
+    if (label) translations[locale.lang] = label;
+  }
+
+  return Object.keys(translations).length > 0 ? { translations } : {};
+}
+
+function buildDirectoryItems(dirPath, slugPrefix) {
+  const entries = readdirSync(dirPath, { withFileTypes: true });
+  const readme = entries.find((entry) => isReadme(entry.name));
+  const readmeNode = readme ? buildPageNode(join(dirPath, readme.name), slugPrefix) : undefined;
+  const childNodes = entries
+    .filter((entry) => !isReadme(entry.name))
+    .flatMap((entry) => {
+      const entryPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) return [buildGroupNode(entryPath, entry.name, joinSlug(slugPrefix, entry.name))];
+      if (entry.isFile() && isMarkdownFile(entry.name)) {
+        return [buildPageNode(entryPath, joinSlug(slugPrefix, stripMarkdownExtension(entry.name)))];
+      }
+      return [];
+    })
+    .filter(Boolean)
+    .sort(compareNodes);
+
+  return readmeNode && !readmeNode.hidden ? [readmeNode, ...childNodes] : childNodes;
+}
+
+function buildGroupNode(dirPath, dirName, slugPrefix) {
+  const readmePath = getReadmePath(dirPath);
+  const readmeData = readmePath ? readFrontmatter(readmePath) : {};
+  const groupConfig = groupDirectoryConfig[slugPrefix];
+  const children = buildDirectoryItems(dirPath, slugPrefix);
+  const childOrder = Math.min(...children.map((child) => child.order), maxOrder);
+
+  return {
+    item: {
+      label: getGroupLabel(readmeData, dirName, slugPrefix),
+      collapsed: true,
+      items: children.map((child) => child.item),
+      ...buildSidebarTranslations(dirPath, slugPrefix),
+    },
+    order: readmeData.sidebar?.order ?? groupConfig?.order ?? childOrder,
+    sortKey: slugPrefix,
+    hidden: false,
+  };
+}
+
+function buildPageNode(filePath, slug) {
+  const data = readFrontmatter(filePath);
+
+  return {
+    item: {
+      label: data.sidebar?.label ?? data.title ?? prettySegmentLabel(basename(slug)),
+      link: `/${slug}/`,
+      ...buildPageTranslations(filePath),
+    },
+    order: data.sidebar?.order ?? maxOrder,
+    sortKey: slug,
+    hidden: data.sidebar?.hidden === true,
+  };
+}
+
+function compareNodes(a, b) {
+  if (a.order !== b.order) return a.order - b.order;
+  return collator.compare(a.sortKey, b.sortKey);
+}
+
+function getGroupLabel(data, dirName, slugPrefix) {
+  return (
+    data.sidebar?.groupLabel ??
+    data.groupLabel ??
+    data.title ??
+    (slugPrefix ? groupDirectoryConfig[slugPrefix]?.label : undefined) ??
+    prettySegmentLabel(dirName)
+  );
+}
+
+function getReadmePath(dirPath) {
+  for (const fileName of ["README.md", "README.mdx"]) {
+    const filePath = join(dirPath, fileName);
+    if (existsSync(filePath)) return filePath;
+  }
+  return undefined;
+}
+
+function readFrontmatter(filePath) {
+  const content = readFileSync(filePath, "utf8");
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!match) return {};
+
+  const data = {};
+  let currentKey;
+
+  for (const rawLine of match[1].split(/\r?\n/)) {
+    if (!rawLine.trim() || rawLine.trimStart().startsWith("#")) continue;
+
+    const nested = rawLine.match(/^ {2}([\w-]+):(?:\s*(.*))?$/);
+    if (nested && currentKey) {
+      data[currentKey] ??= {};
+      data[currentKey][nested[1]] = parseFrontmatterValue(nested[2] ?? "");
+      continue;
+    }
+
+    const topLevel = rawLine.match(/^([\w-]+):(?:\s*(.*))?$/);
+    if (!topLevel) continue;
+
+    const [, key, value = ""] = topLevel;
+    if (value === "") {
+      data[key] = {};
+      currentKey = key;
+    } else {
+      data[key] = parseFrontmatterValue(value);
+      currentKey = undefined;
+    }
+  }
+
+  return data;
+}
+
+function parseFrontmatterValue(value) {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function prettySegmentLabel(segment) {
+  const cleaned = segment.replace(/^\d+-/, (prefix) => `${Number.parseInt(prefix, 10)}: `);
+  return cleaned
+    .split("-")
+    .map((word) => segmentLabelOverrides[word.toLowerCase()] ?? capitalize(word))
+    .join(" ");
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function joinSlug(...parts) {
+  return parts.filter(Boolean).join("/");
+}
+
+function isReadme(fileName) {
+  return /^README\.mdx?$/i.test(fileName);
+}
+
+function isMarkdownFile(fileName) {
+  return [".md", ".mdx"].includes(extname(fileName).toLowerCase());
+}
+
+function stripMarkdownExtension(fileName) {
+  return fileName.replace(/\.mdx?$/i, "");
+}
+
+function buildTopLevelSidebar() {
+  return readdirSync(defaultLocaleTarget, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const dirPath = resolve(defaultLocaleTarget, entry.name);
+      const readmePath = getReadmePath(dirPath);
+      if (!readmePath) return [];
+
+      const readmeData = readFrontmatter(readmePath);
+      if (readmeData.sidebar?.hidden === true) return [];
+
+      return [
+        {
+          item: buildSidebarSection(entry.name),
+          order: readmeData.sidebar?.order ?? maxOrder,
+          sortKey: entry.name,
+        },
+      ];
+    })
+    .sort(compareNodes)
+    .map((node) => node.item);
+}
+
+const sidebar = buildTopLevelSidebar();
+
+// Starlight locale options and the sitemap i18n map both derive from the shared locale table, so
+// adding a locale cannot leave one of them behind. Registering our own sitemap makes Starlight skip
+// its own, which is why the i18n map has to be supplied here rather than read from Starlight.
+const docsLocales = Object.fromEntries(
+  sidebarLocales.map((locale) => [locale.id, { label: locale.label, lang: locale.lang }]),
+);
+
+/**
+ * Language tag for the sitemap's `xhtml:link` hreflang annotations.
+ *
+ * `@astrojs/sitemap` validates every value in its i18n map against `/^[a-zA-Z-]+$/`. A tag carrying
+ * a UN M.49 numeric region (`es-419`) fails that schema, and the integration then skips generating a
+ * sitemap for the entire site rather than for that one locale, while `robots.txt` still advertises
+ * one. Dropping the numeric region yields a valid, less specific tag; the page's own head keeps the
+ * exact tag, so only the sitemap annotation loses precision.
+ */
+function sitemapLanguageTag(lang: string): string {
+  return lang.replace(/-\d+$/, "");
+}
+
+/**
+ * Locale roots each get a meta-refresh redirect to their own introduction page, matching the
+ * Cloudflare 200-rewrites in `public/_redirects`. Unlisted roots are not routes at all: a locale
+ * enters this map only once its page tree exists.
+ */
+const localeRootRedirects = Object.fromEntries(
+  sidebarLocales.map((locale) => [`/${locale.id}/`, `/${locale.id}/introduction/`]),
+);
+
+/**
+ * Machine-readable documentation stays English-only, so every non-default locale tree is excluded
+ * by pattern rather than by name. A locale added to the shared table is covered here without an
+ * edit, which is what keeps a new translation out of the agent-facing text sets.
+ */
+const nonDefaultLocalePatterns = (suffix: string) =>
+  DOCS_LOCALES.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID).map((locale) => `${locale.id}${suffix}`);
+
+/**
+ * Sitemap filter for URLs that must not be advertised: internal wiki pages and every locale route
+ * that only serves the default locale's content. A `noindex` URL left in the sitemap makes Search
+ * Console report "Submitted URL marked 'noindex'", so a fallback has to stay out while the real
+ * translations under the same locale root stay in.
+ */
+const fallbackRoutePattern = buildFallbackRoutePattern();
+
+function buildFallbackRoutePattern() {
+  const fallbacks: string[] = [];
+
+  // Counterpart ids are collected once per locale, compared as normalized page ids rather than raw
+  // paths. A translation authored as `index.md` where the default locale uses `README.mdx` is the
+  // same page, and a path comparison would wrongly drop it from the sitemap as a fallback.
+  const localePageIds = new Map(
+    sidebarLocales
+      .filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID)
+      .map((locale) => [locale.id, collectPageIds(resolve(docsTarget, locale.id))]),
+  );
+
+  // Walked from the default locale's tree because a fallback exists only in the build output: the
+  // route is generated for every default-locale page that a locale has no file for, so a locale
+  // tree by itself cannot list them.
+  for (const [pageId, route] of collectPageIds(defaultLocaleTarget)) {
+    for (const [localeId, pageIds] of localePageIds) {
+      if (pageIds.has(pageId)) continue;
+      fallbacks.push(`^/${localeId}/${route ? `${route}/` : ""}$`);
+    }
+  }
+
+  // An empty alternation matches everything, so a site with no fallbacks gets a pattern that cannot.
+  return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
+}
+
+/** Normalized page ids and their routes for one locale tree. */
+function collectPageIds(localeRoot: string): Map<string, string> {
+  const pages = new Map<string, string>();
+
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+      if (!isMarkdownFile(entry.name)) continue;
+
+      const pageId = normalizePageId(relative(localeRoot, absolutePath));
+      pages.set(pageId, pageIdToRoute(pageId));
+    }
+  };
+
+  walk(localeRoot);
+  return pages;
+}
+
+/**
+ * Pages deploy only under a locale prefix, but search results, bookmarks, and older links use the
+ * bare path (`/self-hosting/`). One stub per default-locale page sends each to its `/en/` page.
+ * Written before the hand-maintained redirects below, which win where both name the same path, and
+ * without `wiki/`, which has no bare URL to preserve. A bare path cannot collide with a content
+ * route because every content route starts with a locale id.
+ */
+const bareRouteRedirects = Object.fromEntries(
+  [...collectPageIds(defaultLocaleTarget).values()]
+    .filter((route) => route !== "" && !/^wiki(\/|$)/.test(route))
+    .map((route) => [`/${route}/`, `/${DEFAULT_DOCS_LOCALE_ID}/${route}/`]),
+);
+
+const isInternalOrFallbackPath = (pathname: string): boolean =>
+  /\/wiki(\/|$)/.test(pathname) || fallbackRoutePattern.test(pathname);
+
+export default defineConfig({
+  site: "https://docs.tomoribot.app",
+  // Astro's default 4321 sits inside the dynamic TCP ranges Windows reserves for Hyper-V, WSL, and
+  // Docker (`netsh interface ipv4 show excludedportrange protocol=tcp`). Binding there fails with
+  // EACCES, which Astro does not treat as "port busy", so it never falls back to the next port.
+  server: { port: 4600 },
+  markdown: {
+    processor: unified({
+      remarkPlugins: [remarkHeadingIds, remarkLocaleLinks(docsTarget), [remarkMath, { singleDollarTextMath: false }]],
+      rehypePlugins: [rehypeKatex],
+    }),
+  },
+  // Redirects for the /features/ restructure: the flat pages were bucketed into
+  // task-based sub-category folders, changing their slugs. Keep the old URLs
+  // (shared links, search-engine index) working by forwarding to the new paths.
+  // Astro emits a static meta-refresh page for each key at build time.
+  redirects: {
+    "/": "/en/introduction/",
+    ...localeRootRedirects,
+    ...bareRouteRedirects,
+    // Previously published paths stay reachable in every locale after their pages move.
+    ...Object.fromEntries(
+      [
+        ["features/knowledge/lorebooks/", "features/knowledge/memory/lorebooks/"],
+        ["features/knowledge/memory/", "features/knowledge/memory/long-term-memory/"],
+        ["self-hosting/local-endpoints/setup-chatmock/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"],
+        ["self-hosting/local-endpoints/setup-cliproxyapi/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"],
+        ["self-hosting/local-endpoints/remote-access-cloudflare/", "self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"],
+        ["self-hosting/mcp-sign-in/", "self-hosting/mcp-servers/mcp-sign-in/"],
+        ["self-hosting/local-endpoints/setup-slop-guard/", "self-hosting/mcp-servers/setup-slop-guard/"],
+        ["self-hosting/local-endpoints/setup-local-mcp/", "self-hosting/mcp-servers/setup-local-mcp/"],
+      ].flatMap(([from, to]) => sidebarLocales.map((locale) => [`/${locale.id}/${from}`, `/${locale.id}/${to}`])),
+    ),
+    "/features/knowledge/lorebooks/": "/en/features/knowledge/memory/lorebooks/",
+    "/architecture/entry-point/": "/en/architecture/entry-point/",
+    "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
+    "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",
+    "/architecture/integrations/matrix/bridge/": "/en/architecture/integrations/matrix/bridge/",
+    "/architecture/integrations/novelai/inpainting/": "/en/architecture/integrations/novelai/inpainting/",
+    "/architecture/integrations/novelai/limitations/": "/en/architecture/integrations/novelai/limitations/",
+    "/architecture/integrations/novelai/tool-calling/": "/en/architecture/integrations/novelai/limitations/",
+    "/architecture/integrations/sillytavern/card-support/": "/en/architecture/integrations/sillytavern/card-support/",
+    "/architecture/integrations/sillytavern/preset-system/": "/en/architecture/integrations/sillytavern/preset-system/",
+    "/architecture/pipelines/chat/01-normalize-invocation/": "/en/architecture/pipelines/chat/01-normalize-invocation/",
+    "/architecture/pipelines/chat/02-evaluate-admission/": "/en/architecture/pipelines/chat/02-evaluate-admission/",
+    "/architecture/pipelines/chat/03-handle-disposition/": "/en/architecture/pipelines/chat/03-handle-disposition/",
+    "/architecture/pipelines/chat/04-channel-lock/": "/en/architecture/pipelines/chat/04-channel-lock/",
+    "/architecture/pipelines/chat/05-plan-turns/": "/en/architecture/pipelines/chat/05-plan-turns/",
+    "/architecture/pipelines/chat/06-per-turn/01-build-context/": "/en/architecture/pipelines/chat/06-per-turn/01-build-context/",
+    "/architecture/pipelines/chat/06-per-turn/02-create-response-sink/": "/en/architecture/pipelines/chat/06-per-turn/02-create-response-sink/",
+    "/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/": "/en/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/",
+    "/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/": "/en/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/",
+    "/architecture/pipelines/context-build/01-preset-routing/": "/en/architecture/pipelines/context-build/01-preset-routing/",
+    "/architecture/pipelines/context-build/02-native-assembly/01-prompt-items/": "/en/architecture/pipelines/context-build/02-native-assembly/01-prompt-items/",
+    "/architecture/pipelines/context-build/02-native-assembly/02-server-info/": "/en/architecture/pipelines/context-build/02-native-assembly/02-server-info/",
+    "/architecture/pipelines/context-build/02-native-assembly/03-server-memories/": "/en/architecture/pipelines/context-build/02-native-assembly/03-server-memories/",
+    "/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/": "/en/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/",
+    "/architecture/pipelines/context-build/02-native-assembly/05-server-stickers/": "/en/architecture/pipelines/context-build/02-native-assembly/05-server-stickers/",
+    "/architecture/pipelines/context-build/02-native-assembly/06-participants/": "/en/architecture/pipelines/context-build/02-native-assembly/06-participants/",
+    "/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/": "/en/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/",
+    "/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/": "/en/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/",
+    "/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/": "/en/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/",
+    "/architecture/pipelines/context-build/02-native-assembly/09-conditioning/": "/en/architecture/pipelines/context-build/02-native-assembly/09-conditioning/",
+    "/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/": "/en/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/",
+    "/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/": "/en/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/",
+    "/architecture/pipelines/memory/ltm/01-ltm-create/": "/en/architecture/pipelines/memory/ltm/01-ltm-create/",
+    "/architecture/pipelines/memory/ltm/02-ltm-update-delete/": "/en/architecture/pipelines/memory/ltm/02-ltm-update-delete/",
+    "/architecture/pipelines/memory/stm/01-passive-capture/": "/en/architecture/pipelines/memory/stm/01-passive-capture/",
+    "/architecture/pipelines/memory/stm/02-summary-upgrade/": "/en/architecture/pipelines/memory/stm/02-summary-upgrade/",
+    "/architecture/pipelines/provider/01-context-assembly/": "/en/architecture/pipelines/provider/01-context-assembly/",
+    "/architecture/pipelines/provider/02-raw-chunk-generation/": "/en/architecture/pipelines/provider/02-raw-chunk-generation/",
+    "/architecture/pipelines/provider/03-chunk-normalization/": "/en/architecture/pipelines/provider/03-chunk-normalization/",
+    "/architecture/pipelines/provider/04-orchestrator-state-machine/": "/en/architecture/pipelines/provider/04-orchestrator-state-machine/",
+    "/architecture/pipelines/provider/05-buffer-management/": "/en/architecture/pipelines/provider/05-buffer-management/",
+    "/architecture/pipelines/provider/06-segment-normalization/": "/en/architecture/pipelines/provider/06-segment-normalization/",
+    "/architecture/pipelines/provider/07-discord-delivery/": "/en/architecture/pipelines/provider/07-discord-delivery/",
+    "/architecture/pipelines/tool-loop/01-stream-once/": "/en/architecture/pipelines/tool-loop/01-stream-once/",
+    "/architecture/pipelines/tool-loop/02-execute-tool-call/": "/en/architecture/pipelines/tool-loop/02-execute-tool-call/",
+    "/architecture/pipelines/tool-loop/03-enhanced-context-restart/": "/en/architecture/pipelines/tool-loop/03-enhanced-context-restart/",
+    "/architecture/pipelines/tool-loop/04-build-result/": "/en/architecture/pipelines/tool-loop/04-build-result/",
+    "/architecture/subsystems/caching/": "/en/architecture/subsystems/caching/",
+    "/architecture/subsystems/command-system/": "/en/architecture/subsystems/command-system/",
+    "/architecture/subsystems/cooldowns/": "/en/architecture/subsystems/cooldowns/",
+    "/architecture/subsystems/database-schema/": "/en/architecture/subsystems/database-schema/",
+    "/architecture/subsystems/event-system/": "/en/architecture/subsystems/event-system/",
+    "/architecture/subsystems/localization/": "/en/architecture/subsystems/localization/",
+    "/architecture/subsystems/logit-bias/": "/en/architecture/subsystems/logit-bias/",
+    "/architecture/subsystems/multi-persona/": "/en/architecture/subsystems/multi-persona/",
+    "/architecture/subsystems/persona-presets/": "/en/architecture/subsystems/persona-presets/",
+    "/architecture/subsystems/prompt-snapshot/": "/en/architecture/subsystems/prompt-snapshot/",
+    "/architecture/subsystems/security/": "/en/architecture/subsystems/security/",
+    "/architecture/subsystems/stats-infographic/": "/en/architecture/subsystems/stats-infographic/",
+    "/architecture/subsystems/status-command/": "/en/architecture/subsystems/status-command/",
+    "/architecture/subsystems/strict-chat-completion/": "/en/architecture/subsystems/strict-chat-completion/",
+    "/architecture/subsystems/thinking-level/": "/en/architecture/subsystems/thinking-level/",
+    "/architecture/subsystems/tool-system/": "/en/architecture/subsystems/tool-system/",
+    "/architecture/subsystems/utils/": "/en/architecture/subsystems/utils/",
+    "/architecture/subsystems/video-generation/": "/en/architecture/subsystems/video-generation/",
+    "/contributing/adding-builtin-tool/": "/en/contributing/extending/builtin-tool/",
+    "/contributing/adding-db-column/": "/en/contributing/extending/db-column/",
+    "/contributing/adding-event-handler/": "/en/contributing/extending/event-handler/",
+    "/contributing/adding-feature-flag-tool/": "/en/contributing/extending/feature-flag-tool/",
+    // Astro resolves this map before the content collection, so a key that is also a live page
+    // replaces that page with a meta-refresh. Only key URLs whose page has moved.
+    "/contributing/adding-env-variable/": "/en/contributing/extending/env-variable/",
+    "/contributing/panel-prose-and-layout/": "/en/contributing/policies/panel-prose-and-layout/",
+    "/contributing/adding-locale/locale-codes/": "/en/contributing/localization/new-locale/",
+    "/contributing/adding-locale/ui-strings/": "/en/contributing/localization/new-locale/",
+    "/contributing/adding-locale/seed-catalog/": "/en/contributing/localization/new-locale/",
+    "/contributing/adding-locale/documentation/": "/en/contributing/localization/docs-site/",
+    "/contributing/adding-locale/readme-and-repo/": "/en/contributing/localization/docs-site/",
+    "/contributing/adding-locale/verification/": "/en/contributing/localization/new-locale/",
+    "/en/contributing/adding-locale/locale-codes/": "/en/contributing/localization/new-locale/",
+    "/en/contributing/adding-locale/ui-strings/": "/en/contributing/localization/new-locale/",
+    "/en/contributing/adding-locale/seed-catalog/": "/en/contributing/localization/new-locale/",
+    "/en/contributing/adding-locale/documentation/": "/en/contributing/localization/docs-site/",
+    "/en/contributing/adding-locale/readme-and-repo/": "/en/contributing/localization/docs-site/",
+    "/en/contributing/adding-locale/verification/": "/en/contributing/localization/new-locale/",
+    // Contributing pages moved into extending/, localization/, testing/, and policies/.
+    "/en/contributing/adding-slash-command/": "/en/contributing/extending/slash-command/",
+    "/en/contributing/adding-event-handler/": "/en/contributing/extending/event-handler/",
+    "/en/contributing/adding-builtin-tool/": "/en/contributing/extending/builtin-tool/",
+    "/en/contributing/adding-feature-flag-tool/": "/en/contributing/extending/feature-flag-tool/",
+    "/en/contributing/adding-db-column/": "/en/contributing/extending/db-column/",
+    "/en/contributing/adding-setup-module/": "/en/contributing/extending/setup-module/",
+    "/en/contributing/adding-new-provider/": "/en/contributing/extending/new-provider/",
+    "/en/contributing/adding-persona-preset/": "/en/contributing/extending/persona-preset/",
+    "/en/contributing/adding-participant-extension/": "/en/contributing/extending/participant-extension/",
+    "/en/contributing/adding-env-variable/": "/en/contributing/extending/env-variable/",
+    "/en/contributing/adding-locale/": "/en/contributing/localization/new-locale/",
+    "/en/contributing/docs-site-localization/": "/en/contributing/localization/docs-site/",
+    "/en/contributing/docs-authoring/": "/en/contributing/localization/docs-authoring/",
+    "/en/contributing/testing-db-changes/": "/en/contributing/testing/db-changes/",
+    "/en/contributing/testing-chat-changes/": "/en/contributing/testing/chat-changes/",
+    "/en/contributing/testing-module-mocks/": "/en/contributing/testing/module-mocks/",
+    "/en/contributing/comment-policy/": "/en/contributing/policies/comments/",
+    "/en/contributing/panel-prose-and-layout/": "/en/contributing/policies/panel-prose-and-layout/",
+    "/en/contributing/raw-sql-boundary/": "/en/contributing/policies/raw-sql/",
+    "/en/contributing/dependency-security-policy/": "/en/contributing/policies/dependency-security/",
+    "/contributing/adding-new-provider/": "/en/contributing/extending/new-provider/",
+    "/contributing/adding-participant-extension/": "/en/contributing/extending/participant-extension/",
+    "/contributing/adding-persona-preset/": "/en/contributing/extending/persona-preset/",
+    "/contributing/adding-setup-module/": "/en/contributing/extending/setup-module/",
+    "/contributing/adding-slash-command/": "/en/contributing/extending/slash-command/",
+    "/contributing/comment-policy/": "/en/contributing/policies/comments/",
+    "/contributing/dependency-security-policy/": "/en/contributing/policies/dependency-security/",
+    "/contributing/development-tasks/": "/en/contributing/development-tasks/",
+    "/contributing/docs-authoring/": "/en/contributing/localization/docs-authoring/",
+    "/contributing/getting-started/": "/en/contributing/getting-started/",
+    "/contributing/raw-sql-boundary/": "/en/contributing/policies/raw-sql/",
+    "/contributing/testing-chat-changes/": "/en/contributing/testing/chat-changes/",
+    "/contributing/testing-db-changes/": "/en/contributing/testing/db-changes/",
+    "/contributing/testing-module-mocks/": "/en/contributing/testing/module-mocks/",
+    "/features/command-reference/": "/en/features/command-reference/",
+    "/features/capabilities/scheduled-tasks/": "/en/features/capabilities/scheduled-tasks/",
+    "/en/features/capabilities/tools-and-extensions/": "/en/features/capabilities/tools-and-extensions/built-in-tools/",
+    "/en/features/capabilities/media-generation/": "/en/features/capabilities/media-generation/image-generation/",
+    "/features/capabilities/tools-and-extensions/": "/en/features/capabilities/tools-and-extensions/",
+    "/features/capabilities/media-generation/image-generation/": "/en/features/capabilities/media-generation/image-generation/",
+    "/features/capabilities/media-generation/tts-and-stt/": "/en/features/capabilities/media-generation/tts-and-stt/",
+    "/features/capabilities/media-generation/video-generation/": "/en/features/capabilities/media-generation/video-generation/",
+    "/features/chatting-personality/behavior-tweaking/": "/en/features/chatting-personality/behavior-tweaking/",
+    "/features/chatting-personality/chatting-and-triggers/": "/en/features/chatting-personality/chatting-and-triggers/",
+    "/features/chatting-personality/multiple-personas/": "/en/features/chatting-personality/multiple-personas/",
+    "/features/integrations/matrix-bridge/": "/en/features/integrations/matrix-bridge/",
+    "/features/integrations/sillytavern-support/": "/en/features/integrations/sillytavern-support/",
+    "/features/knowledge/data-handling/": "/en/features/knowledge/data-handling/",
+    "/features/knowledge/memory/": "/en/features/knowledge/memory/long-term-memory/",
+    "/features/knowledge/personalization/": "/en/features/knowledge/personalization/",
+    "/features/setup-administration/age-restricted-commands/": "/en/features/setup-administration/age-restricted-commands/",
+    "/features/setup-administration/providers-and-models/": "/en/features/setup-administration/providers-and-models/",
+    "/features/setup-administration/server-moderation/": "/en/features/setup-administration/server-moderation/",
+    "/features/setup-administration/stats-and-insights/": "/en/features/setup-administration/stats-and-insights/",
+    "/legal/privacy-policy/": "/en/legal/privacy-policy/",
+    "/legal/terms-of-service/": "/en/legal/terms-of-service/",
+    "/meet-tomori/aphel/": "/en/meet-tomori/aphel/",
+    "/meet-tomori/lilya/": "/en/meet-tomori/lilya/",
+    "/meet-tomori/locke/": "/en/meet-tomori/locke/",
+    "/meet-tomori/nerine/": "/en/meet-tomori/nerine/",
+    "/meet-tomori/rose/": "/en/meet-tomori/rose/",
+    "/meet-tomori/zaya/": "/en/meet-tomori/zaya/",
+    "/self-hosting/docker-compose/": "/en/self-hosting/docker-compose/",
+    "/self-hosting/local-monitoring/": "/en/self-hosting/local-monitoring/",
+    "/self-hosting/maintenance/": "/en/self-hosting/maintenance/",
+    "/self-hosting/mcp-sign-in/": "/en/self-hosting/mcp-servers/mcp-sign-in/",
+    "/self-hosting/manual-setup/": "/en/self-hosting/manual-setup/",
+    "/self-hosting/safe-migration/": "/en/self-hosting/safe-migration/",
+    "/self-hosting/setup-wizard/": "/en/self-hosting/setup-wizard/",
+    "/self-hosting/local-endpoints/setup-chatmock/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/",
+    "/self-hosting/local-endpoints/setup-cliproxyapi/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/",
+    "/self-hosting/local-endpoints/remote-access-cloudflare/": "/en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/",
+    "/self-hosting/local-endpoints/setup-comfyui/": "/en/self-hosting/local-endpoints/setup-comfyui/",
+    "/self-hosting/local-endpoints/setup-crawl4ai/": "/en/self-hosting/local-endpoints/setup-crawl4ai/",
+    "/self-hosting/local-endpoints/setup-local-llm/": "/en/self-hosting/local-endpoints/setup-local-llm/",
+    "/self-hosting/local-endpoints/setup-local-mcp/": "/en/self-hosting/mcp-servers/setup-local-mcp/",
+    "/self-hosting/local-endpoints/setup-searxng/": "/en/self-hosting/local-endpoints/setup-searxng/",
+    "/self-hosting/local-endpoints/setup-slop-guard/": "/en/self-hosting/mcp-servers/setup-slop-guard/",
+    "/self-hosting/local-endpoints/speech-to-text/koboldcpp/": "/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/",
+    "/self-hosting/local-endpoints/speech-to-text/whispercpp/": "/en/self-hosting/local-endpoints/speech-to-text/whispercpp/",
+    "/self-hosting/local-endpoints/speech-to-text/whisperx/": "/en/self-hosting/local-endpoints/speech-to-text/whisperx/",
+    "/self-hosting/local-endpoints/text-to-speech/chatterbox/": "/en/self-hosting/local-endpoints/text-to-speech/chatterbox/",
+    "/self-hosting/local-endpoints/text-to-speech/irodoritts/": "/en/self-hosting/local-endpoints/text-to-speech/irodoritts/",
+    "/self-hosting/local-endpoints/text-to-speech/qwen3tts/": "/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/",
+    "/wiki/refactor-record/": "/en/wiki/refactor-record/",
+    "/wiki/threat-models/": "/en/wiki/threat-models/",
+    "/introduction/quickstart/": "/en/introduction/quickstart/",
+    "/features/chatting-and-triggers": "/en/features/chatting-personality/chatting-and-triggers/",
+    "/features/multiple-personas": "/en/features/chatting-personality/multiple-personas/",
+    "/features/behavior-tweaking": "/en/features/chatting-personality/behavior-tweaking/",
+    "/features/memory": "/en/features/knowledge/memory/long-term-memory/",
+    "/features/personalization": "/en/features/knowledge/personalization/",
+    "/features/data-handling": "/en/features/knowledge/data-handling/",
+    "/features/tools-and-extensions": "/en/features/capabilities/tools-and-extensions/",
+    "/features/scheduled-tasks": "/en/features/capabilities/scheduled-tasks/",
+    "/features/media-generation": "/en/features/capabilities/media-generation/",
+    "/features/media-generation/image-generation": "/en/features/capabilities/media-generation/image-generation/",
+    "/features/media-generation/video-generation": "/en/features/capabilities/media-generation/video-generation/",
+    "/features/media-generation/tts-and-stt": "/en/features/capabilities/media-generation/tts-and-stt/",
+    "/features/providers-and-models": "/en/features/setup-administration/providers-and-models/",
+    "/features/server-moderation": "/en/features/setup-administration/server-moderation/",
+    "/features/age-restricted-commands": "/en/features/setup-administration/age-restricted-commands/",
+    "/features/stats-and-insights": "/en/features/setup-administration/stats-and-insights/",
+    "/features/matrix-bridge": "/en/features/integrations/matrix-bridge/",
+    "/features/sillytavern-support": "/en/features/integrations/sillytavern-support/",
+    "/features/chatting-personality/": "/en/features/",
+    "/features/knowledge/": "/en/features/",
+    "/features/capabilities/": "/en/features/",
+    "/features/setup-administration/": "/en/features/",
+    "/features/integrations/": "/en/features/",
+    "/en/features/chatting-personality/": "/en/features/",
+    "/en/features/knowledge/": "/en/features/",
+    "/en/features/capabilities/": "/en/features/",
+    "/en/features/setup-administration/": "/en/features/",
+    "/en/features/integrations/": "/en/features/",
+    "/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
+    "/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
+    "/en/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
+    "/en/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
+    "/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
+    "/en/features/integrations/novelai-text/": "/en/features/integrations/novelai/",
+  },
+
+  // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
+  // (see above). Vite resolves each content file to its real path under `../../docs/...`,
+  // which sits outside this app, so a bare `@astrojs/starlight/components` import in an MDX
+  // page resolves from repo-root node_modules and fails (Starlight is installed only under
+  // `apps/docs/node_modules`). Alias that one package subpath to its concrete location so
+  // MDX landing pages can use Starlight's <Card>/<LinkCard>/<LinkButton>. A global
+  // `resolve.preserveSymlinks` would fix this too but breaks Bun's `.bun/` symlink store.
+  vite: {
+    resolve: {
+      alias: [
+        // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
+        // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
+        // internally and must not be touched.
+        {
+          find: /^@astrojs\/starlight\/components$/,
+          replacement: resolve(__dirname, "node_modules/@astrojs/starlight/components.ts"),
+        },
+        // The shared docs locale table lives in the bot's source tree because the bot needs it at
+        // runtime, so it sits outside this project root and needs an explicit resolution for both
+        // `.astro` components and config modules.
+        {
+          find: /^@docs-locales$/,
+          replacement: resolve(__dirname, "../../src/constants/docsLocales.ts"),
+        },
+      ],
+    },
+  },
+  integrations: [
+    // Before starlight so it detects this one and skips adding its own. A `noindex` URL left in the
+    // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the route filter.
+    sitemap({
+      i18n: {
+        defaultLocale: DEFAULT_DOCS_LOCALE_ID,
+        locales: Object.fromEntries(sidebarLocales.map((locale) => [locale.id, sitemapLanguageTag(locale.lang)])),
+      },
+      filter: (page) => !isInternalOrFallbackPath(new URL(page).pathname),
+    }),
+    starlight({
+      title: "TomoriBot",
+      markdown: {
+        processedDirs: ["../../docs"],
+      },
+      // Every locale is registered here, including the default one, because Starlight derives both
+      // the route set and the hreflang locale list from this map. `routeData.ts` then removes the
+      // alternates for routes that serve another locale's content.
+      defaultLocale: DEFAULT_DOCS_LOCALE_ID,
+      locales: docsLocales,
+      // Fallback meta description for pages without one (see routeMiddleware
+      // below, which auto-derives per-page descriptions from page content).
+      description:
+        "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
+      plugins: [
+        starlightLlmsTxt({
+          // The agent-facing sets stay English: `starlight-llms-txt` selects the default locale's
+          // entries only, and `scripts/checkLlmsOutput.ts` fails the build if that ever changes.
+          details:
+            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/built-in-tools/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
+          exclude: [
+            ...nonDefaultLocalePatterns("/**"),
+            "en/wiki",
+            "en/wiki/**",
+            "en/architecture/**",
+            "en/contributing/**",
+            "en/self-hosting/**",
+            "en/meet-tomori/**",
+            "en/legal/**",
+          ],
+          excludeFull: ["en/wiki", "en/wiki/**", ...nonDefaultLocalePatterns("/wiki"), ...nonDefaultLocalePatterns("/wiki/**")],
+          promote: ["en/introduction/**", "en/features/**"],
+          demote: ["en/architecture/**", "en/contributing/**"],
+          customSets: [
+            {
+              label: "TomoriBot introduction and features",
+              description: "the emphasized, user-facing self-knowledge source for TomoriBot",
+              paths: ["en/introduction/**", "en/features/**"],
+            },
+            {
+              label: "Self-hosting and public reference",
+              description: "secondary deployment, project, and legal documentation",
+              paths: ["en/self-hosting/**", "en/meet-tomori/**", "en/legal/**"],
+            },
+            {
+              label: "Contributor and architecture documentation",
+              description: "developer implementation guides and code-level architecture references for TomoriBot",
+              paths: ["en/contributing/**", "en/architecture/**"],
+            },
+          ],
+        }),
+      ],
+      // SEO head tags: auto-derives per-page meta descriptions from each
+      // page's first paragraph and noindexes internal wiki/ pages.
+      routeMiddleware: "./src/routeData.ts",
+      // Served from apps/docs/public/favicon.ico at the site root as /favicon.ico.
+      favicon: "/favicon.ico",
+      head: [
+        {
+          // 1200×630 social banner (Open Graph standard size). Served from
+          // apps/docs/public/img/social-banner.png.
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://docs.tomoribot.app/img/social-banner.png" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:width", content: "1200" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: "630" },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "TomoriBot | Open-Source AI Agent & Roleplay Bot for Discord",
+          },
+        },
+        {
+          // Large-image card: the og:image is a proper 1200×630 banner now,
+          // so the stretched-square concern no longer applies.
+          tag: "meta",
+          attrs: { name: "twitter:card", content: "summary_large_image" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "icon", type: "image/x-icon", href: "/favicon.ico", sizes: "any" },
+        },
+        {
+          // Browsers that support SVG favicons (Chrome, Firefox) prefer this over the
+          // PNG/ICO fallbacks below, so it must come first in document order.
+          tag: "link",
+          attrs: { rel: "icon", type: "image/svg+xml", href: "/tomoricon.svg" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "icon", type: "image/png", href: "/tomoricon.png" },
+        },
+        {
+          // iOS ignores SVG apple-touch-icons, so this must stay a raster PNG.
+          tag: "link",
+          attrs: { rel: "apple-touch-icon", href: "/tomoricon.png" },
+        },
+      ],
+      customCss: ["/src/styles/custom.css"],
+      // SiteTitle override renders /tomoricon.svg directly as a plain <img> in the nav header.
+      // The standard `logo` config can't reference public/ files because it generates a Vite
+      // import that expects an Astro image object { src, width, height }, not a URL string.
+      components: {
+        SiteTitle: "./src/components/SiteTitle.astro",
+        // Prepends the "AI-generated" disclaimer note to every page.
+        // Opt out per-page with `aiGenerated: false` in frontmatter.
+        MarkdownContent: "./src/components/MarkdownContent.astro",
+        // Resolves prev/next pager labels to each target page's real title, so
+        // generic "Overview" sidebar labels don't leak into footer navigation.
+        Pagination: "./src/components/Pagination.astro",
+        // Appends a Ko-fi support link beside the GitHub icon in the header,
+        // since Ko-fi isn't part of Starlight's built-in social icon set.
+        SocialIcons: "./src/components/SocialIcons.astro",
+      },
+      // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
+      // Discord uses a built-in Starlight icon; Ko-fi is appended separately in the
+      // SocialIcons override since it isn't part of Starlight's fixed icon set.
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" },
+        { icon: "discord", label: "Discord", href: "https://discord.gg/bjCfHm9QsB" },
+      ],
+      sidebar,
+    }),
+  ],
+});

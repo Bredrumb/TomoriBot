@@ -1,0 +1,182 @@
+---
+title: "SillyTavern Card Support"
+aiGenerated: true
+---
+
+TomoriBot's `/persona import` command ingests and converts SillyTavern character cards into native
+persona records. It supports PNG images with embedded metadata, legacy V2 root JSON files,
+`chara_card_v3` JSON files, and Character Card V3 `.charx` archives.
+
+## Card export
+
+`/persona export` requires `output_format`: TomoriBot Card (PNG), Raw JSON,
+SillyTavern-compatible PNG, or TomoriBot Bundle (ZIP). The native PNG and JSON retain the complete preset payload.
+The ZIP adds portable media; its flow is documented under
+[persona presets](/architecture/subsystems/persona-presets/#cards-imports-and-vision-generation).
+The SillyTavern export uses Character Card V2 JSON encoded as UTF-8 base64 in a PNG `tEXt`
+chunk named `chara`, sharing the native export's avatar resolution and PNG chunk writer.
+
+`convertPresetDataToSillyTavernCard` in `PresetRepository.ts` joins attributes into `description`,
+maps the persona prompt to `system_prompt`, and formats sample dialogues as `mes_example` blocks.
+Unpaired examples omit the user turn. The export normalizes user and character placeholders to
+`{{user}}` and `{{char}}`. Greeting fields stay empty because TomoriBot stores no separate greeting.
+Persona lore becomes a `character_book`, retaining supported activation settings and disabled entries.
+Channel restrictions and TomoriBot-specific settings have no SillyTavern mapping and are omitted.
+
+## Container dispatch and archive safety
+
+Dispatch selects the extraction path by attachment file extension before parsing:
+
+| Extension | Extraction mechanism |
+|---|---|
+| `.png` | Extracts text chunks (`tEXt`, `zTXt`, `iTXt`) searching for `chara` or `char` keys. Decodes direct or base64-encoded JSON. |
+| `.json` | Parses JSON directly, accepting root-level V2 objects or nested `data` V3 objects. |
+| `.charx` | Unpacks zip archives using `src/utils/persona/charxArchive.ts` to retrieve `card.json`. |
+
+Unsupported extensions are rejected before reading file content.
+
+### Archive handling (`.charx`)
+
+A `.charx` archive contains a Character Card V3 object as `card.json` alongside an optional `assets/`
+directory. The reader in `charxArchive.ts` applies strict safety boundaries:
+
+- **Safe parsing:** Archives are opened with `JSZip.loadAsync`, returning structured failure
+  diagnostics without uncaught exceptions.
+- **Card resolution:** `card.json` resolves by exact root path first, falling back to a
+  case-insensitive basename search. This exact-match priority prevents a decoy `assets/card.json`
+  entry from overriding the canonical root specification.
+- **Decompression limits:** The uncompressed size declared in the zip central directory is validated
+  against the card-byte limit before decompression, then the decoded bytes are measured again.
+  The attachment download has a separate archive-byte limit.
+- **Format recognition:** The container accepts cards lacking a `spec` property or declaring any
+  `chara_card` specification, deferring schema validation to the conversion layer.
+- **Asset bounds:** After parsing the card, the reader bounds its declared asset list and sums the
+  central-directory sizes of referenced embedded assets. Asset contents are never decompressed.
+
+### Asset exclusions
+
+Only `card.json` is decompressed and converted. The `assets/` directory is excluded from import:
+
+1. **Payload diversity:** `.charx` assets can bundle arbitrary audio, video, 3D models, fonts, and
+   scripts.
+2. **Sprite mapping incompatibility:** TomoriBot sprites require an explicit `sprite_key` and
+   structured usage instructions. SillyTavern V3 emotion assets provide raw images without
+   contextual trigger metadata.
+
+When an imported archive carries bundled assets, the import succeeds for text data and surfaces a
+notice pointing the user to `/config` > `Persona` > `Identity & Personality` and `/config` > `Persona` > `Sprites` to configure visuals
+manually.
+
+## Field mapping and schema validation
+
+Conversion is performed by `convertSillyTavernJsonToPresetData` in
+`src/utils/db/repositories/PresetRepository.ts`.
+
+### Field transformations
+
+Card attributes map into TomoriBot's persona schema:
+
+| SillyTavern field | TomoriBot destination |
+|---|---|
+| `name` | `persona_nickname` (capitalizes initial letter) |
+| `description` | `attribute_list` (injected without prefix) |
+| `personality`, `scenario`, `system_prompt` | `attribute_list` (prefixed with section headers) |
+| `post_history_instructions`, depth prompts | `attribute_list` (prefixed with section headers) |
+| `character_book.entries` | Persona lorebook entries, including disabled entries |
+| `mes_example`, `first_mes`, `alternate_greetings` | `sample_dialogues_in` and `sample_dialogues_out` |
+| Character name derivations | `trigger_words` |
+
+Fields without operational equivalents in TomoriBot (`creator_notes`, `tags`, `spec_version`,
+`group_only_greetings`) are omitted during import.
+
+### Import safety schema
+
+Converted data validates against TomoriBot's preset Zod schema before database insertion:
+
+- Text fields are capped at 5,000 characters.
+- Persona prompts permit up to 16,003 characters, aligning with the four-part modal configuration
+  limit.
+- Lists are bounded to 200 attributes, 200 NovelAI diffusion tags, 100 sample dialogue pairs, and
+  100 trigger words.
+- The SillyTavern converter also uses current runtime limits to split attribute text and cap
+  sample dialogue lengths, pair counts, and trigger counts before Zod validation.
+
+### Character Books
+
+Character Book entries become the imported persona's lorebook. Their keys, optional selective
+secondary keys, constant flag, enabled flag, insertion order, and before/after position are retained.
+The supported extension fields are `selectiveLogic`, `probability`, `useProbability`, `scan_depth`,
+and numeric `position`. Entry scan depth overrides the book default. Explicit zero probability stays at 0%; missing or null
+probability defaults to 100%. Unsupported numeric ranges are
+clamped to the lorebook limits. Entries longer than 4,000 characters split into consecutive entries
+with shared activation settings, preserving Unicode characters. A book exceeding 250 stored entries
+after splitting keeps its first 250 entries in book order; the import notice reports how many were dropped.
+
+Regex keys remain inert and are counted in the import report. Keys declared with `use_regex` stay
+regex-shaped rather than becoming literal keyword matches. Evaluating untrusted regex requires a
+ReDoS-safe engine; real import reports of lost activations are the trigger for adding one. Empty,
+keyless non-constant entries are skipped and logged. Disabled entries remain editable data.
+
+A present `lorebook_entries` array replaces the persona's complete book, including hand-authored
+entries. An empty book clears it; cards without a Character Book preserve existing lore. Persona
+exports include lore inputs so JSON and PNG re-imports retain them. Persona generation from an
+uploaded card preserves its source book in the generated PNG and the `Import Now` payload.
+
+### World info files
+
+`+ Import Lorebook` in `/memories` > `Lorebooks` creates a Serverwide collection from a standalone
+SillyTavern world info file or a Character Book. `+ Import Entries` imports into a selected collection;
+Persona scope uses `+ Import Lorebook` for its single book. A file whose `entries` is an array is converted as a Character Book; a file
+whose `entries` is a keyed object is converted as a world info file. PNG and CHARX cards and card JSON
+import their embedded Character Book without importing the persona; cards without a book are reported
+separately. JSON is limited to 2 MB, while card carriers reuse the persona import and archive limits.
+
+`+ Export Lorebook` downloads the selected book as world info JSON with every supported entry field.
+Channel restrictions, pending channel names, and collection state do not travel in world info;
+All Personas memory backups retain them. Main Persona and Selected Persona memory exports omit lore.
+
+World info entries map their `key` and `keysecondary` arrays to primary and secondary keywords,
+`comment` to the title, `content` to the entry body, `disable` to the stored enabled flag, `order` to
+insertion order, and `position` to before or after the persona. `scanDepth`, `probability`,
+`useProbability`, and `selectiveLogic` map to the same activation fields as Character Book extensions.
+Content over 4,000 characters splits into numbered entries with shared settings.
+
+The supported ceiling is explicit: world info positions 2 through 7 become before persona, and
+groups, recursion flags, sticky timers, cooldowns, delays, and triggers have no destination. They are
+counted in the import report and dropped without reinterpretation. Regex keys stay inert.
+
+## Conversation and template adaptations
+
+### Unpaired sample dialogues
+
+SillyTavern cards frequently contain assistant-only dialogue examples without corresponding user
+turns. The importer marks unpaired examples with `UNPAIRED_SAMPLE_DIALOGUE_SENTINEL` from
+`src/types/preset/presetExport.ts`. `buildSampleDialogueContextItems()` in
+`src/utils/text/context/templates.ts` omits the user side of those pairs. Preset reassembly adds a separator when sample dialogues end the assembled prompt, keeping examples distinct from the active scene.
+
+### Template placeholders
+
+The template engine supports single-brace and double-brace macros during string substitution:
+
+- Single-brace: `{user}`, `{bot}`, `{char}`
+- Double-brace: `{{user}}`, `{{bot}}`, `{{char}}`
+
+### Avatar handling
+
+Imported JSON files and `.charx` archives lack native avatar image streams. When importing an alter
+persona without an avatar image, the system assigns the active main persona's avatar as the alter's
+`webhook_avatar_url` fallback. When updating a main persona without an avatar, the existing avatar is
+preserved.
+
+## Source pointers
+
+- `src/commands/persona/import.ts`: Command handler for file upload and import dispatch.
+- `src/utils/persona/charxArchive.ts`: `.charx` zip inspection, safety bounds, and `card.json`
+  extraction.
+- `src/utils/image/pngMetadata.ts`: PNG chunk parsing (`tEXt`, `zTXt`, `iTXt`).
+- `src/utils/db/repositories/PresetRepository.ts`: `convertSillyTavernJsonToPresetData` mapping and
+  transformation logic.
+- `src/modules/lorebooks/imports/`: Character Book conversion shared by card import, plus the world
+  info and upload carriers used by `/memories` > `Lorebooks`.
+- `src/utils/text/context/templates.ts`: `buildSampleDialogueContextItems` and unpaired dialogue handling.
+- `src/types/preset/presetExport.ts`: Preset schema interfaces and Zod validation.

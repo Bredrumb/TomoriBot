@@ -1,36 +1,61 @@
-// locales/ja/providers.ts
-
 export default {
   genai: {
+    tool_failure: {
+      endpoint_blocked: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
+      content_blocked: `プロバイダーのコンテンツフィルターにより、このツールリクエストが拒否されました。`,
+      authentication: `このツールリクエストで使用された認証情報がプロバイダーによって拒否されました。`,
+      quota: `クォータまたは請求の上限に達したため、プロバイダーがこのツールリクエストを拒否しました。`,
+      rate_limit: `リクエストが多すぎるため、プロバイダーがこのツールリクエストを拒否しました。`,
+      timeout: `プロバイダーがタイムアウトまでにこのツールリクエストを完了できませんでした。`,
+      provider_overloaded: `プロバイダーが一時的に利用できないか、過負荷になっています。`,
+      invalid_request: `プロバイダーがこのツールリクエストのパラメーターを受け入れられませんでした。`,
+      malformed_response: `プロバイダーがこのツールリクエストに対して無効または不完全な応答を返しました。`,
+      missing_voice: `選択された音声はプロバイダーで利用できなくなりました。`,
+      missing_sample: `このリクエストには音声サンプルが設定されていません。`,
+      sample_read_failed: `保存された音声サンプルを読み取れませんでした。`,
+      script_too_long: `音声スクリプトが選択された音声モデルの長さ制限を超えています。`,
+      cancelled: `このツールリクエストはキャンセルされました。`,
+      model_error: `プロバイダーがこのツールリクエストで選択されたモデルを拒否しました。`,
+      model_files_missing: `生成サーバーに、設定済みの次のモデルファイルがインストールされていません：{models}。`,
+      not_configured: `このツールに使用できるプロバイダーが設定されていません。`,
+      balance_exhausted: `このツールリクエストで使用されたプロバイダーアカウントのクレジットが不足しています。`,
+      credit_limit: `プロバイダーアカウントの残高では要求された出力長をカバーできません。`,
+      context_length: `このツールリクエストは選択されたモデルのコンテキスト制限を超えています。`,
+      provider_error: `プロバイダーがこのツールリクエストを完了できませんでした。`,
+    },
     generic_error_title: `生成エラー`,
-    generic_error_description: `申し訳ありません、応答を生成中にエラーが発生しました ({error_message})。`,
-    generic_error_footer: `\`/tool refresh\`を実行してからもう一度お試しください。問題が解決しない場合は、\`/support discord\`で報告してください。`,
     error_stream_timeout_title: `接続タイムアウト`,
-    error_stream_timeout_description: `この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、\`/tool refresh\`を使用してコンテキスト履歴をリフレッシュしてください。`,
+    error_stream_timeout_description: `この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、\`/refresh\`を使用してコンテキスト履歴をリフレッシュしてください。`,
     empty_response_title: `空の応答`,
-    empty_response_description: `AIから空の応答を受け取りました。この問題が解決しない場合は、\`/tool refresh\`を使用してください。`,
+    empty_response_description: `AIから空の応答を受け取りました。この問題が解決しない場合は、\`/refresh\`を使用してください。`,
     max_iterations_title: `思考ループ`,
-    max_iterations_streaming_description: `思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、\`/tool refresh\`を使用してください。`,
+    max_iterations_streaming_description: `思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、\`/refresh\`を使用してください。`,
     still_working_title: `まだ作業中...`,
-    still_working_description: `このタスクは通常より多くのステップが必要です。もし止まっていると思ったら、\`/bot kill\` を使用してください。`,
-    nai_tool_retry_exhausted_title: `ツールエラー`,
-    nai_tool_retry_exhausted_description: `ツールが複数回失敗し、リクエストを完了できませんでした。もう一度お試しいただくか、問題が解決しない場合は \`/tool refresh\` を使用してください。`,
+    still_working_description: `このタスクは通常より多くのステップが必要です。もし止まっていると思ったら、\`/kill\` を使用してください。`,
     tool_error_loop_title: `ツールエラーループ`,
-    tool_error_loop_description: `ツールエラーが続いたため、リクエストを完了できませんでした。言い回しを変えるか、問題が解決しない場合は \`/tool refresh\` を使用してください。`,
+    tool_error_loop_description: `ツールエラーが続いたため、リクエストを完了できませんでした。言い回しを変えるか、問題が解決しない場合は \`/refresh\` を使用してください。`,
     fallback_used_title: `フォールバックモデルを使用しました`,
-    fallback_used_description: `{chain} の代わりに \`{success_model}\` が使用されました`,
     fallback_used_details_description: `次のモデルが先に失敗したため、フォールバック枠 {slot} の \`{success_model}\` で応答しました:
 {failure_list}`,
-    fallback_used_failure_line: `{index}. {model} は {error_code} で失敗しました`,
-    fallback_used_details_button: `Fallback Used`,
-    fallback_used_hide_footer: `\`/config notice-embeds visibility\` でこれを非表示にし、詳細を思考ログへ回せます`,
+    fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
+    fallback_used_details_button: `フォールバック使用`,
+    fallback_used_personal_opt_out_footer: `\`/personal config\` > モデル > フォールバック で、サーバーモデルが個人のプロバイダーの失敗を補うのを止められます`,
+    markdown_table: {
+      show_button: `マークダウンを表示`,
+      source_expired_title: `テーブルソースの期限切れ`,
+      source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,
+      source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
+    },
     no_response_title: `応答なし`,
-    no_response_description: `応答がありませんでした - これはAIからの空の応答またはタイムアウトが原因である可能性があります。`,
+    log_channel_chat_notice_title: `ログチャンネルでは会話できません`,
+    log_channel_chat_notice_description: `このチャンネルはログチャンネルに設定されているため、ここでのメッセージには返信しません。ここで会話するには、\`/config\` > チャンネル > ログ で解除または変更してください。`,
     thought_log: {
       title: `思考ログ`,
       description: `元チャンネル: {source_line}`,
       personal_attribution: `{user_mention} さんの個人 {provider} 設定で生成されました。`,
       personal_attribution_title: `個人プロバイダー属性`,
+      randomizer_attribution: `モデルランダマイザー：{model}が応答しました。`,
+      randomizer_attribution_title: `モデルランダマイザーの帰属表示`,
       summary_field: `思考サマリー`,
       raw_field: `生の思考`,
       fetched_content_field: `取得コンテンツ`,
@@ -49,32 +74,101 @@ export default {
     text_serverwide_quota_exceeded_description: `このサーバーはこの期間のテキスト生成クォータに達しました。{reset_info}`,
     text_quota_resets_in_hours: `クォータは {hours} 時間後にリセットされます。`,
     text_quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
-    text_quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/server quota\` で設定しています。`,
+    text_quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/moderation\` で設定しています。`,
+    text_quota_unavailable_title: `テキストクォータを確認できません`,
+    text_quota_unavailable_description: `このサーバーのテキスト生成クォータを現在確認できませんでした。しばらくしてからもう一度お試しください。`,
     stream: {
       response_stopped_title: `応答が中断されました`,
-      response_stopped_description: `次の理由で応答が中断されました: {reason}。送信されたコンテンツがAIプロバイダーにとって大きすぎないか確認してください。\`/tool refresh\`で会話コンテンツをクリアしてください。`,
+      response_stopped_description: `次の理由で応答が中断されました: {reason}。送信されたコンテンツがAIプロバイダーにとって大きすぎないか確認してください。\`/refresh\`で会話コンテンツをクリアしてください。`,
       streaming_failed_description: `応答をストリーミング中に問題が発生しました。`,
+      error_footer_server_provider: `発生元: {provider} • このエラーはサーバーのAIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_dm_provider: `発生元: {provider} • このエラーはAIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_personal_provider: `発生元: {provider}（個人） • このエラーは個人AIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_tomoribot: `発生元: TomoriBot • これはTomoriBot内部のエラーであり、AIプロバイダーによるものではありません。`,
       provider_error_interaction: `ストリーム応答がブロック/停止されました。理由: {reason}。`,
       api_error_title: `🔴 プロバイダーAPIエラー`,
-      api_error_tip: `APIキーを確認して再度お試しください。このエラーが解決しない場合は、\`/support discord\`で報告してください。`,
+      privacy_error_title: `🔴 プロバイダーのプライバシー設定`,
+      model_error_title: `🔴 モデル設定エラー`,
+      model_error_description: `選択されたモデルがプロバイダーに拒否されました。設定されているモデル名を確認し、プロバイダーが対応しているモデルIDに変更してください。`,
       rate_limit_title: `🟡 プロバイダーレート制限を超過`,
       rate_limit_title_all_rotation_keys: `🟡 全ローテーションキーがレート制限中`,
-      rate_limit_tip: `数分お待ちいただいてから再度お試しください。複数の個人キーをお持ちなら、\`/config api-key rotation\` の利用も検討してください。`,
-      model_fallback_hint: `耐障害性を高めるには、\`/model fallback\` でモデルのフェイルオーバーを設定できます。`,
       content_blocked_title: `🔴️ プロバイダーコンテンツフィルター`,
-      content_blocked_tip: `ヒント: \`/nsfw jailbreaks\` でこのエラーの回避を試すか、メッセージ(\`/tool refresh\`)、記憶/設定(\`/memory personal export\`、\`/memory server export\`、\`/server config export\`)、問題のあるメンバーをブラックリスト(\`/server user-blacklist add\`)、またはプロバイダを変更(\`/model\`)を確認してください。`,
       timeout_title: `🟡️ プロバイダーリクエストタイムアウト`,
-      timeout_tip: `メッセージを短くするか再度お試しください`,
       provider_overloaded_title: `🔴 プロバイダーの過負荷`,
-      provider_overloaded_tip: `プロバイダーが現在過負荷状態です。しばらく後に再度お試しいただくか、別のプロバイダーに変更してください`,
+      provider_overloaded_description: `プロバイダーが現在過負荷状態、または一時的に利用できません`,
+      connection_refused_description: `プロバイダーへの接続が拒否されました。エンドポイントが起動しており、アドレスが正しいことを確認してください。`,
+      context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
+      credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
+      balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
+      endpoint_blocked_title: `許可されていないエンドポイント`,
       flush_limit_title: `🟡️ 応答の長さ制限に達しました`,
-      flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/bot respond\` を使用して手動で応答を続けることができます。`,
+      flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/respond\` を使用して手動で応答を続けることができます。`,
       inactivity_timeout_title: `🟡️ 応答がタイムアウトしました`,
       inactivity_timeout_description: `AIプロバイダーからの応答が停止し、接続がタイムアウトしました。プロバイダーが過負荷状態にあるか、問題が発生している可能性があります。もう一度お試しください。`,
+      first_token_timeout_description: `AIプロバイダーはリクエストを受け付けましたが、応答を開始しなかったため、接続がタイムアウトしました。プロバイダー側のキューが混み合っている可能性があります。もう一度お試しいただくか、より空いているモデルに切り替えてください。`,
+    },
+    error_detail: {
+      button: `エラー全文を表示`,
+      title: `プロバイダーエラー全文`,
+      manage_server_only: `\`サーバー管理\`権限を持つメンバーだけがエラー全文を確認できます。`,
+      personal_only: `このエラーは個人プロバイダーから発生したため、所有者だけがエラー全文を確認できます。`,
+    },
+    // createTipText() が読み取り専用モーダル内にダッシュ付き箇条書きとして表示する、
+    // 個別のヒント項目文字列。各キーが1つの箇条書きで、呼び出し側が条件付き項目も含めて
+    // 組み合わせます。テキスト表示ではマークダウンとハイパーリンクが表示されます。
+    tips: {
+      title: `💡 できること`,
+      button: `できること`,
+      revise_tool_request: `ツールの入力を確認し、修正したリクエストでもう一度お試しください。`,
+      check_tool_configuration: `このツールに選択されているモデルと設定を確認してください。`,
+      check_provider_quota: `再試行する前に、プロバイダーのクォータと請求状況を確認してください。`,
+      wait_and_retry: `数分お待ちいただいてから、もう一度お試しください。`,
+      api_key_rotation: `このサーバーで複数のキーをお持ちの場合は、\`/providers\` を設定してキーを順番に使用できます。`,
+      model_fallback: `耐障害性を高めるには、\`/config\` > モデル > フォールバックとランダマイザー でバックアップモデルを追加してください。`,
+      model_fallback_personal: `耐障害性を高めるには、\`/personal config\` でバックアップモデルを追加してください。`,
+      openrouter_free_models: `[OpenRouterの無料モデル一覧](https://openrouter.ai/models?max_price=0&output_modalities=text)から \`/providers\` で無料モデルを追加できます。`,
+      openrouter_free_models_personal: `[OpenRouterの無料モデル一覧](https://openrouter.ai/models?max_price=0&output_modalities=text)から \`/personal providers\` で無料モデルを追加できます。`,
+      openrouter_models: `[OpenRouterのモデル一覧](https://openrouter.ai/models)を確認し、\`/providers\` でモデルを切り替えてください。`,
+      openrouter_models_personal: `[OpenRouterのモデル一覧](https://openrouter.ai/models)を確認し、\`/personal providers\` でモデルを登録してから、\`/personal config\` で切り替えてください。`,
+      choose_supported_model: `サポートされているモデルIDを \`/config\` > モデル > モデルの切り替え またはカスタムエンドポイント設定で選択してください。`,
+      choose_supported_model_personal: `サポートされているモデルIDを \`/personal config\` またはカスタムエンドポイント設定で選択してください。`,
+      verify_api_key: `このサーバーのAPIキーをもう一度確認してから、再試行してください。`,
+      verify_api_key_personal: `\`/personal providers\` で個人APIキーをもう一度確認してから、再試行してください。`,
+      endpoint_not_allowed: `\`/providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
+      endpoint_not_allowed_personal: `\`/personal providers\` で公開HTTPSエンドポイントに切り替えるか、ローカルサーバーを許可できるかをこのホストの管理者に確認してください。`,
+      verify_api_key_expiry: `NVIDIA NIMのキーには有効期限があり、期限切れのキーは入力ミスのキーと同じエラーでNVIDIAに拒否されます。[build.nvidia.com](https://build.nvidia.com) で有効期限を確認し、期限が切れていれば新しいキーを生成してください。`,
+      nvidia_register_free_model: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
+      nvidia_register_free_model_personal: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/personal providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
+      google_free_tier_daily: `このAPIキーは本日のGeminiの無料リクエスト枠を使い切りました。太平洋時間の午前0時にリセットされます。`,
+      google_free_tier_minute: `このAPIキーはGeminiの無料プランで許可されている頻度を超えてリクエストを送信しています。1分待ってからもう一度お試しください。`,
+      google_credential_type: `OAuthトークンまたはサービスアカウントの認証情報が使われているようです。\`google\` プロバイダーには [Google AI Studio](https://aistudio.google.com/apikey) の通常のAPIキーが必要です。Google Cloudの認証情報を使う場合は \`vertex\` プロバイダーを選んでください。`,
+      openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
+      openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,
+      reduce_output_tokens: `\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
+      reduce_output_tokens_personal: `\`/personal config\`（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
+      openrouter_add_credits: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さを下げてください。`,
+      openrouter_add_credits_personal: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/personal config\`（出力トークン）で応答の長さを下げてください。`,
+      top_up_provider_balance: `APIキー自体は有効ですが、そのアカウントの残高が不足しています。プロバイダーのサイトで残高を追加してから、もう一度お試しください。メッセージを短くしたり応答の長さを下げたりしても解決しません。`,
+      deepseek_top_up: `[DeepSeekのチャージページ](https://platform.deepseek.com/top_up)で残高を追加してください。`,
+      adjust_parameters: `\`/config\` > モデル > テキストサンプラーとパラメーター を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
+      adjust_parameters_personal: `\`/personal config\` を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
+      switch_model_provider: `\`/config\` > モデル > モデルの切り替え または \`/providers\` で別のモデルやプロバイダーに切り替えてください。`,
+      switch_model_provider_personal: `\`/personal config\` で切り替えるか、\`/personal providers\` で **テキスト** をオフにするとこのサーバーのモデルを使用します。`,
+      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal providers\` で **テキスト** を無効にしてください。`,
+      support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
+      shorten_message: `メッセージを短くしてから、もう一度送信してください。`,
+      refresh_context: `\`/refresh\` で会話コンテキストをクリアしてください。`,
+      provider_overloaded_wait: `プロバイダーが現在高負荷状態です。しばらくしてから再試行するか、別のプロバイダーに切り替えてください。`,
+      nsfw_jailbreaks: `\`/nsfw jailbreaks\` を有効にすると、このフィルターを回避しやすくなります。`,
+      review_messages: `最近のメッセージを確認するか、\`/refresh\` でクリアしてください。`,
+      review_memories: `メモリーと設定を確認してください（\`/export personal memories\`、\`/export memories\`、\`/export config\`）。`,
+      blacklist_member: `問題のあるメンバーは \`/moderation\` でブラックリストに追加できます。`,
+      use_personal_providers: `[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)を \`/personal providers\` で設定すると、このサーバーのクォータを消費せずにリクエストできます。`,
     },
     google: {
       "400_default_message": `リクエスト形式にエラーがありました`,
       "400_billing_default_message": `このサービスには課金が必要です`,
+      "401_default_message": `Googleの認証情報が拒否されました。Google AI StudioのAPIキーを使用しているか確認してください`,
       "403_default_message": `APIキーに必要な権限がありません。Google AI Studioから合法的に取得した自分自身のAPIキーを使用していることを確認してください`,
       "404_default_message": `参照されたリソースが見つかりませんでした`,
       "429_default_message": `短時間に多くのリクエストを送信しすぎました`,
@@ -83,11 +177,29 @@ export default {
       content_blocked_default_message: `あなたのコンテンツは安全フィルターによってブロックされました`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
+    vertex: {
+      config_error_message: `Vertex AI がこのプロバイダーの設定を読み取れませんでした。\`/providers\` でキーを \`project-id::location\` の形式で入力してください。`,
+      auth_error_message: `Vertex AI の認証に失敗しました。TomoriBot のホスト管理者が Google Cloud の Application Default Credentials（\`gcloud auth application-default login\` または \`GOOGLE_APPLICATION_CREDENTIALS\`）を設定する必要があります。`,
+    },
     vertexexpress: {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
     },
     novelai: {
-      "400_default_message": `無効なリクエスト形式またはパラメータ`,
+      tokenizer_setup:
+        "NovelAIのトークナイザーが見つからないか無効です。ボットのホストに `bun run setup:tokenizers` を実行してTomoriBotを再起動するよう依頼してください。",
+      input_complexity:
+        "このプロンプトにはテキストが多すぎるか、異常に長い単語が含まれています。短くしてもう一度お試しください。",
+      context_overflow:
+        "ペルソナ、最小限の例、直近の会話がこのモデルのコンテキストウィンドウを超えています。これらを短くするか、より大きなウィンドウを持つモデルを選択してください。",
+      subscription_unavailable:
+        "NovelAIのサブスクリプション情報を読み込めませんでした。しばらくしてからもう一度お試しください。",
+      subscription_inactive: "このNovelAIキーには有効なサブスクリプションがありません。",
+      model_tier: "このNovelAIサブスクリプションには、選択されたテキストモデルが含まれていません。",
+      xialong_opus:
+        "Xialongには有効なNovelAI Opusサブスクリプションが必要です。Opusキーを使用するか、別のテキストモデルを選択してください。",
+      continuation_exhausted:
+        "出力バジェット内で完全な返答を生成する前にNovelAIが終了しました。もう一度お試しいただくか、設定された出力長を増やしてください。",
+      "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,
       "400_trial_message": `トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください`,
       "401_default_message": `NovelAIのAPIキーが無効または期限切れです`,
       "402_default_message": `Anlasクレジットが不足しています`,
@@ -98,18 +210,14 @@ export default {
     },
     openrouter: {
       "404_privacy_policy_error": `**プライバシーポリシー制限**
-選択したモデルは有料モデルトレーニングのためのデータ使用を許可する必要がありますが、OpenRouterアカウントのプライバシー設定で現在ブロックされています。
-
-**修正方法：**
-1. https://openrouter.ai/settings/privacy にアクセス
-2. 「Data Policy」設定を調整してこのモデルを許可
-3. またはプライバシー設定に一致する別のモデルを選択`,
+選択されたモデルは有償モデルのトレーニングにデータを提供することを許可する必要がありますが、現在のOpenRouterアカウントのプライバシー設定によりブロックされています。`,
       "400_default_message": `OpenRouterへの無効なリクエストです`,
       "401_default_message": `OpenRouterのAPIキーが無効または期限切れです`,
       "402_default_message": `OpenRouterアカウントのクレジットが不足しています`,
       "403_default_message": `アクセスが拒否されました。OpenRouterアカウントの設定を確認してください`,
       "408_default_message": `OpenRouterリクエストがタイムアウトしました`,
       "429_default_message": `OpenRouterのレート制限を超えました。しばらく待ってから再試行してください`,
+      "429_free_models_message": `無料モデルのOpenRouterレート制限を超えました。`,
       "500_default_message": `OpenRouterで内部サーバーエラーが発生しました`,
       "502_default_message": `上流のAIプロバイダーが一時的に利用できません`,
       "503_default_message": `上流のAIモデルが現在過負荷状態です`,
@@ -117,42 +225,87 @@ export default {
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     anthropic: {
-      "400_default_message": `Anthropic APIへのリクエストが無効です。別のモデルを試すか、コンテキスト長を減らしてください。`,
+      "400_default_message": `Anthropic APIへの無効なリクエストです。`,
       "401_default_message": `Anthropic APIキーが無効です。console.anthropic.comでキーを確認してください。`,
-      "403_default_message": `Anthropic APIキーにこの操作の権限がありません。`,
-      "404_default_message": `リクエストされたAnthropicモデルが見つかりません。\`/model text\`でモデルを切り替えてください。`,
-      "429_default_message": `Anthropicのレート制限に達しました。しばらく待ってから再試行してください。`,
+      "403_default_message": `Anthropic APIキーにはこの操作に対する権限がありません。`,
+      "404_default_message": `要求されたAnthropicモデルが見つかりませんでした。`,
+      "429_default_message": `Anthropicのレート制限を超えました。しばらく待ってから再試行してください。`,
       "500_default_message": `Anthropicで内部サーバーエラーが発生しました。`,
       "503_default_message": `Anthropicは現在利用できないか、過負荷状態です。`,
-      temperature_top_p_conflict_message: `Anthropic は Temperature と Top-P を同時に受け付けません。\`/config parameters\` を使って、そのプロバイダーの **Temperature** か **Top P** のどちらかを調整してください。`,
+      temperature_top_p_conflict_message: `TemperatureとTop-Pの両方が送信されたため、Anthropicはこのリクエストを拒否しました。`,
       unknown_default_message: `Anthropicとの通信中に予期しないエラーが発生しました。`,
     },
+    custom: {
+      "402_default_message": `このエンドポイントのアカウント残高が不足しています`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `このホストは、このエンドポイントのアドレスへのリクエストを許可していません。`,
+      REDIRECT_CREDENTIALS_WITHHELD_default_message: `このエンドポイントは別のアドレスにリダイレクトされたため、TomoriBotはAPIキーを送信しませんでした。\`/providers\` でこのエンドポイントを管理している人は、URLをサーバーのリダイレクト先の最終アドレスに変更することで修正できます。`,
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
+    deepseek: {
+      "402_default_message": `DeepSeekアカウントの残高が不足しています`,
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
+    zai: {
+      // Z.aiは課金拒否を429で返すため、レート制限と混同されないようフォーマッタが再分類します。
+      "429_balance_default_message": `Z.aiアカウントの残高が不足しています`,
+      "429_plan_access_default_message": `Z.aiのサブスクリプションプランではこのモデルを利用できません`,
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
     nvidia: {
-      "404_default_message": `リクエストされた NVIDIA NIM モデルが見つかりません。NVIDIAによって非推奨にされた可能性があります。\`/model text\` で別のモデルに切り替えてください。`,
+      "401_default_message": `NVIDIAはこのキーを認識できませんでした。\`nvapi-\` プレフィックスを含め、全体が正しくコピーされているか確認してください。`,
+      "403_default_message": `NVIDIAがこのキーを拒否しました。入力ミス、期限切れ、またはアカウントに推論のアクセス権がない可能性があります。`,
+      "404_default_message": `要求されたNVIDIA NIMモデルが見つかりませんでした。NVIDIAによって非推奨にされた可能性があります。`,
+      "500_default_message": `このモデルを提供している NVIDIA のバックエンドで障害が発生しました。多くの場合は一時的なものなので、少し待ってからもう一度お試しください。失敗が続く場合は、TomoriBot のホスト管理者がボットのログで NVIDIA の完全な報告を確認できます。`,
+      // NVIDIA 自身のテキストが除去可能なリクエストパラメータを名指しした場合のみ、500_default_message の代わりに表示されます。
+      // すべての 500 でこの原因を断定していたため、実際には送信していない設定をユーザーに変更させていました。
+      "500_parameter_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。\`/config\` > モデル > テキストサンプラーとパラメーター で、\`min_p\` などの未対応サンプラーを \`0\` に設定し、保存済みの \`logit_bias\` エントリを削除してください。`,
+      unknown_default_message: `予期しないエラーが発生しました`,
     },
     self_teach: {
+      memory_forgotten_description: `空きを作るため、休眠中の記憶を忘れました:
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `保存:
+{memory_content}
+
+忘却:
+{forgotten_content}`,
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,
-      server_memory_learned_description: `サーバー記憶を保存しました:
-\`{memory_content}\``,
+      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を保存しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_updated_title: `📝 {persona_nickname}が記憶を更新しました！`,
-      server_memory_updated_description: `サーバー記憶を更新しました:
-\`{memory_content}\``,
+      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を更新しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname}が記憶を削除しました！`,
-      server_memory_deleted_description: `サーバー記憶を削除しました:
-\`{memory_content}\``,
+      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を削除しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname}が{user_nickname}さんについて新しいことを学びました！`,
-      personal_memory_learned_description: `{user_nickname}さんに関する個人的な記憶を保存しました:
-\`{memory_content}\``,
+      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を保存しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname}が{user_nickname}さんについての記憶を更新しました！`,
-      personal_memory_updated_description: `{user_nickname}さんに関する個人的な記憶を更新しました:
-\`{memory_content}\``,
+      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を更新しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname}が{user_nickname}さんについての記憶を削除しました！`,
-      personal_memory_deleted_description: `{user_nickname}さんに関する個人的な記憶を削除しました:
-\`{memory_content}\``,
-      server_memory_footer: `サーバー管理者は\`/memory server\`でこの記憶を管理できます。`,
-      personal_memory_footer_manage: `個人記憶は\`/memory personal\`で管理できます。`,
-      personal_memory_footer_personalization_disabled: `この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。全文は\`/memory personal export\`で確認できます。\`/personal privacy\`でオプトアウトできます。`,
-      personal_memory_footer_user_blacklisted: `この記憶は保存されましたが、対象のユーザーは現在このサーバーのパーソナライズ機能のブラックリストに登録されているため、すぐには効果がありません。全文は\`/memory personal export\`で確認できます。\`/personal privacy\`でオプトアウトできます。`,
+      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/long-term-memory/)**を削除しました:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_footer: `サーバー管理者は\`/memories\`でこの記憶を管理できます。`,
+      personal_memory_footer_manage: `個人記憶は\`/personal memories\`で管理できます。`,
+      personal_memory_footer_personalization_disabled: `この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。全文は\`/export personal memories\`で確認できます。\`/personal config\`でオプトアウトできます。`,
+      personal_memory_footer_user_blacklisted:
+        "この記憶は保存されましたが、対象のユーザーはこのサーバーでブラックリストに登録されているため、ここでは無視され、効果はありません。全文は`/export personal memories`で確認できます。`/personal config`でオプトアウトできます。",
       expand_memory_button: `全文を表示`,
       expand_memory_title: `記憶の全文`,
     },

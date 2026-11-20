@@ -4,169 +4,73 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext } from "../../types/db/schema";
-import { invalidateUserCache } from "../../utils/cache/userCache";
-import { userRepository } from "@/utils/db/repositories";
+import type { UserRow } from "@/types/db/schema";
+import { personalConfigOperations } from "@/utils/discord/interactions/personalConfigOperations";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { ColorCode } from "@/utils/misc/logger";
+import { getLocaleEndonym, getSupportedLocales, localizer } from "@/utils/text/localizer";
 
-// Define constants at the top (Rule #20)
-const SUPPORTED_LANGUAGES = ["en-US", "ja"] as const;
-const DEFAULT_LANGUAGE = "en-US";
-
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("language")
     .setDescription(localizer("en-US", "commands.personal.language.description"))
     .addStringOption((option) =>
       option
-        .setName("value")
-        .setDescription(localizer("en-US", "commands.personal.language.value_description"))
+        .setName("language")
+        .setDescription(localizer("en-US", "commands.personal.language.language_description"))
         .setRequired(true)
-        .addChoices(
-          {
-            name: localizer("en-US", "commands.personal.language.choice_english"),
-            value: "en-US",
-          },
-          {
-            name: localizer("en-US", "commands.personal.language.choice_japanese"),
-            value: "ja",
-          },
-        ),
+        .addChoices(...getSupportedLocales().map((code) => ({ name: getLocaleEndonym(code), value: code }))),
     );
 
-/**
- * Configures the user's preferred interface language for TomoriBot.
- * This affects how the bot's messages and interfaces appear to the individual user.
- * Supported languages: English (en-US) and Japanese (ja)
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
-  if (!interaction.channel) {
-    await replyInfoEmbed(interaction, userData.language_pref, {
-      titleKey: "general.errors.channel_only_title",
-      descriptionKey: "general.errors.channel_only_description",
+  const userId = userData.user_id;
+  if (userId === undefined) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
       color: ColorCode.ERROR,
     });
     return;
   }
 
-  // 1.5. Defer the interaction before async work to prevent timeout
+  const language = interaction.options.getString("language", true);
+  if (!getSupportedLocales().includes(language)) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.invalid_option_title",
+      descriptionKey: "general.errors.invalid_option_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  try {
-    // 2. Get the language value from options
-    const languageValue = interaction.options.getString("value", true);
+  const result = await personalConfigOperations.setLanguage({
+    userId,
+    userDiscId: userData.user_disc_id,
+    language,
+  });
 
-    // 3. Additional validation (Discord already handles choices, but just in case)
-    if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(languageValue)) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.personal.language.invalid_value_title",
-        descriptionKey: "commands.personal.language.invalid_value_description",
-        descriptionVars: {
-          supported: SUPPORTED_LANGUAGES.join(", "),
-        },
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // 4. Check if this is the same as the current language preference - let helper functions manage interaction state
-    const currentLanguage = userData.language_pref ?? DEFAULT_LANGUAGE;
-    if (languageValue === currentLanguage) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.personal.language.already_set_title",
-        descriptionKey: "commands.personal.language.already_set_description",
-        descriptionVars: {
-          value: getLanguageLabel(locale, languageValue),
-        },
-        color: ColorCode.WARN,
-      });
-      return;
-    }
-
-    // 6. Update the user's language preference in the database
-    // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
-    const ok = await userRepository.setLanguage(userData.user_id!, languageValue);
-
-    if (!ok) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // 7. Invalidate user cache so next message gets fresh data
-    invalidateUserCache(userData.user_disc_id);
-
-    // 8. Success message with explanation of the language change
-    await replyInfoEmbed(interaction, languageValue, {
-      titleKey: "commands.personal.language.success_title",
-      descriptionKey: "commands.personal.language.success_description",
-      descriptionVars: {
-        value: getLanguageLabel(languageValue, languageValue),
-        previous_value: getLanguageLabel(languageValue, currentLanguage),
-      },
-      color: ColorCode.SUCCESS,
+  if (result.status !== "success") {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
     });
-  } catch (error) {
-    // 9. Log error with context
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      errorType: "CommandExecutionError",
-      metadata: {
-        command: "config language",
-        guildId: interaction.guild?.id ?? interaction.user.id,
-        executorDiscordId: interaction.user.id,
-        valueAttempted: interaction.options.getString("value"), // Log attempted value
-      },
-    };
-    await log.error(`Error executing /config language for user ${userData.user_disc_id}`, error as Error, context);
-
-    // 10. Inform user of unknown error
-    // Check if the interaction has already been replied to or deferred
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    return;
   }
-}
 
-/**
- * Helper function to get a user-friendly label for language values
- * @param locale - The user's locale for localization
- * @param value - Language preference value
- * @returns Localized language label
- */
-function getLanguageLabel(locale: string, value: string): string {
-  switch (value) {
-    case "en-US":
-      return localizer(locale, "commands.personal.language.choice_english");
-    case "ja":
-      return localizer(locale, "commands.personal.language.choice_japanese");
-    default:
-      // Default to English if value is somehow unexpected, though validation should prevent this
-      log.warn(`Unexpected language value encountered in getLanguageLabel: ${value}`);
-      return localizer(locale, "commands.personal.language.choice_english");
-  }
+  // A confirmation in the old language reads as a failed change, so the receipt uses the language
+  // just written.
+  await replyInfoEmbed(interaction, language, {
+    titleKey: "commands.personal.config.language_updated_heading",
+    descriptionKey: "commands.personal.config.language_updated_detail",
+    descriptionVars: { language: getLocaleEndonym(language) },
+    color: ColorCode.SUCCESS,
+  });
 }

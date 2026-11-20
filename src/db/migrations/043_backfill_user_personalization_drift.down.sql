@@ -1,0 +1,4 @@
+-- 043_backfill_user_personalization_drift.down.sql
+--
+-- Data repair migration. No rollback is possible without reintroducing the
+-- stale split-table values this migration intentionally overwrites.

@@ -1,5 +1,5 @@
 import { personaSpriteMessageSchema, type PersonaSpriteMessageRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
 export type PersonaSpriteMessageRecordInput = {
@@ -13,11 +13,11 @@ export type PersonaSpriteMessageRecordInput = {
  * Persists the message → sprite-label mapping for webhook-delivered sprite messages.
  *
  * Rows are immutable (a sent message's sprite never changes), so writes never
- * require cache invalidation — callers seed the read cache directly instead.
+ * require cache invalidation, so callers seed the read cache directly instead.
  * Missing rows degrade gracefully: context rebuilding falls back to the plain
  * persona name, never an error.
  */
-export class PersonaSpriteMessageRepository {
+class PersonaSpriteMessageRepository {
   /**
    * Records that a webhook message was delivered with a sprite label.
    *
@@ -32,6 +32,13 @@ export class PersonaSpriteMessageRepository {
       `;
       return true;
     } catch (error) {
+      if (typeof error === "object" && error !== null && "errno" in error && error.errno === "23503") {
+        log.metric("persona_sprite_message_skipped", { reason: "persona_deleted" });
+        log.warn("Skipped sprite message mapping for a deleted persona", error, {
+          personaId: input.personaId,
+        });
+        return false;
+      }
       log.error(`Error recording persona sprite message ${input.messageDiscId} for persona ${input.personaId}:`, error);
       return false;
     }
@@ -42,7 +49,7 @@ export class PersonaSpriteMessageRepository {
    * Single round trip via `message_disc_id = ANY(...)` so context builds can
    * resolve an entire history window in one query.
    *
-   * @returns null on query failure — callers must NOT cache misses in that case,
+   * @returns null on query failure, so callers must NOT cache misses in that case,
    *   or a transient DB error would negative-cache real sprite messages
    */
   async getByMessageIds(messageDiscIds: string[]): Promise<Map<string, PersonaSpriteMessageRow> | null> {
@@ -52,11 +59,14 @@ export class PersonaSpriteMessageRepository {
     }
 
     try {
-      const rows = await sql<PersonaSpriteMessageRow[]>`
+      const rows = await withTransientDbRetry(
+        () => sql<PersonaSpriteMessageRow[]>`
         SELECT message_disc_id, persona_id, sprite_name, channel_disc_id, created_at
         FROM persona_sprite_messages
         WHERE message_disc_id = ANY(${sql.array(messageDiscIds, "TEXT")})
-      `;
+        `,
+        "load persona sprite messages",
+      );
 
       for (const row of rows) {
         const parsed = personaSpriteMessageSchema.safeParse(row);

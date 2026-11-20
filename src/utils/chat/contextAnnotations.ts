@@ -1,4 +1,7 @@
+import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
+import { getCachedImpersonatedUserIdForWebhook, verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Embed, Message, MessageReaction } from "discord.js";
+import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ForcedMention } from "@/types/discord/mentions";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -6,36 +9,28 @@ import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCa
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import type { MessageProxyHistoryIdentity } from "@/utils/messageProxy/historyAttribution";
+import { extractMessageProxyReplyTargetFromEmbed } from "@/utils/messageProxy/registry";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { log } from "@/utils/misc/logger";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { formatTimestampInline } from "@/utils/text/contextBuilder";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { matchesProtocolTemplateKey, classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
+import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const REACTION_CONTEXT_ENABLED = parseBooleanEnvFlag(process.env.REACTION_CONTEXT_ENABLED, true);
-const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_API_CALLS_PER_TURN,
-  20,
-  0,
-);
-const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE,
-  4,
-  1,
-);
-const REACTION_CONTEXT_MAX_USERS_PER_REACTION = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_USERS_PER_REACTION,
-  5,
-  0,
-);
+const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = 20;
+const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = 4;
+const REACTION_CONTEXT_MAX_USERS_PER_REACTION = 5;
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",
   "video/mov",
+  "video/quicktime",
   "video/avi",
   "video/x-flv",
   "video/mpg",
@@ -44,24 +39,11 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/3gpp",
 ];
 const DISCORD_MESSAGE_LINK_PATTERN = /discord(?:app)?\.com\/channels\/(?:@me|\d+)\/(\d+)\/(\d+)/;
-const REPLY_CONTEXT_URL_SENTINEL = "https://discord.com/channels/0/0";
-const REPLY_CONTEXT_USER_SENTINEL = "__tomori_user__";
 
-export type ReactionContextBudgetState = {
-  callsUsed: number;
-  budgetExhaustedLogged: boolean;
-  messagesWithReactions: number;
-  fallbackCount: number;
+type ReactionUserLabelOptions = {
+  clientUserId?: string;
+  mainPersonaNickname?: string | null;
 };
-
-export function createReactionContextBudgetState(): ReactionContextBudgetState {
-  return {
-    callsUsed: 0,
-    budgetExhaustedLogged: false,
-    messagesWithReactions: 0,
-    fallbackCount: 0,
-  };
-}
 
 export function mergeForcedMentions(...mentionLists: Array<ForcedMention[] | undefined>): ForcedMention[] {
   const seen = new Set<string>();
@@ -98,9 +80,13 @@ export function stripAtPersonaTriggers(content: string, allPersonas: TomoriState
 export function buildRevealedMessageMetadataTailDirective(): string {
   return (
     "Recent message metadata has been revealed in the visible conversation turns. " +
-    "Each annotated message now includes a `ref_N` handle and sent timestamp. " +
+    "Each annotated message now includes a `ref_N` handle, sent timestamp, and who reacted to it when it has reactions. " +
+    // The system prompt still documents `reveal_message_metadata` (macros expand
+    // once at context-build time, before the reveal), so without this line the
+    // model re-requests a reveal it has already been given.
+    "That reveal is already complete, so do not call `reveal_message_metadata` again for the rest of this turn: use the `ref_N` handles shown above. " +
     "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
-    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it."
+    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
   );
 }
 
@@ -122,12 +108,18 @@ export function buildTailDirectiveMessage(directive: string | null | undefined):
   return buildCombinedTailDirectiveMessage([directive]);
 }
 
-export function buildSpeakerGuardRetryDirective(activePersonaName?: string | null): StructuredContextItem | null {
+export function buildSpeakerGuardRetryDirective(
+  activePersonaName?: string | null,
+  allowSpriteLabel = false,
+): StructuredContextItem | null {
   const normalizedPersonaName = compactWhitespace(activePersonaName ?? "") || process.env.DEFAULT_BOTNAME || "Tomori";
   const sanitizedPersonaName = normalizedPersonaName.replaceAll('"', "'");
 
+  const opening = allowSpriteLabel
+    ? `Start with "${sanitizedPersonaName}:", or with "${sanitizedPersonaName} ({sprite label}):" if you are using a listed sprite.`
+    : `Start exactly with "${sanitizedPersonaName}:".`;
   return buildTailDirectiveMessage(
-    `Your previous attempt started as the wrong speaker and was discarded. Reply only as ${sanitizedPersonaName}. Start exactly with "${sanitizedPersonaName}:". Do not start with any other speaker name or write dialogue for anyone else.`,
+    `Your previous attempt started as the wrong speaker and was discarded. Reply only as ${sanitizedPersonaName}. ${opening} Do not start with any other speaker name or write dialogue for anyone else.`,
   );
 }
 
@@ -173,28 +165,11 @@ export function appendInjectedContextItems(
   return [...contextItems, ...injectedContextItems];
 }
 
-export function insertBeforeLatestDialoguePair(
-  contextSegments: StructuredContextItem[],
-  injectedItem: StructuredContextItem,
-): void {
-  const dialogueIndexes: number[] = [];
-
-  for (let index = contextSegments.length - 1; index >= 0; index--) {
-    const item = contextSegments[index];
-    if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && (item.role === "user" || item.role === "model")) {
-      dialogueIndexes.push(index);
-      if (dialogueIndexes.length === 2) break;
-    }
-  }
-
-  if (dialogueIndexes.length === 0) {
-    contextSegments.push(injectedItem);
-    return;
-  }
-
-  const insertAt = dialogueIndexes.length >= 2 ? dialogueIndexes[1] : dialogueIndexes[0];
-  contextSegments.splice(insertAt, 0, injectedItem);
-}
+export {
+  insertBeforeLatestDialoguePair,
+  insertAtDialogueDepth,
+  speakerTurnStartIndexes,
+} from "@/utils/text/context/promptLayout";
 
 export function findReplyContextTargetInMessage(
   message: Pick<Message, "embeds">,
@@ -209,29 +184,25 @@ export function findReplyContextTargetInMessage(
 }
 
 function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; messageId: string } | null {
+  // The proxy record that restores `message.reference` is memory-resident, so a
+  // refetched proxy arrives with the embed as its only reply evidence.
+  const messageProxyReplyTarget = extractMessageProxyReplyTargetFromEmbed(embed);
+  if (messageProxyReplyTarget) {
+    return messageProxyReplyTarget;
+  }
+
   const description = embed.description?.trim() ?? "";
   const authorName = embed.author?.name?.trim() ?? "";
   const footerText = embed.footer?.text?.trim() ?? "";
-  const hasReplyDescription = matchesLocalizedReplyContextTemplate(
-    description,
+  const hasReplyMarker = classifyProtocolEmbed(embed) === "reply_context";
+  const hasReplyDescription = matchesProtocolTemplateKey(
     "genai.message_interaction.reply_context_description",
-    { message_url: REPLY_CONTEXT_URL_SENTINEL },
+    description,
   );
-  const hasReplyAuthor = matchesLocalizedReplyContextTemplate(
-    authorName,
-    "genai.message_interaction.reply_context_author",
-    { user: REPLY_CONTEXT_USER_SENTINEL },
-  );
-  const hasReplyFooter = matchesLocalizedReplyContextTemplate(
-    footerText,
-    "genai.message_interaction.reply_context_footer",
-    {
-      user: REPLY_CONTEXT_USER_SENTINEL,
-      message_url: REPLY_CONTEXT_URL_SENTINEL,
-    },
-  );
+  const hasReplyAuthor = matchesProtocolTemplateKey("genai.message_interaction.reply_context_author", authorName);
+  const hasReplyFooter = matchesProtocolTemplateKey("genai.message_interaction.reply_context_footer", footerText);
 
-  if (!hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
+  if (!hasReplyMarker && !hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
     return null;
   }
 
@@ -246,28 +217,11 @@ function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; 
   };
 }
 
-function matchesLocalizedReplyContextTemplate(
-  text: string,
-  templateKey: string,
-  placeholderValues: Record<string, string>,
-): boolean {
-  for (const locale of getSupportedLocales()) {
-    const template = localizer(locale, templateKey, placeholderValues);
-    let pattern = escapeRegExp(template);
-    for (const placeholderValue of Object.values(placeholderValues)) {
-      pattern = pattern.replaceAll(escapeRegExp(placeholderValue), ".+?");
-    }
-    if (new RegExp(`^${pattern}$`).test(text)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function annotateRecentMessageMetadataInContext(params: {
   simplifiedMessages: SimplifiedMessageForContext[];
   contextSegments: StructuredContextItem[];
   messageIdMap: MessageIdMap;
+  reactionUsersByMessageId: ReadonlyMap<string, string>;
 }): { annotatedCount: number; patchedReplyReferenceCount: number } {
   const metadataByMessageId = new Map<string, { inline: string; annotation: string }>();
   // Maps a dialogue turn's representative message ID (the entry's own `id`, which is
@@ -275,7 +229,7 @@ export function annotateRecentMessageMetadataInContext(params: {
   // into that turn. Merged turns expand to all constituents; plain turns map to one.
   const constituentIdsByEntryId = new Map<string, string[]>();
   for (const message of params.simplifiedMessages) {
-    // 1. Resolve the original messages folded into this entry. Merged entries carry
+    // Resolve the original messages folded into this entry. Merged entries carry
     //    combinedMessageIds + combinedCreatedAts (parallel arrays); plain entries
     //    fall back to their own id + createdAt.
     const isMerged = !!message.combinedMessageIds && message.combinedMessageIds.length > 0;
@@ -293,7 +247,11 @@ export function annotateRecentMessageMetadataInContext(params: {
       const messageRef = params.messageIdMap.register(ids[i], "ref");
       metadataByMessageId.set(ids[i], {
         inline: buildRecentMessageMetadataInline(createdAt),
-        annotation: buildRecentMessageMetadataAnnotation(messageRef, createdAt),
+        annotation: buildRecentMessageMetadataAnnotation(
+          messageRef,
+          createdAt,
+          params.reactionUsersByMessageId.get(ids[i]),
+        ),
       });
       registeredIds.push(ids[i]);
     }
@@ -321,7 +279,7 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (textParts.some((part) => part.text.includes("[System: Message metadata: ref="))) {
       continue;
     }
-    // 2. Emit one metadata line per constituent message (in message order) so each
+    // Emit one metadata line per constituent message (in message order) so each
     //    original message in a merged turn still exposes its own ref_N handle and
     //    sent timestamp for manage_message / interact_with_recent_message.
     const annotationBlock = constituentIds
@@ -371,6 +329,7 @@ export async function buildReplyReferenceContextAnnotation(params: {
   serverDiscId: string;
   serverPersonalizationDisabled: boolean;
   messageIdMap: MessageIdMap;
+  messageProxyIdentitiesByMessageId?: Map<string, MessageProxyHistoryIdentity>;
 }): Promise<string> {
   const replyAuthorName = await resolveMessageAuthorDisplayName({
     message: params.replyMessage,
@@ -379,6 +338,7 @@ export async function buildReplyReferenceContextAnnotation(params: {
     personaByNickname: params.personaByNickname,
     serverDiscId: params.serverDiscId,
     serverPersonalizationDisabled: params.serverPersonalizationDisabled,
+    messageProxyIdentitiesByMessageId: params.messageProxyIdentitiesByMessageId,
   });
   const referencedAuthorName = await resolveMessageAuthorDisplayName({
     message: params.referencedMessage,
@@ -387,85 +347,107 @@ export async function buildReplyReferenceContextAnnotation(params: {
     personaByNickname: params.personaByNickname,
     serverDiscId: params.serverDiscId,
     serverPersonalizationDisabled: params.serverPersonalizationDisabled,
+    messageProxyIdentitiesByMessageId: params.messageProxyIdentitiesByMessageId,
   });
 
   const replyRef = params.messageIdMap.register(params.replyMessage.id, "ref");
   const referencedRef = params.messageIdMap.register(params.referencedMessage.id, "ref");
+  const referencedContent = processEmbedsFromMessage({
+    embeds: params.referencedMessage.embeds.filter((embed) => classifyProtocolEmbed(embed) !== "diagnostic"),
+    components: params.referencedMessage.components,
+    content: params.referencedMessage.content,
+    imageAttachments: [],
+    isTomoriAuthoredMessage: false,
+    selfDebugEnabled: false,
+    tomoriNickname: null,
+  }).content;
+  const referencedSummary = `${formatInlineSystemContent(referencedContent)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}`;
 
-  return `[System: This message (ID: ${replyRef}) by ${replyAuthorName} is referring to a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${formatInlineSystemContent(params.referencedMessage.content)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}]`;
+  if (params.replyMessage.type === MessageType.ChannelPinnedMessage) {
+    return `[System: ${replyAuthorName} pinned a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
+  }
+
+  return `[System: This message (ID: ${replyRef}) by ${replyAuthorName} is referring to a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
 }
 
-export async function buildReactionContextAnnotation(
-  message: Message,
-  budgetState: ReactionContextBudgetState,
-  options?: {
-    clientUserId?: string;
-    mainPersonaNickname?: string | null;
-  },
-): Promise<string | null> {
-  if (!REACTION_CONTEXT_ENABLED || REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE < 1) {
-    return null;
+function selectContextReactions(message: Message): { selected: MessageReaction[]; hiddenTypeCount: number } {
+  if (!REACTION_CONTEXT_ENABLED) {
+    return { selected: [], hiddenTypeCount: 0 };
   }
-
-  const availableReactions = Array.from(message.reactions.cache.values())
+  const available = Array.from(message.reactions.cache.values())
     .filter((reaction) => (reaction.count ?? 0) > 0)
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  if (availableReactions.length === 0) {
+  const selected = available.slice(0, REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE);
+  return { selected, hiddenTypeCount: available.length - selected.length };
+}
+
+export function hasContextReactions(message: Message): boolean {
+  return selectContextReactions(message).selected.length > 0;
+}
+
+/**
+ * Counts come from the gateway payload, so this never calls Discord; reactor names wait for
+ * {@link fetchReactionUserSummaries} during a `reveal_message_metadata` restart.
+ */
+export function buildReactionContextAnnotation(message: Message): string | null {
+  const { selected, hiddenTypeCount } = selectContextReactions(message);
+  if (selected.length === 0) {
     return null;
   }
 
-  budgetState.messagesWithReactions += 1;
-  const selectedReactions = availableReactions.slice(0, REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE);
-  const reactionSegments: string[] = [];
+  const reactionSegments = selected.map(
+    (reaction) => `${normalizeReactionEmojiLabel(reaction)} x${reaction.count ?? 0}`,
+  );
+  if (hiddenTypeCount > 0) {
+    reactionSegments.push(`+${hiddenTypeCount} more reaction type${hiddenTypeCount === 1 ? "" : "s"}`);
+  }
+  return `[System: Reactions on this message: ${reactionSegments.join("; ")}]`;
+}
 
-  for (const reaction of selectedReactions) {
-    const count = reaction.count ?? 0;
-    const emojiLabel = normalizeReactionEmojiLabel(reaction);
-    let segment = `${emojiLabel} x${count}`;
+/**
+ * Fetches who reacted to each message, newest message first so the per-reveal call budget
+ * covers the messages the model is most likely asking about.
+ *
+ * @returns Reactor summaries keyed by message ID; a message whose lookups all failed or fell
+ * outside the budget is absent, leaving its counts-only history line as the only reaction context.
+ */
+export async function fetchReactionUserSummaries(
+  messages: readonly Message[],
+  options: ReactionUserLabelOptions,
+): Promise<Map<string, string>> {
+  const summaries = new Map<string, string>();
+  let callsUsed = 0;
 
-    if (count > 0 && REACTION_CONTEXT_MAX_USERS_PER_REACTION > 0) {
-      if (budgetState.callsUsed < REACTION_CONTEXT_MAX_API_CALLS_PER_TURN) {
-        try {
-          budgetState.callsUsed += 1;
-          const users = await reaction.users.fetch({ limit: REACTION_CONTEXT_MAX_USERS_PER_REACTION });
-          const userLabels = Array.from(users.values())
-            .map((user) => formatReactionUserLabel(user, options))
-            .filter((label): label is string => label.length > 0);
-
-          if (userLabels.length > 0) {
-            segment += ` by ${userLabels.join(", ")}`;
-            const remaining = Math.max(0, count - userLabels.length);
-            if (remaining > 0) {
-              segment += ` (+${remaining} more)`;
-            }
-          }
-        } catch (error) {
-          budgetState.fallbackCount += 1;
-          log.warn(
-            `Reaction context: Failed to fetch users for ${emojiLabel} on message ${message.id}. Using counts only.`,
-            error,
-          );
-        }
-      } else {
-        budgetState.fallbackCount += 1;
-        if (!budgetState.budgetExhaustedLogged) {
-          budgetState.budgetExhaustedLogged = true;
-          log.info(
-            `Reaction context: User fetch budget exhausted (${budgetState.callsUsed}/${REACTION_CONTEXT_MAX_API_CALLS_PER_TURN}). Falling back to counts-only reactions.`,
-          );
-        }
+  for (const message of [...messages].reverse()) {
+    const segments: string[] = [];
+    for (const reaction of selectContextReactions(message).selected) {
+      if (callsUsed >= REACTION_CONTEXT_MAX_API_CALLS_PER_TURN) {
+        log.info(
+          `Reaction context: User fetch budget exhausted (${callsUsed}/${REACTION_CONTEXT_MAX_API_CALLS_PER_TURN}). Older messages keep counts only.`,
+        );
+        return summaries;
+      }
+      callsUsed += 1;
+      const emojiLabel = normalizeReactionEmojiLabel(reaction);
+      try {
+        recordChatTurnFetch("reaction");
+        const users = await reaction.users.fetch({ limit: REACTION_CONTEXT_MAX_USERS_PER_REACTION });
+        const userLabels = Array.from(users.values())
+          .map((user) => formatReactionUserLabel(user, options))
+          .filter((label) => label.length > 0);
+        if (userLabels.length === 0) continue;
+        const remaining = Math.max(0, (reaction.count ?? 0) - userLabels.length);
+        segments.push(`${emojiLabel} by ${userLabels.join(", ")}${remaining > 0 ? ` (+${remaining} more)` : ""}`);
+      } catch (error) {
+        log.warn(`Reaction context: Failed to fetch users for ${emojiLabel} on message ${message.id}.`, error);
       }
     }
-
-    reactionSegments.push(segment);
+    if (segments.length > 0) {
+      summaries.set(message.id, segments.join("; "));
+    }
   }
 
-  const remainingReactionTypes = availableReactions.length - selectedReactions.length;
-  if (remainingReactionTypes > 0) {
-    reactionSegments.push(`+${remainingReactionTypes} more reaction type${remainingReactionTypes === 1 ? "" : "s"}`);
-  }
-
-  return reactionSegments.length > 0 ? `[System: Reactions on this message: ${reactionSegments.join("; ")}]` : null;
+  return summaries;
 }
 
 function parseBooleanEnvFlag(value: string | undefined, defaultValue: boolean): boolean {
@@ -481,19 +463,17 @@ function parseBooleanEnvFlag(value: string | undefined, defaultValue: boolean): 
   return defaultValue;
 }
 
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
-
 function buildRecentMessageMetadataInline(createdAt: number): string {
   return `sent ${formatTimestampInline(createdAt)}`;
 }
 
-function buildRecentMessageMetadataAnnotation(messageRef: string, createdAt: number): string {
-  return `[System: Message metadata: ref=${messageRef} | ${buildRecentMessageMetadataInline(createdAt)}]`;
+function buildRecentMessageMetadataAnnotation(
+  messageRef: string,
+  createdAt: number,
+  reactionUsers: string | undefined,
+): string {
+  const reactionSuffix = reactionUsers ? ` | reacted: ${reactionUsers}` : "";
+  return `[System: Message metadata: ref=${messageRef} | ${buildRecentMessageMetadataInline(createdAt)}${reactionSuffix}]`;
 }
 
 function buildReplyReferenceAttachmentInfo(message: Message): string {
@@ -513,34 +493,52 @@ async function resolveMessageAuthorDisplayName(params: {
   personaByNickname: Map<string, TomoriState>;
   serverDiscId: string;
   serverPersonalizationDisabled: boolean;
+  messageProxyIdentitiesByMessageId?: Map<string, MessageProxyHistoryIdentity>;
 }): Promise<string> {
-  const webhookName = stripBridgePrefix(params.message.author.username);
-  const renderModifierSource = params.message.webhookId
+  if (params.message.author.id === params.clientUserId) {
+    return params.botDisplayName || "Bot";
+  }
+
+  // A verified, indexed proxy message carries a stable member identity, so it is named from the
+  // same source ordinary history uses. The webhook name is the service's configurable veneer
+  // (PluralKit's name_format can add system tags or drop the member name), so it is never
+  // treated as the member label. Deliberately not gated on personalization: a member name is
+  // identity rather than a saved user nickname, matching how history and participants use it.
+  const messageProxyIdentity = params.messageProxyIdentitiesByMessageId?.get(params.message.id);
+  if (messageProxyIdentity) {
+    const identityRow = await getCachedUserRow(messageProxyIdentity.userDiscId);
+    return identityRow?.user_nickname?.trim() || messageProxyIdentity.displayName;
+  }
+
+  const trustedWebhook = await verifyMessageWebhook(params.message);
+  const webhookName = trustedWebhook
+    ? stripBridgePrefix(params.message.author.username)
+    : params.message.author.username;
+  const renderModifierSource = trustedWebhook
     ? resolveRenderModifierSourcePersona(webhookName, params.personaByNickname)
     : null;
-  const matchedPersona = params.message.webhookId
+  const matchedPersona = trustedWebhook
     ? (renderModifierSource?.persona ?? params.personaByNickname.get(normalizeRenderModifierName(webhookName)))
     : undefined;
+  // A user-impersonation webhook's author id is the webhook's, so its speaker's saved nickname
+  // is only reachable through the relay cache.
+  const nicknameOwnerId =
+    (trustedWebhook ? getCachedImpersonatedUserIdForWebhook(params.message.webhookId) : null) ??
+    params.message.author.id;
   const userRow =
     params.message.author.id !== params.clientUserId && !matchedPersona
-      ? await getCachedUserRow(params.message.author.id)
+      ? await getCachedUserRow(nicknameOwnerId)
       : null;
   const userBlacklisted =
-    userRow !== null ? await getCachedBlacklistStatus(params.serverDiscId, params.message.author.id) : false;
+    userRow !== null ? await getCachedBlacklistStatus(params.serverDiscId, nicknameOwnerId) : false;
   const fallbackName = resolvePreferredDiscordDisplayName({
     memberDisplayName: params.message.member?.displayName,
     user: params.message.author,
     fallback: webhookName,
   });
 
-  if (params.message.author.id === params.clientUserId) {
-    return params.botDisplayName || "Bot";
-  }
-
-  // Clean-named sprite messages carry no "(sprite)" suffix in the webhook name;
-  // recover the decorated label from the persisted mapping.
   const spriteDisplayName =
-    !renderModifierSource && matchedPersona
+    (!renderModifierSource || renderModifierSource.isNeutralAppearance) && matchedPersona
       ? await resolveSpriteMessageDisplayName(
           params.message.id,
           matchedPersona.persona_id,
@@ -549,8 +547,8 @@ async function resolveMessageAuthorDisplayName(params: {
       : null;
 
   return (
-    renderModifierSource?.displayName ??
     spriteDisplayName ??
+    renderModifierSource?.displayName ??
     matchedPersona?.persona_nickname ??
     (userBlacklisted || params.serverPersonalizationDisabled || !userRow?.user_nickname
       ? fallbackName
@@ -572,12 +570,9 @@ function normalizeReactionEmojiLabel(reaction: MessageReaction): string {
 
 function formatReactionUserLabel(
   user: { id: string; globalName: string | null; username: string },
-  options?: {
-    clientUserId?: string;
-    mainPersonaNickname?: string | null;
-  },
+  options: ReactionUserLabelOptions,
 ): string {
-  if (options?.clientUserId && user.id === options.clientUserId && options.mainPersonaNickname?.trim()) {
+  if (options.clientUserId && user.id === options.clientUserId && options.mainPersonaNickname?.trim()) {
     return options.mainPersonaNickname.trim();
   }
   return user.globalName || user.username;
@@ -585,4 +580,41 @@ function formatReactionUserLabel(
 
 export function formatInlineSystemContent(content: string | null | undefined): string {
   return content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]";
+}
+
+// Turn-ephemeral `[System: …]` annotations the context builder injects into message
+// text. They carry per-turn `ref_N` handles and message/channel IDs that are minted
+// fresh each turn (see buildReplyReferenceContextAnnotation / buildRecentMessageMetadataAnnotation
+// / buildReactionContextAnnotation and the provider media notices). Persisting them
+// verbatim into durable stores (e.g. short-term memory) leaves stale handles that a
+// later turn re-renders against a different messageIdMap: risking mis-targeted
+// manage_message / interact_with_recent_message actions. Strip them before storing.
+const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
+  /^\[System: This message \(ID: [^)]*\) by .* is referring to a previous message \(ID: [^)]*\) by .* saying: .*\]$/gm,
+  // Media/GIF notices: "[System: This message (ID: …) …]"
+  /\[System: This message \(ID: [^)]*\)[^\]]*\]/g,
+  // Recent-message metadata: "[System: Message metadata: ref=… | …]"
+  /\[System: Message metadata:[^\]]*\]/g,
+  // Reaction context: "[System: Reactions on this message: …]"
+  /\[System: Reactions on this message:[^\]]*\]/g,
+];
+
+/**
+ * Removes injected, turn-ephemeral `[System: …]` annotations from message text so the
+ * clean conversational content can be persisted (e.g. into short-term memory) without
+ * stale per-turn `ref_N` handles or IDs leaking into future turns.
+ *
+ * @param content - Raw message text that may carry injected context annotations.
+ * @returns The text with known injected annotations removed and blank lines collapsed.
+ */
+export function stripInjectedContextAnnotations(content: string): string {
+  let cleaned = content;
+  for (const pattern of INJECTED_CONTEXT_ANNOTATION_PATTERNS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  // Collapse trailing whitespace and blank lines left behind by removed annotations.
+  return cleaned
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 }

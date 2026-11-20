@@ -1,8 +1,23 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import { canReminderActorModifyReminder, parseUpdateTaskArguments } from "@/tools/functionCalls/updateTaskTool";
 import { formatPendingReminderForContext } from "@/utils/text/context/participants";
 
+afterEach(() => {
+  setSystemTime();
+});
+
 describe("update_task helpers", () => {
+  it("reschedules by calendar months before adding fixed-length parts", () => {
+    setSystemTime(new Date("2026-01-31T09:00:00Z"));
+    const result = parseUpdateTaskArguments(
+      { reminder_id: 3, reminder_purpose: "Renew the domain.", months_from_now: 1, days_from_now: 2 },
+      0,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newReminderTime?.toISOString()).toBe("2026-03-02T09:00:00.000Z");
+  });
   it("parses blank reminder_purpose as delete and ignores scheduling fields", () => {
     const result = parseUpdateTaskArguments(
       {
@@ -19,7 +34,7 @@ describe("update_task helpers", () => {
       reminderId: 42,
       newPurpose: "",
       isDeleteRequested: true,
-      hasRepetitionIntervalUpdate: false,
+      hasRepetitionUpdate: false,
     });
   });
 
@@ -38,7 +53,7 @@ describe("update_task helpers", () => {
     expect(result.newPurpose).toBe("Bring up the deployment checklist.");
     expect(result.isDeleteRequested).toBe(false);
     expect(result.newReminderTime).toBeUndefined();
-    expect(result.hasRepetitionIntervalUpdate).toBe(false);
+    expect(result.hasRepetitionUpdate).toBe(false);
   });
 
   it("parses relative reschedules and clears recurrence with interval 0", () => {
@@ -58,8 +73,63 @@ describe("update_task helpers", () => {
     if (!result.ok) return;
     expect(result.newReminderTime?.getTime()).toBeGreaterThanOrEqual(before + 2 * 60 * 60 * 1000);
     expect(result.newReminderTime?.getTime()).toBeLessThanOrEqual(after + 2 * 60 * 60 * 1000 + 10);
-    expect(result.hasRepetitionIntervalUpdate).toBe(true);
-    expect(result.repetitionIntervalHours).toBeNull();
+    expect(result.hasRepetitionUpdate).toBe(true);
+    expect(result.repetition).toBeNull();
+  });
+
+  it("parses a monthly repeat and rejects a positive interval in both units", () => {
+    const monthly = parseUpdateTaskArguments(
+      { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 0, repetition_interval_months: 1 },
+      0,
+    );
+    expect(monthly).toMatchObject({ ok: true, hasRepetitionUpdate: true, repetition: { unit: "months", interval: 1 } });
+
+    expect(
+      parseUpdateTaskArguments(
+        { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 24, repetition_interval_months: 1 },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
+  });
+
+  it("parses minute intervals and validates the window and repeat limit independently", () => {
+    const task = { reminder_id: 4, reminder_purpose: "Check the queue." };
+    expect(
+      parseUpdateTaskArguments(
+        {
+          ...task,
+          repetition_interval_minutes: 15,
+          repeat_count: 3,
+          daily_window_start_time: "9AM",
+          daily_window_end_time: "17:30",
+        },
+        5.5,
+      ),
+    ).toMatchObject({
+      ok: true,
+      repetition: { unit: "minutes", interval: 15 },
+      recurrenceOptions: { limit: { remaining: 3 }, window: { start: 540, end: 1050, timezoneOffset: 5.5 } },
+    });
+
+    expect(parseUpdateTaskArguments({ ...task, clear_repeat_limit: true, clear_daily_window: true }, 0)).toMatchObject({
+      ok: true,
+      recurrenceOptions: { limit: null, window: null },
+    });
+
+    expect(parseUpdateTaskArguments({ ...task, repeat_until_time: "2099-01-01_13:00" }, 5.5)).toMatchObject({
+      ok: true,
+      recurrenceOptions: { limit: { until: new Date("2099-01-01T07:30:59.999Z") } },
+    });
+
+    for (const args of [
+      { repetition_interval_minutes: 5, repetition_interval_months: 1 },
+      { repeat_count: 3, repeat_until_time: "2099-01-01_13:00" },
+      { clear_repeat_limit: true, repeat_count: 12 },
+      { daily_window_start_time: "09:00" },
+      { daily_window_start_time: "18:00", daily_window_end_time: "08:00" },
+    ]) {
+      expect(parseUpdateTaskArguments({ ...task, ...args }, 0)).toMatchObject({ ok: false });
+    }
   });
 
   it("rejects invalid IDs, intervals, and past absolute times", () => {
@@ -94,6 +164,61 @@ describe("update_task helpers", () => {
         0,
       ),
     ).toMatchObject({ ok: false, status: "task_update_failed_invalid_time" });
+  });
+
+  it("interprets absolute times in utc_offset when labeled, else the server timezone", () => {
+    // Without utc_offset: 09:00 at the server's UTC+8 is 01:00 UTC
+    const serverFrame = parseUpdateTaskArguments(
+      {
+        reminder_id: 5,
+        reminder_purpose: "Ping Alice about standup.",
+        reminder_time: "2099-01-01_09:00",
+      },
+      8,
+    );
+    expect(serverFrame.ok).toBe(true);
+    if (!serverFrame.ok) return;
+    expect(serverFrame.newReminderTime?.toISOString()).toBe("2099-01-01T01:00:00.000Z");
+
+    // With utc_offset: 09:00 at Alice's UTC-5 is 14:00 UTC, so server offset must NOT apply
+    const userFrame = parseUpdateTaskArguments(
+      {
+        reminder_id: 5,
+        reminder_purpose: "Ping Alice about standup.",
+        reminder_time: "2099-01-01_09:00",
+        utc_offset: -5,
+      },
+      8,
+    );
+    expect(userFrame.ok).toBe(true);
+    if (!userFrame.ok) return;
+    expect(userFrame.newReminderTime?.toISOString()).toBe("2099-01-01T14:00:00.000Z");
+  });
+
+  it("rejects out-of-range or non-numeric utc_offset values", () => {
+    expect(
+      parseUpdateTaskArguments(
+        {
+          reminder_id: 5,
+          reminder_purpose: "Ping Alice about standup.",
+          reminder_time: "2099-01-01_09:00",
+          utc_offset: 20,
+        },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
+
+    expect(
+      parseUpdateTaskArguments(
+        {
+          reminder_id: 5,
+          reminder_purpose: "Ping Alice about standup.",
+          reminder_time: "2099-01-01_09:00",
+          utc_offset: "-5",
+        },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
   });
 
   it("authorizes creator and non-self target edits, but not unrelated users", () => {

@@ -1,0 +1,20 @@
+export default {
+  respond: {
+    description: `Manually trigger response to the latest message in this channel.`,
+    persona_description: `Persona to respond as. Leave empty to select automatically.`,
+    reasoning_description: `Use this provider's reasoning model with its highest reasoning budget.`,
+    prompt_description: `Optional system prompt to append at the end of context.`,
+    prefill_description: `Optional assistant prefill you want me to continue.`,
+    prefill_instruction_notice: `This model cannot continue a prefill, so I passed it on as an instruction instead.`,
+    success_title: `Manual Response Triggered`,
+    success_description: `Responding to the latest message in this channel...`,
+    invalid_persona_description: `Choose an available persona from autocomplete or enter its full name.`,
+    no_smart_model_title: `No Reasoning Model Found`,
+    no_smart_model_description: `No reasoning model found for your current AI provider. Use \`/config\` > Models > Switch Models to switch to a provider that supports reasoning models.`,
+    no_messages_title: `No Messages Found`,
+    no_messages_description: `No messages found in this channel. Send at least one message before using \`/respond\`.`,
+    cooldown_active: `This server's managers have configured a cooldown. Please wait **{seconds}** seconds before using \`/respond\` again. This cooldown is shared with message triggers.`,
+    channel_not_whitelisted: `This server has whitelist restrictions active. \`/respond\` can only be used in whitelisted channels by members with whitelisted roles, and only with personas allowed in this channel.`,
+    persona_access_blocked: `Your current whitelist permissions and personal spotlight settings do not leave any personas available for \`/respond\` in this channel.`,
+  },
+};

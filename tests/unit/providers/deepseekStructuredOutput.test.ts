@@ -1,0 +1,327 @@
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { callDeepseekStructuredJSON } from "@/providers/deepseek/deepseekStructuredOutput";
+import { DEEPSEEK_EXPRESSION_BATCH_SIZE, DeepseekProvider } from "@/providers/deepseek/deepseekProvider";
+import {
+  generateConversationSummaryDeepseek,
+  generateRoleplaySummaryDeepseek,
+} from "@/providers/deepseek/compactGenerator";
+import * as imageProcessor from "@/utils/image/imageProcessor";
+import { z } from "zod";
+import { log } from "@/utils/misc/logger";
+import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
+
+describe("DeepSeek structured output", () => {
+  const originalFetch = globalThis.fetch;
+  let imageSpy: ReturnType<typeof spyOn> | undefined;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    imageSpy?.mockRestore();
+    imageSpy = undefined;
+  });
+
+  it("reserves the expression output budget for classifications by disabling DeepSeek reasoning", async () => {
+    const expression = { name: "smile", emotion_key: "joy", description: "A smiling face with bright eyes." };
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.thinking).toEqual({ type: "disabled" });
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ expressions: [expression] }) } }] });
+    }) as typeof fetch;
+
+    const result = await callExpressionInitializationForProvider({
+      providerName: "deepseek",
+      apiKey: "fixture-key",
+      model: "deepseek-flash",
+      systemPrompt: "Classify expressions.",
+      userPrompt: "Classify smile.",
+      images: [],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.expressions).toEqual([expression]);
+  });
+
+  it("retains empty-response finish and token diagnostics without copying private content", async () => {
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    try {
+      for (const finishReason of ["length", "stop", "PRIVATE_REASONING"]) {
+        globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              id: "req_PRIVATE_KEY",
+              choices: [
+                { finish_reason: finishReason, message: { content: "", reasoning_content: "PRIVATE_REASONING" } },
+              ],
+              usage:
+                finishReason === "PRIVATE_REASONING"
+                  ? {
+                      prompt_tokens: "PRIVATE_EVIDENCE",
+                      completion_tokens: -1,
+                      completion_tokens_details: { reasoning_tokens: "PRIVATE_REASONING" },
+                    }
+                  : {
+                      prompt_tokens: 150,
+                      completion_tokens: 8192,
+                      completion_tokens_details: { reasoning_tokens: 8192 },
+                    },
+            }),
+            { status: 200 },
+          )) as typeof fetch;
+        const result = await callDeepseekStructuredJSON(
+          {
+            apiKey: "PRIVATE_KEY",
+            model: "deepseek-flash",
+            systemPrompt: "PRIVATE_PROTOCOL",
+            userPrompt: "PRIVATE_EVIDENCE",
+            schemaName: "expression_batch_result",
+          },
+          { type: "object" },
+          z.object({}),
+        );
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error("Expected empty-response failure");
+        expect(result.diagnostics).toMatchObject({
+          finishReason: finishReason === "PRIVATE_REASONING" ? "unknown" : finishReason,
+          inputTokens: finishReason === "PRIVATE_REASONING" ? undefined : 150,
+          outputTokens: finishReason === "PRIVATE_REASONING" ? undefined : 8192,
+          reasoningTokens: finishReason === "PRIVATE_REASONING" ? undefined : 8192,
+          reasoningPresent: true,
+          maxOutputTokens: 8192,
+          thinkingMode: "provider-default",
+          imageCount: 0,
+        });
+        expect(warnings.mock.lastCall?.[2]?.metadata).toMatchObject(result.diagnostics ?? {});
+        expect(warnings.mock.lastCall?.[3]?.retain).toBe(true);
+        const diagnosticPayload = JSON.stringify({
+          diagnostics: result.diagnostics,
+          context: warnings.mock.lastCall?.[2],
+        });
+        for (const privateValue of ["PRIVATE_KEY", "PRIVATE_PROTOCOL", "PRIVATE_EVIDENCE", "PRIVATE_REASONING"]) {
+          expect(diagnosticPayload).not.toContain(privateValue);
+        }
+      }
+    } finally {
+      warnings.mockRestore();
+    }
+  });
+
+  it("formats multimodal image inputs into OpenAI-compatible image_url parts", async () => {
+    imageSpy = spyOn(imageProcessor, "fetchAndOptimizeImage").mockResolvedValue({
+      data: "base64data",
+      mimeType: "image/png",
+    });
+
+    // Written by the fetch stub below, which runs before the guarded read.
+    let capturedRequestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedRequestBody = JSON.parse(init?.body as string);
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ emotion: "joy", confidence: 0.95 }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const schema = {
+      type: "object",
+      properties: {
+        emotion: { type: "string" },
+        confidence: { type: "number" },
+      },
+      required: ["emotion", "confidence"],
+    };
+
+    const zodSchema = z.object({
+      emotion: z.string(),
+      confidence: z.number(),
+    });
+
+    const result = await callDeepseekStructuredJSON(
+      {
+        apiKey: "test-deepseek-key",
+        model: "deepseek-v4-flash-vision",
+        systemPrompt: "You are an emotion analyzer.",
+        userPrompt: "Analyze this image.",
+        images: [{ url: "https://example.com/smile.png", mimeType: "image/png", name: "smile" }],
+      },
+      schema,
+      zodSchema,
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data).toEqual({ emotion: "joy", confidence: 0.95 });
+
+    expect(capturedRequestBody).not.toBeNull();
+    if (!capturedRequestBody) throw new Error("Expected captured request body");
+    expect(capturedRequestBody.model).toBe("deepseek-flash");
+    const messages = capturedRequestBody.messages as Array<{ role: string; content: unknown }>;
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe("system");
+    expect(messages[1].role).toBe("user");
+
+    const userContent = messages[1].content as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    expect(Array.isArray(userContent)).toBe(true);
+    expect(userContent).toHaveLength(2);
+    expect(userContent[0]).toEqual({ type: "text", text: "Analyze this image." });
+    expect(userContent[1]).toEqual({
+      type: "image_url",
+      image_url: { url: "data:image/png;base64,base64data" },
+    });
+  });
+
+  it("parses JSON wrapped in markdown fences and think tags", async () => {
+    globalThis.fetch = (async (_url: string | URL | Request, _init?: RequestInit) => {
+      const payload = '<think>Analyzing emotion...</think>\n```json\n{\n  "status": "ok"\n}\n```';
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: payload } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const result = await callDeepseekStructuredJSON(
+      {
+        apiKey: "test-deepseek-key",
+        model: "deepseek-v4-flash",
+        systemPrompt: "system",
+        userPrompt: "user",
+      },
+      { type: "object", properties: { status: { type: "string" } } },
+      z.object({ status: z.string() }),
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data).toEqual({ status: "ok" });
+  });
+
+  it("provides the expression initialization batch size with its default and an override", () => {
+    const provider = new DeepseekProvider();
+    expect(provider.getExpressionInitializationBatchSize()).toBe(DEEPSEEK_EXPRESSION_BATCH_SIZE);
+    expect(provider.getExpressionInitializationBatchSize(35)).toBe(35);
+  });
+
+  it("parses JSON arrays containing objects surrounded by conversational text", async () => {
+    globalThis.fetch = (async (_url: string | URL | Request, _init?: RequestInit) => {
+      const payload = 'Here is the extracted list:\n[ {"name": "foo", "score": 10} ]\nHope this helps!';
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: payload } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const result = await callDeepseekStructuredJSON(
+      {
+        apiKey: "test-deepseek-key",
+        model: "deepseek-v4-flash",
+        systemPrompt: "system",
+        userPrompt: "user",
+      },
+      { type: "array", items: { type: "object" } },
+      z.array(z.object({ name: z.string(), score: z.number() })),
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected success");
+    expect(result.data).toEqual([{ name: "foo", score: 10 }]);
+  });
+
+  it("plumbs images and custom endpoint into generateConversationSummaryDeepseek", async () => {
+    imageSpy = spyOn(imageProcessor, "fetchAndOptimizeImage").mockResolvedValue({
+      data: "compactBase64",
+      mimeType: "image/jpeg",
+    });
+
+    let requestedUrl: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestedUrl = String(url);
+      requestBody = JSON.parse(init?.body as string);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Compacted summary text." } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const result = await generateConversationSummaryDeepseek({
+      apiKey: "deepseek-api-key-12345",
+      model: "deepseek-flash",
+      endpointUrl: "https://custom.deepseek.proxy/v1/chat/completions",
+      systemPrompt: "System instruction",
+      userPrompt: "Compact these messages",
+      images: [{ url: "https://example.com/scene.jpg", mimeType: "image/jpeg" }],
+    });
+
+    expect(result.summary).toBe("Compacted summary text.");
+    expect(requestedUrl).toBe("https://custom.deepseek.proxy/v1/chat/completions");
+    if (!requestBody) throw new Error("Expected request body");
+    const messages = requestBody.messages as Array<{ role: string; content: unknown }>;
+    expect(messages[1].role).toBe("user");
+    const userContent = messages[1].content as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    expect(userContent[0]).toEqual({ type: "text", text: "Compact these messages" });
+    expect(userContent[1]).toEqual({
+      type: "image_url",
+      image_url: { url: "data:image/jpeg;base64,compactBase64" },
+    });
+  });
+
+  it("plumbs images and endpointUrl into generateRoleplaySummaryDeepseek", async () => {
+    imageSpy = spyOn(imageProcessor, "fetchAndOptimizeImage").mockResolvedValue({
+      data: "roleplayBase64",
+      mimeType: "image/png",
+    });
+
+    let requestedUrl: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestedUrl = String(url);
+      requestBody = JSON.parse(init?.body as string);
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ overall_scene_summary: "Scene summary here" }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const result = await generateRoleplaySummaryDeepseek({
+      apiKey: "deepseek-api-key-12345",
+      model: "deepseek-flash",
+      endpointUrl: "https://proxy.deepseek.local/chat/completions",
+      systemPrompt: "RP system",
+      userPrompt: "RP user",
+      images: [{ url: "https://example.com/avatar.png", mimeType: "image/png" }],
+    });
+
+    expect(result.summary).toEqual({ overall_scene_summary: "Scene summary here" });
+    expect(requestedUrl).toBe("https://proxy.deepseek.local/chat/completions");
+    if (!requestBody) throw new Error("Expected request body");
+    const messages = requestBody.messages as Array<{ role: string; content: unknown }>;
+    const userContent = messages[1].content as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    expect(userContent[1]).toEqual({
+      type: "image_url",
+      image_url: { url: "data:image/png;base64,roleplayBase64" },
+    });
+  });
+});

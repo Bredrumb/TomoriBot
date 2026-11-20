@@ -1,50 +1,74 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, type Message, MessageFlags } from "discord.js";
+import type { Message } from "discord.js";
 import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { createStandardEmbed } from "@/utils/discord/embedHelper";
+import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
+import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "@/utils/discord/textDisplayModal";
+import { NOTICE_CONFIG_HINT_KEY } from "@/constants/toolNotices";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 const FALLBACK_DETAILS_BUTTON_ID = "fallback_notice_details";
-const DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
-const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
-  process.env.FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-  DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-);
+const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
 
 export interface FallbackNoticeAttempt {
   modelCodename: string;
-  errorCode: string;
+  errorDetail: string;
 }
 
 interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
+  /**
+   * Names the account setting that turns this fallback off. Only a success on the server route of
+   * a turn that started on personal credentials has one, because every other route is either the
+   * server's own or a model the user configured themselves.
+   */
+  offerPersonalFallbackOptOut?: boolean;
 }
 
-function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+// Characters reserved for the description text wrapping the failure list (slot/model prefix line),
+// so the joined list plus that prefix stays within Discord's embed description limit.
+const FAILURE_LIST_DESCRIPTION_RESERVE = 256;
 
 function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): string {
-  return failures
+  const failureList = failures
     .map((failure, index) =>
       localizer(locale, "genai.fallback_used_failure_line", {
         index: index + 1,
         model: `\`${failure.modelCodename}\``,
-        error_code: `\`${failure.errorCode}\``,
+        error_detail: failure.errorDetail,
       }),
     )
     .join("\n");
+
+  // Cap the combined list to Discord's embed description limit; verbose provider messages across
+  // several fallback failures can otherwise overflow the embed.
+  return truncateForEmbedDescription(failureList, FAILURE_LIST_DESCRIPTION_RESERVE);
 }
 
-function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failures: FallbackNoticeAttempt[]): number {
+/**
+ * The fallback slot the receipt names for the model that answered.
+ *
+ * Both routes number their own configured slots, so a personal success names its personal slot and a
+ * server-route success names the server's. A model that is not in its route's fallback list is that
+ * route's own lead: it holds no slot, so the receipt reports the first model of the route that
+ * answered instead of borrowing a number from the failure count, which named a slot the reader
+ * cannot see anywhere on the page.
+ */
+export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
+  const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
+    entry.kind === "llm"
+      ? entry.model.llm_id === successModel.llm_id
+      : entry.endpoint.model_ref_id === successModel.llm_id,
+  );
+  if (configuredChainIndex !== undefined && configuredChainIndex >= 0) {
+    return configuredChainIndex + 1;
+  }
+
   const configuredFallbackIndex =
     context.tomoriState.fallback_llms?.findIndex((llm) => llm.llm_id === successModel.llm_id) ?? -1;
 
@@ -52,33 +76,25 @@ function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failure
     return configuredFallbackIndex + 1;
   }
 
-  return Math.max(1, failures.length);
-}
-
-function createFallbackDetailsButton(locale: string, disabled = false): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(FALLBACK_DETAILS_BUTTON_ID)
-      .setLabel(localizer(locale, "genai.fallback_used_details_button"))
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
-  );
+  return 1;
 }
 
 export async function sendFallbackModelUsageNotice({
   context,
   failures,
   successModel,
+  offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
-  const slot = resolveFallbackSlot(context, successModel, failures);
+  const slot = resolveFallbackSlot(context, successModel);
+  const descriptionVars = (locale: string) => ({
+    slot,
+    success_model: successModel.llm_codename,
+    failure_list: buildFailureList(locale, failures),
+  });
   const detailsOptions = {
     titleKey: "genai.fallback_used_title",
     descriptionKey: "genai.fallback_used_details_description",
-    descriptionVars: {
-      slot,
-      success_model: successModel.llm_codename,
-      failure_list: buildFailureList(context.locale, failures),
-    },
+    descriptionVars: descriptionVars(context.locale),
     color: ColorCode.INFO,
   } as const;
 
@@ -87,72 +103,52 @@ export async function sendFallbackModelUsageNotice({
     return;
   }
 
-  const detailsEmbed = createStandardEmbed(context.locale, {
-    ...detailsOptions,
-    footerKey: "genai.fallback_used_hide_footer",
-  });
+  const renderDetails = (locale: string) => {
+    const optOutFooter = offerPersonalFallbackOptOut
+      ? `\n-# ${localizer(locale, "genai.fallback_used_personal_opt_out_footer")}`
+      : "";
+    return {
+      title: localizer(locale, detailsOptions.titleKey),
+      content: `${localizer(locale, detailsOptions.descriptionKey, descriptionVars(locale))}\n\n-# ${localizer(
+        locale,
+        NOTICE_CONFIG_HINT_KEY,
+      )}${optOutFooter}`,
+    };
+  };
 
   try {
-    const buttonRow = createFallbackDetailsButton(context.locale);
-    const disabledButtonRow = createFallbackDetailsButton(context.locale, true);
+    const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");
+    const buttonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel);
+    const disabledButtonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel, true);
 
-    // Resolve thread ID — webhooks targeting a parent channel need it to post into a thread.
+    // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
 
-    let noticeMessage: Message;
+    const outcome = await sendToolPersonaPost(context, context.tomoriState, { components: [buttonRow] });
+    if (outcome.status !== "sent") return;
+    const noticeMessage: Message = outcome.message;
 
-    if (context.webhook && context.personaUsername) {
-      // Send through the persona/user-impersonation webhook so the button appears
-      // as belonging to the same identity that delivered the AI response.
-      noticeMessage = await sendWebhookMessageWithIdentity(
-        context.webhook,
-        {
-          components: [buttonRow],
-          ...(threadId ? { threadId } : {}),
-        },
-        { username: context.personaUsername, avatarUrl: context.personaAvatarUrl },
-        threadId ?? context.webhook.channelId ?? context.webhook.id,
-      );
-    } else {
-      noticeMessage = await context.channel.send({ components: [buttonRow] });
-    }
-
-    const collector = noticeMessage.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-      filter: (interaction) => interaction.customId === FALLBACK_DETAILS_BUTTON_ID && !interaction.user.bot,
-    });
-
-    collector.on("collect", async (interaction) => {
-      try {
-        await interaction.reply({
-          embeds: [detailsEmbed],
-          flags: MessageFlags.Ephemeral,
-        });
-      } catch (error) {
-        log.warn("Fallback model details button reply failed", error as Error);
-      }
-    });
-
-    collector.on("end", async () => {
-      // Webhook messages must be edited via the webhook token, not the bot token.
-      if (context.webhook) {
-        await context.webhook
-          .editMessage(noticeMessage.id, {
+    attachTextDisplayModalCollector({
+      message: noticeMessage,
+      customId: FALLBACK_DETAILS_BUTTON_ID,
+      render: renderDetails,
+      timeoutMs: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
+      logLabel: "Fallback model details",
+      onExpire: async () => {
+        if (outcome.receipt.route === "webhook") {
+          const author = await resolveAuthoringWebhook(context.channel, outcome.receipt.webhookId, context.webhook);
+          if (!author) throw new Error("Authoring webhook unavailable for fallback notice edit");
+          await author.editMessage(noticeMessage.id, {
             components: [disabledButtonRow],
             ...(threadId ? { threadId } : {}),
-          })
-          .catch((err: unknown) =>
-            log.warn("[FallbackNotice] Failed to disable buttons via webhook after collector end", err),
-          );
-      } else {
-        await noticeMessage
-          .edit({ components: [disabledButtonRow] })
-          .catch((err: unknown) => log.warn("[FallbackNotice] Failed to disable buttons after collector end", err));
-      }
+          });
+          return;
+        }
+        await noticeMessage.edit({ components: [disabledButtonRow] });
+      },
     });
   } catch (error) {
     log.warn("Failed to send compact fallback model notice", error as Error);

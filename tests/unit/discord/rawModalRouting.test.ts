@@ -1,0 +1,645 @@
+import { Client, type ButtonInteraction, type Interaction } from "discord.js";
+import * as shutdownState from "@/utils/misc/shutdownState";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import {
+  hasRawModalAcknowledgement,
+  initializeShutdownInteractionAdmission,
+  rejectInteractionDuringShutdown,
+  showRoutedRawModal,
+} from "@/utils/discord/ui/interactionCore";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
+import { localizedCopy } from "../../helpers/localeCases";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { log } from "@/utils/misc/logger";
+import type { GlobalDiscordState, RawDiscordWebSocketPacket, RawDiscordShard } from "@/types/discord/rawApiTypes";
+import {
+  initializeRawModalInterception,
+  takeRawModalChannelSelectValues,
+  takeRawModalCheckboxGroupValues,
+  takeRawModalSelectValue,
+  takeRawModalStringSelectValues,
+} from "@/utils/discord/ui/modals";
+
+describe("routed raw modal gateway support", () => {
+  it("forwards the packetless readiness drain to Discord.js", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const calls: Array<[RawDiscordWebSocketPacket | undefined, RawDiscordShard | undefined]> = [];
+      const client = {
+        ws: {
+          handlePacket: (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => {
+            calls.push([packet, shard]);
+            return true;
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      expect(client.ws.handlePacket()).toBe(true);
+      expect(calls).toEqual([[undefined, undefined]]);
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("transforms a nonce-bounded Radio Group submission and consumes its intercepted value once", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-1",
+          type: 5,
+          data: {
+            custom_id: "config:v2:mcp-add-submit:en-US:12345678",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 21,
+                  custom_id: "server-type_12345678",
+                  value: "web_search",
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]?.d?.data?.components).toEqual([
+        {
+          type: 1,
+          components: [
+            {
+              type: 21,
+              custom_id: "server-type_12345678",
+              value: "web_search",
+            },
+          ],
+        },
+      ]);
+      expect(takeRawModalSelectValue("modal-submit-1", "server-type_12345678")).toBe("web_search");
+      expect(takeRawModalSelectValue("modal-submit-1", "server-type_12345678")).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("transforms a nonce-bounded Checkbox Group submission and consumes its intercepted array values once", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-2",
+          type: 5,
+          data: {
+            custom_id: "moderation:v2:member-access-submit:en-US:abcd1234",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 22,
+                  custom_id: "memberaccess_checkbox_abcd1234",
+                  values: ["servermemories", "sampledialogues"],
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]?.d?.data?.components).toEqual([
+        {
+          type: 1,
+          components: [
+            {
+              type: 22,
+              custom_id: "memberaccess_checkbox_abcd1234",
+              values: ["servermemories", "sampledialogues"],
+            },
+          ],
+        },
+      ]);
+      expect(takeRawModalCheckboxGroupValues("modal-submit-2", "memberaccess_checkbox_abcd1234")).toEqual([
+        "servermemories",
+        "sampledialogues",
+      ]);
+      expect(takeRawModalCheckboxGroupValues("modal-submit-2", "memberaccess_checkbox_abcd1234")).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("distinguishes an explicit empty array from missing checkbox group transport", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-empty",
+          type: 5,
+          data: {
+            custom_id: "moderation:v2:member-access-submit:en-US:empty123",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 22,
+                  custom_id: "memberaccess_checkbox_empty123",
+                  values: [],
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toEqual([]);
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toBeUndefined();
+
+      client.ws.handlePacket(
+        {
+          op: 0,
+          t: "INTERACTION_CREATE",
+          d: {
+            id: "modal-submit-empty",
+            type: 5,
+            data: {
+              components: [{ type: 18, component: { type: 22, custom_id: "memberaccess_checkbox_empty123" } }],
+            },
+          },
+        },
+        { id: 0 },
+      );
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toEqual([]);
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toBeUndefined();
+
+      expect(
+        takeRawModalCheckboxGroupValues("non-existent-interaction", "memberaccess_checkbox_empty123"),
+      ).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("transforms a nonce-bounded User Select submission and consumes its intercepted value once", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-user-select",
+          type: 5,
+          data: {
+            custom_id: "moderation:v2:user-blacklist-add-submit:en-US:user1234",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 5,
+                  custom_id: "userblacklist_add_user_user1234",
+                  values: ["123456789012345678"],
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]?.d?.data?.components).toEqual([
+        {
+          type: 1,
+          components: [
+            {
+              type: 5,
+              custom_id: "userblacklist_add_user_user1234",
+              values: ["123456789012345678"],
+            },
+          ],
+        },
+      ]);
+      expect(takeRawModalSelectValue("modal-submit-user-select", "userblacklist_add_user_user1234")).toBe(
+        "123456789012345678",
+      );
+      expect(takeRawModalSelectValue("modal-submit-user-select", "userblacklist_add_user_user1234")).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("transforms a nonce-bounded Channel Select submission and consumes every intercepted value once", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-channel-select",
+          type: 5,
+          data: {
+            custom_id: "moderation:v2:whitelist-channel-add-submit:en-US:chan1234",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 8,
+                  custom_id: "whitelist_channel_add_channel_chan1234",
+                  channel_types: [0],
+                  values: ["987654321098765432", "123456789012345678"],
+                },
+              },
+              {
+                type: 18,
+                component: {
+                  type: 3,
+                  custom_id: "whitelist_channel_add_type_chan1234",
+                  values: ["2"],
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]?.d?.data?.components).toEqual([
+        {
+          type: 1,
+          components: [
+            {
+              type: 8,
+              custom_id: "whitelist_channel_add_channel_chan1234",
+              channel_types: [0],
+              values: ["987654321098765432", "123456789012345678"],
+            },
+          ],
+        },
+        {
+          type: 1,
+          components: [
+            {
+              type: 3,
+              custom_id: "whitelist_channel_add_type_chan1234",
+              values: ["2"],
+            },
+          ],
+        },
+      ]);
+      expect(
+        takeRawModalChannelSelectValues("modal-submit-channel-select", "whitelist_channel_add_channel_chan1234"),
+      ).toEqual(["987654321098765432", "123456789012345678"]);
+      expect(
+        takeRawModalChannelSelectValues("modal-submit-channel-select", "whitelist_channel_add_channel_chan1234"),
+      ).toBeUndefined();
+      expect(takeRawModalSelectValue("modal-submit-channel-select", "whitelist_channel_add_type_chan1234")).toBe("2");
+      expect(
+        takeRawModalSelectValue("modal-submit-channel-select", "whitelist_channel_add_type_chan1234"),
+      ).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("keeps an empty Channel Select submission distinct from a missing one", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const client = { ws: { handlePacket: (_packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {} } };
+      initializeRawModalInterception(client);
+      client.ws.handlePacket(
+        {
+          op: 0,
+          t: "INTERACTION_CREATE",
+          d: {
+            id: "modal-submit-empty-channel-select",
+            type: 5,
+            data: {
+              custom_id: "memories:v2:document-add-submit:en-US:empty1234",
+              components: [
+                {
+                  type: 18,
+                  component: { type: 8, custom_id: "document_channels_empty1234", values: [] },
+                },
+                {
+                  type: 18,
+                  component: { type: 8, custom_id: "memory_channels_empty1234" },
+                },
+              ],
+            },
+          },
+        },
+        { id: 0 },
+      );
+
+      expect(
+        takeRawModalChannelSelectValues("modal-submit-empty-channel-select", "document_channels_empty1234"),
+      ).toEqual([]);
+      expect(
+        takeRawModalChannelSelectValues("modal-submit-empty-channel-select", "document_channels_empty1234"),
+      ).toBeUndefined();
+      expect(takeRawModalChannelSelectValues("modal-submit-empty-channel-select", "memory_channels_empty1234")).toEqual(
+        [],
+      );
+      expect(
+        takeRawModalChannelSelectValues("modal-submit-never-captured", "document_channels_empty1234"),
+      ).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("keeps every String Select pick, an empty pick as empty, and consumes a select from both stores", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const client = { ws: { handlePacket: (_packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {} } };
+      initializeRawModalInterception(client);
+      client.ws.handlePacket(
+        {
+          op: 0,
+          t: "INTERACTION_CREATE",
+          d: {
+            id: "modal-submit-multi-string-select",
+            type: 5,
+            data: {
+              custom_id: "nudge-studio:v1:add:en-US:ping_user:multi1234",
+              components: [
+                {
+                  type: 18,
+                  component: { type: 3, custom_id: "nstudio_needs_multi1234", values: ["recent_memory", "tool:image"] },
+                },
+                { type: 18, component: { type: 3, custom_id: "nstudio_tools_multi1234" } },
+              ],
+            },
+          },
+        },
+        { id: 0 },
+      );
+
+      expect(takeRawModalStringSelectValues("modal-submit-multi-string-select", "nstudio_needs_multi1234")).toEqual([
+        "recent_memory",
+        "tool:image",
+      ]);
+      expect(takeRawModalSelectValue("modal-submit-multi-string-select", "nstudio_needs_multi1234")).toBeUndefined();
+      expect(takeRawModalStringSelectValues("modal-submit-multi-string-select", "nstudio_tools_multi1234")).toEqual([]);
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
+  it("transforms a nonce-bounded Role Select submission and consumes its intercepted value once", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const received: RawDiscordWebSocketPacket[] = [];
+      const client = {
+        ws: {
+          handlePacket: (packet: RawDiscordWebSocketPacket, _shard: RawDiscordShard) => {
+            received.push(structuredClone(packet));
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: "modal-submit-role-select",
+          type: 5,
+          data: {
+            custom_id: "moderation:v2:whitelist-role-add-submit:en-US:role1234",
+            components: [
+              {
+                type: 18,
+                component: {
+                  type: 6,
+                  custom_id: "whitelist_role_add_role_role1234",
+                  values: ["876543210987654321"],
+                },
+              },
+            ],
+          },
+        },
+      };
+      client.ws.handlePacket(packet, { id: 0 });
+
+      expect(received[0]?.d?.data?.components).toEqual([
+        {
+          type: 1,
+          components: [
+            {
+              type: 6,
+              custom_id: "whitelist_role_add_role_role1234",
+              values: ["876543210987654321"],
+            },
+          ],
+        },
+      ]);
+      expect(takeRawModalSelectValue("modal-submit-role-select", "whitelist_role_add_role_role1234")).toBe(
+        "876543210987654321",
+      );
+      expect(takeRawModalSelectValue("modal-submit-role-select", "whitelist_role_add_role_role1234")).toBeUndefined();
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+});
+
+describe("shutdown raw modal acknowledgement", () => {
+  beforeAll(() => initializeLocalizer());
+
+  it("records modal preparation age separately from failed REST duration without logging the token", async () => {
+    const client = new Client({ intents: [] });
+    const patchState = (globalThis as GlobalDiscordState).__webSocketPatched;
+    const opener = Object.assign(createRouteInteraction(), {
+      client,
+      token: "PRIVATE_INTERACTION_TOKEN",
+      createdTimestamp: 10_000,
+    }) as unknown as ButtonInteraction;
+    let now = 11_000;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    const fetchSpy = stubGlobalFetch(async () => {
+      now += 2_000;
+      return Response.json({ message: "Expired interaction", code: 10062 }, { status: 404 });
+    });
+    try {
+      await expect(
+        showRoutedRawModal(opener, { custom_id: "fixture-modal", title: "Fixture", components: [] }),
+      ).rejects.toMatchObject({ code: 10062, status: 404 });
+      expect(errors.mock.calls[0]?.[2]).toMatchObject({
+        metadata: { interactionAgeAtRequestMs: 1_000, requestDurationMs: 2_000 },
+      });
+      expect(JSON.stringify(errors.mock.calls)).not.toContain("PRIVATE_INTERACTION_TOKEN");
+      expect(hasRawModalAcknowledgement(opener)).toBe(false);
+    } finally {
+      clock.mockRestore();
+      errors.mockRestore();
+      fetchSpy.mockRestore();
+      if (patchState === undefined) delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      else (globalThis as GlobalDiscordState).__webSocketPatched = patchState;
+      await client.destroy();
+    }
+  });
+
+  it("preserves a raw modal acknowledgement and rejects its submission before collectors", async () => {
+    const client = new Client({ intents: [] });
+    initializeShutdownInteractionAdmission(client);
+    let draining = false;
+    const gate = spyOn(shutdownState, "isDraining").mockImplementation(() => draining);
+    const patchState = (globalThis as GlobalDiscordState).__webSocketPatched;
+    const opener = Object.assign(createRouteInteraction(), {
+      client,
+      token: "fixture-token",
+      isAutocomplete: () => false,
+      isRepliable: () => true,
+    }) as unknown as ButtonInteraction;
+    const received: Interaction[] = [];
+    client.on("interactionCreate", (interaction) => {
+      received.push(interaction);
+    });
+    initializeRawModalInterception(client);
+    const fetchSpy = stubGlobalFetch(async () => new Response(null, { status: 204 }));
+    try {
+      await showRoutedRawModal(opener, { custom_id: "fixture-modal", title: "Fixture", components: [] });
+      expect(hasRawModalAcknowledgement(opener)).toBe(true);
+      expect(opener.replied).toBe(false);
+      draining = true;
+      await rejectInteractionDuringShutdown(opener);
+      expect(hasRawModalAcknowledgement(opener)).toBe(true);
+      expect((opener as unknown as ReturnType<typeof createRouteInteraction>).calls).toHaveLength(0);
+
+      const submitted = Object.assign(createRouteInteraction({ kind: "modal" }), {
+        isAutocomplete: () => false,
+        isRepliable: () => true,
+      });
+      const packet: RawDiscordWebSocketPacket = {
+        op: 0,
+        t: "INTERACTION_CREATE",
+        d: {
+          id: submitted.id,
+          type: 5,
+          data: { components: [{ type: 18, component: { type: 3, custom_id: "choice", values: ["value"] } }] },
+        },
+      };
+      delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      const gateway = {
+        ws: {
+          handlePacket: (_packet: RawDiscordWebSocketPacket) =>
+            client.emit("interactionCreate", submitted as unknown as Interaction),
+        },
+      };
+      initializeRawModalInterception(gateway);
+      gateway.ws.handlePacket(packet);
+      await rejectInteractionDuringShutdown(submitted as unknown as Interaction);
+      expect(received).toHaveLength(0);
+      expect(submitted.calls.map((call) => call.method)).toEqual(["reply"]);
+      expect(JSON.stringify(submitted.replies)).toContain(localizedCopy("en-US", "general.restarting"));
+      expect(takeRawModalSelectValue(submitted.id, "choice")).toBe("value");
+    } finally {
+      gate.mockRestore();
+      fetchSpy.mockRestore();
+      if (patchState === undefined) delete (globalThis as GlobalDiscordState).__webSocketPatched;
+      else (globalThis as GlobalDiscordState).__webSocketPatched = patchState;
+      await client.destroy();
+    }
+  });
+});

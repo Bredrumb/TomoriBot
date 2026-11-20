@@ -1,4 +1,4 @@
-import { ActivityType, type Client, type PresenceStatus } from "discord.js";
+import { type Activity, ActivityType, type Client, type PresenceStatus } from "discord.js";
 import {
   ContextItemTag,
   type ContextPart,
@@ -7,35 +7,12 @@ import {
 } from "@/types/misc/context";
 import type { SimplifiedMessageForContext } from "./types";
 import { log } from "@/utils/misc/logger";
+import { fetchParticipantMember, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
 
 export const MEDIA_IMAGE_MESSAGE_LIMIT = (() => {
   const parsed = Number.parseInt(process.env.MEDIA_IMAGE_MESSAGE_LIMIT || "3", 10);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 3;
 })();
-
-export function buildMediaDescription(msg: SimplifiedMessageForContext): string {
-  const imageCount = msg.imageAttachments.length;
-  const videoCount = msg.videoAttachments.length;
-  const hasGif = msg.imageAttachments.some((att) => att.mimeType?.includes("gif"));
-
-  const mediaParts: string[] = [];
-
-  if (imageCount > 0) {
-    if (hasGif && imageCount === 1) {
-      mediaParts.push("1 GIF");
-    } else if (hasGif) {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""} (including GIF)`);
-    } else {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""}`);
-    }
-  }
-
-  if (videoCount > 0) {
-    mediaParts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
-  }
-
-  return mediaParts.join(" and ");
-}
 
 export function buildMediaAttributionText(msg: SimplifiedMessageForContext, authorName: string): string {
   const imageCount = msg.imageAttachments.length;
@@ -151,7 +128,7 @@ export function getLastImageOccurrenceIndices(
 
 const UTC_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-export function formatRelativeTime(diffMs: number): string {
+function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(diffMs / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -187,6 +164,7 @@ export function pushDialogueHistoryContextItem(
   metadataTag?: ContextItemTag,
   sender?: StructuredContextItem["sender"],
   mediaDescriptors?: MediaDescriptor[],
+  combinedMessageIds?: string[],
 ): void {
   if (parts.length === 0 && (!mediaDescriptors || mediaDescriptors.length === 0)) {
     return;
@@ -197,6 +175,7 @@ export function pushDialogueHistoryContextItem(
     parts,
     metadataTag: metadataTag ?? ContextItemTag.DIALOGUE_HISTORY,
     messageId,
+    ...(combinedMessageIds && { combinedMessageIds }),
     ...(sender && { sender }),
     ...(mediaDescriptors && mediaDescriptors.length > 0 && { mediaDescriptors }),
   });
@@ -207,6 +186,7 @@ export async function getUserPresenceDetails(
   userId: string,
   guildId: string,
   preloadedMember?: import("discord.js").GuildMember | null,
+  requestScope?: ParticipantRequestScope,
 ): Promise<string> {
   try {
     const guild = client.guilds.cache.get(guildId);
@@ -226,12 +206,7 @@ export async function getUserPresenceDetails(
     if (preloadedMember && preloadedMember.id === userId) {
       member = preloadedMember;
     } else {
-      // force:true fetches fresh member metadata (roles, nickname) via REST,
-      // but presence data is gateway-only and comes from guild.presences.cache
-      member = await guild.members.fetch({ user: userId }).catch((error) => {
-        log.warn(`Failed to fetch member ${userId}: ${error}`);
-        return null;
-      });
+      member = await fetchParticipantMember(guild, userId, requestScope);
     }
 
     if (!member) {
@@ -257,7 +232,7 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
-        // 1. Diagnostic log so we can see exactly what the gateway delivered
+        // Diagnostic log so we can see exactly what the gateway delivered
         //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
         const largeText = activity.assets?.largeText?.trim() || null;
         const smallText = activity.assets?.smallText?.trim() || null;
@@ -265,53 +240,7 @@ export async function getUserPresenceDetails(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
 
-        // 2. Compose extra fields once so each case can surface asset text uniformly
-        const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
-        const appendAssetText = (base: string): string => {
-          const extras: string[] = [];
-          if (largeText && !base.includes(largeText)) extras.push(largeText);
-          if (smallText && !base.includes(smallText)) extras.push(smallText);
-          return extras.length > 0 ? `${base} [${extras.join(" / ")}]` : base;
-        };
-
-        switch (activity.type) {
-          case ActivityType.Playing: {
-            // Surface details, state, and any asset hover text
-            const segments: string[] = [`Playing ${activity.name}`];
-            if (activity.details) segments.push(activity.details);
-            if (activity.state) segments.push(activity.state);
-            return appendAssetText(segments.join(": ")) + timeSpent;
-          }
-          case ActivityType.Streaming:
-            return appendAssetText(`Streaming ${activity.name}`) + timeSpent;
-          case ActivityType.Listening:
-            if (activity.name === "Spotify" && activity.details && activity.state) {
-              return `Listening to ${activity.details} by ${activity.state} on Spotify${timeSpent}`;
-            }
-
-            if (activity.details && activity.state) {
-              return (
-                appendAssetText(`Listening to ${activity.state} - ${activity.details} on ${activity.name}`) + timeSpent
-              );
-            }
-            return appendAssetText(`Listening to ${activity.name}`) + timeSpent;
-          case ActivityType.Watching:
-            return appendAssetText(`Watching ${activity.name}`) + timeSpent;
-          case ActivityType.Custom: {
-            // Custom Status — some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
-            const parts: string[] = [];
-            if (activity.emoji?.name) parts.push(activity.emoji.name);
-            if (activity.state) parts.push(activity.state);
-            if (activity.details && !parts.includes(activity.details)) parts.push(activity.details);
-            if (largeText && !parts.includes(largeText)) parts.push(largeText);
-            if (smallText && !parts.includes(smallText)) parts.push(smallText);
-            return parts.length > 0 ? `Custom status: ${parts.join(": ")}` : "Custom status";
-          }
-          case ActivityType.Competing:
-            return appendAssetText(`Competing in ${activity.name}`) + timeSpent;
-          default:
-            return appendAssetText(activity.name);
-        }
+        return formatPresenceActivity(activity);
       });
 
       result += ` - ${activityDetails.join(", ")}`;
@@ -324,6 +253,55 @@ export async function getUserPresenceDetails(
   } catch (error) {
     log.error(`Error getting presence for user ${userId}:`, error);
     return "Status unknown";
+  }
+}
+
+/** One gateway activity as the text the model reads, such as "Playing Elden Ring: Limgrave for 2 hours". */
+export function formatPresenceActivity(activity: Activity): string {
+  const largeText = activity.assets?.largeText?.trim() || null;
+  const smallText = activity.assets?.smallText?.trim() || null;
+  const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
+  const appendAssetText = (base: string): string => {
+    const extras: string[] = [];
+    if (largeText && !base.includes(largeText)) extras.push(largeText);
+    if (smallText && !base.includes(smallText)) extras.push(smallText);
+    return extras.length > 0 ? `${base} [${extras.join(" / ")}]` : base;
+  };
+
+  switch (activity.type) {
+    case ActivityType.Playing: {
+      const segments: string[] = [`Playing ${activity.name}`];
+      if (activity.details) segments.push(activity.details);
+      if (activity.state) segments.push(activity.state);
+      return appendAssetText(segments.join(": ")) + timeSpent;
+    }
+    case ActivityType.Streaming:
+      return appendAssetText(`Streaming ${activity.name}`) + timeSpent;
+    case ActivityType.Listening:
+      if (activity.name === "Spotify" && activity.details && activity.state) {
+        return `Listening to ${activity.details} by ${activity.state} on Spotify${timeSpent}`;
+      }
+
+      if (activity.details && activity.state) {
+        return appendAssetText(`Listening to ${activity.state} - ${activity.details} on ${activity.name}`) + timeSpent;
+      }
+      return appendAssetText(`Listening to ${activity.name}`) + timeSpent;
+    case ActivityType.Watching:
+      return appendAssetText(`Watching ${activity.name}`) + timeSpent;
+    case ActivityType.Custom: {
+      // Custom Status: some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
+      const parts: string[] = [];
+      if (activity.emoji?.name) parts.push(activity.emoji.name);
+      if (activity.state) parts.push(activity.state);
+      if (activity.details && !parts.includes(activity.details)) parts.push(activity.details);
+      if (largeText && !parts.includes(largeText)) parts.push(largeText);
+      if (smallText && !parts.includes(smallText)) parts.push(smallText);
+      return parts.length > 0 ? `Custom status: ${parts.join(": ")}` : "Custom status";
+    }
+    case ActivityType.Competing:
+      return appendAssetText(`Competing in ${activity.name}`) + timeSpent;
+    default:
+      return appendAssetText(activity.name);
   }
 }
 

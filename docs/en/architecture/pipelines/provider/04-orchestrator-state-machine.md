@@ -1,0 +1,127 @@
+---
+title: "04: Orchestrator State Machine"
+aiGenerated: true
+---
+
+The orchestrator state machine drives the provider generator loop, routes normalized chunks to downstream
+stages, resolves stop and interrupt signals, and compiles the terminal `StreamResult`.
+
+## Flow and ownership
+
+`StreamOrchestrator.streamToDiscord()` is the universal coordinator for Discord streaming. It wraps
+the private `executeStream()` method, which instantiates fresh `StreamMetrics`, `StreamState`, and
+delivery configurations before consuming the generator yielded by
+[stage 02](/architecture/pipelines/provider/02-raw-chunk-generation/).
+
+The state machine runs through a `for await` loop over the raw chunk generator:
+
+```mermaid
+flowchart TD
+  gen["Stream generator"] --> stopPre{"Check stop registry<br/>(pre-chunk)"}
+  stopPre -->|"Stop / Interrupt detected"| retStop["Return stop result"]
+  stopPre -->|"Continue"| watchdog["Reset caller watchdog (onStreamProgress)"]
+  watchdog --> norm["Normalize chunk (stage 03 processChunk)"]
+  norm -->|"type = text"| text["Stage 05 processTextChunk"]
+  norm -->|"type = function_call"| fn["Flush pending buffer →<br/>return { status: function_call }"]
+  norm -->|"type = error"| err["Flush pending buffer → show error embed →<br/>return { status: error }"]
+  norm -->|"type = done"| done["Record terminal metadata"]
+  text --> stopPost{"Check stop registry<br/>(post-write)"}
+  done --> stopPost
+  stopPost -->|"Stop detected"| retStop
+  stopPost -->|"More chunks"| stopPre
+  stopPost -->|"Loop exhausted"| complete["completeStreamAfterProviderEnd()<br/>(flushFinalBuffer, clear internal stops, assemble StreamResult)"]
+  complete --> empty{"wasEmptyStreamResponse()?"}
+  empty -->|"Empty"| retEmpty["return { status: empty_response }"]
+  empty -->|"Output"| retOk["return { status: completed }"]
+```
+
+## Stop and interrupt resolution
+
+The orchestrator inspects the stop registry (`src/utils/discord/stream/stopRequests.ts`) before
+processing each chunk and again immediately after delivery writes. The post-write check resolves
+delivery caps (such as message limits) without awaiting another token from the provider.
+Every registered stop and follow-up emits a `stream_stop_requested` metric with the channel, type, and
+reason, so production logs at the `error` level still show which interrupts a turn received.
+
+Stop handling distinguishes these cases:
+
+- **Follow-up interrupts:** When a user sends a new message while generation is in flight, the
+  orchestrator clears the stop request, discards the buffer, and exits immediately with
+  `{ status: "follow_up_interrupt" }`. This lets the chat pipeline start the next turn without delay.
+- **Graceful user stops:** Ordinary streaming flushes pending buffered text and exits with
+  `{ status: "stopped_by_user" }`. Held response text is discarded. `/kill` additionally aborts the transport and
+  rejects the [stream race](/architecture/pipelines/tool-loop/01-stream-once/), which can bypass this flush.
+- **Internal delivery stops:** Stops triggered by delivery caps (`send_message_limit`, `flush_limit`,
+  `speaker_guard`, `channel_deleted`, `missing_access`, `pending_response_limit`) skip the pending
+  buffer flush. Flushing into
+  an inaccessible or rate-limited destination would trigger redundant rejected Discord requests and
+  risk re-registering stops that leak into subsequent turns. A speaker-guard stop can still flush
+  already-accepted aggregated text; it discards the unsafe remainder.
+- **Silent speaker-guard stops:** When a speaker guard stops generation before any visible text is
+  sent, the orchestrator returns `{ status: "empty_response" }` so retry logic can reschedule the turn.
+
+## Chunk routing and token usage
+
+The orchestrator routes normalized chunks based on `ProcessedChunk.type`:
+
+- **Text:** Sent to [stage 05](/architecture/pipelines/provider/05-buffer-management/)
+  (`StreamBufferFlusher.processTextChunk()`) for semantic buffering and boundary detection.
+- **Tool calls:** Triggers a pending buffer flush before returning `{ status: "function_call" }`.
+  The tool loop executes the tool and starts a subsequent generation turn with the tool result.
+- **Errors:** Reports the failure through `reportStreamProviderFailure()` with the attempt's own
+  request key, then flushes pending buffer text and displays a Discord error embed via
+  `StreamErrorUi` (unless suppressed by retries, a hidden turn, or user impersonation), returning
+  `{ status: "error" }`. The report runs for every attempt, shown or not, so callers that retry,
+  surface, or adapt the returned failure (the chat response sink, hidden image planning) never
+  report it again. Thrown stream exceptions are reported once by the orchestrator's own catch.
+- **Done metadata:** Captures terminal completion data such as `finishReason`.
+- **Token usage:** Captured from `metadata.usage` on any chunk (latest non-null wins). This handles
+  providers that report usage on trailing empty chunks or override terminal metadata. Terminal results
+  retain reported usage, including errors, stops and empty replies.
+
+OpenRouter attempts containing video attach `videoRequestDiagnostics` to the existing failure
+report, including suppressed fallback failures. Fields identify the requested model, payload
+attempt, omitted video count, source category, URL scheme, known declared MIME type, inline encoded
+size, available [Discord URL expiry](https://discord.com/developers/docs/reference#signed-attachment-cdn-urls),
+HTTP status, and bounded provider request IDs and serving provider. Raw URLs, query values, filenames,
+media bytes, and prompts are excluded from this structure. Collection makes no additional network
+requests, so CDN reachability and actual media response headers remain unknown. A streamed provider
+rejection can accompany HTTP 200.
+
+## Stream completion
+
+When the generator finishes normally, `completeStreamAfterProviderEnd()` invokes `flushFinalBuffer()`,
+clears internal stop requests, and constructs the completed `StreamResult`.
+
+The outer `streamToDiscord()` wrapper inspects the completed result. If `wasEmptyStreamResponse()`
+detects that no visible text and no tool call were delivered, it returns `{ status: "empty_response" }`
+instead of `"completed"`, allowing upstream fallback and retry logic to trigger.
+
+## Held response presentation
+
+Response Drafting sets `holdResponseText` to collect normalized prose and its presentation segments
+without sending messages or recording delivery receipts. Unlike `suppressTextOutput`, collection
+still runs ordinary formatting, reasoning removal, emoji processing and speaker guards.
+
+Completed and function-call results expose `pendingResponse.text` and a single-use `deliver(signal)`
+closure. Approval replays the saved segments through ordinary delivery with webhook identity and
+Discord limits intact. Only accepted sends create accumulated text and receipts. Cancellation never
+flushes held prose. A speaker guard can complete a valid collected prefix for review; an empty prefix
+retains ordinary empty-response handling.
+
+Collection is bounded before text is retained, because a reviewer limit checked afterwards cannot
+stop a runaway provider. One turn holds at most `MAX_PENDING_RESPONSE_BYTES` (64 KiB) and `MAX_PENDING_RESPONSE_SEGMENTS` across all tool-loop passes; the
+tool loop passes the remaining room as `pendingResponseLimit`. Each pass also stops at the length one
+replay could send (`send_message_limit`, or the flush cap times the message length), and a buffer that
+can never flush, such as an unterminated table or fence, is cut once it exceeds the byte room. The cut
+lands on a code-point boundary, records `pendingResponse.truncation`, and raises the internal
+`pending_response_limit` stop, which completes with the kept prefix like a speaker guard. A truncated
+result never becomes `empty_response`, because rescheduling would regenerate the same oversized output.
+
+## Source pointers
+
+- `src/utils/discord/stream/stateMachine.ts`: `StreamOrchestrator.executeStream` and loop routing.
+- `src/utils/provider/providerErrorMetrics.ts`: `reportStreamProviderFailure` severity and diagnostic fields.
+- `src/types/provider/interfaces.ts`: `StreamResult` definition.
+- `src/utils/discord/stream/stopRequests.ts`: channel stop registry.
+- `src/utils/discord/stream/thoughtLog.ts`: `wasEmptyStreamResponse` evaluation.

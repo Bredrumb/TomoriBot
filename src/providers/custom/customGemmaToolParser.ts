@@ -72,7 +72,7 @@ export class GemmaToolCallParser {
   /**
    * Recognised leaked formats, in priority order. The scanner picks whichever
    * dialect's start token appears *earliest* in the stream, so ordering here only
-   * breaks exact-position ties (which cannot happen — the start tokens differ).
+   * breaks exact-position ties (which cannot happen: the start tokens differ).
    */
   private readonly dialects: GemmaDialect[] = [
     // Special-token form: <|tool_call>call:name{key:value}<tool_call|>
@@ -116,7 +116,7 @@ export class GemmaToolCallParser {
       return { pendingText, functionCall: null };
     }
 
-    // Stream ended mid-accumulation — attempt a best-effort parse with the
+    // Stream ended mid-accumulation, so attempt a best-effort parse with the
     // dialect that opened the block.
     log.info("CustomGemmaToolParser: Stream ended during tool call accumulation — attempting truncated parse");
     const functionCall = this.activeDialect?.parse(this.toolBuffer) ?? null;
@@ -127,8 +127,6 @@ export class GemmaToolCallParser {
     }
     return { pendingText: "", functionCall };
   }
-
-  // ─── Private helpers ────────────────────────────────────────────────────────
 
   private scanForStart(text: string): GemmaFeedResult {
     const combined = this.scanHoldback + text;
@@ -146,7 +144,6 @@ export class GemmaToolCallParser {
     }
 
     if (bestDialect && bestIdx !== -1) {
-      // Found it: emit text before the token, start accumulating after it.
       const visibleText = combined.slice(0, bestIdx);
       this.scanHoldback = "";
       this.activeDialect = bestDialect;
@@ -157,7 +154,7 @@ export class GemmaToolCallParser {
     }
 
     // No full match. Only hold back the minimum tail that is a genuine prefix of
-    // some dialect's start token — normal prose never ends with `<` mid-token so
+    // some dialect's start token, because normal prose never ends with `<` mid-token so
     // holdback is usually "".
     const holdback = this.longestSuffixPrefix(combined);
     this.scanHoldback = holdback;
@@ -186,7 +183,7 @@ export class GemmaToolCallParser {
 
     const functionCall = dialect.parse(block);
     if (!functionCall) {
-      // Parse failed — emit raw block as text so nothing is silently dropped.
+      // Parse failed, so emit raw block as text so nothing is silently dropped.
       log.warn(`CustomGemmaToolParser: Failed to parse block — emitting as text: ${block.slice(0, 200)}`);
       return { visibleText: prependVisible + block, functionCall: null };
     }
@@ -220,13 +217,12 @@ export class GemmaToolCallParser {
    * Expected format: call:{toolName}{key:<|"|>value<|"|>, ...}
    */
   private parseSpecialTokenBlock(block: string): FunctionCall | null {
-    // 1. Try the full well-formed pattern: call:name{...}
     const full = block.match(/^call:(\w+)\{([\s\S]*)\}$/);
     if (full) {
       return this.buildCall(full[1], full[2]);
     }
 
-    // 2. Truncation recovery: closing brace may be missing.
+    // Truncation recovery: closing brace may be missing.
     const open = block.match(/^call:(\w+)\{([\s\S]*)$/);
     if (open) {
       log.info(`CustomGemmaToolParser: Recovering truncated call for "${open[1]}"`);
@@ -248,13 +244,13 @@ export class GemmaToolCallParser {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();
 
-    // 1. Format A — special token string markers: key:<|"|>value<|"|>
+    // Format A: special token string markers: key:<|"|>value<|"|>
     for (const m of argsStr.matchAll(/(\w+):\s*<\|"\|>([\s\S]*?)<\|"\|>/g)) {
       args[m[1]] = m[2];
       matchedKeys.add(m[1]);
     }
 
-    // 2. Format B — standard double-quoted strings: key: "value" or key:"value"
+    // Format B: standard double-quoted strings: key: "value" or key:"value"
     //    Lazy quantifier stops at the first closing quote to keep args separate.
     for (const m of argsStr.matchAll(/(\w+):\s*"([\s\S]*?)"/g)) {
       if (matchedKeys.has(m[1])) continue;
@@ -262,7 +258,7 @@ export class GemmaToolCallParser {
       matchedKeys.add(m[1]);
     }
 
-    // 3. Non-string args: key:rawValue (number / boolean / bare identifier).
+    // Non-string args: key:rawValue (number / boolean / bare identifier).
     //    Mask out the already-captured quoted spans first so a `word:word`
     //    sequence *inside* a string value is not re-scanned as a phantom scalar.
     const residue = argsStr.replace(/(\w+):\s*<\|"\|>[\s\S]*?<\|"\|>/g, "").replace(/(\w+):\s*"[\s\S]*?"/g, "");
@@ -290,20 +286,20 @@ export class GemmaToolCallParser {
   private parseToolCodeBlock(block: string): FunctionCall | null {
     let body = block.trim();
 
-    // 1. Unwrap a single print(...) layer if present: print(name(...)) → name(...)
+    // Unwrap a single print(...) layer if present: print(name(...)) → name(...)
     const printWrap = body.match(/^print\(\s*([\s\S]*?)\s*\)$/);
     if (printWrap) {
       body = printWrap[1].trim();
     }
 
-    // 2. Full well-formed pattern: name(...). Greedy up to the last ')' so nested
+    // Full well-formed pattern: name(...). Greedy up to the last ')' so nested
     //    parens inside argument values are kept inside the args string.
     const full = body.match(/^(\w+)\s*\(([\s\S]*)\)$/);
     if (full) {
       return this.buildPythonCall(full[1], full[2]);
     }
 
-    // 3. Truncation recovery: closing paren may be missing.
+    // Truncation recovery: closing paren may be missing.
     const open = body.match(/^(\w+)\s*\(([\s\S]*)$/);
     if (open) {
       log.info(`CustomGemmaToolParser: Recovering truncated tool_code call for "${open[1]}"`);
@@ -325,20 +321,19 @@ export class GemmaToolCallParser {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();
 
-    // 1. Double-quoted strings: key="value"
     for (const m of argsStr.matchAll(/(\w+)\s*=\s*"([\s\S]*?)"/g)) {
       args[m[1]] = m[2];
       matchedKeys.add(m[1]);
     }
 
-    // 2. Single-quoted strings: key='value' (Gemma uses either quote style).
+    // Single-quoted strings: key='value' (Gemma uses either quote style).
     for (const m of argsStr.matchAll(/(\w+)\s*=\s*'([\s\S]*?)'/g)) {
       if (matchedKeys.has(m[1])) continue;
       args[m[1]] = m[2];
       matchedKeys.add(m[1]);
     }
 
-    // 3. Bare scalars: key=rawValue (number / Python bool / bare identifier).
+    // Bare scalars: key=rawValue (number / Python bool / bare identifier).
     //    Mask out the already-captured quoted spans first so a `word=word`
     //    sequence *inside* a string value is not re-scanned as a phantom scalar.
     const residue = argsStr.replace(/(\w+)\s*=\s*"[\s\S]*?"/g, "").replace(/(\w+)\s*=\s*'[\s\S]*?'/g, "");

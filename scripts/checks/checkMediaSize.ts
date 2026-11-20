@@ -7,10 +7,11 @@
  * (these get uploaded to Discord on seed), plus bundled assets under assets/img.
  *
  * Historical marketing screenshots under .github/release/** are intentionally
- * NOT scanned — they are immutable release artifacts, not shipped or runtime art.
+ * NOT scanned because they are immutable release artifacts, not shipped or runtime art.
  *
- * The budget is configurable via MEDIA_SIZE_LIMIT_BYTES (see .env.optional.example).
- * Run `bun run compress-media` to losslessly shrink offenders in place.
+ * The budget is the `DEFAULT_LIMIT_BYTES` constant in scripts/lib/media.ts. Run
+ * `bun run compress-media` to losslessly shrink offenders in place; when legitimate art still
+ * cannot fit after that, raise the constant there rather than committing an oversized file.
  *
  * Exits non-zero if any in-scope media file exceeds the budget.
  *
@@ -19,17 +20,16 @@
  *   bun run scripts/checks/checkMediaSize.ts
  */
 import { config } from "dotenv";
-import { formatBytes, listInScopeMedia, resolveLimitBytes, SCOPE_PREFIXES } from "../lib/media";
+import { DEFAULT_LIMIT_BYTES, formatBytes, listInScopeMedia, SCOPE_PREFIXES } from "../lib/media";
 
 config({ quiet: true });
 
 function main(): void {
-  const limit = resolveLimitBytes();
+  const limit = DEFAULT_LIMIT_BYTES;
 
-  // 1. Collect in-scope media that exceeds the budget.
   const offenders = listInScopeMedia().filter((file) => file.size > limit);
 
-  // 2. Report. Persona art is listed first and tagged, since it ships to Discord.
+  // Report. Persona art is listed first and tagged, since it ships to Discord.
   if (offenders.length > 0) {
     offenders.sort((a, b) => Number(b.isPersona) - Number(a.isPersona) || b.size - a.size);
     console.error(

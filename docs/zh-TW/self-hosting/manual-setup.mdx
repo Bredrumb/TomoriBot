@@ -1,0 +1,280 @@
+---
+title: "手動設定"
+aiGenerated: false
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+想使用Docker Compose的使用者請跳過此精靈，容器化安裝路徑請參閱[Docker Compose](/self-hosting/docker-compose/)。
+:::
+
+這是給不想使用引導式精靈的技術背景使用者的手動安裝流程。如果你希望有步驟引導，請改用[設定精靈](/self-hosting/setup-wizard/)，它會為你建立`.env`、產生安全的`CRYPTO_SECRET`、設定PostgreSQL並執行安裝。
+
+## 事前準備
+
+- [Bun](https://bun.sh/)
+- 原生安裝的PostgreSQL，或執行在Docker容器中（請參閱步驟2）
+
+PostgreSQL結構描述、`pgcrypto`、種子資料與遷移會在bot啟動時自動初始化。
+
+## 1.安裝
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+bun install --frozen-lockfile
+```
+
+## 2.設定
+
+從範例檔建立環境檔案，並填入所需設定值：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Copy-Item .env.example .env
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+cp .env.example .env
+```
+
+</TabItem>
+</Tabs>
+
+必填項目：
+
+- `DISCORD_TOKEN`：你的Discord bot權杖（啟用`GuildMembers`、`MessageContent`與`GuildPresences`特權意圖）。
+- `CRYPTO_SECRET`：32個字元的加密金鑰（用來加密已儲存的API金鑰）。
+- PostgreSQL連線：`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`。
+- `ALLOW_PRIVATE_NETWORK`：`true`、`false`或`host:port`清單。請參閱[私人網路](/self-hosting/setup-wizard/#private-networks)進行選擇。
+
+請將加密金鑰的受保護複本與資料庫備份分開存放。新版備份不包含`.env`。若需輪換金鑰，請使用`CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2`或後續任意正整數版本，並可選擇搭配`CRYPTO_SECRET_CURRENT`指定使用版本。
+
+:::note[沒有原生PostgreSQL？]
+你可以只在容器中執行資料庫，然後讓`POSTGRES_*`值指向該容器：
+
+```sh
+docker run -d --name tomori-db \
+  -e POSTGRES_USER=tomori -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=tomori \
+  -p 5432:5432 pgvector/pgvector:pg16
+```
+
+接著將`POSTGRES_HOST=localhost`、`POSTGRES_PORT=5432`以及上方的使用者、密碼與資料庫名稱寫入設定。`pgvector/pgvector`映像檔已預先安裝RAG擴充功能；若不需要文件與RAG記憶，可換成`postgres:16`。這種做法只有資料庫跑在Docker中，bot依然在主機的Bun上執行。若需要完全容器化的bot與資料庫，請改用[Docker Compose](/self-hosting/docker-compose/)。
+:::
+
+選用調校設定位於`.env.optional.example`。請將想自訂的值（限制、逾時、功能開關、本機伺服器URL等）複製過來。
+
+請將`data/`目錄保留在持久性儲存空間上。本機檔案可能包含位於`data/avatars/`的人格頭像與立繪、位於`data/voice-samples/`的語音樣本，以及位於`data/custom-expressions/`的自訂表情。資料庫分開儲存，因此請將它與這些檔案一併備份。
+
+## 3.執行
+
+```sh
+bun run dev
+```
+
+當你看到`TomoriBot up and running!`時，請前往Discord並在伺服器中執行`/setup`以連接AI供應商並初始化bot。該指令會開啟引導式檢查清單面板，在你按下`完成設定`之前不會寫入任何資料。
+
+如果你想讓選用的本機伺服器（SearXNG、Crawl4AI、本機TTS/STT）跟著bot一起啟動，請改用`bun run launch`取代`bun run dev`：
+
+```sh
+bun run launch --searxng --crawl4ai
+bun run launch --help        # see all flags
+```
+
+## 選用額外項目（手動「完整安裝」）
+{/* anchor: optional-extras-the-manual-full-install */}
+
+[設定精靈](/self-hosting/setup-wizard/)的`完整安裝`路徑會在基礎安裝之上加入輕量的額外項目。這些項目都不是執行bot的必要條件，但每一項都能解鎖對應功能。若你是手動安裝，請依需求自行加入：
+
+### `pgvector`：文件與RAG記憶
+
+RAG（文件上傳與跨頻道回想）會將嵌入向量儲存在`vector`欄位中，這需要[pgvector](https://github.com/pgvector/pgvector)擴充功能。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+原生Windows PostgreSQL沒有預先建置的`pgvector`套件。原生安裝需要用Visual Studio C++與`nmake`，針對你確切的PostgreSQL版本從原始碼編譯（請參閱pgvector的[Windows說明](https://github.com/pgvector/pgvector#windows)）。在Windows上較簡單的做法是使用上方[設定](#2-設定)所示的`pgvector/pgvector`容器執行PostgreSQL，然後在容器內開啟`psql`：
+
+```powershell
+docker exec -it tomori-db psql -U tomori -d tomori
+```
+
+如果你已為原生Windows PostgreSQL編譯好`pgvector`，請改用`psql`連線：
+
+```powershell
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+請安裝符合你PostgreSQL主版本的`pgvector`套件（Debian/Ubuntu上的PostgreSQL 16範例）：
+
+```bash
+sudo apt-get install -y postgresql-16-pgvector
+```
+
+使用`psql`連線至資料庫（若在Docker中執行，則使用`docker exec -it tomori-db psql -U tomori -d tomori`）：
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+透過Homebrew安裝與Homebrew對應PostgreSQL配方相符的`pgvector`（若你固定了舊版PostgreSQL配方導致預編譯套件不相符，請針對該配方的`pg_config`以`make && make install`從原始碼建置`pgvector`）：
+
+```bash
+brew install pgvector
+```
+
+使用`psql`連線至資料庫（若在Docker中執行，則使用`docker exec -it tomori-db psql -U tomori -d tomori`）：
+
+```bash
+psql -h localhost -p 5432 -U tomori -d tomodb
+```
+
+</TabItem>
+</Tabs>
+
+連線後（`psql`會提示輸入`POSTGRES_PASSWORD`），啟用該擴充功能：
+
+```sql
+CREATE EXTENSION vector;
+```
+
+沒有pgvector時bot依然能執行，但RAG功能會完全無法使用。在還原備份之前，目標資料庫也必須先安裝此擴充功能；詳情請參閱[維護與備份](/self-hosting/maintenance/)。
+
+### `pg_cron`：排程清理工作
+
+`pg_cron`提供選用的定期資料庫維護（清理冷卻與提醒資料列）。本存放庫的Docker Compose已經設定好它。
+
+:::caution[提醒與觸發不需要此擴充功能]
+`pg_cron`純粹負責日常清理，只會清除過期資料列。提醒送達與隨機觸發都在應用程式本身中執行，因此無論有沒有`pg_cron`，這些功能都能正常運作。
+:::
+
+對於自行管理的PostgreSQL，若有需要請先安裝擴充功能套件，再於`postgresql.conf`中載入：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+原生Windows PostgreSQL沒有標準的`pg_cron`預先建置二進位檔；編譯它需要針對你的PostgreSQL伺服器標頭檔進行Visual Studio C++建置（`nmake`），或改透過[Docker Compose](/self-hosting/docker-compose/)或WSL2 Linux執行PostgreSQL。由於`pg_cron`僅清理過期資料列，略過它不會影響bot的任何功能。
+
+</TabItem>
+<TabItem label="Linux">
+
+安裝符合你PostgreSQL主版本的`pg_cron`套件（Debian/Ubuntu上的PostgreSQL 16範例）：
+
+```bash
+sudo apt-get install -y postgresql-16-cron
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+透過Homebrew安裝與Homebrew對應PostgreSQL配方相符的`pg_cron`：
+
+```bash
+brew install pg_cron
+```
+
+</TabItem>
+</Tabs>
+
+在`psql`中找出目前生效的設定檔：
+
+```sql
+SHOW config_file;
+```
+
+在`postgresql.conf`中啟用擴充功能：若`shared_preload_libraries`已經列出其他函式庫，請附加在後面：
+
+```ini
+shared_preload_libraries = 'pg_cron'   # e.g. 'pg_stat_statements,pg_cron'
+cron.database_name = 'your_dbname'
+```
+
+重新啟動PostgreSQL，然後執行：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+### Tokenizer資產
+
+NovelAI文字生成與模型感知logit偏權值需要本機tokenizer資產：
+
+```sh
+bun run setup:tokenizers
+```
+
+部分模型家族（例如Gemma）受存取管制，需要先接受授權並提供[HuggingFace權杖](https://huggingface.co/settings/tokens)：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secureToken = Read-Host -Prompt "Hugging Face token" -AsSecureString
+$env:HF_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+try {
+  bun run setup:tokenizers
+} finally {
+  Remove-Item Env:\HF_TOKEN -ErrorAction SilentlyContinue
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+read -r -s -p "Hugging Face token: " HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'Hugging Face token: '
+read -r -s HF_TOKEN
+echo
+HF_TOKEN="$HF_TOKEN" bun run setup:tokenizers
+unset HF_TOKEN
+```
+
+</TabItem>
+</Tabs>
+
+缺少資產會停用選用的logit偏權值。NovelAI文字生成需要其三個tokenizer家族，若缺少或無效會回傳設定錯誤。這些家族使用固定的公開MIT定義，不需要Hugging Face權杖。若要僅安裝這些家族：
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+下載程式會將檔案寫入存放庫的`tokenizers/`目錄。若`TOKENIZER_ASSET_DIR`指向其他位置，請將下載的家族目錄複製到該處。安裝或修復資產後請重新啟動TomoriBot，因為執行階段會快取載入失敗狀態。
+
+安全的`fetch_url`備援與DuckDuckGo的`web_search`備援均在處理程序內執行，因此兩者都不需要額外安裝。
+
+## 維護、更新與備份
+
+安裝完成後，主機端指令稿（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`等）與更新、備份流程都集中於[維護與備份](/self-hosting/maintenance/)頁面。若你準備拉取新版本，請先從[維護與備份](/self-hosting/maintenance/)開始。

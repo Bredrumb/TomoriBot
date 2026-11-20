@@ -1,42 +1,108 @@
+import {
+  findProviderRequestDeniedError,
+  type ProviderRequestDeniedError,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
+import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
+import { createHash } from "node:crypto";
 import type { CustomEndpointRow } from "@/types/db/schema";
+import {
+  loadHostedSpeechSelection,
+  loadHostedTranscriptionSelections,
+  type HostedSpeechSelection,
+  type HostedTranscriptionSelection,
+} from "@/utils/db/repositories/SpeechRepository";
 import { log } from "@/utils/misc/logger";
-import { buildServerCustomProviderName } from "@/utils/provider/customProviderUtils";
+import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { loadActiveEndpoint, loadEndpointCredentials } from "@/utils/db/repositories/SpeechRepository";
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
+import {
+  loadActiveEndpoint,
+  loadEndpointCredentials,
+  loadSpeechRoutingPolicy,
+} from "@/utils/db/repositories/SpeechRepository";
 
-export interface SpeechEndpointResult {
+interface SpeechEndpointResult {
+  usageContext?: ProviderUsageContext;
   endpoint: CustomEndpointRow;
   /** Empty string when requires_auth = false (local endpoint with no auth). */
   apiKey: string;
 }
 
-/**
- * Resolves the active speech or transcription endpoint for a server by querying
- * `custom_endpoints` directly (capability-first lookup, bypassing the LLM/model chain).
- *
- * @param serverId - Database server_id
- * @param capability - "speech" or "transcription"
- * @returns Endpoint row + decrypted API key, or null if none is registered
- */
+export type SpeechTargetResult =
+  | (SpeechEndpointResult & { kind: "custom-endpoint"; owner: { kind: "server"; ownerId: number } })
+  | (Omit<HostedSpeechSelection, "apiKey" | "keyVersion"> & {
+      kind: "hosted-model";
+      endpoint: null;
+      apiKey: string;
+      usageContext?: ProviderUsageContext;
+    });
+
+export function speechTargetSource(target: SpeechTargetResult | null | undefined) {
+  return target?.kind === "hosted-model" ? target.model : (target?.endpoint ?? null);
+}
+
+export function speechTargetFingerprint(target: SpeechTargetResult | null | undefined): string {
+  if (!target) return "none";
+  return createHash("sha256")
+    .update(
+      JSON.stringify(
+        target.kind === "hosted-model"
+          ? [
+              target.kind,
+              target.model.speech_model_id,
+              target.model.provider,
+              target.model.codename,
+              target.model.voice_mode,
+              target.owner,
+              target.credentialId,
+              target.credentialRevision,
+              target.credentialProvider,
+              target.usageContext,
+              target.apiKey,
+            ]
+          : [
+              target.kind,
+              target.endpoint.custom_endpoint_id,
+              target.endpoint.connection_id,
+              target.endpoint.api_style,
+              target.endpoint.endpoint_url,
+              target.endpoint.extra_config,
+              target.owner,
+              target.apiKey,
+            ],
+      ),
+    )
+    .digest("hex");
+}
+
+export function speechTargetLabel(target: SpeechTargetResult | null | undefined): string {
+  return target?.kind === "hosted-model" ? target.model.codename : (target?.endpoint.label ?? "ElevenLabs");
+}
+
 async function resolveActiveEndpointByCapability(
   serverId: number,
-  capability: "speech" | "transcription",
+  capability: VoiceSourceMode | "transcription",
 ): Promise<SpeechEndpointResult | null> {
   try {
-    // 1. Find the active (is_default) custom endpoint for this capability on the server via repository
     const endpoint = await loadActiveEndpoint(serverId, capability);
 
-    if (!endpoint) {
+    if (!endpoint?.connection_id) {
       return null;
     }
 
-    // 2. Endpoints that don't require auth (local servers) need no key lookup.
+    // Endpoints that don't require auth (local servers) need no key lookup.
     if (!endpoint.requires_auth) {
       return { endpoint, apiKey: "" };
     }
 
-    // 3. Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
-    const providerName = buildServerCustomProviderName(serverId, endpoint.label);
+    // Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
+    const providerName = buildCustomProviderName(endpoint.connection_id);
     const configRow = await loadEndpointCredentials(serverId, providerName);
 
     if (!configRow?.api_key) {
@@ -58,7 +124,7 @@ async function resolveActiveEndpointByCapability(
       return null;
     }
 
-    return { endpoint, apiKey };
+    return { endpoint, apiKey, usageContext: await storedCredentialUsageContext(configRow.api_key, apiKey) };
   } catch (error) {
     log.warn(`[SpeechResolver] Error resolving ${capability} endpoint for server ${serverId}`, error);
     return null;
@@ -69,14 +135,176 @@ async function resolveActiveEndpointByCapability(
  * Resolves the active speech (TTS) endpoint and credentials for a server.
  * Returns null when no speech endpoint is registered.
  */
-export async function resolveActiveSpeechEndpoint(serverId: number): Promise<SpeechEndpointResult | null> {
-  return resolveActiveEndpointByCapability(serverId, "speech");
+async function resolveActiveSpeechEndpoint(
+  serverId: number,
+  mode: VoiceSourceMode,
+): Promise<SpeechEndpointResult | null> {
+  return resolveActiveEndpointByCapability(serverId, mode);
+}
+
+export type TranscriptionTarget =
+  | (SpeechEndpointResult & { kind: "custom-endpoint" })
+  | (Omit<HostedTranscriptionSelection, "apiKey" | "keyVersion"> & {
+      kind: "hosted-model";
+      apiKey: string;
+      usageContext?: ProviderUsageContext;
+    });
+
+async function decryptTranscriptionSelection(
+  selection: HostedTranscriptionSelection | null,
+): Promise<TranscriptionTarget | null> {
+  if (!selection) return null;
+  try {
+    const apiKey = await decryptApiKey(selection.apiKey, selection.keyVersion);
+    return apiKey
+      ? {
+          ...selection,
+          kind: "hosted-model",
+          apiKey,
+          usageContext:
+            selection.model.provider === "vertex"
+              ? undefined
+              : await storedCredentialUsageContext(selection.apiKey, apiKey),
+        }
+      : null;
+  } catch (error) {
+    log.warn("SpeechResolver: transcription credential unavailable", error, {
+      metadata: { owner: selection.owner, provider: selection.model.provider },
+    });
+    return null;
+  }
 }
 
 /**
- * Resolves the active transcription (STT) endpoint and credentials for a server.
- * Returns null when no transcription endpoint is registered.
+ * Lists the transcription targets to try in order for one message.
+ *
+ * The sender's enabled personal model comes first. The server's hosted model, or else its default
+ * endpoint, follows unless BYOK mode forbids server keys or the sender turned off falling back to them.
  */
-export async function resolveActiveTranscriptionEndpoint(serverId: number): Promise<SpeechEndpointResult | null> {
-  return resolveActiveEndpointByCapability(serverId, "transcription");
+export async function resolveTranscriptionTargets(serverId: number, userId?: number): Promise<TranscriptionTarget[]> {
+  const [selections, policy] = await Promise.all([
+    loadHostedTranscriptionSelections(serverId, userId),
+    userId === undefined ? null : loadSpeechRoutingPolicy(serverId, userId),
+  ]);
+  const personal = await decryptTranscriptionSelection(selections.personal);
+  if (policy && !policy.serverAllowed) return personal ? [personal] : [];
+  if (personal && policy && !policy.fallbackEnabled) return [personal];
+  const server =
+    (await decryptTranscriptionSelection(selections.server)) ??
+    (await resolveActiveEndpointByCapability(serverId, "transcription").then((endpoint) =>
+      endpoint ? { ...endpoint, kind: "custom-endpoint" as const } : null,
+    ));
+  return [personal, server].filter((target): target is TranscriptionTarget => target !== null);
+}
+
+export async function resolveSpeechTargets(
+  serverId: number,
+  userId?: number,
+  modelSelection?: GenerationModelSelection | null,
+): Promise<{
+  design: SpeechTargetResult | null;
+  clone: SpeechTargetResult | null;
+  denials?: Partial<Record<VoiceSourceMode, ProviderRequestDeniedError>>;
+}> {
+  if (modelSelection) {
+    if (modelSelection.kind !== "speech" && modelSelection.kind !== "speech-endpoint")
+      throw new GenerationModelUnavailableError();
+    await validateGenerationModelSelection(serverId, userId ?? null, modelSelection);
+    const saved =
+      modelSelection.source === "personal" && userId !== undefined
+        ? await llmProviderRepo.loadUserSavedProviderConfig(userId, modelSelection.provider)
+        : modelSelection.source === "server"
+          ? await llmProviderRepo.loadSavedProviderConfig(serverId, modelSelection.provider)
+          : null;
+    let target: SpeechTargetResult;
+    if (modelSelection.kind === "speech-endpoint") {
+      const endpoint = (await llmProviderRepo.loadCustomEndpointsForServer(serverId)).find(
+        (entry) => entry.custom_endpoint_id === modelSelection.modelId,
+      );
+      if (!endpoint || (endpoint.requires_auth && !saved?.api_key)) throw new GenerationModelUnavailableError();
+      const apiKey =
+        endpoint.requires_auth && saved?.api_key ? await decryptApiKey(saved.api_key, saved.key_version) : "";
+      if (endpoint.requires_auth && !apiKey) throw new GenerationModelUnavailableError();
+      target = {
+        kind: "custom-endpoint",
+        endpoint,
+        apiKey,
+        owner: { kind: "server", ownerId: serverId },
+        usageContext: saved?.api_key && apiKey ? await storedCredentialUsageContext(saved.api_key, apiKey) : undefined,
+      };
+    } else {
+      const model = await llmModelRepo.loadSpeechModelById(modelSelection.modelId);
+      if (!model || !saved) throw new GenerationModelUnavailableError();
+      const personal = "user_id" in saved;
+      const credentialId = personal ? saved.user_saved_config_id : saved.saved_config_id;
+      if (credentialId === undefined) throw new GenerationModelUnavailableError();
+      target = await resolveHostedSpeechTarget({
+        model,
+        apiKey: saved.api_key,
+        keyVersion: saved.key_version,
+        owner: personal ? { kind: "personal", ownerId: saved.user_id } : { kind: "server", ownerId: serverId },
+        credentialId,
+        credentialRevision: saved.credential_revision,
+        credentialProvider: modelSelection.provider,
+      });
+    }
+    const source = speechTargetSource(target);
+    return {
+      design: source && supportsSpeechMode(source, "design") ? target : null,
+      clone: source && supportsSpeechMode(source, "clone") ? target : null,
+    };
+  }
+  const serverAllowed = userId === undefined || (await loadSpeechRoutingPolicy(serverId, userId)).serverAllowed;
+  const denials: Partial<Record<VoiceSourceMode, ProviderRequestDeniedError>> = {};
+  async function resolve(mode: VoiceSourceMode): Promise<SpeechTargetResult | null> {
+    const hosted = await loadHostedSpeechSelection(serverId, mode, userId);
+    if (hosted) {
+      if (hosted.owner.kind === "server" && !serverAllowed) return null;
+      try {
+        return await resolveHostedSpeechTarget(hosted);
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (denied) denials[mode] = denied;
+        log.warn("SpeechResolver: hosted credential unavailable", error, {
+          serverId,
+          metadata: { mode, owner: hosted.owner },
+        });
+        return null;
+      }
+    }
+    if (!serverAllowed) return null;
+    const endpoint = await resolveActiveSpeechEndpoint(serverId, mode);
+    return endpoint ? { ...endpoint, kind: "custom-endpoint", owner: { kind: "server", ownerId: serverId } } : null;
+  }
+  const [design, clone] = await Promise.all([resolve("design"), resolve("clone")]);
+  return { design, clone, ...(Object.keys(denials).length > 0 ? { denials } : {}) };
+}
+
+async function resolveHostedSpeechTarget(
+  hosted: HostedSpeechSelection,
+): Promise<Extract<SpeechTargetResult, { kind: "hosted-model" }>> {
+  const option = findProviderOption(hosted.credentialProvider);
+  let apiKey: string | null = null;
+  let usageContext: ProviderUsageContext | undefined;
+  if (option) {
+    const capability = hosted.model.voice_mode === "clone" ? "speech-clone" : "speech-design";
+    if (
+      !option.capabilities.includes(capability) ||
+      !(await option.availability(hosted.owner)).eligible ||
+      !option.selection.resolveCredentials
+    )
+      throw new GenerationModelUnavailableError();
+    const credentials = await option.selection.resolveCredentials({
+      scope: hosted.owner,
+      capability,
+      modelId: hosted.model.speech_model_id,
+    });
+    apiKey = credentials?.apiKey ?? null;
+    usageContext = credentials?.usageContext;
+  } else if (hosted.apiKey) {
+    apiKey = await decryptApiKey(hosted.apiKey, hosted.keyVersion);
+    if (hosted.model.provider !== "vertex") usageContext = await storedCredentialUsageContext(hosted.apiKey, apiKey);
+  }
+  if (!apiKey) throw new GenerationModelUnavailableError();
+  return { ...hosted, kind: "hosted-model", endpoint: null, apiKey, usageContext };
 }

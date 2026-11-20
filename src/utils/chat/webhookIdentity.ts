@@ -1,7 +1,48 @@
-import type { Client, Guild, Message } from "discord.js";
+import type { BaseGuildTextChannel, Client, Guild, Message, TextChannel, Webhook } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { extractBridgeUserId, stripBridgePrefix } from "@/utils/bridges";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
+import { getCachedManagedWebhookForChannel } from "@/utils/discord/webhook/webhookCore";
+
+let managedMessageTrust = new WeakMap<Message, boolean>();
+
+/** Threads inherit their parent's managed webhook; a name or avatar never proves provenance. */
+export async function verifyMessageWebhook(message: Message): Promise<boolean> {
+  if (!message.webhookId || !message.guildId) return false;
+  const cached = managedMessageTrust.get(message);
+  if (cached !== undefined) return cached;
+  const channelId = message.channel.isThread() ? message.channel.parentId : message.channelId;
+  if (!channelId) return false;
+  const relay = getCachedWebhookRelay(message.webhookId);
+  if (relay && relay.guildId === message.guildId && relay.channelId === channelId) {
+    managedMessageTrust.set(message, true);
+    return true;
+  }
+  try {
+    const webhook = getCachedManagedWebhookForChannel(channelId, message.webhookId);
+    if (webhook && webhook.guildId === message.guildId && webhook.channelId === channelId) {
+      managedMessageTrust.set(message, true);
+      return true;
+    }
+    const row = await serverRepository.loadManagedWebhookByChannelAndWebhookId(channelId, message.webhookId);
+    const trusted = Boolean(
+      row &&
+        row.guild_disc_id === message.guildId &&
+        row.channel_disc_id === channelId &&
+        row.webhook_disc_id === message.webhookId,
+    );
+    managedMessageTrust.set(message, trusted);
+    return trusted;
+  } catch {
+    return false;
+  }
+}
+
+/** Synchronous trigger planning consumes only identity already verified during admission. */
+export function isManagedWebhookMessage(message: Message): boolean {
+  return Boolean(message.webhookId && managedMessageTrust.get(message));
+}
 
 const USER_IMPERSONATION_WEBHOOK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -10,12 +51,20 @@ type CachedWebhookRelayKind = "user_impersonation";
 type CachedWebhookRelay = {
   userId: string;
   kind: CachedWebhookRelayKind;
+  guildId: string;
+  channelId: string;
   cachedAt: number;
 };
 
 const webhookRelayCache = new Map<string, CachedWebhookRelay>();
 
-function cacheWebhookRelay(webhookId: string, userId: string, kind: CachedWebhookRelayKind): void {
+function cacheWebhookRelay(
+  webhookId: string,
+  userId: string,
+  kind: CachedWebhookRelayKind,
+  guildId: string,
+  channelId: string,
+): void {
   if (!webhookId || !userId) {
     return;
   }
@@ -23,16 +72,30 @@ function cacheWebhookRelay(webhookId: string, userId: string, kind: CachedWebhoo
   webhookRelayCache.set(webhookId, {
     userId,
     kind,
+    guildId,
+    channelId,
     cachedAt: Date.now(),
   });
 }
 
-export function cacheUserImpersonationWebhook(webhookId: string, userId: string): void {
-  cacheWebhookRelay(webhookId, userId, "user_impersonation");
+/**
+ * Registers a temporary impersonation webhook as ours. It is deleted right after the response and
+ * never persisted as a managed webhook, so this cache is the only record that later replies to its
+ * messages came from TomoriBot. The guild and channel binding keeps a foreign webhook that reuses
+ * the id from being trusted elsewhere.
+ */
+export function cacheUserImpersonationWebhook(
+  webhookId: string,
+  userId: string,
+  guildId: string,
+  channelId: string,
+): void {
+  cacheWebhookRelay(webhookId, userId, "user_impersonation", guildId, channelId);
 }
 
 export function clearWebhookIdentityCache(): void {
   webhookRelayCache.clear();
+  managedMessageTrust = new WeakMap();
 }
 
 export function getWebhookIdentityCacheSize(): number {
@@ -66,11 +129,11 @@ export function getCachedImpersonatedUserIdForWebhook(webhookId: string | null |
   return cachedRelay.userId;
 }
 
-export function normalizeIdentityName(value?: string | null): string {
+function normalizeIdentityName(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-export function normalizeAvatarUrlForMatch(value?: string | null): string | null {
+function normalizeAvatarUrlForMatch(value?: string | null): string | null {
   if (!value) {
     return null;
   }
@@ -83,6 +146,41 @@ export function normalizeAvatarUrlForMatch(value?: string | null): string | null
     const trimmed = value.split("?")[0]?.trim();
     return trimmed || null;
   }
+}
+
+function resolvePersonaByWebhookName(
+  rawWebhookName: string | null | undefined,
+  personaByNickname: Map<string, TomoriState>,
+): TomoriState | null {
+  if (!rawWebhookName || extractBridgeUserId(rawWebhookName)) {
+    return null;
+  }
+
+  const webhookName = stripBridgePrefix(rawWebhookName);
+  const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByNickname);
+  return renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)) ?? null;
+}
+
+export function resolvePersonaForMessage(
+  message: Message,
+  allPersonas: readonly TomoriState[],
+  clientUserId?: string | null,
+): TomoriState | null {
+  if (!message.webhookId) {
+    return clientUserId && message.author.id === clientUserId
+      ? (allPersonas.find((persona) => !persona.is_alter) ?? null)
+      : null;
+  }
+  if (!isManagedWebhookMessage(message)) return null;
+
+  const personaByNickname = new Map<string, TomoriState>();
+  for (const persona of allPersonas) {
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
+    if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
+    personaByNickname.set(nicknameKey, persona);
+  }
+
+  return resolvePersonaByWebhookName(message.author.username, personaByNickname);
 }
 
 function resolveImpersonatedUserIdByWebhookIdentity(
@@ -171,25 +269,43 @@ export async function resolveImpersonatedIdentity(
   };
 }
 
+/**
+ * Creates a single-use webhook named and pictured as a member, registered so history, reply
+ * targeting, and block checks credit its messages to that member; the caller deletes it.
+ */
+export async function createUserImpersonationWebhook(
+  client: Client,
+  webhookTargetChannel: TextChannel | BaseGuildTextChannel,
+  userId: string,
+  reason: string,
+): Promise<{ webhook: Webhook; displayName: string; avatarUrl?: string }> {
+  const identity = await resolveImpersonatedIdentity(client, webhookTargetChannel.guild, userId, undefined);
+  // A whitespace-only display name is truthy, so it would reach Discord as the webhook name.
+  const displayName = identity.displayName.trim() || "User";
+  const webhook = await webhookTargetChannel.createWebhook({
+    name: displayName,
+    avatar: identity.avatarUrl || undefined,
+    reason,
+  });
+
+  cacheUserImpersonationWebhook(webhook.id, userId, webhookTargetChannel.guildId, webhookTargetChannel.id);
+  return { webhook, displayName, avatarUrl: identity.avatarUrl };
+}
+
 export function resolveReferencedWebhookTarget(
   referenceMessage: Message,
   personaByNickname: Map<string, TomoriState>,
   guild: Guild | null | undefined,
 ): { replyPersona: TomoriState | null; impersonatedUserId: string | null } {
-  if (!referenceMessage.webhookId) {
+  if (!isManagedWebhookMessage(referenceMessage)) {
     return { replyPersona: null, impersonatedUserId: null };
   }
 
   const cachedRelay = getCachedWebhookRelay(referenceMessage.webhookId);
   const rawWebhookName = referenceMessage.author.username;
-  if (rawWebhookName && !extractBridgeUserId(rawWebhookName)) {
-    const webhookName = stripBridgePrefix(rawWebhookName);
-    const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByNickname);
-    const matchedPersona =
-      renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName));
-    if (matchedPersona) {
-      return { replyPersona: matchedPersona, impersonatedUserId: null };
-    }
+  const matchedPersona = resolvePersonaByWebhookName(rawWebhookName, personaByNickname);
+  if (matchedPersona) {
+    return { replyPersona: matchedPersona, impersonatedUserId: null };
   }
 
   if (cachedRelay?.kind === "user_impersonation") {

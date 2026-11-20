@@ -3,15 +3,15 @@ import { naiPresetSections } from "./naiPresets";
 import { bool, jsonb, str } from "./sql";
 import type { NaiModelTarget, NaiPresetInput } from "./types";
 
-const NAI_COLUMNS = "preset_name, model_target, is_default, preset_desc, ja_preset_desc, parameters";
+const NAI_COLUMNS = "preset_name, model_target, is_default, preset_desc, descriptions, parameters";
 
 const NAI_ON_CONFLICT = `ON CONFLICT (preset_name, model_target) DO UPDATE
     SET parameters     = EXCLUDED.parameters,
         is_default     = EXCLUDED.is_default,
         preset_desc    = EXCLUDED.preset_desc,
-        ja_preset_desc = EXCLUDED.ja_preset_desc`;
+        descriptions = EXCLUDED.descriptions`;
 
-const NAI_MODEL_TARGETS: NaiModelTarget[] = ["kayra", "erato"];
+const NAI_MODEL_TARGETS: NaiModelTarget[] = ["kayra", "erato", "xialong"];
 
 function rowsOf(): NaiPresetInput[] {
   return naiPresetSections.flatMap((section) => section.rows);
@@ -23,7 +23,7 @@ function renderNaiPresetTuple(preset: NaiPresetInput): string {
     str(preset.modelTarget),
     bool(preset.isDefault),
     str(preset.desc),
-    str(preset.jaDesc),
+    jsonb({ "en-US": preset.desc, ...preset.i18n }),
     jsonb(preset.parameters),
   ].join(", ");
 }

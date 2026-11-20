@@ -6,12 +6,14 @@
  */
 
 import { log } from "@/utils/misc/logger";
+import { readBoundedResponse, ResponseSizeError } from "@/utils/security/boundedResponse";
+import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import type {
   Crawl4aiApiResult,
   Crawl4aiCookie,
+  Crawl4aiCrawlRequest,
   Crawl4aiCrawlResponse,
   Crawl4aiFilterMode,
-  Crawl4aiHealthResponse,
   Crawl4aiMarkdownRequest,
   Crawl4aiMarkdownResponse,
   Crawl4aiRequestConfig,
@@ -22,11 +24,17 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 TomoriBot";
 
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.FETCH_URL_TIMEOUT_MS ?? "15000", 10) || 15000);
-const HEALTHCHECK_CACHE_MS =
-  Math.max(5, Number.parseInt(process.env.FETCH_URL_HEALTHCHECK_CACHE_SEC ?? "60", 10) || 60) * 1000;
+const HEALTHCHECK_CACHE_MS = 60_000;
 const HEALTHCHECK_TIMEOUT_MS = Math.min(3000, REQUEST_TIMEOUT_MS);
 
 const FILTER_MODES = new Set<Crawl4aiFilterMode>(["raw", "fit", "bm25", "llm"]);
+
+const BYTES_PER_MIB = 1024 * 1024;
+const MARKDOWN_RESPONSE_MAX_BYTES = FETCH_LIMITS.MAX_FETCH_SIZE_MB * BYTES_PER_MIB;
+// /crawl repeats the page as raw HTML, cleaned HTML, and several Markdown variants in one body.
+const CRAWL_RESPONSE_MAX_BYTES = 4 * MARKDOWN_RESPONSE_MAX_BYTES;
+// Error bodies are only logged, so a short prefix is enough to diagnose the failure.
+const ERROR_BODY_MAX_BYTES = 4 * 1024;
 
 interface HealthcheckCache {
   available: boolean;
@@ -45,6 +53,11 @@ function getCrawl4aiBaseUrl(): string | null {
 function getCrawl4aiToken(): string | null {
   const raw = process.env.CRAWL4AI_TOKEN?.trim();
   return raw || null;
+}
+
+/** Reads configuration only, so callers can decide on Crawl4AI without paying for a health request. */
+export function isCrawl4aiConfigured(): boolean {
+  return getCrawl4aiBaseUrl() !== null;
 }
 
 /**
@@ -115,6 +128,75 @@ function createAbortController(
   return { controller, timeoutId };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
+}
+
+async function readJsonBody(response: Response, maxBytes: number): Promise<unknown> {
+  return JSON.parse((await readBoundedResponse(response, maxBytes)).toString("utf8"));
+}
+
+async function readErrorSummary(response: Response): Promise<string> {
+  try {
+    return (await readBoundedResponse(response, ERROR_BODY_MAX_BYTES)).toString("utf8");
+  } catch (error) {
+    return error instanceof ResponseSizeError ? `[error body exceeded ${ERROR_BODY_MAX_BYTES} bytes]` : "Unknown error";
+  }
+}
+
+function toMarkdownResponse(body: unknown): Crawl4aiMarkdownResponse | null {
+  if (!isRecord(body) || typeof body.success !== "boolean" || typeof body.url !== "string") return null;
+  if (typeof body.markdown !== "string" || typeof body.filter !== "string") return null;
+  if (!FILTER_MODES.has(body.filter as Crawl4aiFilterMode)) return null;
+  if (!isOptionalString(body.query) || !isOptionalString(body.cache)) return null;
+  return body as unknown as Crawl4aiMarkdownResponse;
+}
+
+function toCrawlResponse(body: unknown): Crawl4aiCrawlResponse | null {
+  if (!isRecord(body) || typeof body.success !== "boolean" || !Array.isArray(body.results)) return null;
+  const [result] = body.results as unknown[];
+  if (result === undefined) return body as unknown as Crawl4aiCrawlResponse;
+  if (!isRecord(result) || typeof result.success !== "boolean" || typeof result.url !== "string") return null;
+  if (!isOptionalString(result.error_message)) return null;
+  const markdown = result.markdown;
+  if (markdown !== undefined && markdown !== null) {
+    if (!isRecord(markdown) || !isOptionalString(markdown.raw_markdown) || !isOptionalString(markdown.fit_markdown)) {
+      return null;
+    }
+  }
+  return body as unknown as Crawl4aiCrawlResponse;
+}
+
+/**
+ * Maps a bounded-read or JSON failure to the result shape both endpoints return.
+ */
+function describeBodyFailure(endpoint: string, error: unknown): Crawl4aiApiResult<never> | null {
+  if (error instanceof ResponseSizeError) {
+    log.warn(`${SERVICE_NAME} ${endpoint} response exceeded its byte limit`);
+    return { success: false, error: `Crawl4AI ${endpoint} response exceeded the size limit` };
+  }
+  if (error instanceof SyntaxError) {
+    log.warn(`${SERVICE_NAME} ${endpoint} returned malformed JSON`);
+    return { success: false, error: `Crawl4AI ${endpoint} returned malformed JSON` };
+  }
+  return null;
+}
+
+/**
+ * Returns a parenthesized log suffix naming the likely token problem for an auth rejection, or an
+ * empty string for any other status.
+ */
+function authFailureHint(status: number): string {
+  if (status !== 401 && status !== 403) return "";
+  return getCrawl4aiToken()
+    ? " (verify CRAWL4AI_TOKEN in .env matches CRAWL4AI_API_TOKEN on the container)"
+    : " (CRAWL4AI_TOKEN is not set in .env)";
+}
+
 export async function isCrawl4aiAvailable(force = false): Promise<boolean> {
   const baseUrl = getCrawl4aiBaseUrl();
   if (!baseUrl) return false;
@@ -136,20 +218,20 @@ export async function isCrawl4aiAvailable(force = false): Promise<boolean> {
     const available = response.ok;
     healthcheckCache = { available, expiresAt: now + HEALTHCHECK_CACHE_MS };
     if (!available) {
-      log.warn(`${SERVICE_NAME} health check returned status ${response.status}`);
+      log.warn(`${SERVICE_NAME} health check returned status ${response.status}${authFailureHint(response.status)}`);
     }
     return available;
   } catch (error) {
     healthcheckCache = { available: false, expiresAt: now + HEALTHCHECK_CACHE_MS };
-    log.warn(`${SERVICE_NAME} health check failed:`, error as Error);
+    // A stopped container fails the same way, so the missing token is offered as a possibility, not the cause.
+    const tokenHint = getCrawl4aiToken()
+      ? ""
+      : " (CRAWL4AI_TOKEN is unset; Crawl4AI 0.9.4 refuses outside connections without one)";
+    log.warn(`${SERVICE_NAME} health check failed${tokenHint}:`, error as Error);
     return false;
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-export function resetCrawl4aiHealthCache(): void {
-  healthcheckCache = null;
 }
 
 export async function crawl4aiMarkdown(
@@ -175,8 +257,10 @@ export async function crawl4aiMarkdown(
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
-      log.warn(`${SERVICE_NAME} /md failed with status ${response.status}: ${errorText}`);
+      const errorText = await readErrorSummary(response);
+      log.warn(
+        `${SERVICE_NAME} /md failed with status ${response.status}${authFailureHint(response.status)}: ${errorText}`,
+      );
       return {
         success: false,
         error: `Crawl4AI request failed: ${response.statusText || response.status}`,
@@ -184,7 +268,14 @@ export async function crawl4aiMarkdown(
       };
     }
 
-    const data = (await response.json()) as Crawl4aiMarkdownResponse;
+    const data = toMarkdownResponse(await readJsonBody(response, MARKDOWN_RESPONSE_MAX_BYTES));
+    if (!data) {
+      return {
+        success: false,
+        error: "Crawl4AI /md returned an unexpected response shape",
+        statusCode: response.status,
+      };
+    }
     if (!data.success) {
       return {
         success: false,
@@ -200,6 +291,8 @@ export async function crawl4aiMarkdown(
       log.warn(`${SERVICE_NAME} /md timed out after ${timeoutMs}ms`);
       return { success: false, error: "Request timed out", statusCode: 408 };
     }
+    const bodyFailure = describeBodyFailure("/md", error);
+    if (bodyFailure) return bodyFailure;
 
     log.warn(`${SERVICE_NAME} /md request error:`, error as Error);
     return {
@@ -213,7 +306,7 @@ export async function crawl4aiMarkdown(
 
 /**
  * Fetch a URL via /crawl with browser-level cookie injection.
- * Used when CRAWL4AI_COOKIES_JSON is set — /md does not support cookies.
+ * Used when CRAWL4AI_COOKIES_JSON is set, so /md does not support cookies.
  * Returns a normalised Crawl4aiMarkdownResponse so callers stay uniform.
  */
 export async function crawl4aiCrawlWithCookies(
@@ -238,14 +331,16 @@ export async function crawl4aiCrawlWithCookies(
       signal: controller.signal,
       body: JSON.stringify({
         urls: [request.url],
-        // Playwright requires path alongside domain — default to "/" when omitted.
+        // Playwright requires path alongside domain, so default to "/" when omitted.
         browser_config: { cookies: cookies.map((c) => ({ path: "/", ...c })) },
-      } satisfies import("./types").Crawl4aiCrawlRequest),
+      } satisfies Crawl4aiCrawlRequest),
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
-      log.warn(`${SERVICE_NAME} /crawl failed with status ${response.status}: ${errorText}`);
+      const errorText = await readErrorSummary(response);
+      log.warn(
+        `${SERVICE_NAME} /crawl failed with status ${response.status}${authFailureHint(response.status)}: ${errorText}`,
+      );
       return {
         success: false,
         error: `Crawl4AI /crawl request failed: ${response.statusText || response.status}`,
@@ -253,8 +348,15 @@ export async function crawl4aiCrawlWithCookies(
       };
     }
 
-    const data = (await response.json()) as Crawl4aiCrawlResponse;
-    const result = data.results?.[0];
+    const data = toCrawlResponse(await readJsonBody(response, CRAWL_RESPONSE_MAX_BYTES));
+    if (!data) {
+      return {
+        success: false,
+        error: "Crawl4AI /crawl returned an unexpected response shape",
+        statusCode: response.status,
+      };
+    }
+    const result = data.results[0];
 
     if (!data.success || !result?.success) {
       return {
@@ -294,36 +396,9 @@ export async function crawl4aiCrawlWithCookies(
       log.warn(`${SERVICE_NAME} /crawl timed out after ${timeoutMs}ms`);
       return { success: false, error: "Request timed out", statusCode: 408 };
     }
+    const bodyFailure = describeBodyFailure("/crawl", error);
+    if (bodyFailure) return bodyFailure;
     log.warn(`${SERVICE_NAME} /crawl request error:`, error as Error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-export async function getCrawl4aiHealth(
-  config: Crawl4aiRequestConfig = {},
-): Promise<Crawl4aiApiResult<Crawl4aiHealthResponse>> {
-  const baseUrl = config.baseUrl ?? getCrawl4aiBaseUrl();
-  if (!baseUrl) {
-    return { success: false, error: "CRAWL4AI_BASE_URL is not configured", statusCode: 503 };
-  }
-
-  const timeoutMs = config.timeoutMs ?? HEALTHCHECK_TIMEOUT_MS;
-  const { controller, timeoutId } = createAbortController(timeoutMs, config.signal);
-
-  try {
-    const response = await fetch(`${baseUrl}/health`, {
-      method: "GET",
-      signal: controller.signal,
-      headers: buildHeaders(),
-    });
-    const data = (await response.json().catch(() => ({}))) as Crawl4aiHealthResponse;
-    return { success: response.ok, data, statusCode: response.status };
-  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

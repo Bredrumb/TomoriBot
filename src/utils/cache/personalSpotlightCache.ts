@@ -1,16 +1,53 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 
 const spotlightCache = new Map<string, { result: PersonalSpotlightStatus | null; expiresAt: number }>();
 
+/**
+ * Per-server gate so a server that has never configured a spotlight never creates an entry in the
+ * server/user/channel-keyed cache below.
+ *
+ * Any new write path must call {@link invalidatePersonalSpotlightCache}, or this keeps answering
+ * "none" for up to the TTL.
+ */
+const serverHasSpotlights = new Map<number, { hasAny: boolean; expiresAt: number }>();
+
 let cacheHits = 0;
 let cacheMisses = 0;
 
-const CACHE_TTL_MINUTES = Number.parseInt(process.env.PERSONAL_SPOTLIGHT_CACHE_TTL_MINUTES || "5", 10);
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+const MAX_ENTRIES = 2000;
 
 function getCacheKey(serverId: number, userId: number, channelDiscId: string): string {
   return `${serverId}:${userId}:${channelDiscId}`;
+}
+
+/**
+ * Bound the cache before inserting.
+ *
+ * The TTL above is consulted only on read, so nothing expires on its own. Expired entries go first,
+ * then oldest-inserted, which relies on Map preserving insertion order.
+ */
+function evictForInsert(now: number): void {
+  if (spotlightCache.size < MAX_ENTRIES) return;
+
+  for (const [key, entry] of spotlightCache) {
+    if (entry.expiresAt <= now) spotlightCache.delete(key);
+  }
+
+  while (spotlightCache.size >= MAX_ENTRIES) {
+    const oldest = spotlightCache.keys().next();
+    if (oldest.done) break;
+    spotlightCache.delete(oldest.value);
+  }
 }
 
 export async function getCachedPersonalSpotlightStatus(
@@ -27,9 +64,25 @@ export async function getCachedPersonalSpotlightStatus(
     return cached.result;
   }
 
+  const gate = serverHasSpotlights.get(serverId);
+  if (gate && gate.expiresAt > now) {
+    if (!gate.hasAny) {
+      cacheHits++;
+      return null;
+    }
+  } else {
+    const hasAny = await userRepository.serverHasPersonalSpotlights(serverId);
+    serverHasSpotlights.set(serverId, { hasAny, expiresAt: now + CACHE_TTL_MS });
+    if (!hasAny) {
+      cacheMisses++;
+      return null;
+    }
+  }
+
   cacheMisses++;
 
   const result = await userRepository.getPersonalSpotlightStatus(serverId, userId, channelDiscId);
+  evictForInsert(now);
   spotlightCache.set(cacheKey, {
     result,
     expiresAt: now + CACHE_TTL_MS,
@@ -39,24 +92,27 @@ export async function getCachedPersonalSpotlightStatus(
 }
 
 export function invalidatePersonalSpotlightCache(serverId: number, userId?: number, channelDiscId?: string): void {
-  const prefixParts = [serverId.toString()];
-  if (userId !== undefined) {
-    prefixParts.push(userId.toString());
-  }
-  if (channelDiscId !== undefined) {
-    prefixParts.push(channelDiscId);
-  }
-  const prefix = `${prefixParts.join(":")}${channelDiscId !== undefined ? "" : ":"}`;
+  // The first spotlight created or the last removed flips the gate, so it drops with the entries.
+  serverHasSpotlights.delete(serverId);
 
   for (const key of spotlightCache.keys()) {
-    if (key.startsWith(prefix)) {
+    const [server, user, channel] = key.split(":");
+    if (
+      server === String(serverId) &&
+      (userId === undefined || user === String(userId)) &&
+      (channelDiscId === undefined || channel === channelDiscId)
+    ) {
       spotlightCache.delete(key);
     }
   }
+  broadcastInvalidation("personalSpotlight", [
+    [String(serverId), userId === undefined ? null : String(userId), channelDiscId ?? null],
+  ]);
 }
 
 export function clearPersonalSpotlightCache(): void {
   spotlightCache.clear();
+  serverHasSpotlights.clear();
   cacheHits = 0;
   cacheMisses = 0;
 }
@@ -75,3 +131,10 @@ export function getPersonalSpotlightCacheStats(): {
     size: spotlightCache.size,
   };
 }
+
+registerInvalidation(
+  "personalSpotlight",
+  z.tuple([invalidationDatabaseId, invalidationDatabaseId.nullable(), invalidationKey.nullable()]),
+  ([server, user, channel]) => invalidatePersonalSpotlightCache(server, user ?? undefined, channel ?? undefined),
+  clearPersonalSpotlightCache,
+);

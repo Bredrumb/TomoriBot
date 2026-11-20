@@ -4,12 +4,15 @@
  * as well as optimizing images before sending to LLM providers.
  */
 
+// sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
+//    rather than a member of a merged `sharp` namespace.
 import sharp from "sharp";
+import { recordChatTurnFetch } from "@/utils/chat/turnLatency";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-// ── LLM context image optimization thresholds ────────────────────────
 // Images exceeding these limits are downscaled before being sent to providers
 // to prevent stream timeouts (especially on slower models like Qwen via OpenRouter).
 
@@ -19,8 +22,8 @@ const IMAGE_CONTEXT_MAX_BYTES = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_BY
 /** Maximum pixel dimension on the longest side before downscaling (default 2048 px) */
 const IMAGE_CONTEXT_MAX_DIMENSION = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_DIMENSION ?? "2048", 10);
 
-/** JPEG quality used when an image is downscaled (default 85) */
-const IMAGE_CONTEXT_JPEG_QUALITY = Number.parseInt(process.env.IMAGE_CONTEXT_JPEG_QUALITY ?? "85", 10);
+/** JPEG quality used when an image is downscaled */
+const IMAGE_CONTEXT_JPEG_QUALITY = 85;
 
 /** Timeout in milliseconds for fetching images for LLM context (default 20 s) */
 const IMAGE_FETCH_TIMEOUT_MS = Number.parseInt(process.env.IMAGE_FETCH_TIMEOUT_MS ?? "20000", 10);
@@ -33,58 +36,172 @@ export interface OptimizedImage {
   mimeType: string;
 }
 
+interface FetchedImage {
+  data: string;
+  mimeType?: string;
+  contentType?: string;
+}
+
+const IMAGE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const imageCache = new Map<string, FetchedImage>();
+const inFlightImages = new Map<string, Promise<FetchedImage>>();
+let imageCacheBytes = 0;
+
+function getImageCacheKey(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "https:" ||
+      !["cdn.discordapp.com", "media.discordapp.net"].includes(parsed.hostname) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port
+    ) {
+      return undefined;
+    }
+    for (const parameter of ["ex", "is", "hm"]) parsed.searchParams.delete(parameter);
+    return parsed.href;
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearImageCache(): void {
+  imageCache.clear();
+  inFlightImages.clear();
+  imageCacheBytes = 0;
+}
+
+export function getImageCacheSize(): number {
+  return imageCache.size;
+}
+
+function storeImage(key: string, image: FetchedImage): void {
+  const bytes = Buffer.byteLength(image.data);
+  if (bytes > IMAGE_CACHE_MAX_BYTES) return;
+  while (imageCacheBytes + bytes > IMAGE_CACHE_MAX_BYTES) {
+    const oldest = imageCache.entries().next();
+    if (oldest.done) break;
+    imageCache.delete(oldest.value[0]);
+    imageCacheBytes -= Buffer.byteLength(oldest.value[1].data);
+  }
+  imageCache.set(key, image);
+  imageCacheBytes += bytes;
+}
+
+async function fetchCachedImage(url: string): Promise<FetchedImage> {
+  const key = getImageCacheKey(url);
+  if (!key) return fetchImage(url);
+  const cached = imageCache.get(key) ?? inFlightImages.get(key);
+  if (cached) {
+    const validation = await validateRemoteUrl(url);
+    if (!validation.valid) throw new Error("Image URL refused by policy");
+    return cached;
+  }
+  const pending = fetchImage(url).then((image) => {
+    if (inFlightImages.get(key) === pending) storeImage(key, image);
+    return image;
+  });
+  inFlightImages.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inFlightImages.get(key) === pending) inFlightImages.delete(key);
+  }
+}
+
+function detectImageMimeType(buffer: Buffer): string | undefined {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))) {
+    return "image/png";
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (buffer.length >= 6) {
+    const signature = buffer.subarray(0, 6).toString("ascii");
+    if (signature === "GIF87a" || signature === "GIF89a") {
+      return "image/gif";
+    }
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (buffer.length >= 16 && buffer.subarray(4, 8).toString("ascii") === "ftyp") {
+    const brands = buffer.subarray(8, Math.min(buffer.length, 32)).toString("ascii");
+    if (brands.includes("avif") || brands.includes("avis")) {
+      return "image/avif";
+    }
+  }
+  return undefined;
+}
+
+function normalizeMimeType(mimeType: string | undefined): string | undefined {
+  const normalized = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
+  return normalized || undefined;
+}
+
 /**
  * Fetch an image from a URL and conditionally downscale it for LLM context use.
  *
  * Uses a three-tier cost check to avoid unnecessary work:
- * 1. **Buffer byte length** (O(1)) — if under threshold, return as-is.
- * 2. **Sharp metadata** (header-only read, <1 ms) — check pixel dimensions.
- * 3. **Sharp resize** (decode + encode) — only runs when the image actually exceeds
+ * 1. **Buffer byte length** (O(1)) if under threshold, return as-is.
+ * 2. **Sharp metadata** (header-only read, <1 ms): check pixel dimensions.
+ * 3. **Sharp resize** (decode + encode); only runs when the image actually exceeds
  *    the maximum dimension, converting to JPEG for significantly smaller payloads.
  *
  * This prevents multi-MB base64 payloads from causing provider stream timeouts
  * while adding near-zero overhead for normally-sized images.
  *
- * @param url - HTTP(S) URL to fetch the image from
  * @param sourceMimeType - Original MIME type hint (used as fallback if no optimization needed)
  * @returns Optimized base64 image data and final MIME type
  * @throws Error if the fetch itself fails
  */
 export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string): Promise<OptimizedImage> {
-  // 1. Fetch the raw image bytes
+  const image = await fetchCachedImage(url);
+  return {
+    data: image.data,
+    mimeType: image.mimeType ?? normalizeMimeType(sourceMimeType) ?? image.contentType ?? "image/jpeg",
+  };
+}
+
+async function fetchImage(url: string): Promise<FetchedImage> {
+  const downloadStartedAt = performance.now();
   const downloadResult = await safeDownload(url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: IMAGE_FETCH_TIMEOUT_MS,
   });
+  if (!url.startsWith("data:") && downloadResult.error !== "blocked_by_policy") {
+    recordChatTurnFetch("image", performance.now() - downloadStartedAt);
+  }
   if (!downloadResult.success || !downloadResult.buffer) {
     throw new Error(`Image fetch failed: ${downloadResult.details ?? downloadResult.error ?? "unknown error"}`);
   }
 
   const buffer = downloadResult.buffer;
   const rawSize = buffer.byteLength;
-  const finalMimeType = sourceMimeType || downloadResult.contentType || "image/jpeg";
+  // Discord filenames and remote headers can disagree with the payload bytes. Provider APIs use
+  // the data-URI MIME label while decoding, so prefer recognizable file signatures.
+  const finalMimeType = detectImageMimeType(buffer);
+  const contentType = normalizeMimeType(downloadResult.contentType);
 
-  // 2. Fast path — small images pass through unchanged
   if (rawSize <= IMAGE_CONTEXT_MAX_BYTES) {
-    return { data: buffer.toString("base64"), mimeType: finalMimeType };
+    return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
   }
 
-  // 3. Buffer exceeds byte threshold — read dimensions from the image header
   try {
     const metadata = await sharp(buffer).metadata();
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
     const longestSide = Math.max(width, height);
 
-    // If dimensions are within limits, the file is just a dense format (e.g. BMP) — pass through
     if (longestSide <= IMAGE_CONTEXT_MAX_DIMENSION) {
-      log.info(
-        `Image ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) is within dimension limit, passing through`,
-      );
-      return { data: buffer.toString("base64"), mimeType: finalMimeType };
+      return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
     }
 
-    // 4. Downscale to max dimension and re-encode as JPEG
     const optimizedBuffer = await sharp(buffer)
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
@@ -95,22 +212,17 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
       .toBuffer();
 
-    const optimizedSize = optimizedBuffer.byteLength;
-    log.info(
-      `Optimized image for LLM context: ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) → ${IMAGE_CONTEXT_MAX_DIMENSION}px max (${(optimizedSize / 1024).toFixed(0)} KB)`,
-    );
-
     return {
       data: optimizedBuffer.toString("base64"),
       mimeType: "image/jpeg",
     };
   } catch (sharpError) {
-    // Sharp failed (corrupt image, unsupported format, etc.) — fall back to raw data
+    // Sharp failed (corrupt image, unsupported format, etc.), so fall back to raw data
     // so the provider can still attempt to process it
     log.warn(
       `Image optimization failed, sending raw (${(rawSize / 1024 / 1024).toFixed(1)} MB): ${sharpError instanceof Error ? sharpError.message : String(sharpError)}`,
     );
-    return { data: buffer.toString("base64"), mimeType: finalMimeType };
+    return { data: buffer.toString("base64"), mimeType: finalMimeType, contentType };
   }
 }
 
@@ -125,12 +237,10 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
 export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string): Promise<OptimizedImage> {
   const rawSize = buffer.byteLength;
 
-  // 1. Fast path — small images pass through unchanged
   if (rawSize <= IMAGE_CONTEXT_MAX_BYTES) {
     return { data: buffer.toString("base64"), mimeType: sourceMimeType };
   }
 
-  // 2. Check dimensions
   try {
     const metadata = await sharp(buffer).metadata();
     const width = metadata.width ?? 0;
@@ -141,7 +251,6 @@ export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string
       return { data: buffer.toString("base64"), mimeType: sourceMimeType };
     }
 
-    // 3. Downscale
     const optimizedBuffer = await sharp(buffer)
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
@@ -151,10 +260,6 @@ export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string
       })
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
       .toBuffer();
-
-    log.info(
-      `Optimized image buffer: ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) → ${IMAGE_CONTEXT_MAX_DIMENSION}px max (${(optimizedBuffer.byteLength / 1024).toFixed(0)} KB)`,
-    );
 
     return {
       data: optimizedBuffer.toString("base64"),
@@ -189,7 +294,6 @@ function selectClosestNaiReferenceCanvas(width: number, height: number): { width
  * Center-crop an image to a 1:1 square aspect ratio
  * This is ideal for Discord avatar images which display best as squares
  *
- * @param buffer - Input image buffer (any format supported by Sharp)
  * @returns Promise<Buffer> - Output PNG buffer cropped to square
  *
  * @example
@@ -198,26 +302,19 @@ function selectClosestNaiReferenceCanvas(width: number, height: number): { width
  */
 export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
   try {
-    // 1. Get image metadata to determine current dimensions
     const metadata = await sharp(buffer).metadata();
 
     if (!metadata.width || !metadata.height) {
       throw new Error("Unable to read image dimensions");
     }
 
-    log.info(`Processing image: ${metadata.width}x${metadata.height} (${metadata.format})`);
-
-    // 2. Determine the size of the square (use the smaller dimension)
     const squareSize = Math.min(metadata.width, metadata.height);
 
-    // 3. Calculate the extraction position to center the crop
+    // Calculate the extraction position to center the crop
     // For a 1920x1080 image, we want to extract a 1080x1080 square from the center
     const left = Math.floor((metadata.width - squareSize) / 2);
     const top = Math.floor((metadata.height - squareSize) / 2);
 
-    log.info(`Cropping to ${squareSize}x${squareSize} square (offset: ${left}x${top})`);
-
-    // 4. Extract the square region and convert to PNG
     const croppedBuffer = await sharp(buffer)
       .extract({
         left,
@@ -228,37 +325,10 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
       .png() // Convert to PNG format for consistency
       .toBuffer();
 
-    log.info(`Image successfully cropped to square (${croppedBuffer.length} bytes)`);
-
     return croppedBuffer;
   } catch (error) {
     log.error("Failed to crop image to square:", error);
     throw new Error(`Image processing failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
-}
-
-/**
- * Resize an image to a specific width while maintaining aspect ratio
- *
- * @param buffer - Input image buffer
- * @param targetWidth - Desired width in pixels
- * @returns Promise<Buffer> - Resized PNG buffer
- */
-export async function resizeImage(buffer: Buffer, targetWidth: number): Promise<Buffer> {
-  try {
-    const resizedBuffer = await sharp(buffer)
-      .resize({
-        width: targetWidth,
-        fit: "contain", // Maintain aspect ratio
-      })
-      .png()
-      .toBuffer();
-
-    log.info(`Image resized to ${targetWidth}px width`);
-    return resizedBuffer;
-  } catch (error) {
-    log.error("Failed to resize image:", error);
-    throw new Error(`Image resize failed: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }
 
@@ -270,7 +340,6 @@ export async function resizeImage(buffer: Buffer, targetWidth: number): Promise<
  * 1536x1024. This helper mirrors that preprocessing so API requests don't send
  * arbitrary image dimensions directly.
  *
- * @param buffer - Input image buffer
  * @returns Promise<Buffer> - PNG buffer normalized to a supported NAI canvas
  */
 export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer> {
@@ -292,10 +361,6 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
       .png()
       .toBuffer();
 
-    log.info(
-      `[NAI] Normalized reference image ${metadata.width}x${metadata.height} -> ${canvas.width}x${canvas.height} with black padding`,
-    );
-
     return normalizedBuffer;
   } catch (error) {
     log.error("Failed to normalize NovelAI reference image:", error);
@@ -308,32 +373,14 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
 /**
  * Convert an image buffer to PNG format
  *
- * @param buffer - Input image buffer (any format)
  * @returns Promise<Buffer> - PNG buffer
  */
 export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
   try {
     const pngBuffer = await sharp(buffer).png().toBuffer();
-    log.info("Image converted to PNG format");
     return pngBuffer;
   } catch (error) {
     log.error("Failed to convert image to PNG:", error);
     throw new Error(`Image conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
-}
-
-/**
- * Get metadata from an image buffer
- *
- * @param buffer - Input image buffer
- * @returns Promise<sharp.Metadata> - Image metadata
- */
-export async function getImageMetadata(buffer: Buffer): Promise<sharp.Metadata> {
-  try {
-    const metadata = await sharp(buffer).metadata();
-    return metadata;
-  } catch (error) {
-    log.error("Failed to read image metadata:", error);
-    throw new Error(`Image metadata read failed: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }

@@ -1,9 +1,27 @@
+import {
+  lorebookEntryInputSchema,
+  LOREBOOK_ENTRIES_PER_SCOPE_MAX,
+  type LorebookEntryInput,
+} from "@/modules/lorebooks/db/types";
 /**
  * Type definitions and schemas for TomoriBot preset export/import system
  * Enables sharing personalities as PNG files with embedded metadata
  */
 
 import { z } from "zod";
+import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
+import {
+  naturalNudgeInterestsSchema,
+  naturalNudgeTalkativenessSchema,
+  personaAuthoredIdleNudgesSchema,
+  type NaturalNudgeInterest,
+  type PersonaAuthoredIdleNudge,
+} from "@/modules/natural-nudges/db/types";
+import {
+  EMPTY_PERSONA_NAMING_CONFIG,
+  personaNamingConfigSchema,
+  type PersonaNamingConfig,
+} from "@/types/personaNaming";
 
 /**
  * Current version of the preset export format
@@ -11,27 +29,24 @@ import { z } from "zod";
  */
 export const PRESET_EXPORT_VERSION = "1.0.0";
 
+export type PresetImportMode = "card" | "bundle";
+
 /**
  * Internal marker used for model-only sample dialogues (no paired user turn).
  * Context builder detects this value and skips injecting a user example turn.
  */
 export const UNPAIRED_SAMPLE_DIALOGUE_SENTINEL = "__UNPAIRED_SAMPLE_DIALOGUE__";
 
-function parsePositiveIntegerEnv(name: string, defaultValue: number): number {
-  const parsedValue = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
-}
-
 /**
  * Preset import/export schema limits.
- * Admins can raise these with env vars, but doing so affects untrusted import files
- * and cross-instance preset portability.
  */
-export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRING_LENGTH", 5000);
-export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
-export const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
-export const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-export const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
+export const PRESET_MAX_STRING_LENGTH = 5000;
+// Four 4000-character persona prompt fields can add three two-character separators.
+export const PRESET_MAX_PERSONA_PROMPT_LENGTH = 16_003;
+export const PRESET_MAX_ATTRIBUTES = 200;
+const PRESET_MAX_SAMPLE_DIALOGUES = 100;
+const PRESET_MAX_TRIGGER_WORDS = 100;
+const PRESET_MAX_IMAGE_TAGS = 200;
 
 /**
  * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
@@ -52,6 +67,7 @@ export function buildGeneratedPresetAttributePublicFlags(attributeList: readonly
  * Contains all personality-related fields from personas and persona-scoped config tables.
  */
 export interface PresetExportData {
+  lorebook_entries?: LorebookEntryInput[];
   tomori_nickname: string;
   attribute_list: string[];
   /** Visibility flags aligned to attribute_list; true exposes the attribute to other triggered personas */
@@ -60,13 +76,16 @@ export interface PresetExportData {
   sample_dialogues_out: string[];
   trigger_words: string[];
   persona_prompt?: string | null;
+  speech_voice_design_prompt?: string | null;
+  voice_source_priority?: "design" | "clone";
+  naming_config?: PersonaNamingConfig;
   persona_lineage_id?: number;
   /** Official preset lineage, when this export was materialized from a preset pointer */
   preset_lineage_id?: number;
   /** Public imageboard-style persona physical appearance tags for image generation */
   physical_appearance_tags?: string[];
-  /** Persona-specific NovelAI character reference image URL */
-  nai_char_ref_url?: string | null;
+  /** Persona-specific character reference image URL */
+  char_ref_url?: string | null;
   /** ATTG: Story author name */
   nai_attg_author?: string | null;
   /** ATTG: Story title */
@@ -77,6 +96,13 @@ export interface PresetExportData {
   nai_attg_genre?: string | null;
   /** ATTG: Quality stars (Erato only, 1-5) */
   nai_attg_stars?: number | null;
+  /** Absent in exports that predate the flag, which were all SFW. */
+  is_nsfw?: boolean;
+  /** Natural Nudges topics; absent in exports that predate Natural Nudges. */
+  natural_nudge_interests?: NaturalNudgeInterest[];
+  natural_nudge_talkativeness?: number;
+  /** Persona-authored idle nudge definitions; absent in exports that predate them. */
+  natural_nudge_idle_nudges?: PersonaAuthoredIdleNudge[];
 }
 
 /**
@@ -90,9 +116,6 @@ export interface PresetExport {
   data: PresetExportData;
 }
 
-/**
- * Result type for export operations
- */
 export type ExportResult =
   | {
       success: true;
@@ -103,9 +126,6 @@ export type ExportResult =
       error: string; // Locale key for error message
     };
 
-/**
- * Result type for import operations
- */
 export type ImportResult =
   | {
       success: true;
@@ -115,6 +135,8 @@ export type ImportResult =
         dialogueCount: number;
         triggerWordCount: number;
       };
+      /** Whether the imported main persona now resolves sprites from an official preset. */
+      mainPersonaIsPointer: boolean;
     }
   | {
       success: false;
@@ -130,17 +152,18 @@ export interface ValidationResult {
   error?: string; // Locale key or pipe-separated error
 }
 
-/**
- * Zod schema for preset export data validation
- */
 export const presetExportDataSchema = z.object({
+  lorebook_entries: z.array(lorebookEntryInputSchema).max(LOREBOOK_ENTRIES_PER_SCOPE_MAX).optional(),
   tomori_nickname: z.string().min(1, "Nickname cannot be empty").max(100, "Nickname too long"),
   attribute_list: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_ATTRIBUTES),
   attribute_public_flags: z.array(z.boolean()).max(PRESET_MAX_ATTRIBUTES).optional(),
   sample_dialogues_in: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   sample_dialogues_out: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
-  persona_prompt: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
+  persona_prompt: z.string().max(PRESET_MAX_PERSONA_PROMPT_LENGTH).nullable().optional(),
+  speech_voice_design_prompt: z.string().max(MAX_VOICE_DESIGN_PROMPT_LENGTH).nullable().optional(),
+  voice_source_priority: z.enum(["design", "clone"]).default("design"),
+  naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_lineage_id: z
     .preprocess((value) => {
       if (typeof value === "bigint") {
@@ -164,13 +187,29 @@ export const presetExportDataSchema = z.object({
     }, z.number().int().nonnegative())
     .optional(),
   physical_appearance_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_IMAGE_TAGS).optional(),
-  nai_char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
+  char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_author: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_title: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_tags: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_genre: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(),
+  is_nsfw: z.boolean().optional(),
+  natural_nudge_interests: naturalNudgeInterestsSchema.optional(),
+  natural_nudge_talkativeness: naturalNudgeTalkativenessSchema.optional(),
+  natural_nudge_idle_nudges: personaAuthoredIdleNudgesSchema.optional(),
 });
+
+/**
+ * Files exported before the character reference became provider-neutral name it `nai_char_ref_url`;
+ * those files are still in users' hands, so imports rename the key before validation.
+ */
+export function renameLegacyCharRefKey(data: unknown): unknown {
+  if (typeof data !== "object" || data === null || Array.isArray(data) || !("nai_char_ref_url" in data)) {
+    return data;
+  }
+  const { nai_char_ref_url: legacyCharRefUrl, ...rest } = data as Record<string, unknown>;
+  return "char_ref_url" in rest ? rest : { ...rest, char_ref_url: legacyCharRefUrl };
+}
 
 /**
  * Zod schema for complete preset export structure validation
@@ -179,11 +218,5 @@ export const presetExportSchema = z.object({
   version: z.string(),
   type: z.literal("preset"),
   exported_at: z.string(), // ISO 8601 format
-  data: presetExportDataSchema,
+  data: z.preprocess(renameLegacyCharRefKey, presetExportDataSchema),
 });
-
-/**
- * Type inference from Zod schemas for TypeScript safety
- */
-export type PresetExportDataValidated = z.infer<typeof presetExportDataSchema>;
-export type PresetExportValidated = z.infer<typeof presetExportSchema>;

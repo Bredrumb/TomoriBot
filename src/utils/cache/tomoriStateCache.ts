@@ -1,5 +1,7 @@
 import type { TomoriState } from "@/types/db/schema";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 import { personaRepository } from "@/utils/db/repositories";
 import { cache, lastDbError, invalidateTomoriStateCache } from "./tomoriStateCacheStore";
 import { log } from "../misc/logger";
@@ -17,12 +19,6 @@ export { invalidateTomoriStateCache };
 const DB_ERROR_STALENESS_MS = 2 * 60 * 1000;
 
 /**
- * Cache duration: configurable via env, default 10 minutes.
- * Longer TTL than emoji cache since config changes are less frequent.
- */
-const TOMORI_STATE_CACHE_DURATION_MS = (Number(process.env.TOMORI_STATE_CACHE_TTL_MINUTES) || 10) * 60 * 1000;
-
-/**
  * Cache statistics for monitoring
  */
 let cacheHits = 0;
@@ -38,32 +34,13 @@ let cacheMisses = 0;
  */
 const botStartTimestamp = Date.now();
 
-/**
- * How long after process start to treat empty persona results as "updating"
- * rather than "not set up". Configurable via env (default 3 minutes).
- */
-const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES) || 3) * 60 * 1000;
+/** How long after process start to treat empty persona results as "updating" rather than "not set up". */
+const STARTUP_GRACE_PERIOD_MS = 3 * 60 * 1000;
 
-/**
- * Checks whether the current "not set up" state is likely a transient
- * deployment artifact rather than a genuinely unconfigured server.
- *
- * Returns a synthetic error entry when:
- * 1. A real DB error was recently recorded for this server, OR
- * 2. The bot is still within the startup grace period (fresh container start)
- *
- * Used by the UI layer (replyInfoEmbed / sendStandardEmbed) to swap
- * "Initial Setup Required" for "Currently Updating..." when appropriate.
- *
- * @param serverDiscId - Discord server ID (or user ID for DMs)
- * @returns The error entry if fresh (within staleness threshold) or within
- *          startup grace period, or null if this is genuinely "not set up"
- */
-export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
-  // 1. Check for a real DB error recorded by getCachedAllPersonas
+/** Returns only a recent database failure recorded for this workspace. */
+export function getRecordedDbError(serverDiscId: string): { message: string; timestamp: number } | null {
   const entry = lastDbError.get(serverDiscId);
   if (entry) {
-    // Discard stale entries
     if (Date.now() - entry.timestamp > DB_ERROR_STALENESS_MS) {
       lastDbError.delete(serverDiscId);
     } else {
@@ -71,7 +48,18 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
     }
   }
 
-  // 2. During startup grace period, treat empty results as "updating"
+  return null;
+}
+
+/**
+ * Returns a recent database failure or a startup-grace marker for an empty workspace read.
+ * The synthetic startup marker must not be used to downgrade successfully loaded data.
+ */
+export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
+  const entry = getRecordedDbError(serverDiscId);
+  if (entry) return entry;
+
+  // During startup grace period, treat empty results as "updating"
   //    so users don't see "Initial Setup Required" on servers that ARE
   //    configured but whose data hasn't been fetched yet.
   if (Date.now() - botStartTimestamp < STARTUP_GRACE_PERIOD_MS) {
@@ -99,15 +87,13 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
  * @returns Array of TomoriState objects (main first, then alters), or empty array if not found
  */
 export async function getCachedAllPersonas(serverDiscId: string): Promise<TomoriState[]> {
-  // 1. Check in-memory cache
   const now = Date.now();
   const cachedEntry = cache.get(serverDiscId);
 
   if (cachedEntry) {
     // Check if cache is still fresh (< 10 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
-      // Cache hit - return immediately
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.personas;
     }
@@ -115,18 +101,15 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
     // Cache stale - fall through to refresh
   }
 
-  // 2. Cache miss or stale - refresh from DB
+  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
-    // 3. Load fresh data from database (all personas)
     const personas = await personaRepository.loadAllForServer(serverDiscId);
 
-    // Successful load — clear any stale DB error for this server
     lastDbError.delete(serverDiscId);
 
     if (personas.length > 0) {
-      // Find main persona (is_alter=false)
       const mainPersona = personas.find((p) => !p.is_alter);
       if (!mainPersona) {
         log.error(`[TomoriState Cache] No main persona found for server ${serverDiscId}`);
@@ -135,12 +118,14 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
 
       // Apply tool-use master toggle: when tool_use_enabled is false, artificially
       // override has_tools to false on every persona so all providers see no tools.
+      // The narrowed flag also carries the toggle into context synthesis, but it is not the
+      // enforcement point: a provider holding a live capability catalog can raise it again, so
+      // `resolveToolsEnabled` re-reads tool_use_enabled at every gate.
       const effectivePersonas = personas.map((p) =>
         p.config.tool_use_enabled ? p : { ...p, llm: { ...p.llm, has_tools: false } },
       );
       const effectiveMainPersona = effectivePersonas.find((p) => !p.is_alter) ?? mainPersona;
 
-      // 4. Cache the loaded data
       cache.set(serverDiscId, {
         personas: effectivePersonas,
         mainPersona: effectiveMainPersona,
@@ -183,25 +168,22 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
  * @returns Main TomoriState or null if not found
  */
 export async function getCachedMainPersona(serverDiscId: string): Promise<TomoriState | null> {
-  // 1. Check in-memory cache first for quick lookup
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
     const cacheAge = Date.now() - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
-      // Cache hit - return main persona immediately
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.mainPersona;
     }
   }
 
-  // 2. Cache miss or stale - load all personas
+  // Cache miss or stale - load all personas
   const personas = await getCachedAllPersonas(serverDiscId);
 
   if (personas.length === 0) {
     return null;
   }
 
-  // Return main persona (is_alter=false)
   const mainPersona = personas.find((p) => !p.is_alter);
   return mainPersona || null;
 }
@@ -221,6 +203,7 @@ export async function getCachedTomoriState(serverDiscId: string): Promise<Tomori
  * Useful for testing or manual refresh operations.
  */
 export function clearTomoriStateCache(): void {
+  clearPersonaAppearances();
   cache.clear();
   lastDbError.clear();
   cacheHits = 0;

@@ -1,4 +1,4 @@
-import type { ModalSubmitInteraction, TextInputStyle, APIAttachment } from "discord.js";
+import type { ModalSubmitInteraction, TextInputStyle, APIAttachment, ChannelType } from "discord.js";
 
 /**
  * Options for string select menu choices
@@ -7,14 +7,12 @@ export interface SelectOption {
   label: string;
   value: string;
   description?: string;
+  default?: boolean;
   emoji?: {
     name: string;
   };
 }
 
-/**
- * Options for text input fields in a modal
- */
 export interface ModalInputField {
   customId: string;
   labelKey: string;
@@ -27,9 +25,6 @@ export interface ModalInputField {
   value?: string;
 }
 
-/**
- * Options for string select fields in a modal
- */
 export interface ModalSelectField {
   customId: string;
   labelKey: string;
@@ -41,7 +36,7 @@ export interface ModalSelectField {
 
 /**
  * A single option within a Radio Group (type 21)
- * Note: Radio Group options do not support emojis or descriptions in the current API
+ * Note: Radio Group options do not support emojis in the current API
  */
 export interface RadioGroupOption {
   /** Developer-defined value submitted on selection; max 100 chars */
@@ -70,7 +65,7 @@ export interface CheckboxGroupOption {
 
 /**
  * Options for a Radio Group field in a modal (Discord component type 21)
- * Allows the user to select exactly one option from a fixed list (2–10 options).
+ * Allows the user to select exactly one option from a fixed list (2-10 options).
  * Use the `kind` discriminant to identify this type in the ModalComponent union.
  */
 export interface ModalRadioGroupField {
@@ -86,7 +81,7 @@ export interface ModalRadioGroupField {
 
 /**
  * Options for a Checkbox Group field in a modal (Discord component type 22)
- * Allows the user to select one or many options from a list (1–10 options).
+ * Allows the user to select one or many options from a list (1-10 options).
  * Use a single option with `required: true` as a "required boolean" pattern.
  * Use the `kind` discriminant to identify this type in the ModalComponent union.
  */
@@ -107,7 +102,7 @@ export interface ModalCheckboxGroupField {
 
 /**
  * Options for a Checkbox field in a modal (Discord component type 23)
- * A single binary toggle — cannot be set as required (use Checkbox Group with 1 option instead).
+ * A single binary toggle , so cannot be set as required (use Checkbox Group with 1 option instead).
  * Use the `kind` discriminant to identify this type in the ModalComponent union.
  */
 export interface ModalCheckboxField {
@@ -133,22 +128,72 @@ export interface ModalFileUploadField {
 }
 
 /**
- * Union type for all modal component types
+ * Options for a User Select field in a modal (Discord component type 5)
+ * Wrapped in a Label component (type 18).
+ * Use the `kind` discriminant to identify this type in the ModalComponent union.
  */
+export interface ModalUserSelectField {
+  kind: "userSelect";
+  customId: string;
+  labelKey: string;
+  descriptionKey?: string;
+  placeholder?: string;
+  required?: boolean;
+  minValues?: number;
+  maxValues?: number;
+}
+
+/**
+ * Options for a Role Select field in a modal (Discord component type 6)
+ * Wrapped in a Label component (type 18).
+ * Use the `kind` discriminant to identify this type in the ModalComponent union.
+ */
+export interface ModalRoleSelectField {
+  kind: "roleSelect";
+  customId: string;
+  labelKey: string;
+  descriptionKey?: string;
+  placeholder?: string;
+  required?: boolean;
+  minValues?: number;
+  maxValues?: number;
+}
+
+/**
+ * Options for a Channel Select field in a modal (Discord component type 8)
+ * Wrapped in a Label component (type 18).
+ * Use the `kind` discriminant to identify this type in the ModalComponent union.
+ */
+export interface ModalChannelSelectField {
+  kind: "channelSelect";
+  customId: string;
+  labelKey: string;
+  descriptionKey?: string;
+  placeholder?: string;
+  required?: boolean;
+  minValues?: number;
+  maxValues?: number;
+  channelTypes?: ChannelType[];
+}
+
 export type ModalComponent =
   | ModalInputField
   | ModalSelectField
   | ModalFileUploadField
   | ModalRadioGroupField
   | ModalCheckboxGroupField
-  | ModalCheckboxField;
+  | ModalCheckboxField
+  | ModalUserSelectField
+  | ModalRoleSelectField
+  | ModalChannelSelectField;
 
 /**
  * Type guard for text input fields
  */
 export function isModalInputField(component: ModalComponent): component is ModalInputField {
   return (
-    "style" in component || (!("options" in component) && !("minValues" in component) && !("maxValues" in component))
+    "style" in component ||
+    (!("options" in component) && !("minValues" in component) && !("maxValues" in component) && !("kind" in component))
   );
 }
 
@@ -163,7 +208,7 @@ export function isModalSelectField(component: ModalComponent): component is Moda
  * Type guard for file upload fields
  */
 export function isModalFileUploadField(component: ModalComponent): component is ModalFileUploadField {
-  return "minValues" in component || "maxValues" in component;
+  return !("kind" in component) && !("options" in component) && ("minValues" in component || "maxValues" in component);
 }
 
 /**
@@ -191,6 +236,30 @@ export function isModalCheckboxField(component: ModalComponent): component is Mo
 }
 
 /**
+ * Type guard for User Select fields (type 5)
+ * Uses the `kind` discriminant to avoid ambiguity with other select types.
+ */
+export function isModalUserSelectField(component: ModalComponent): component is ModalUserSelectField {
+  return "kind" in component && (component as ModalUserSelectField).kind === "userSelect";
+}
+
+/**
+ * Type guard for Role Select fields (type 6)
+ * Uses the `kind` discriminant to avoid ambiguity with other select types.
+ */
+export function isModalRoleSelectField(component: ModalComponent): component is ModalRoleSelectField {
+  return "kind" in component && (component as ModalRoleSelectField).kind === "roleSelect";
+}
+
+/**
+ * Type guard for Channel Select fields (type 8)
+ * Uses the `kind` discriminant to avoid ambiguity with other select types.
+ */
+export function isModalChannelSelectField(component: ModalComponent): component is ModalChannelSelectField {
+  return "kind" in component && (component as ModalChannelSelectField).kind === "channelSelect";
+}
+
+/**
  * Configuration options for creating a modal
  * Discord handles modal timeouts naturally (~15 minutes), so no timeout option is needed
  */
@@ -198,19 +267,45 @@ export interface ModalOptions {
   modalTitleKey: string;
   modalCustomId: string;
   components: ModalComponent[]; // Changed from inputs to components
+  /**
+   * Which `>25`-option page selector to render in `promptWithPaginatedModal`.
+   *
+   * - `"legacy"` (default): numbered page-button embed on the interaction's reply.
+   * - `"componentsV2"`: the shared Components V2 range selector
+   *   (`1-25`/`26-50` ranges + Previous/Cancel/Next), identical to the persona
+   *   workflow's `>25` shell.
+   *
+   * At `<=25` options both styles are byte-identical (a direct modal), so this only
+   * affects the paginated path. Defaults to `"legacy"` so existing callers are
+   * unchanged by construction until they explicitly opt in.
+   */
+  selectorStyle?: "legacy" | "componentsV2";
+  /** Title of the page selector shown past 25 options; defaults to `general.pagination.select_page_title`. */
+  pageSelectTitleKey?: string;
+  /**
+   * Description of that selector, receiving `{totalItems}` and `{totalPages}`; defaults to
+   * `general.pagination.select_page_description`.
+   */
+  pageSelectDescriptionKey?: string;
 }
 
-/**
- * Result type for modal interactions
- */
 export type ModalResult = {
-  outcome: "submit" | "timeout";
+  /**
+   * `submit`: the user completed the modal. `timeout`: the selector or modal
+   * expired. `error` : a delivery/collection failure (see {@link ModalResult.error}).
+   * `cancelled` : the user clicked the Cancel button on the `componentsV2` range
+   * selector (the legacy page selector has no Cancel button, so it never returns this).
+   * Callers that gate on `outcome !== "submit"` already handle every non-submit case.
+   */
+  outcome: "submit" | "timeout" | "error" | "cancelled";
   /** Scalar string values from text inputs, radio groups (selected value), and checkboxes ("true"/"false") */
   values?: Record<string, string>;
-  /** Array values from checkbox groups — keyed by customId, value is the array of selected option values */
+  /** Array values from checkbox groups : keyed by customId, value is the array of selected option values */
   multiValues?: Record<string, string[]>;
   /** Resolved attachments from file upload components, keyed by customId */
   attachments?: Record<string, APIAttachment>;
   /** The raw modal submit interaction for further Discord API calls */
   interaction?: ModalSubmitInteraction;
+  /** Preserved failure when displaying or collecting the modal fails for a reason other than timeout. */
+  error?: unknown;
 };

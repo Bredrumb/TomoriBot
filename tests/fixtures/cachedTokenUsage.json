@@ -1,0 +1,135 @@
+{
+  "anthropic": {
+    "segments": [
+      [
+        {
+          "type": "message_start",
+          "message": {
+            "usage": {
+              "input_tokens": 100,
+              "cache_read_input_tokens": 600,
+              "cache_creation_input_tokens": 300,
+              "output_tokens": 1
+            }
+          }
+        },
+        { "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "Hello" } },
+        { "type": "message_delta", "delta": { "stop_reason": "end_turn" }, "usage": { "output_tokens": 40 } },
+        { "type": "message_stop" }
+      ],
+      [
+        {
+          "type": "message_start",
+          "message": {
+            "usage": {
+              "input_tokens": 200,
+              "cache_read_input_tokens": 700,
+              "cache_creation_input_tokens": 0,
+              "output_tokens": 1
+            }
+          }
+        },
+        { "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "Hello" } },
+        {
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn" },
+          "usage": {
+            "input_tokens": 250,
+            "cache_read_input_tokens": 750,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": 60
+          }
+        },
+        { "type": "message_stop" }
+      ]
+    ],
+    "expected": { "inputTokens": 2000, "outputTokens": 100, "cacheReadTokens": 1350, "cacheWriteTokens": 300 }
+  },
+  "openai": {
+    "segments": [
+      [
+        { "choices": [{ "index": 0, "delta": { "content": "Hello" } }] },
+        { "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }] },
+        {
+          "choices": [],
+          "usage": { "prompt_tokens": 1000, "completion_tokens": 40, "prompt_tokens_details": { "cached_tokens": 600 } }
+        }
+      ],
+      [
+        { "choices": [{ "index": 0, "delta": { "content": "Hello" } }] },
+        { "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }] },
+        {
+          "choices": [],
+          "usage": { "prompt_tokens": 1200, "completion_tokens": 60, "prompt_tokens_details": { "cached_tokens": 0 } }
+        }
+      ]
+    ],
+    "expected": { "inputTokens": 2200, "outputTokens": 100, "cacheReadTokens": 600 }
+  },
+  "openrouter": {
+    "segments": [
+      [
+        { "choices": [{ "index": 0, "delta": { "content": "Hello" } }] },
+        { "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }] },
+        {
+          "choices": [],
+          "usage": {
+            "prompt_tokens": 1000,
+            "completion_tokens": 40,
+            "prompt_tokens_details": { "cached_tokens": 600, "cache_write_tokens": 200 },
+            "cost": 0.01
+          }
+        }
+      ],
+      [
+        { "choices": [{ "index": 0, "delta": { "content": "Hello" } }] },
+        { "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }] },
+        {
+          "choices": [],
+          "usage": {
+            "prompt_tokens": 1200,
+            "completion_tokens": 60,
+            "prompt_tokens_details": { "cached_tokens": 0, "cache_write_tokens": 0 },
+            "cost": 0
+          }
+        }
+      ]
+    ],
+    "expected": {
+      "inputTokens": 2200,
+      "outputTokens": 100,
+      "cacheReadTokens": 600,
+      "cacheWriteTokens": 200,
+      "costUsd": 0.01
+    }
+  },
+  "gemini": {
+    "segments": [
+      [
+        { "candidates": [{ "content": { "role": "model", "parts": [{ "text": "Hello" }] } }] },
+        {
+          "candidates": [{ "finishReason": "STOP" }],
+          "usageMetadata": {
+            "promptTokenCount": 1000,
+            "candidatesTokenCount": 20,
+            "thoughtsTokenCount": 10,
+            "cachedContentTokenCount": 700
+          }
+        }
+      ],
+      [
+        { "candidates": [{ "content": { "role": "model", "parts": [{ "text": "Hello" }] } }] },
+        {
+          "candidates": [{ "finishReason": "STOP" }],
+          "usageMetadata": {
+            "promptTokenCount": 1200,
+            "candidatesTokenCount": 30,
+            "thoughtsTokenCount": 15,
+            "cachedContentTokenCount": 0
+          }
+        }
+      ]
+    ],
+    "expected": { "inputTokens": 2200, "outputTokens": 75, "cacheReadTokens": 700 }
+  }
+}

@@ -1,0 +1,251 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { type HumanizerPreset, type HumanizerSettings, matchHumanizerPreset } from "@/constants/humanizer";
+import type { ChatInvocationSource } from "@/utils/chat/diagnosticTimeline";
+import { log } from "@/utils/misc/logger";
+
+interface ChatLatencyInvocation {
+  startedAt: number;
+  gatewayMs: number;
+  source: ChatInvocationSource;
+}
+
+const PROVIDERS = [
+  "anthropic",
+  "custom",
+  "deepseek",
+  "google",
+  "novelai",
+  "nvidia",
+  "openrouter",
+  "vertex",
+  "vertexexpress",
+  "zai",
+  "zaicoding",
+] as const;
+type LatencyProvider = (typeof PROVIDERS)[number] | "unknown";
+type YesNo = "yes" | "no";
+
+interface ChatTurnLatencyFields {
+  gateway_ms: number;
+  admission_ms: number;
+  plan_ms: number;
+  context_ms: number;
+  dispatch_ms: number;
+  provider_ttfb_ms: number;
+  first_message_ms: number;
+  history_fetch_ms: number;
+  assets_ms: number;
+  history_build_ms: number;
+  participant_ms: number;
+  participant_candidate_ms: number;
+  participant_members_ms: number;
+  participant_proxy_ms: number;
+  participant_composition_ms: number;
+  participant_candidate_reads: number;
+  participant_member_cache_hits: number;
+  participant_member_fetches: number;
+  participant_proxy_reads: number;
+  participant_discovery: "unmeasured" | "fresh" | "reused";
+  naming_ms: number;
+  reunion_ms: number;
+  native_ms: number;
+  reaction_fetches: number;
+  reply_fetches: number;
+  image_fetches: number;
+  image_ms: number;
+  provider: LatencyProvider;
+  humanizer: HumanizerPreset | "custom" | "unknown";
+  source: ChatInvocationSource;
+  rag: YesNo;
+  history: "rest" | "reused";
+  drafting: YesNo;
+}
+
+type StageField =
+  | "context_ms"
+  | "history_fetch_ms"
+  | "assets_ms"
+  | "history_build_ms"
+  | "participant_ms"
+  | "participant_candidate_ms"
+  | "participant_members_ms"
+  | "participant_proxy_ms"
+  | "participant_composition_ms"
+  | "naming_ms"
+  | "reunion_ms"
+  | "native_ms";
+
+interface TurnLatencyScope {
+  invocation: ChatLatencyInvocation;
+  fields: ChatTurnLatencyFields;
+  finished: boolean;
+  participantActive: boolean;
+}
+
+const scope = new AsyncLocalStorage<TurnLatencyScope>();
+
+export function createChatLatencyInvocation(
+  createdTimestamp: number,
+  source: ChatInvocationSource,
+  startedAt = performance.now(),
+  receivedAt = Date.now(),
+): ChatLatencyInvocation {
+  return { startedAt, gatewayMs: receivedAt - createdTimestamp, source };
+}
+
+export async function runWithChatTurnLatency<T>(
+  invocation: ChatLatencyInvocation,
+  admissionMs: number,
+  planMs: number,
+  callback: () => Promise<T>,
+): Promise<T> {
+  const active: TurnLatencyScope = {
+    invocation,
+    finished: false,
+    participantActive: false,
+    fields: {
+      gateway_ms: invocation.gatewayMs,
+      admission_ms: admissionMs,
+      plan_ms: planMs,
+      context_ms: -1,
+      dispatch_ms: -1,
+      provider_ttfb_ms: -1,
+      first_message_ms: -1,
+      history_fetch_ms: -1,
+      assets_ms: -1,
+      history_build_ms: -1,
+      participant_ms: -1,
+      participant_candidate_ms: -1,
+      participant_members_ms: -1,
+      participant_proxy_ms: -1,
+      participant_composition_ms: -1,
+      participant_candidate_reads: 0,
+      participant_member_cache_hits: 0,
+      participant_member_fetches: 0,
+      participant_proxy_reads: 0,
+      participant_discovery: "unmeasured",
+      naming_ms: -1,
+      reunion_ms: -1,
+      native_ms: -1,
+      reaction_fetches: 0,
+      reply_fetches: 0,
+      image_fetches: 0,
+      image_ms: 0,
+      provider: "unknown",
+      humanizer: "unknown",
+      source: invocation.source,
+      rag: "no",
+      history: "rest",
+      drafting: "no",
+    },
+  };
+  return scope.run(active, async () => {
+    try {
+      return await callback();
+    } finally {
+      active.finished = true;
+      log.metric("chat_turn_latency", { ...active.fields });
+    }
+  });
+}
+
+function current(): TurnLatencyScope | undefined {
+  const active = scope.getStore();
+  return active?.finished ? undefined : active;
+}
+
+export async function measureChatTurnStage<T>(field: StageField, callback: () => Promise<T>): Promise<T> {
+  const active = current();
+  const participantStage = field === "participant_ms";
+  if (field.startsWith("participant_") && !participantStage && !active?.participantActive) return callback();
+  if (participantStage && active) active.participantActive = true;
+  const startedAt = performance.now();
+  try {
+    return await callback();
+  } finally {
+    if (participantStage && active) active.participantActive = false;
+    if (active && !active.finished) {
+      active.fields[field] = Math.max(0, active.fields[field]) + performance.now() - startedAt;
+    }
+  }
+}
+
+export function recordChatTurnConfiguration(provider: string, humanizer: HumanizerSettings): void {
+  const active = current();
+  if (!active) return;
+  if (active.fields.dispatch_ms < 0) active.fields.provider = providerDimension(provider);
+  active.fields.humanizer = matchHumanizerPreset(humanizer) ?? "custom";
+}
+
+export function recordChatTurnParticipantDiscovery(reused: boolean): void {
+  const active = current();
+  if (active?.participantActive) active.fields.participant_discovery = reused ? "reused" : "fresh";
+}
+
+export function recordChatTurnParticipantLookup(kind: "candidate" | "member_cache" | "member_fetch" | "proxy"): void {
+  const active = current();
+  if (!active?.participantActive) return;
+  const field = {
+    candidate: "participant_candidate_reads",
+    member_cache: "participant_member_cache_hits",
+    member_fetch: "participant_member_fetches",
+    proxy: "participant_proxy_reads",
+  } as const;
+  active.fields[field[kind]]++;
+}
+
+function providerDimension(provider: string): LatencyProvider {
+  const name = provider.trim().toLowerCase();
+  if (name.startsWith("custom:")) return "custom";
+  return PROVIDERS.find((candidate) => candidate === name) ?? "unknown";
+}
+
+export function recordChatTurnFlags(flags: { rag?: boolean; drafting?: boolean }): void {
+  const active = current();
+  if (!active) return;
+  if (flags.rag) active.fields.rag = "yes";
+  if (flags.drafting) active.fields.drafting = "yes";
+}
+
+export function recordChatTurnFetch(kind: "reaction" | "reply" | "image", durationMs = 0): void {
+  const active = current();
+  if (!active) return;
+  active.fields[`${kind}_fetches`]++;
+  if (kind === "image") active.fields.image_ms += durationMs;
+}
+
+export function recordChatTurnHistory(history: "rest" | "reused"): void {
+  const active = current();
+  if (active) active.fields.history = history;
+}
+
+export function chatTurnContextTimings(): { historyFetchMs: number; replyFetches: number; nativeMs: number } {
+  const fields = current()?.fields;
+  return {
+    historyFetchMs: fields?.history_fetch_ms ?? -1,
+    replyFetches: fields?.reply_fetches ?? 0,
+    nativeMs: fields?.native_ms ?? -1,
+  };
+}
+
+export function recordChatProviderDispatch(provider: string): () => void {
+  const active = current();
+  const startedAt = performance.now();
+  const firstRequest = active && active.fields.dispatch_ms < 0;
+  if (firstRequest) {
+    active.fields.dispatch_ms = startedAt - active.invocation.startedAt;
+    active.fields.provider = providerDimension(provider);
+  }
+  return () => {
+    if (firstRequest && !active.finished && active.fields.provider_ttfb_ms < 0) {
+      active.fields.provider_ttfb_ms = performance.now() - startedAt;
+    }
+  };
+}
+
+export function recordChatTurnMessageSent(): void {
+  const active = current();
+  if (active && active.fields.first_message_ms < 0) {
+    active.fields.first_message_ms = performance.now() - active.invocation.startedAt;
+  }
+}

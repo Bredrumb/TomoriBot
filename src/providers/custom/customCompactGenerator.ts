@@ -9,8 +9,10 @@ import type {
   CompactRoleplayResult,
   ProviderCompactSummaryRequest as CompactSummaryRequest,
 } from "@/types/provider/featureInterfaces";
-import { log } from "@/utils/misc/logger";
 import { buildRoleplaySchema, CompactRoleplaySummarySchema } from "@/providers/utils/compactCommon";
+import { normalizeOpenAICompatibleProviderError } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
+import { redactProviderDetail, reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 export async function generateConversationSummaryCustom(
   request: CompactSummaryRequest,
@@ -36,17 +38,15 @@ export async function generateConversationSummaryCustom(
       body,
       logLabel: "Custom compact summary",
       messagesForLog: messages as Array<Record<string, unknown>>,
+      privateOutput: true,
     });
 
     if (!response.success) {
-      log.error("Custom compact summary request failed", new Error(response.error.errorBody), {
-        errorType: "CustomCompactSummaryHttpError",
-        metadata: {
-          model: request.model,
-          status: response.error.status,
-          statusText: response.error.statusText,
-        },
-      });
+      await reportCustomSummaryFailure(
+        request,
+        new Error(`HTTP ${response.error.status}: ${response.error.errorBody}`),
+        response.error.status,
+      );
       return {
         error:
           response.error.status === 0
@@ -66,11 +66,29 @@ export async function generateConversationSummaryCustom(
       summary: responseText,
     };
   } catch (error) {
-    log.error("Custom compact summary failed", error as Error);
+    await reportCustomSummaryFailure(request, error);
     return {
       error: error instanceof Error ? error.message : "Unknown custom endpoint error",
     };
   }
+}
+
+async function reportCustomSummaryFailure(
+  request: CompactSummaryRequest,
+  error: unknown,
+  status?: number,
+): Promise<void> {
+  const providerError = normalizeOpenAICompatibleProviderError(error, { errorMessagePrefix: "Custom compact summary" });
+  await reportProviderFailure({
+    summary: "Custom compact summary request failed",
+    errorType: "CustomCompactSummaryHttpError",
+    error,
+    expected: !request.endpointUrl?.trim() || !isOperatorActionableProviderError(providerError),
+    detail: redactProviderDetail(error instanceof Error ? error.message : String(error), request.apiKey),
+    dimensions: { operation: "compact-summary", provider: "custom", status: status ?? "none" },
+    metadata: { model: request.model },
+    redactValues: [request.apiKey],
+  });
 }
 
 export async function generateRoleplaySummaryCustom(request: CompactSummaryRequest): Promise<CompactRoleplayResult> {

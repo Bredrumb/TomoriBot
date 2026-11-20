@@ -26,8 +26,43 @@ export interface AnthropicSamplingSelection {
   logLevel?: "info" | "warn";
 }
 
-export const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
-export const ANTHROPIC_TOP_P_DEFAULT = 0.95;
+const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
+const ANTHROPIC_TOP_P_DEFAULT = 0.95;
+
+/**
+ * Gemini 3.6 Flash and every later Gemini pin sampling server-side, and Google has announced that
+ * upcoming models answer `temperature`, `topP`, or `topK` with 400 INVALID_ARGUMENT. Earlier
+ * Gemini releases and Gemma still honor them, so the gate is a version floor, not a family prefix.
+ */
+const GEMINI_FIXED_SAMPLING_FLOOR = { major: 3, minor: 6 } as const;
+
+interface GeminiSamplingParams {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+}
+
+const GEMINI_VERSION_PATTERN = /^gemini-(\d+)(?:\.(\d+))?(?:-|$)/;
+
+/** True when the Gemini codename ignores client sampling parameters and will eventually reject them. */
+export function geminiIgnoresSampling(model: string): boolean {
+  const match = GEMINI_VERSION_PATTERN.exec(model.trim().toLowerCase());
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2] ?? 0);
+  if (major !== GEMINI_FIXED_SAMPLING_FLOOR.major) return major > GEMINI_FIXED_SAMPLING_FLOOR.major;
+  return minor >= GEMINI_FIXED_SAMPLING_FLOOR.minor;
+}
+
+/** Remove `temperature`, `topP`, and `topK` from a Gemini generation config when the model ignores them. */
+export function omitGeminiSampling<T extends GeminiSamplingParams>(
+  model: string,
+  config: T,
+): Omit<T, keyof GeminiSamplingParams> & GeminiSamplingParams {
+  if (!geminiIgnoresSampling(model)) return config;
+  const { temperature: _temperature, topP: _topP, topK: _topK, ...rest } = config;
+  return rest;
+}
 
 export function isParamDisabled(disabledParams: readonly string[] | null | undefined, param: SupportedParam): boolean {
   return disabledParams?.includes(param) ?? false;
@@ -39,7 +74,7 @@ export function getActiveTemperature(
   return isParamDisabled(config.llm_disabled_params, "temperature") ? undefined : config.llm_temperature;
 }
 
-export function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
+function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
   switch (param) {
     case "temperature":
       return getActiveTemperature(config) !== undefined;
@@ -65,6 +100,18 @@ export function selectAnthropicSamplingParams(config: {
   const hasTemperature = typeof config.temperature === "number" && !isParamDisabled(disabledParams, "temperature");
   const hasTopP = typeof config.topP === "number" && config.topP < 1.0 && !isParamDisabled(disabledParams, "topP");
 
+  const logMessages: string[] = [];
+  let currentLogLevel: "info" | "warn" = "info";
+
+  let finalTemperature = config.temperature;
+  if (hasTemperature && (finalTemperature < 0 || finalTemperature > 1.0)) {
+    finalTemperature = Math.max(0.0, Math.min(1.0, finalTemperature));
+    logMessages.push(
+      `Clamped temperature from ${config.temperature} to ${finalTemperature} (Anthropic requires 0.0-1.0)`,
+    );
+    currentLogLevel = "warn";
+  }
+
   if (!hasTemperature && !hasTopP) {
     return {};
   }
@@ -74,27 +121,45 @@ export function selectAnthropicSamplingParams(config: {
   }
 
   if (!hasTopP) {
-    return { temperature: config.temperature };
+    return {
+      temperature: finalTemperature,
+      ...(logMessages.length > 0 && {
+        logMessage: `AnthropicStreamAdapter: ${logMessages.join(" | ")}`,
+        logLevel: currentLogLevel,
+      }),
+    };
   }
 
-  const temperatureIsDefault = Math.abs(config.temperature - ANTHROPIC_TEMPERATURE_DEFAULT) < 0.001;
+  const temperatureIsDefault = Math.abs(finalTemperature - ANTHROPIC_TEMPERATURE_DEFAULT) < 0.001;
   const topP = config.topP as number;
   const topPIsSharedDefault = Math.abs(topP - ANTHROPIC_TOP_P_DEFAULT) < 0.001;
 
   if (!topPIsSharedDefault && temperatureIsDefault) {
+    logMessages.push(
+      `Omitting temperature and using top_p=${topP} because temperature is still at the shared default (${ANTHROPIC_TEMPERATURE_DEFAULT})`,
+    );
     return {
       topP,
-      logLevel: "info",
-      logMessage: `AnthropicStreamAdapter: Omitting temperature and using top_p=${topP} because temperature is still at the shared default (${ANTHROPIC_TEMPERATURE_DEFAULT})`,
+      logLevel: currentLogLevel,
+      logMessage: `AnthropicStreamAdapter: ${logMessages.join(" | ")}`,
     };
   }
 
+  if (topPIsSharedDefault) {
+    logMessages.push(
+      `Omitting top_p=${topP} and using temperature=${finalTemperature} because Anthropic rejects sending both and top_p matches the shared default (${ANTHROPIC_TOP_P_DEFAULT})`,
+    );
+  } else {
+    logMessages.push(
+      `Omitting top_p=${topP} and using temperature=${finalTemperature} because Anthropic rejects sending both temperature and top_p`,
+    );
+    currentLogLevel = "warn";
+  }
+
   return {
-    temperature: config.temperature,
-    logLevel: topPIsSharedDefault ? "info" : "warn",
-    logMessage: topPIsSharedDefault
-      ? `AnthropicStreamAdapter: Omitting top_p=${topP} and using temperature=${config.temperature} because Anthropic rejects sending both and top_p matches the shared default (${ANTHROPIC_TOP_P_DEFAULT})`
-      : `AnthropicStreamAdapter: Omitting top_p=${topP} and using temperature=${config.temperature} because Anthropic rejects sending both temperature and top_p`,
+    temperature: finalTemperature,
+    logLevel: currentLogLevel,
+    logMessage: `AnthropicStreamAdapter: ${logMessages.join(" | ")}`,
   };
 }
 

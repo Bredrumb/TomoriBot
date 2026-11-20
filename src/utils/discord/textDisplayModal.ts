@@ -1,0 +1,126 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  EmbedBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextDisplayBuilder,
+  type ButtonInteraction,
+  type Message,
+} from "discord.js";
+import type { TextDisplayModalAccess } from "@/types/discord/embed";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode, log } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
+
+const MODAL_TITLE_LIMIT = 45;
+const TEXT_DISPLAY_LIMIT = 4_000;
+const MODAL_COMPONENT_LIMIT = 5;
+
+interface TextDisplayModalOptions {
+  customId: string;
+  title: string;
+  content: string;
+}
+
+interface TextDisplayModalCollectorOptions {
+  message: Message;
+  customId: string;
+  /** Anyone in the channel may press, so the modal is rendered per click in the presser's language. */
+  render: (locale: string) => Pick<TextDisplayModalOptions, "title" | "content">;
+  timeoutMs: number;
+  onExpire?: () => Promise<void>;
+  logLabel: string;
+  access?: TextDisplayModalAccess;
+}
+
+interface TextDisplayModalButtonSpec {
+  customId: string;
+  label: string;
+}
+
+/** Builds a read-only modal from markdown-capable text display components. */
+export function buildTextDisplayModal({ customId, title, content }: TextDisplayModalOptions): ModalBuilder {
+  const chunks: string[] = [];
+  for (let offset = 0; offset < content.length; offset += TEXT_DISPLAY_LIMIT) {
+    chunks.push(content.slice(offset, offset + TEXT_DISPLAY_LIMIT));
+  }
+
+  if (chunks.length === 0) {
+    chunks.push("\u200b");
+  }
+  if (chunks.length > MODAL_COMPONENT_LIMIT) {
+    throw new Error("Text display modal content exceeds Discord's component limit");
+  }
+
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(title.slice(0, MODAL_TITLE_LIMIT));
+  modal.addTextDisplayComponents(...chunks.map((chunk) => new TextDisplayBuilder().setContent(chunk)));
+  return modal;
+}
+
+/** Builds the single-button row used to open a read-only text modal. */
+export function buildTextDisplayModalButton(
+  customId: string,
+  label: string,
+  disabled = false,
+): ActionRowBuilder<ButtonBuilder> {
+  return buildTextDisplayModalRow([{ customId, label }], disabled);
+}
+
+/** Builds one row of buttons that each open a read-only text modal. */
+export function buildTextDisplayModalRow(
+  buttons: TextDisplayModalButtonSpec[],
+  disabled = false,
+): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    buttons.map(({ customId, label }) =>
+      new ButtonBuilder().setCustomId(customId).setLabel(label).setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+    ),
+  );
+}
+
+/** Wires a message button to a read-only modal for the collector lifetime. */
+export function attachTextDisplayModalCollector({
+  message,
+  customId,
+  render,
+  timeoutMs,
+  onExpire,
+  logLabel,
+  access,
+}: TextDisplayModalCollectorOptions): void {
+  const collector = message.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: timeoutMs,
+    filter: (interaction) => interaction.customId === customId && !interaction.user.bot,
+  });
+
+  collector.on("collect", async (interaction: ButtonInteraction) => {
+    try {
+      const locale = await resolveUserLocale(interaction);
+      if (access && !access.canOpen(interaction)) {
+        await interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizedStatusTitle(locale, "general.errors.permission_denied_title", ColorCode.ERROR))
+              .setDescription(localizer(locale, access.deniedKey))
+              .setColor(ColorCode.ERROR),
+          ],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      await interaction.showModal(buildTextDisplayModal({ customId: `${customId}_modal`, ...render(locale) }));
+    } catch (error) {
+      log.warn(`${logLabel} modal failed`, error as Error);
+    }
+  });
+
+  collector.on("end", async () => {
+    if (!onExpire) return;
+    await onExpire().catch((error: unknown) => log.warn(`${logLabel} expiry update failed`, error));
+  });
+}

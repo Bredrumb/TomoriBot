@@ -1,3 +1,6 @@
+import { buildFailedToolResponse } from "@/utils/tools/toolResult";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Hidden Image Agent Turn
  *
@@ -6,12 +9,12 @@
  * generate an image of the current channel scene.
  *
  * Key properties vs. a normal bot turn:
- * - Text output is suppressed  (`suppressTextOutput: true`) — only the image appears.
+ * - Text output is suppressed  (`suppressTextOutput: true`), so only the image appears.
  * - The target image tool (generate_image or generate_image_nai) signals `endTurn: true`
  *   on success via the `endTurnAfterTools` mechanism, stopping the loop immediately.
- * - STM writes are disabled (`disableShortTermMemoryUpdate: true`) — a hidden turn
+ * - STM writes are disabled (`disableShortTermMemoryUpdate: true`), because a hidden turn
  *   should not pollute the short-term memory log.
- * - No webhook / persona avatar — the image is posted directly by the tool.
+ * - The caller may supply webhook/persona identity so the generated image posts as the selected persona.
  */
 
 import type { Client, Guild, Webhook } from "discord.js";
@@ -26,17 +29,20 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
-
-// ─── Constants ───────────────────────────────────────────────────────────────
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { prepareParticipantContext } from "@/utils/text/participants/preparation";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 
 /** Number of recent messages to fetch from the channel for context. */
-const BOT_GENERATE_IMAGE_HISTORY_LIMIT = parseEnvInt("BOT_GENERATE_IMAGE_HISTORY_LIMIT", 24, 5, 100);
+const BOT_GENERATE_IMAGE_HISTORY_LIMIT = 24;
 
 /** Maximum streaming iterations in the hidden agent tool loop. */
-const BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS = parseEnvInt("BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS", 5, 1, 10);
+const BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS = 5;
 
 /** Discord message types that carry no conversational content and should be skipped. */
 const SKIPPED_MESSAGE_TYPES = new Set<number>([
@@ -57,23 +63,17 @@ const SKIPPED_MESSAGE_TYPES = new Set<number>([
   24, // AutoModerationAction
 ]);
 
-function parseEnvInt(name: string, fallback: number, min: number, max: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(Math.max(parsed, min), max);
-}
-
-// ─── Public interface ─────────────────────────────────────────────────────────
-
 /** Configuration for the hidden image agent. Caller (image.ts) owns preset/backend logic. */
 export interface HiddenImageTurnParams {
+  spoiler?: boolean;
+  imageModelSelection?: GenerationModelSelection;
   /** Discord text channel to read history from and post the image to. */
   channel: ToolContext["channel"];
   client: Client;
-  guild: Guild;
+  guild: Guild | null;
   tomoriState: TomoriState;
   locale: string;
-  /** Discord ID of the user who invoked the /bot generate image command. */
+  /** Discord ID of the user who invoked `/generate image` in Auto mode. */
   interactingUserId: string;
   /** Internal database user ID of the invoking user, if known. */
   internalUserId?: number | null;
@@ -108,7 +108,47 @@ export interface HiddenImageTurnParams {
   };
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
+/**
+ * Builds the hidden turn's `[System: ...]` directive. With Danbooru Search off it keeps the original
+ * wording; with it on, the model may look tags up before the image call.
+ */
+export function buildHiddenImageDirective(
+  params: Pick<
+    HiddenImageTurnParams,
+    "backend" | "presetLabel" | "presetInstruction" | "aspectRatio" | "naiOrientation" | "extraDirection"
+  > & { lookupEnabled: boolean },
+): string {
+  const { backend, presetLabel, presetInstruction, aspectRatio, naiOrientation, extraDirection, lookupEnabled } =
+    params;
+  const toolInstruction = lookupEnabled
+    ? backend === "current_provider"
+      ? "Call the generate_image tool to draw the scene. Use the conversation context above, including any Physical Appearance lines for users/personas, to write a detailed prompt describing the scene."
+      : "Call the generate_image_nai tool to draw the scene. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene."
+    : backend === "current_provider"
+      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
+      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
+
+  const dirLines: string[] = [
+    toolInstruction,
+    `Framing: ${presetLabel} — ${presetInstruction}`,
+    backend === "current_provider" ? `Aspect ratio: ${aspectRatio}` : `Orientation: ${naiOrientation}`,
+  ];
+  if (extraDirection?.trim()) {
+    dirLines.push(`Extra direction from user: ${extraDirection.trim()}`);
+  }
+  if (lookupEnabled) {
+    dirLines.push(
+      "If the scene includes an existing character, outfit, or series whose exact tags or look you are unsure of, first call danbooru_search_tags once with every such name, then call the image tool.",
+      "IMPORTANT: Do not ask for clarification or ask if the user wants you to proceed. Your turn must end with a call to the image tool (generate_image or generate_image_nai).",
+    );
+  } else {
+    dirLines.push(
+      "IMPORTANT: You MUST call the image tool (generate_image or generate_image_nai) immediately. Do not ask for clarification or ask if the user wants you to proceed. Just call the tool now with the scene information from above.",
+    );
+  }
+
+  return `[System: ${dirLines.join(" ")}]`;
+}
 
 /**
  * Runs a hidden bot turn that generates an image of the current channel scene.
@@ -122,11 +162,12 @@ export interface HiddenImageTurnParams {
  *          `{ success: false, error: "…" }` with a human-readable reason.
  */
 export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise<{ success: boolean; error?: string }> {
+  const serverDiscId = params.guild?.id ?? params.interactingUserId;
   const {
     channel,
     client,
     guild,
-    tomoriState,
+    tomoriState: baseState,
     locale,
     interactingUserId,
     backend,
@@ -142,7 +183,20 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // 1. Verify the active model supports function calling — required for tool-based generation.
+  let tomoriState: TomoriState;
+  let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+  try {
+    credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: internalUserId,
+      textModel: baseState.llm,
+    });
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (!failure) throw error;
+    return { success: false, error: failure.description };
+  }
+
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
@@ -151,21 +205,10 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 2. Decrypt the API key.
-  const decryptedApiKey = await decryptApiKey(
-    // biome-ignore lint/style/noNonNullAssertion: api_key presence was validated by the command before invoking this helper
-    tomoriState.config.api_key!,
-    tomoriState.config.key_version || 1,
-  );
-  if (!decryptedApiKey) {
-    return { success: false, error: "Failed to decrypt API key." };
-  }
-
-  // 3. Fetch recent channel history and convert to SimplifiedMessageForContext[].
+  const usageContext = credentials.usageContext;
   const rawMessages = await channel.messages.fetch({
     limit: BOT_GENERATE_IMAGE_HISTORY_LIMIT,
   });
-  // Messages arrive newest-first; reverse to chronological order.
   const messagesChron = [...rawMessages.values()].reverse();
 
   const botDiscordId = client.user?.id;
@@ -173,7 +216,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const userListSet = new Set<string>();
 
   for (const msg of messagesChron) {
-    // Skip non-conversational system message types.
     if (SKIPPED_MESSAGE_TYPES.has(msg.type as number)) continue;
 
     // Determine whether this message is from the bot/persona or a human user.
@@ -183,7 +225,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     const authorId = msg.author.id;
     const authorName = stripBridgePrefix(msg.member?.displayName ?? msg.author.id);
 
-    // Skip image attachments — the hidden agent only needs text context to plan the
+    // Skip image attachments because the hidden agent only needs text context to plan the
     // image prompt. Including images would cause the provider to base64-encode and
     // upload them all inline, producing a multi-MB payload that overwhelms the model.
 
@@ -195,11 +237,10 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
-      imageAttachments: [], // Skip — see comment above
+      imageAttachments: [], // Skip (see comment above)
       videoAttachments: [], // Skip video processing for the hidden agent
     });
 
-    // 2. Collect human user IDs for the users-in-conversation block.
     if (!msg.author.bot && !msg.webhookId) {
       userListSet.add(authorId);
     }
@@ -212,20 +253,15 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
   const userList = Array.from(userListSet);
 
-  // Resolve channel metadata for context.
   const channelName = "name" in channel ? channel.name : "Unknown Channel";
   const channelDesc = "topic" in channel ? (channel as unknown as { topic: string | null }).topic : null;
 
-  // Resolve the display name of the invoking user for context.
-  const interactingMember = guild.members.cache.get(interactingUserId);
+  const interactingMember = guild?.members.cache.get(interactingUserId);
   const triggererName = stripBridgePrefix(interactingMember?.displayName ?? interactingUserId);
 
-  // 4. Build full bot context using the standard context pipeline.
   let contextItems: StructuredContextItem[];
   let messageIdMap: ToolContext["messageIdMap"];
   try {
-    // Use the selected sender persona's identity if an override is provided;
-    // otherwise fall back to the active tomoriState values.
     const persona = contextPersonaOverride ?? {
       tomoriNickname: tomoriState.persona_nickname,
       personaPrompt: tomoriState.persona_prompt ?? null,
@@ -233,22 +269,34 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       personaLineageId: tomoriState.persona_lineage_id,
     };
 
-    // Reflect any per-channel system prompt override in the hidden planning turn.
     const channelPromptOverride = tomoriState.server_id
       ? await getCachedChannelPrompt(tomoriState.server_id, channel.id)
       : null;
+    const personas = await getCachedAllPersonas(serverDiscId).catch(() => [tomoriState]);
+    const preparedParticipantContext = await prepareParticipantContext({
+      client,
+      guildId: serverDiscId,
+      simplifiedMessageHistory: simplifiedMessages,
+      personas,
+      activePersona: tomoriState,
+      visibleUserIds: userList,
+      syntheticUsers: new Map(),
+      matrixUsers: new Map(),
+    });
 
     const contextBuild = await buildContext({
-      guildId: guild.id,
-      serverName: guild.name,
-      serverDescription: guild.description ?? null,
+      guildId: serverDiscId,
+      serverName: guild?.name ?? "Direct Message",
+      serverDescription: guild?.description ?? null,
       simplifiedMessageHistory: simplifiedMessages,
-      userList,
+      preparedParticipantContext,
       channelDesc,
       channelName,
       channelId: channel.id,
       client,
       triggererName,
+      triggererFormattedName: triggererName,
+      triggererAddressTerm: "",
       tomoriNickname: persona.tomoriNickname,
       tomoriAttributes: persona.tomoriAttributes,
       tomoriConfig: tomoriState.config,
@@ -263,7 +311,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   } catch (error) {
     log.error("Hidden image agent: buildContext failed", error as Error, {
       errorType: "HiddenImageAgentContextError",
-      metadata: { guildId: guild.id, channelId: channel.id },
+      metadata: { guildId: serverDiscId, channelId: channel.id },
     });
     return {
       success: false,
@@ -271,31 +319,22 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 5. Append the image agent directive as the final user message.
-  //    This replaces the old structured-output planner — the model itself plans
-  //    the image prompt using the full scene context it now sees above.
-  // Build the tool call instruction dynamically based on the selected backend.
-  const toolInstruction =
-    backend === "current_provider"
-      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
-      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
-
-  const dirLines: string[] = [
-    toolInstruction,
-    `Framing: ${presetLabel} — ${presetInstruction}`,
-    backend === "current_provider" ? `Aspect ratio: ${aspectRatio}` : `Orientation: ${naiOrientation}`,
-  ];
-  if (extraDirection?.trim()) {
-    dirLines.push(`Extra direction from user: ${extraDirection.trim()}`);
-  }
-  // Use a clearer instruction that allows text alongside the tool call
-  dirLines.push(
-    "IMPORTANT: You MUST call the image tool (generate_image or generate_image_nai) immediately. Do not ask for clarification or ask if the user wants you to proceed. Just call the tool now with the scene information from above.",
-  );
-
   const agentDirective: StructuredContextItem = {
     role: "user",
-    parts: [{ type: "text", text: `[System: ${dirLines.join(" ")}]` }],
+    parts: [
+      {
+        type: "text",
+        text: buildHiddenImageDirective({
+          backend,
+          presetLabel,
+          presetInstruction,
+          aspectRatio,
+          naiOrientation,
+          extraDirection,
+          lookupEnabled: tomoriState.config.danbooru_enabled === true,
+        }),
+      },
+    ],
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
   };
   contextItems = [...contextItems, agentDirective];
@@ -311,23 +350,27 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     llm: mediaResolutionLlm,
   });
 
-  // 6. Set up streaming context flags for the hidden turn.
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";
 
   const streamingContext: StreamingContext = {
+    deliveryMode: "persona",
+    imageModelSelection: params.imageModelSelection,
+    usageContext,
+    textCredentialSource: credentials.source,
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
     disableShortTermMemoryUpdate: true, // Do not pollute STM from a hidden agent turn
-    suppressTextOutput: true, // No visible text — only the image
+    suppressTextOutput: true, // No visible text: only the image
+    suppressUserErrors: true,
     isManuallyTriggered: true,
-    // End the turn as soon as either image tool succeeds — both are listed so the
+    // End the turn as soon as either image tool succeeds, so both are listed so the
     // loop terminates cleanly even if the model calls the non-preferred backend.
     endTurnAfterTools: ["generate_image", "generate_image_nai"],
     messageIdMap,
+    triggererUserId: internalUserId ?? undefined,
   };
 
-  // 7. Get provider and create config.
   let provider: Awaited<ReturnType<typeof getProviderForTomori>>;
   try {
     provider = await getProviderForTomori(tomoriState);
@@ -344,7 +387,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
   let providerConfig: Awaited<ReturnType<typeof provider.createConfig>>;
   try {
-    providerConfig = await provider.createConfig(tomoriState, decryptedApiKey);
+    providerConfig = await provider.createConfig(tomoriState, credentials.apiKey);
   } catch (error) {
     log.error("Hidden image agent: failed to create provider config", error as Error, {
       errorType: "HiddenImageAgentConfigError",
@@ -355,7 +398,16 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 8. Run the simplified tool loop.
+  const planningFailure = (error: unknown) => ({
+    success: false,
+    error: createProviderToolFailure(error, {
+      locale,
+      provider: tomoriState.llm.llm_provider,
+      credentialScope: credentials.source,
+    }).error,
+  });
+
+  // Run the simplified tool loop.
   //    We mimic the structure of tomoriChat's streaming loop but stripped down to
   //    only what a hidden image agent needs: stream → execute tool → check endTurn.
   const functionInteractionHistory: Array<{
@@ -365,17 +417,19 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   }> = [];
 
   const toolContext: ToolContext = {
+    deliveryMode: "persona",
     channel,
     client,
     userId: interactingUserId,
     internalUserId: internalUserId ?? undefined,
-    guildId: guild.id,
+    guildId: serverDiscId,
     tomoriState,
     locale,
     provider: provider.getInfo().name,
     streamContext: streamingContext,
+    usageContext,
     suppressProgressNotices: true, // Keep the hidden turn quiet
-    // Persona identity for webhook-based image posting (set by /bot generate image).
+    // Persona identity for webhook-based image posting (set by /generate image Auto mode).
     // When absent, the image tool falls back to a direct bot message.
     webhook,
     personaUsername,
@@ -391,35 +445,55 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   for (let i = 0; i < BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS; i++) {
     log.info(`[Hidden Image Agent] Iteration ${i + 1}/${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`);
 
-    // 8a. Stream one LLM turn.
-    // No per-stream timeout — normal chat (tomoriChat.ts) also has none.
+    // Stream one LLM turn.
+    // No per-stream timeout because normal chat (tomoriChat.ts) also has none.
     // Protection against infinite loops comes from BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS.
     let streamResult: Awaited<ReturnType<typeof provider.streamToDiscord>>;
     try {
-      streamResult = await provider.streamToDiscord(
-        channel,
-        client,
-        tomoriState,
-        providerConfig,
-        contextItems,
-        [], // currentTurnModelParts — empty for first iteration, accumulate on retries
-        undefined, // emojiStrings
-        functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
-        undefined, // initialInteraction
-        undefined, // replyToMessage
-        streamingContext,
-        locale,
+      streamResult = await withProviderUsageContext(usageContext, async () =>
+        provider.streamToDiscord(
+          channel,
+          client,
+          tomoriState,
+          providerConfig,
+          contextItems,
+          [], // currentTurnModelParts: empty for first iteration, accumulate on retries
+          undefined, // emojiStrings
+          functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
+          undefined, // initialInteraction
+          undefined, // replyToMessage
+          streamingContext,
+          locale,
+        ),
       );
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      log.error(`[Hidden Image Agent] Stream error on iteration ${i + 1}: ${msg}`, error as Error, {
+      // Providers report what they catch, so only an exception that escaped one is unreported here.
+      await reportProviderFailure({
+        summary: "Hidden image planning failed",
         errorType: "HiddenImageAgentStreamError",
-        metadata: { channelId: channel.id, iteration: i + 1 },
+        error,
+        expected: false,
+        serverId: tomoriState.server_id,
+        userId: internalUserId,
+        dimensions: { operation: "image-planning", provider: tomoriState.llm.llm_provider },
+        metadata: {
+          channelId: channel.id,
+          model: providerConfig.model,
+          iteration: i + 1,
+          credentialSource: credentials.source,
+        },
+        redactValues: [credentials.apiKey],
       });
-      return { success: false, error: `Streaming error: ${msg}` };
+      return planningFailure(error);
     }
 
-    // 8b. Handle stream result.
+    reportProviderUsage(usageContext, {
+      modelCodename: tomoriState.llm.llm_codename,
+      costUsd: streamResult.usage?.costUsd,
+      inputTokens: streamResult.usage?.inputTokens,
+      outputTokens: streamResult.usage?.outputTokens,
+    });
+
     if (streamResult.status === "function_call") {
       if (!streamResult.data) {
         log.error("[Hidden Image Agent] function_call status received without data.");
@@ -430,22 +504,19 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       const funcName = funcCall.name?.trim() ?? "";
       log.info(`[Hidden Image Agent] Model called tool: ${funcName}`);
 
-      // 8c. Execute the tool.
-      const toolResult = await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
+      const args = { ...(funcCall.args || {}) };
+      if (params.spoiler !== undefined && (funcName === "generate_image" || funcName === "generate_image_nai"))
+        args.nsfw = params.spoiler;
+      const toolResult = await ToolRegistry.executeTool(funcName, args, toolContext);
       log.info(
         `[Hidden Image Agent] Tool "${funcName}" ${toolResult.success ? "succeeded" : "failed"}: ${toolResult.message ?? toolResult.error ?? ""}`,
       );
 
-      // Build function response for next iteration history.
       const functionExecutionResult: Record<string, unknown> = toolResult.success
         ? ((toolResult.data as Record<string, unknown>) ?? {
             status: "completed",
           })
-        : {
-            status: "tool_execution_failed",
-            reason: toolResult.message || toolResult.error || "Tool execution failed",
-            tool_name: funcName,
-          };
+        : buildFailedToolResponse(toolResult, funcName);
 
       const preToolCallText = (streamResult.accumulatedText ?? "").trim();
       functionInteractionHistory.push({
@@ -459,7 +530,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         preToolCallTextParts: preToolCallText ? [{ type: "text", text: preToolCallText }] : undefined,
       });
 
-      // 8d. endTurn from the image tool means success — exit immediately.
       if (toolResult.endTurn) {
         if (toolResult.success) {
           log.info(`[Hidden Image Agent] Image tool "${funcName}" completed successfully — ending hidden turn.`);
@@ -472,24 +542,13 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         };
       }
 
-      // Non-image tool or failed image tool — continue to next iteration.
       continue;
     }
 
-    // Any other status (completed, error, timeout, stopped_by_user) ends the loop.
     if (streamResult.status === "error") {
-      const errData = streamResult.data;
-      const errMsg =
-        errData instanceof Error
-          ? errData.message
-          : typeof errData === "object" && errData !== null && "message" in errData
-            ? String((errData as { message: unknown }).message)
-            : "Unknown streaming error";
-      log.error(`[Hidden Image Agent] Stream returned error status: ${errMsg}`);
-      return { success: false, error: errMsg };
+      return planningFailure(streamResult.data);
     }
 
-    // Completed without a function call — the model didn't call the image tool.
     log.warn(`[Hidden Image Agent] Stream completed without calling ${targetToolName} on iteration ${i + 1}.`);
     break;
   }

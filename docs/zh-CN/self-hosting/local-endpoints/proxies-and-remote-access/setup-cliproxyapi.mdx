@@ -1,0 +1,358 @@
+---
+title: "配置：CLIProxyAPI"
+sidebar:
+  label: "CLIProxyAPI"
+  order: 2
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+通过本地Chat Completions代理[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)将TomoriBot连接到已获授权的上游服务。
+
+:::danger[使用CLI账号代理需自行承担风险]
+通过Codex、Claude Code、Antigravity或其他CLI账号进行第三方访问可能违反提供方条款，并存在账号被封禁的风险。订阅并不代表获得了用于bot或API的授权。登录前请先查阅[各提供方限制说明与API替代方案](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk)。
+:::
+
+## 1. 安装CLIProxyAPI
+
+按照官方[快速入门](https://help.router-for.me/introduction/quick-start)进行安装。[发布压缩包](https://github.com/router-for-me/CLIProxyAPI/releases/latest)包含开箱即用的可执行文件；选择对应你的操作系统与CPU架构，解压压缩包并核验其校验和。从Git克隆构建源码是可选操作。
+
+## 2. 创建配置文件
+
+启动CLIProxyAPI之前先完成配置。如果安装程序已经启动了系统服务，请先停止它。
+
+在可执行文件（Windows上为`cli-proxy-api.exe`）同级目录下创建`config.yaml`。使用独立的配置文件夹是可选做法；以下示例将两个文件放在同一目录。请使用密码管理器生成至少32字节的随机内容，编码为十六进制或base64后替换客户端密钥占位符。
+
+```yaml
+config-version: 8
+server:
+  host: "127.0.0.1"
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+access:
+  api-keys:
+    - "REPLACE_WITH_RANDOM_CLIENT_KEY"
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+```
+
+`access.api-keys`下的客户端密钥用于TomoriBot向CLIProxyAPI进行身份验证。请将`config.yaml`与`oauth.auth-dir`中的凭据文件妥善私密保存，不要放入Git仓库，并将访问权限仅限制为你自己的账号与运行进程的账号。
+
+请保持`MANAGEMENT_PASSWORD`未设置，也不要使用`--password`或管理TUI：空的管理密钥会让管理路由始终处于禁用状态，即使在隧道后方也是如此。如果你下载的版本使用了不同的配置格式，请将这些设置套用到其自带的`config.example.yaml`中。
+
+## 3. 连接上游服务
+
+选择CLIProxyAPI向模型提供方进行身份验证的方式。两种方式均共用上方的基础配置。
+
+<Tabs syncKey="upstream-auth">
+<TabItem label="账号登录（OAuth）">
+
+在包含可执行文件与`config.yaml`的文件夹中运行登录命令。下方示例以Antigravity为例；请替换为你的提供方对应的参数，并在登录前仔细阅读授权同意界面：
+
+| 提供方 | 登录参数 |
+|---|---|
+| Antigravity | `--antigravity-login` |
+| Claude | `--claude-login` |
+| Codex | `--codex-login`或`--codex-device-login` |
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+</Tabs>
+
+完成浏览器登录并等待终端提示成功。CLIProxyAPI会将凭据保存在`oauth.auth-dir`中；纯OAuth配置不需要添加上游API密钥配置块。请保持OAuth回调监听在本地，并在登录与启动时使用相同的配置路径。其他登录参数见`--help`与[上游提供方指南](https://help.router-for.me/introduction/quick-start)。
+
+</TabItem>
+<TabItem label="上游API密钥">
+
+对于兼容OpenAI的API，请将下方顶层配置块添加到`config.yaml`中，并替换示例URL、上游密钥与模型ID：
+
+```yaml
+api-keys:
+  openai-compatibility:
+    - name: "authorized-backend"
+      base-url: "https://api.example.com/v1"
+      keys:
+        - api-key: "REPLACE_WITH_UPSTREAM_KEY"
+      models:
+        - name: "upstream-model-id"
+          alias: "home-chat"
+```
+
+</TabItem>
+</Tabs>
+
+## 4. 启动服务器
+
+在包含`config.yaml`的文件夹中启动服务器。如路径不同请替换为可执行文件的实际路径或已安装的指令；请保留`--config`以确保加载此配置文件。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+</Tabs>
+
+保持服务器运行，继续第5步。请将`server.host`保持为`127.0.0.1`；不需要添加入站防火墙例外或路由器端口转发规则。
+
+## 5. 连接TomoriBot
+
+<Tabs syncKey="bot-location">
+<TabItem label="bot运行在本机">
+
+1. 对于与CLIProxyAPI运行在同一台电脑上的非生产环境bot，请在TomoriBot的环境变量中设置`ALLOW_PRIVATE_NETWORK=127.0.0.1:8317`并重启bot。使用上方配置的本地监听地址即可，无需隧道。
+2. 运行`/providers`（服务器管理员）或`/personal providers`，按以下设置添加一个`OpenAI 兼容`自定义端点：
+
+| 字段 | 值 |
+|---|---|
+| 端点URL | `http://127.0.0.1:8317/v1` |
+| 认证令牌 | 来自`access.api-keys`的客户端密钥 |
+
+选中已保存的连接，使用CLIProxyAPI提供的ID或别名添加一个文本模型，然后确认在Discord中可以正常回复。
+
+此URL假设bot直接运行在宿主机上。在Docker中，`127.0.0.1`指向容器自身，因此无法通过该地址访问宿主机的监听。以生产模式运行的bot仍然需要走独立托管生产环境方案。
+
+</TabItem>
+<TabItem label="独立托管的生产环境bot">
+
+1. 使用文本引擎配置档和8317端口完成[Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)配置。生产环境需要公网HTTPS URL和公网DNS解析结果。
+2. 运行`/providers`（服务器管理员）或`/personal providers`，按以下设置添加一个`OpenAI 兼容`自定义端点：
+
+| 字段 | 值 |
+|---|---|
+| 端点URL | 你的隧道基础地址，例如`https://engine.example.com/v1` |
+| 认证令牌 | 来自`access.api-keys`的客户端密钥 |
+
+选中已保存的连接，使用CLIProxyAPI提供的ID或别名添加一个文本模型，然后确认在Discord中可以正常回复。
+
+</TabItem>
+</Tabs>
+
+<details>
+<summary>如何列出可用模型</summary>
+
+在CLIProxyAPI运行期间，打开另一个终端列出其模型ID。加载客户端密钥前请先关闭PowerShell脚本记录或Shell命令追踪，完成后关闭该终端。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+在包含`config.yaml`的文件夹中运行；它会从上方配置格式中读取第一个客户端密钥。
+
+```powershell
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+Remove-Variable engineKey, keyMatch, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给curl，避免出现在进程参数中。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给curl，避免出现在进程参数中。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+返回空列表说明仍需配置上游服务。HTTP `401`表示服务器已响应，但拒绝了该客户端密钥。
+
+</details>
+
+## 故障排查
+
+| 症状 | 处理方式 |
+|---|---|
+| `401` | 核对客户端密钥，注意与上游密钥区分。 |
+| `404` | 使用`/v1`基础路径，不要包含`/chat/completions`；并核对模型ID。 |
+| 参数被拒绝 | 将上下文窗口留空，并将思考等级保持在`自动`；在开始输出前，TomoriBot本身就会对符合条件的参数拒绝进行重试。在开启工具调用或依赖采样参数前，先检查日志中是否存在降级请求。 |
+| `403`、HTML登录页或隧道错误 | 检查[隧道配置](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)。如果启用了Cloudflare Access，需要配置[可选的Access与Caddy方案](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)；Discord面板无法直接提供Access请求头。 |
+| 流式输出中断 | 检查电脑是否休眠、上游配额、隧道健康状况以及Cloudflare指南中的流式传输限制。 |
+
+除非正在排查经过脱敏的本地复现问题，否则请保持请求/调试日志关闭。如果客户端密钥泄露，请在CLIProxyAPI、TomoriBot已保存的端点以及使用它的可选中继中同时轮换密钥。若上游凭据泄露，请另行撤销。
+
+<details>
+<summary>停用账号登录</summary>
+
+在上游账号设置中撤销授权，停止代理，然后删除其本地凭据文件。仅删除文件并不会吊销令牌。
+
+</details>
+
+<details>
+<summary>检查本地监听地址</summary>
+
+如果无法访问本地API，请在CLIProxyAPI运行期间从另一个终端检查其监听地址：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, State, OwningProcess
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+</TabItem>
+</Tabs>
+
+监听地址应当只有`127.0.0.1`；如果看到`0.0.0.0`、`::`、`*`或局域网地址，请立即停止。检查现有的防火墙规则（Windows上为`wf.msc`）；不要开放入站端口或添加路由器端口转发。Windows的TCP状态查询可能会漏掉可达的端点，因此命令包含了所有状态；上方的可选模型列表命令可直接测试API可达性。
+
+</details>
+
+<details>
+<summary>测试本地回复</summary>
+
+如果模型在Discord中无法回复，请在CLIProxyAPI运行期间直接测试它。加载客户端密钥前请先关闭PowerShell脚本记录或Shell命令追踪。
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+在包含`config.yaml`的文件夹中运行；它会从上方配置格式中读取第一个客户端密钥。
+
+```powershell
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$body = @{
+  model = Read-Host 'Model ID to test'
+  messages = @(@{ role = 'user'; content = 'Reply with hello.' })
+  stream = $false
+} | ConvertTo-Json -Depth 4
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -Body $body
+$reply.choices.message.content
+Remove-Variable engineKey, keyMatch, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给curl，避免出现在进程参数中。
+
+将`REPLACE_WITH_MODEL_ID`替换为要测试的模型ID。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+密钥会在关闭回显的情况下读取，并通过标准输入传给curl，避免出现在进程参数中。
+
+将`REPLACE_WITH_MODEL_ID`替换为要测试的模型ID。
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+收到生成的回复即可确认上游访问正常。仅靠套接字查询没有结果并不能证明API不可达。
+
+</details>

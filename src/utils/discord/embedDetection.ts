@@ -5,53 +5,17 @@
  */
 
 import type { Embed, Message } from "discord.js";
-import { localizer, getSupportedLocales } from "@/utils/text/localizer";
+import { classifyProtocolEmbed } from "./embedProtocol";
 
 /**
- * Checks whether a single embed is a "refresh marker" — an embed that signals
+ * Checks whether a single embed is a "refresh marker": an embed that signals
  * a conversation reset or compact-refresh boundary.
  *
- * Matches the following localizer keys across all supported locales:
- * - `commands.tool.refresh.title` (conversation reset)
- * - `commands.tool.compact.summary_title_refreshed` (compact summary refresh)
- * - `commands.tool.compact.roleplay_scene_title_refreshed` (compact scene refresh)
- *
- * @param embed - A Discord embed to check
- * @returns True if the embed is a refresh/reset marker
+ * Detection uses the startup title lookup, or a legacy footer token on older embeds.
  */
 export function isRefreshMarkerEmbed(embed: Embed): boolean {
-  const title = embed.title;
-  if (!title) return false;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    // 1. Check for conversation reset title
-    const resetTitle = localizer(supportedLocale, "commands.tool.refresh.title");
-    if (title === resetTitle) return true;
-
-    // 2. Check for compact summary refreshed title
-    const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
-    if (title === compactSummaryRefreshed) return true;
-
-    // 3. Check for compact roleplay scene refreshed title
-    const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
-    if (title === compactSceneRefreshed) return true;
-
-    // 4. Check for compact manual entry refreshed title
-    const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
-    if (title === compactManualRefreshed) return true;
-  }
-
-  return false;
-}
-
-/**
- * Checks whether any embed in an array is a refresh marker.
- *
- * @param embeds - Array of Discord embeds from a message
- * @returns True if at least one embed is a refresh/reset marker
- */
-export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
-  return embeds.some(isRefreshMarkerEmbed);
+  const kind = classifyProtocolEmbed(embed);
+  return kind === "reset" || kind === "compact_refresh";
 }
 
 /**
@@ -60,30 +24,10 @@ export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
  * history: plain resets drop the marker itself, compact-refreshes keep it
  * (since the compact summary IS the new conversation opener).
  *
- * @param embed - A Discord embed to classify
- * @returns "compact_refresh" if the embed is a compact-summary refresh marker,
- *          "reset" if it's a plain `/refresh` marker, null otherwise
  */
-export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" | null {
-  const title = embed.title;
-  if (!title) return null;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    // 1. Plain reset from /refresh
-    if (title === localizer(supportedLocale, "commands.tool.refresh.title")) {
-      return "reset";
-    }
-    // 2. Compact refresh markers — summary, scene, or manual refresh
-    if (
-      title === localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed")
-    ) {
-      return "compact_refresh";
-    }
-  }
-
-  return null;
+function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" | null {
+  const kind = classifyProtocolEmbed(embed);
+  return kind === "reset" || kind === "compact_refresh" ? kind : null;
 }
 
 /**
@@ -94,7 +38,7 @@ export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_ref
  * Exactly mirrors the slicing logic in `tomoriChat.ts`:
  *   - If no marker is found: return the full array
  *   - `reset` marker: slice starts at `resetIndex + 1` (drop the marker itself)
- *   - `compact_refresh` marker: slice starts at `resetIndex` (keep the marker —
+ *   - `compact_refresh` marker: slice starts at `resetIndex` (keep the marker:
  *     it carries the compact summary that replaces old history)
  *
  * @param messages - Messages in chronological order (oldest first, newest last)
@@ -106,7 +50,7 @@ export function sliceMessagesAtResetMarker<T extends Pick<Message, "embeds">>(
   let resetIndex = -1;
   let markerType: "reset" | "compact_refresh" | null = null;
 
-  // 1. Walk from newest to oldest to find the most recent marker
+  // Walk from newest to oldest to find the most recent marker
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
       const classified = classifyRefreshMarkerEmbed(embed);
@@ -119,7 +63,7 @@ export function sliceMessagesAtResetMarker<T extends Pick<Message, "embeds">>(
     if (resetIndex !== -1) break;
   }
 
-  // 2. Compute startIndex based on marker type (or 0 if no marker)
+  // Compute startIndex based on marker type (or 0 if no marker)
   const startIndex = resetIndex === -1 ? 0 : markerType === "compact_refresh" ? resetIndex : resetIndex + 1;
   return {
     sliced: messages.slice(startIndex),

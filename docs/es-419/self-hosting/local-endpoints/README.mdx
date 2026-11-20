@@ -1,0 +1,99 @@
+---
+title: "Endpoints locales y autoalojados"
+sidebar:
+  label: "Resumen"
+  groupLabel: "Endpoints locales y autoalojados"
+  order: 4
+aiGenerated: false
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Esta traducción se proporciona para tu comodidad. La versión en inglés es la autoritativa.
+
+Ejecuta generación de texto, motores multimedia y utilidades MCP en tus propias máquinas. Registra las conexiones de modelos mediante `/providers` o `/personal providers`; las claves de API guardadas se almacenan cifradas en la base de datos. Los motores en una máquina separada también necesitan la configuración de acceso remoto a continuación.
+Elige una capacidad para configurar:
+
+## Texto y embeddings
+
+<CardGrid>
+  <LinkCard title="LLM local" href="/es-419/self-hosting/local-endpoints/setup-local-llm/"
+    description="Cualquier servidor compatible con OpenAI como Ollama, KoboldCPP, LM Studio, vLLM o LiteLLM para generación de texto y embeddings." />
+</CardGrid>
+
+## Imagen y video
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/es-419/self-hosting/local-endpoints/setup-comfyui/"
+    description="Genera imágenes y videos cortos a través de tu propia instancia de ComfyUI usando un flujo de trabajo en formato API." />
+</CardGrid>
+
+## Voz
+
+<CardGrid>
+  <LinkCard title="Texto a voz" href="/es-419/self-hosting/local-endpoints/text-to-speech/"
+    description="Motores locales de texto a voz (Chatterbox, Qwen3-TTS, IrodoriTTS, Fish S2 Pro, VoxCPM2, CosyVoice 3) para mensajes de voz nativos de Discord, clonación de voz y Diseño de voz." />
+  <LinkCard title="Voz a texto" href="/es-419/self-hosting/local-endpoints/speech-to-text/"
+    description="Transcribe archivos adjuntos de audio localmente con WhisperX, whisper.cpp o KoboldCPP." />
+</CardGrid>
+
+## Búsqueda y obtención web
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/es-419/self-hosting/local-endpoints/setup-searxng/"
+    description="Proxy de metabúsqueda que respeta la privacidad como herramienta web_search local para evitar límites de tasa públicos." />
+  <LinkCard title="Crawl4AI" href="/es-419/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="Extracción de markdown renderizado por el navegador para sitios con mucho JS, potenciando la herramienta fetch_url." />
+</CardGrid>
+
+## Herramientas personalizadas
+
+<CardGrid>
+  <LinkCard title="slop-guard" href="/es-419/self-hosting/mcp-servers/setup-slop-guard/"
+    description="Un corrector de prosa basado en reglas que Revisión de respuestas puede usar como verificador de reglas." />
+  <LinkCard title="Servidor MCP local" href="/es-419/self-hosting/mcp-servers/setup-local-mcp/"
+    description="Ejecuta un servidor MCP local para extender TomoriBot con tus propias herramientas (solo instancias de autoalojamiento)." />
+</CardGrid>
+
+## Proxies y acceso remoto
+
+Revisa los [riesgos de cuenta](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) antes de usar cuentas respaldadas por CLI a través de puentes de terceros.
+
+<CardGrid>
+  <LinkCard title="ChatMock" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"
+    description="Conecta un puente autorizado respaldado por ChatGPT en tu máquina." />
+  <LinkCard title="CLIProxyAPI" href="/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"
+    description="Instala un proxy local y registra modelos desde un servicio ascendente autorizado." />
+  <LinkCard title="Cloudflare Tunnel" href="/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"
+    description="Asigna a un motor en casa una URL HTTPS pública para un bot alojado." />
+</CardGrid>
+
+## Iniciar servidores locales con `bun run launch`
+
+En lugar de iniciar los servidores locales manualmente, usa `bun run launch` que inicia los servidores solicitados, espera a que estén listos y luego lanza el bot en modo de observación automáticamente:
+
+```sh
+# Solo el bot, idéntico a bun run dev
+bun run launch
+
+# Con los contenedores Docker de SearXNG y Crawl4AI
+bun run launch --searxng --crawl4ai
+
+# Con el corrector de prosa slop-guard para Revisión de respuestas
+bun run launch --slopguard
+
+# Con un servidor TTS local (venv debe configurarse primero; consulta la guía de Texto a voz a continuación)
+bun run launch --qwen3tts
+bun run launch --fishs2
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
+
+# Ver todas las banderas disponibles
+bun run launch --help
+```
+
+Banderas disponibles: `--searxng`, `--crawl4ai`, `--slopguard` (alias `--slop-guard`), `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`
+
+Los contenedores Docker (`--searxng`, `--crawl4ai`, `--slopguard`) se crean en la primera ejecución y se reutilizan en ejecuciones posteriores. Los servidores de texto a voz y voz a texto de Python requieren que su venv se configure una vez de antemano; consulta las guías de configuración individuales en [Texto a voz](/es-419/self-hosting/local-endpoints/text-to-speech/) y [Voz a texto](/es-419/self-hosting/local-endpoints/speech-to-text/).
+
+Ctrl+C detiene el bot y cualquier proceso de servidor de Python. Los contenedores de Docker se dejan ejecutando intencionalmente. Detenlos manualmente con `docker stop searxng`, `docker stop crawl4ai` o `docker stop slop-guard` cuando termines.

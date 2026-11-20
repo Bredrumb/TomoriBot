@@ -2,14 +2,12 @@ import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { buildContextNative } from "./nativeBuilder";
 import { resolveRandomChoiceMacrosInBuildOutput } from "./templates";
 import type { BuildContextParams, BuildContextResult } from "./types";
 
-/**
- * Builds model context, applying SillyTavern preset reassembly when one is active.
- */
+/** Applies SillyTavern preset reassembly when one is active. */
 export async function buildContext(params: BuildContextParams): Promise<BuildContextResult> {
   const messageIdMap = params.messageIdMap ?? new MessageIdMap();
   const paramsWithMap = { ...params, messageIdMap };
@@ -22,13 +20,18 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
       if (presetData) {
         const nativeOutput = await buildContextNative({
           ...paramsWithMap,
-          suppressDefaultSystemPrompt: !params.tomoriConfig.system_prompt?.trim(),
+          presetOwnsSystemPrompt: true,
         });
 
         const lastUserMessage =
           params.simplifiedMessageHistory.filter((message) => message.authorType === "user").at(-1)?.content ?? "";
         const presetToolPromptMacroResolver = createToolPromptMacroResolver({
           provider: tomoriStateForPreset?.llm?.llm_provider,
+          capabilities: resolvePromptCapabilityValues(
+            params.tomoriConfig,
+            Boolean(tomoriStateForPreset?.llm?.has_tools),
+          ),
+          deliberateToolAllowedNames: params.deliberateToolAllowedNames,
           stateForContext:
             tomoriStateForPreset?.server_id && tomoriStateForPreset.llm
               ? {
@@ -39,6 +42,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                   nai_diffusion_model_id: tomoriStateForPreset.config.nai_diffusion_model_id,
                   video_model_id: tomoriStateForPreset.config.video_model_id,
                   config: {
+                    emoji_usage_enabled: params.tomoriConfig.emoji_usage_enabled,
                     sticker_usage_enabled: params.tomoriConfig.sticker_usage_enabled,
                     web_search_enabled: params.tomoriConfig.web_search_enabled,
                     self_teaching_enabled: params.tomoriConfig.self_teaching_enabled,
@@ -47,12 +51,20 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                     videogen_enabled: params.tomoriConfig.videogen_enabled,
                     voice_message_enabled: params.tomoriConfig.voice_message_enabled,
                     user_blocking_enabled: params.tomoriConfig.user_blocking_enabled,
+                    user_info_updates_enabled: params.tomoriConfig.user_info_updates_enabled,
                     thread_creation_enabled: params.tomoriConfig.thread_creation_enabled,
+                    conditioning_interactions_enabled: params.tomoriConfig.conditioning_interactions_enabled,
+                    dice_rolling_enabled: params.tomoriConfig.dice_rolling_enabled,
+                    danbooru_enabled: params.tomoriConfig.danbooru_enabled,
                   },
                 }
               : undefined,
         });
 
+        const nativeContextItems = resolveRandomChoiceMacrosInBuildOutput({
+          ...nativeOutput,
+          contextItems: nativeOutput.contextItems.map((item) => ({ ...item, parts: [...item.parts] })),
+        }).contextItems;
         const presetResult = await reassembleWithPreset(
           nativeOutput,
           presetData,
@@ -64,17 +76,25 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             sampleDialoguesIn: tomoriStateForPreset?.sample_dialogues_in ?? [],
             sampleDialoguesOut: tomoriStateForPreset?.sample_dialogues_out ?? [],
             lastUserMessage,
+            // Effective randomizer and fallback models require the resolved request model in BuildContextParams.
+            model: tomoriStateForPreset?.llm?.llm_codename ?? "",
+            provider: tomoriStateForPreset?.llm?.llm_provider ?? "",
+            utcOffsetHours:
+              params.tomoriConfig.time_awareness_enabled !== false ? params.tomoriConfig.timezone_offset : null,
+            nowMs: Date.now(),
           },
           {
             client: params.client,
             guildId: params.guildId,
             triggererName: params.triggererName,
+            triggererFormattedName: params.triggererFormattedName,
+            triggererAddressTerm: params.triggererAddressTerm,
             botName: params.tomoriNickname,
             personalMemoriesEnabled: params.tomoriConfig.personal_memories_enabled ?? true,
             toolPromptMacroResolver: presetToolPromptMacroResolver,
           },
         );
-        return { ...resolveRandomChoiceMacrosInBuildOutput(presetResult), messageIdMap };
+        return { ...resolveRandomChoiceMacrosInBuildOutput(presetResult), nativeContextItems, messageIdMap };
       }
     }
   }

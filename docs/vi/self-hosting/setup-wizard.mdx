@@ -1,0 +1,137 @@
+---
+title: "Trình hướng dẫn thiết lập"
+aiGenerated: false
+sidebar:
+  label: "Trình hướng dẫn thiết lập"
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+Nếu muốn dùng Docker Compose, bạn nên bỏ qua trình hướng dẫn này và xem [Docker Compose](/self-hosting/docker-compose/) để cài đặt trong container.
+:::
+
+`bun run setup` là cách self-hosting được khuyến nghị cho bản cài đặt chạy trực tiếp trên Bun cục bộ. Lệnh này tự động cài đặt các dependency từ `bun.lock` trước khi mở trình hướng dẫn, kể cả trên một bản clone mới. Trình hướng dẫn sẽ tạo tệp `.env`, sinh khóa `CRYPTO_SECRET`, hỏi token bot Discord của bạn, hỏi xem có [cho phép mạng riêng tư](#private-networks) hay không và cấu hình PostgreSQL. Bạn có thể chạy lại lệnh này một cách an toàn; các giá trị `.env` hiện có được giữ nguyên trừ khi bạn chọn cấu hình lại.
+
+## Những thứ cần chuẩn bị
+
+Trước khi bắt đầu, hãy đảm bảo bạn có sẵn:
+
+- **Một token bot Discord** đã bật các privileged intent `GuildMembers`, `MessageContent` và `GuildPresences`.
+- **Bun** để chạy bot và chính trình hướng dẫn này.
+- **PostgreSQL đã cài sẵn**, hoặc **[Docker](https://www.docker.com/)** nếu bạn muốn trình hướng dẫn tự chạy một container PostgreSQL giúp bạn. TomoriBot lưu mọi thứ trong PostgreSQL và tự động khởi tạo schema, dữ liệu hạt giống, bước di chuyển dữ liệu, `pgcrypto` và schema RAG ngay trong lần khởi động đầu tiên.
+- **Node.js v20+ (tùy chọn)** nếu bạn dự định dùng các máy chủ MCP khởi chạy bằng `npx`.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Cài đặt [Bun](https://bun.sh/) trong PowerShell nếu chưa cài:
+
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+Đối với PostgreSQL, hãy cài [PostgreSQL for Windows](https://www.postgresql.org/download/windows/) (bao gồm `psql` và `pg_dump` trong `PATH`) hoặc [Docker Desktop](https://www.docker.com/products/docker-desktop/). Docker Desktop là cách dễ nhất để có sẵn `pgvector` và `pg_cron` trên Windows mà không cần biên dịch tiện ích mở rộng từ mã nguồn.
+
+</TabItem>
+<TabItem label="Linux">
+
+Cài đặt [Bun](https://bun.sh/) nếu chưa cài:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Cài đặt PostgreSQL cùng bộ công cụ dòng lệnh (`psql` và `pg_dump`), hoặc cài Docker Engine kèm plugin Compose v2 (`docker compose`). Trên Debian hoặc Ubuntu:
+
+```bash
+sudo apt-get update && sudo apt-get install -y postgresql postgresql-client
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Cài đặt [Bun](https://bun.sh/) bằng trình cài đặt chính thức hoặc Homebrew:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Cài đặt PostgreSQL qua Homebrew (hoặc [Docker Desktop](https://www.docker.com/products/docker-desktop/)):
+
+```bash
+brew install postgresql@17
+brew services start postgresql@17
+```
+
+</TabItem>
+</Tabs>
+
+## Lấy mã nguồn
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## Chạy trình hướng dẫn
+
+Chạy trình hướng dẫn thiết lập bằng lệnh:
+
+```bash
+bun run setup
+```
+
+Sau khi chạy lệnh, bạn sẽ chọn một trong hai lộ trình:
+
+| Lộ trình | Dùng khi | Tác vụ thực hiện |
+|---|---|---|
+| Full Install | Bạn muốn bản thiết lập khuyên dùng kèm các tiện ích bổ sung nhẹ. | Chạy Base Install trước, sau đó thử cài các tiện ích bên dưới. |
+| Base Install | Bạn chỉ muốn bản bot tối thiểu có thể hoạt động. | Tạo/cấu hình `.env`, token Discord, PostgreSQL và các dependency. |
+
+### Mạng riêng tư
+{/* anchor: private-networks */}
+
+Trình hướng dẫn sẽ hỏi liệu TomoriBot có được phép kết nối tới `localhost` và mạng LAN của bạn không, rồi lưu câu trả lời thành `ALLOW_PRIVATE_NETWORK` trong `.env`. Ngoài môi trường production, TomoriBot sẽ không khởi động nếu chưa đặt biến này, nên cách cài đặt thủ công cũng cần thêm dòng này. Mọi thành viên có quyền thêm endpoint tùy chỉnh hoặc máy chủ MCP đều có thể kết nối tới bất kỳ địa chỉ nào bạn cho phép ở đây, vì vậy hãy chọn theo đối tượng sử dụng bot:
+
+| Giá trị | Chọn khi |
+|---|---|
+| `true` | Chỉ có bạn hoặc một cộng đồng Discord tin cậy sử dụng bot. Các model cục bộ và máy chủ MCP trên `localhost` hoặc mạng LAN của bạn đều hoạt động, kể cả qua HTTP thường. |
+| Một danh sách `host:port`, ví dụ `localhost:5001,localhost:8188` | Bạn chia sẻ máy chủ cục bộ như KoboldCPP hoặc ComfyUI với những thành viên bạn chưa hoàn toàn tin tưởng. Chỉ các máy chủ trong danh sách mới hoạt động, nên endpoint của họ không thể truy cập bất kỳ thứ gì khác trong mạng của bạn. |
+| `false` | Có thành viên không tin cậy sử dụng bot và bạn không chia sẻ máy chủ cục bộ nào. |
+
+Các endpoint HTTPS công khai, chẳng hạn API tương thích OpenAI được lưu trữ trên đám mây, hoạt động bình thường với mọi giá trị. Đối với model chạy trên máy khác, hãy dùng [kết nối từ xa có xác thực](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Tunnel cung cấp kết nối và cần thêm các biện pháp kiểm soát truy cập riêng. Môi trường production luôn từ chối endpoint riêng tư bất kể giá trị `ALLOW_PRIVATE_NETWORK`.
+
+Danh sách này khớp chính xác từng địa chỉ như cách endpoint được đăng ký, nên `localhost:5001` không bao gồm `127.0.0.1:5001`; hãy liệt kê mọi cách viết bạn dùng. Một máy chủ có trong danh sách vẫn mở cho mọi thành viên ở bất kỳ đường dẫn nào, vì vậy hãy bảo vệ các tính năng quản trị riêng của máy chủ đó bằng mật khẩu (với KoboldCPP là `--adminpassword`).
+
+Địa chỉ Tailscale và tên miền `*.ts.net` được tính là mạng riêng tư, nên chúng cần `true` hoặc nằm trong danh sách; nếu đặt `false`, chỉ Tailscale Funnel hoạt động.
+
+Hình ảnh, tệp tin và bản xem trước liên kết do thành viên gửi sẽ không bao giờ kết nối tới địa chỉ riêng tư, bất kể bạn chọn giá trị nào. Công cụ `fetch_url` có cài đặt riêng là `FETCH_URL_ALLOW_PRIVATE_NETWORK` (mặc định tắt).
+
+### Tiện ích bổ sung của Full Install
+
+Full Install chạy Base Install trước, sau đó thử cài các tiện ích bên dưới. Nếu có bước nào thất bại, trình hướng dẫn sẽ in ra lệnh hoặc liên kết hướng dẫn để bạn hoàn tất thủ công và vẫn tiếp tục chạy tiếp:
+
+| Tiện ích | Mục đích |
+|---|---|
+| `pgvector` | Tìm kiếm vector cho bộ nhớ tài liệu/RAG. |
+| `pg_cron` | Dọn dẹp các hàng cooldown/lời nhắc theo lịch tùy chọn. |
+| Tài nguyên tokenizer | Tài nguyên tokenizer cục bộ để tạo văn bản NovelAI và logit bias theo model. |
+
+Để tự cài đặt thủ công bất kỳ thành phần nào trong số này, hãy xem [Tiện ích bổ sung trong Thiết lập thủ công](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).
+
+## Sau khi thiết lập
+
+```bash
+bun run dev                          # chỉ chạy bot
+bun run launch --searxng --crawl4ai  # bot + máy chủ cục bộ (xem bun run launch --help)
+```
+
+Khi bot đã trực tuyến, hãy chạy `/setup` trong Discord. Lệnh này sẽ dẫn dắt bạn kết nối một nhà cung cấp AI hoặc trỏ tới endpoint tùy chỉnh của bạn.
+
+## Cập nhật
+
+Hãy dùng lệnh cập nhật sao lưu trước: `bun run update`
+
+Lệnh này chạy `bun run backup`, sau đó `git pull --rebase --autostash`, rồi `bun install --frozen-lockfile`. Thêm `--build` nếu bạn chạy từ `dist/`, hoặc `--docker` cho bản triển khai Compose. Xem chi tiết đầy đủ tại trang [Bảo trì & Sao lưu](/self-hosting/maintenance/).

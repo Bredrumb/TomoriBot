@@ -1,7 +1,7 @@
-# SearXNG Sidecar
+# SearXNG Local Server
 
 Self-hosted [SearXNG](https://docs.searxng.org/) instance fronted by the TomoriBot
-web-search engine chain (`Brave → SearXNG → DuckDuckGo → Felo`).
+web-search engine chain (`Brave → SearXNG → DuckDuckGo`).
 
 SearXNG is a privacy-respecting metasearch aggregator. It calls upstream engines
 (Google, Bing, DDG, Brave, Wikipedia, …) and returns a unified JSON result. By
@@ -10,7 +10,7 @@ breakage.
 
 TomoriBot exposes the common categories (`text`, `image`, `video`, `news`) and
 SearXNG-only verticals (`science`, `it`, `files`, `music`) through the unified
-`web_search` tool. The specialty categories only work when this sidecar is
+`web_search` tool. The specialty categories only work when this server is
 configured and SearXNG has active engines for that category.
 
 ## Files
@@ -18,7 +18,7 @@ configured and SearXNG has active engines for that category.
 - `settings.yml` — SearXNG configuration. Mounted read-only at
   `/etc/searxng/settings.yml`. References `${SEARXNG_SECRET}` which the
   container substitutes from env at startup.
-- `limiter.toml` — Disables SearXNG's bot detection. Safe because the sidecar
+- `limiter.toml` — Disables SearXNG's bot detection. Safe because the container
   only listens on the private container network.
 
 ## Local development
@@ -59,8 +59,7 @@ SEARXNG_BASE_URL=http://localhost:8080/ bun run dev
 
 ### No SearXNG (graceful absence)
 
-Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DDG → Felo`
-exactly as before Phase 2.
+Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DuckDuckGo`.
 
 SearXNG-only categories return the standard category-unavailable message in
 this mode.
@@ -79,7 +78,7 @@ AWS task definition. To upgrade:
    in:
    - `docker-compose.yaml`
    - `terraform/gcp/variables.tf` (`searxng_image` default)
-   - `.github/workflows/deploy-tomoribot-aws.yml` task-def container image
+   - `.github/workflows/deploy-aws.yml` task-def container image
 3. Smoke test locally with `docker compose up`.
 4. Open a PR. CI build + deploy will roll the new digest forward.
 

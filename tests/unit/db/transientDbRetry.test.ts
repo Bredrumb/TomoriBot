@@ -1,0 +1,337 @@
+import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { withTransientDbRetry } from "@/utils/db/client";
+import * as dbClient from "@/utils/db/client";
+import { statRepository } from "@/utils/db/repositories/StatRepository";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import { fireRowSchema } from "@/modules/natural-nudges/db/types";
+import { log } from "@/utils/misc/logger";
+import { useEnvSandbox } from "../../helpers/env";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
+import { serverStmConfigSchema } from "@/types/db/schema";
+import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
+import { userPersonaNamingPreferenceSchema } from "@/types/personaNaming";
+import { decryptApiKey } from "@/utils/security/crypto";
+import { keyManager } from "@/utils/security/keyManager";
+import { OAuthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
+import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
+import * as quotas from "@/utils/db/repositories/QuotaRepository";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import type { SQL } from "bun";
+
+useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
+
+beforeAll(() => {
+  process.env.POSTGRES_TRANSIENT_RETRY_DELAY_MS = "0";
+  process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS = "3";
+});
+
+it("recovers quota configuration reads without allowing genuine query faults", async () => {
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    for (const read of [quotas.getTextConfigResult, quotas.getImageConfigResult, quotas.getVideoConfigResult]) {
+      for (const code of ["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"]) {
+        const thunk = failOnceThen(code, []);
+        const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+        try {
+          expect(await read(1)).toEqual({ status: code === "23505" ? "unavailable" : "fresh", config: null });
+          expect(thunk.calls()).toBe(code === "23505" ? 1 : 2);
+        } finally {
+          query.mockRestore();
+        }
+      }
+    }
+  } finally {
+    logged.mockRestore();
+  }
+});
+
+it("restarts preset materialization in a fresh transaction only for a retired connection", async () => {
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    for (const code of ["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"]) {
+      let attempts = 0;
+      const transaction = async (callback: (tx: SQL) => Promise<boolean>) => {
+        attempts++;
+        if (attempts === 1) throw postgresError(code);
+        return callback((async () => [{ persona_id: 1, is_pointer: false }]) as unknown as SQL);
+      };
+      const query = spyOn(dbClient, "sql").mockImplementation((async () => []) as unknown as typeof dbClient.sql);
+      Object.assign(dbClient.sql, { transaction });
+      try {
+        expect(await personaRepository.materializeIfPointer(1)).toBe(code !== "23505");
+        expect(attempts).toBe(code === "23505" ? 1 : 2);
+      } finally {
+        query.mockRestore();
+      }
+    }
+  } finally {
+    logged.mockRestore();
+  }
+});
+
+it("recovers credential decryption, sprite history, and OAuth cleanup after connection retirement", async () => {
+  const sprite = {
+    message_disc_id: "123456789012345678",
+    persona_id: 1,
+    sprite_name: "Happy",
+    channel_disc_id: "123456789012345679",
+    created_at: new Date(),
+  };
+  const key = spyOn(keyManager, "getKey").mockReturnValue("fixture-encryption-key");
+  const cases = [
+    {
+      read: () => decryptApiKey(Buffer.from("ciphertext")),
+      rows: [{ decrypted_key: "fixture-api-key" }],
+      expected: "fixture-api-key",
+    },
+    {
+      read: () => personaSpriteMessageRepository.getByMessageIds([sprite.message_disc_id]),
+      rows: [sprite],
+      expected: new Map([[sprite.message_disc_id, sprite]]),
+    },
+    {
+      read: () => new OAuthStateRepository(dbClient.sql).purgeFinishedStates(),
+      rows: [{ oauth_state_id: 1 }],
+      expected: { purgedStates: 1 },
+    },
+  ];
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  try {
+    for (const entry of cases) {
+      const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", entry.rows);
+      const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+      Object.assign(dbClient.sql, { array });
+      try {
+        expect(await entry.read()).toEqual(entry.expected);
+        expect(thunk.calls()).toBe(2);
+      } finally {
+        query.mockRestore();
+      }
+    }
+  } finally {
+    key.mockRestore();
+  }
+});
+
+it("recovers saved short-term memory settings after a connection lifetime timeout", async () => {
+  const row = serverStmConfigSchema.parse({ server_id: 1, refresh_cadence: 9, render_mode: "supersede" });
+  const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", [row]);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  try {
+    expect(await shortTermMemoryRepository.getStmConfig(1)).toEqual(row);
+    expect(thunk.calls()).toBe(2);
+  } finally {
+    query.mockRestore();
+  }
+});
+
+it.each(["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"])("handles naming preference query failures: %s", async (code) => {
+  const row = userPersonaNamingPreferenceSchema.parse({
+    user_id: 1,
+    persona_lineage_id: 2,
+    nickname_override: "Mirri",
+    prefix_override: null,
+    suffix_override: null,
+    created_at: new Date(0),
+    updated_at: new Date(0),
+  });
+  const thunk = failOnceThen(code, [row]);
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  Object.assign(dbClient.sql, { array });
+  try {
+    const result = userNamingRepository.loadPreferences([
+      { userId: row.user_id, personaLineageId: row.persona_lineage_id },
+    ]);
+    if (code === "ERR_POSTGRES_LIFETIME_TIMEOUT") {
+      expect([...(await result).values()]).toEqual([row]);
+      expect(thunk.calls()).toBe(2);
+    } else {
+      await expect(result).rejects.toMatchObject({ code });
+      expect(thunk.calls()).toBe(1);
+    }
+  } finally {
+    query.mockRestore();
+  }
+});
+
+it.each(["ERR_POSTGRES_LIFETIME_TIMEOUT", "23505"])("classifies proxy lookup failures: %s", async (code) => {
+  const rows = [
+    {
+      service_id: "pluralkit",
+      instance_id: "pluralkit:official",
+      user_disc_id: "pk:11111111-2222-4333-8444-555555555555",
+      display_name: "Mirri",
+      user_nickname: null,
+    },
+  ];
+  const thunk = failOnceThen(code, rows);
+  const array = dbClient.sql.array.bind(dbClient.sql);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  Object.assign(dbClient.sql, { array });
+  const logged = spyOn(log, "error").mockResolvedValue(undefined);
+  try {
+    const result = await messageProxyRepository.loadContextReferenceIdentities({
+      hostUserDiscIds: ["123456789012345678"],
+      normalizedHistoryText: "Mirri",
+    });
+    if (code === "ERR_POSTGRES_LIFETIME_TIMEOUT") {
+      expect(result.map((entry) => entry.userDiscId)).toEqual([rows[0].user_disc_id]);
+      expect(thunk.calls()).toBe(2);
+    } else {
+      expect(result).toEqual([]);
+      expect(thunk.calls()).toBe(1);
+      expect(logged).toHaveBeenCalled();
+    }
+  } finally {
+    query.mockRestore();
+    logged.mockRestore();
+  }
+});
+
+describe("natural nudge database reads", () => {
+  const at = new Date("2026-01-01T12:00:00Z");
+  const cases = [
+    {
+      name: "daily counts",
+      read: () => statRepository.getServerDailyHeatCounts({ serverId: 1, from: at }),
+      rows: [{ bucket: "2026-01-01", total: "7" }],
+      expected: new Map([["2026-01-01", 7]]),
+    },
+    {
+      name: "persona counts",
+      read: () => statRepository.getServerPersonaMessageCounts({ serverId: 1, from: at }),
+      rows: [{ persona_lineage_id: "2", total: "7" }],
+      expected: new Map([[2, 7]]),
+    },
+    {
+      name: "active hours",
+      read: () => statRepository.getServerActiveHourHistogram({ serverId: 1, from: at }),
+      rows: [{ metric_key: "12", total: "7" }],
+      expected: Array.from({ length: 24 }, (_, hour) => (hour === 12 ? 7 : 0)),
+    },
+    {
+      name: "last activity",
+      read: () => statRepository.getServerMetricLastAt({ serverId: 1, metric: "message_sent" }),
+      rows: [{ last_at: at }],
+      expected: at,
+    },
+    {
+      name: "runtime state",
+      read: () => naturalNudgeRepository.loadRuntimeState(1),
+      rows: [{ server_id: 1, idle_nudge_jitter: 1.2, consecutive_failures: 2, stopped_at: null }],
+      expected: { server_id: 1, idle_nudge_jitter: 1.2, consecutive_failures: 2, stopped_at: null },
+    },
+  ];
+
+  it.each(cases)("recovers $name after connection retirement", async ({ read, rows, expected }) => {
+    const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", rows);
+    const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+    try {
+      expect(await read()).toEqual(expected);
+      expect(thunk.calls()).toBe(2);
+    } finally {
+      query.mockRestore();
+    }
+  });
+
+  it("retries both idle history windows when one connection retires", async () => {
+    const row = fireRowSchema.parse({
+      fire_id: 1,
+      server_id: 1,
+      channel_disc_id: "123456789012345678",
+      persona_id: 1,
+      mode: "idle",
+      category: "start_topic",
+      idle_nudge_key: null,
+      target_user_id: null,
+      opener_message_disc_id: "123456789012345679",
+      answered: null,
+      fired_at: at,
+    });
+    const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", [row]);
+    const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+    try {
+      expect(await naturalNudgeRepository.loadFireHistory(1, at, 3)).toEqual({
+        recent: [row],
+        latestIdleNudges: [row],
+      });
+      expect(thunk.calls()).toBe(4);
+    } finally {
+      query.mockRestore();
+    }
+  });
+
+  it.each(cases)("propagates exhausted $name reads instead of supplying empty activity", async ({ read }) => {
+    const error = postgresError("ERR_POSTGRES_LIFETIME_TIMEOUT");
+    const query = spyOn(dbClient, "sql").mockImplementation((async () => {
+      throw error;
+    }) as unknown as typeof dbClient.sql);
+    const logged = spyOn(log, "error").mockResolvedValue(undefined);
+    try {
+      await expect(read()).rejects.toBe(error);
+      expect(query).toHaveBeenCalledTimes(3);
+    } finally {
+      query.mockRestore();
+      logged.mockRestore();
+    }
+  });
+});
+
+function postgresError(code: string): Error & { code: string } {
+  return Object.assign(new Error("Failed to read data"), { code });
+}
+
+/**
+ * Builds a thunk that fails once with `code`, then succeeds, so a passing assertion on
+ * the returned value proves a retry happened rather than the error propagating.
+ */
+function failOnceThen<T>(code: string, value: T): { run: () => Promise<T>; calls: () => number } {
+  let calls = 0;
+  return {
+    run: async () => {
+      calls++;
+      if (calls === 1) throw postgresError(code);
+      return value;
+    },
+    calls: () => calls,
+  };
+}
+
+describe("withTransientDbRetry connection-retirement classification", () => {
+  // Bun rejects in-flight queries from `#onClose` using whatever state its wire-protocol
+  // reader stopped in, so one dead connection surfaces under several codes. Missing any
+  // of them means a healthy query fails outright instead of retrying on a fresh socket.
+  it.each([
+    "ERR_POSTGRES_CONNECTION_CLOSED",
+    "ERR_POSTGRES_LIFETIME_TIMEOUT",
+    "ERR_POSTGRES_IDLE_TIMEOUT",
+    "ERR_POSTGRES_INVALID_MESSAGE",
+    "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
+  ])("retries %s on a fresh connection", async (code) => {
+    const thunk = failOnceThen(code, "recovered");
+
+    expect(await withTransientDbRetry(thunk.run, `retry ${code}`)).toBe("recovered");
+    expect(thunk.calls()).toBe(2);
+  });
+
+  it("does not retry a genuine query fault", async () => {
+    const thunk = failOnceThen("23505", "unreachable");
+
+    await expect(withTransientDbRetry(thunk.run, "unique violation")).rejects.toThrow("Failed to read data");
+    expect(thunk.calls()).toBe(1);
+  });
+
+  it("does not retry an error carrying no driver code", async () => {
+    let calls = 0;
+
+    await expect(
+      withTransientDbRetry(async () => {
+        calls++;
+        throw new Error("ERR_POSTGRES_INVALID_MESSAGE");
+      }, "message-only error"),
+    ).rejects.toThrow("ERR_POSTGRES_INVALID_MESSAGE");
+    expect(calls).toBe(1);
+  });
+});

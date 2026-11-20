@@ -1,0 +1,90 @@
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import type { ToolContext } from "@/types/tool/interfaces";
+import type { ReminderRow } from "@/types/db/schema";
+import { ReminderTool } from "@/tools/functionCalls/reminderTool";
+import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
+import * as expandableEmbedNotice from "@/utils/discord/expandableEmbedNotice";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
+import { stubLogMembers } from "../../helpers/mockSurface";
+
+beforeAll(initializeLocalizer);
+stubLogMembers({ info: () => undefined, success: () => undefined });
+
+const ANCHOR_AUTHOR = createUserRow({ user_id: 11, user_disc_id: "fixture-juno" });
+
+async function executeTaskCreation(
+  context: Partial<ToolContext>,
+  timing: Record<string, unknown> = { minutes_from_now: 30, repetition_interval_hours: 0 },
+) {
+  const addReminder = spyOn(serverScheduleRepository, "addReminder").mockImplementation(
+    async (row) => ({ ...row, reminder_id: 5 }) as unknown as ReminderRow,
+  );
+  const spies = [
+    addReminder,
+    spyOn(userRepository, "loadByDiscordId").mockResolvedValue(ANCHOR_AUTHOR),
+    spyOn(expandableEmbedNotice, "sendTaskEmbedWithExpand").mockResolvedValue(undefined as never),
+  ];
+  try {
+    const result = await new ReminderTool().execute(
+      { reminder_purpose: "Check the build.", self_reminder: true, ...timing },
+      {
+        channel: { id: "fixture-channel" },
+        client: { user: { id: "fixture-bot", username: "Tomori" } },
+        tomoriState: createPersona(),
+        locale: "en-US",
+        provider: "google",
+        userId: ANCHOR_AUTHOR.user_disc_id,
+        ...context,
+      } as ToolContext,
+    );
+    return { result, row: addReminder.mock.calls[0]?.[0] };
+  } finally {
+    for (const spy of spies.reverse()) spy.mockRestore();
+  }
+}
+
+async function createTaskAndReadCreator(context: Partial<ToolContext>): Promise<number | null | undefined> {
+  const { result, row } = await executeTaskCreation(context);
+  expect(result.success).toBeTrue();
+  return row?.created_by_user_id;
+}
+
+describe("create_task recurrence", () => {
+  it("starts a minute schedule after one interval and saves its finite limit", async () => {
+    const before = Date.now();
+    const { result, row } = await executeTaskCreation(
+      {
+        internalUserId: ANCHOR_AUTHOR.user_id,
+      },
+      { repetition_interval_hours: 0, repetition_interval_minutes: 15, repeat_count: 2 },
+    );
+    expect(result.success).toBeTrue();
+    expect(row).toMatchObject({
+      repetition: { unit: "minutes", interval: 15 },
+      recurrenceOptions: { limit: { remaining: 2 } },
+    });
+    expect(row?.reminder_time.getTime()).toBeGreaterThanOrEqual(before + 15 * 60_000);
+    expect(row?.reminder_time.getTime()).toBeLessThanOrEqual(Date.now() + 15 * 60_000);
+  });
+});
+
+describe("create_task creator attribution", () => {
+  it("allows a task created within its private destination channel", async () => {
+    expect(
+      await createTaskAndReadCreator({
+        tomoriState: createPersona({ config: { private_channel_ids: ["fixture-channel"] } }),
+        internalUserId: ANCHOR_AUTHOR.user_id,
+      }),
+    ).toBe(ANCHOR_AUTHOR.user_id);
+  });
+
+  it("credits the requester on an ordinary turn", async () => {
+    expect(await createTaskAndReadCreator({ internalUserId: ANCHOR_AUTHOR.user_id })).toBe(ANCHOR_AUTHOR.user_id);
+  });
+
+  it("credits a borrowed turn's billed owner, or nobody, never the anchor message's author", async () => {
+    expect(await createTaskAndReadCreator({ borrowsTriggerMessage: true, internalUserId: 77 })).toBe(77);
+    expect(await createTaskAndReadCreator({ borrowsTriggerMessage: true })).toBeNull();
+  });
+});

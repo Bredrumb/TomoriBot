@@ -1,0 +1,166 @@
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import type { sql } from "@/utils/db/client";
+import * as leases from "@/utils/cluster/shardLeases";
+import { useEnvSandbox } from "../../helpers/env";
+import { stubLogMembers } from "../../helpers/mockSurface";
+
+const queries: string[] = [];
+const insertValues: unknown[][] = [];
+let insertRejection: Error | null = null;
+
+/**
+ * Injected in place of the real `sql`, recording the normalized statement text so a test can
+ * assert which statements ran. Injection rather than `mock.module`: Bun registers module mocks
+ * process-wide for the whole run and never undoes them, so a mocked `sql` would answer queries
+ * in every later test file too.
+ */
+function fakeSql(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> {
+  const text = strings.join(" ? ").replace(/\s+/g, " ").trim();
+  queries.push(text);
+  if (text.startsWith("INSERT")) insertValues.push(values);
+  if (insertRejection && text.startsWith("INSERT")) {
+    return Promise.reject(insertRejection);
+  }
+  return Promise.resolve([]);
+}
+
+const injectedSql = fakeSql as unknown as typeof sql;
+
+stubLogMembers({ warn: () => {} });
+
+let MetricSampleRepository: typeof import("@/utils/db/repositories/MetricSampleRepository").MetricSampleRepository;
+
+beforeAll(async () => {
+  ({ MetricSampleRepository } = await import("@/utils/db/repositories/MetricSampleRepository"));
+});
+
+useEnvSandbox(["METRIC_SAMPLE_PRUNE_INTERVAL_MS", "METRIC_SAMPLE_RETENTION_DAYS"]);
+
+let primarySpy: ReturnType<typeof spyOn<typeof leases, "isPrimaryProcess">>;
+
+beforeEach(() => {
+  primarySpy = spyOn(leases, "isPrimaryProcess").mockReturnValue(true);
+  queries.length = 0;
+  insertValues.length = 0;
+  insertRejection = null;
+});
+
+afterEach(() => {
+  primarySpy.mockRestore();
+});
+
+const inserts = () => queries.filter((q) => q.startsWith("INSERT"));
+const deletes = () => queries.filter((q) => q.startsWith("DELETE"));
+
+describe("MetricSampleRepository", () => {
+  it("redacts stored metric credentials without changing numeric fields or the caller payload", async () => {
+    const repository = new MetricSampleRepository(injectedSql);
+    const key = `sk-proj-${"synthetic".repeat(5)}`;
+    const password = "synthetic-database-password";
+    for (const model of [
+      key,
+      JSON.stringify({ apiKey: password }),
+      `https://example.com/metrics?api_key=${password}`,
+    ]) {
+      const fields = {
+        model,
+        provider: "google",
+        source: "estimated",
+        input_tokens: 1250,
+        output_tokens: 0,
+        cache_read_tokens: "unknown",
+        cache_write_tokens: "unknown",
+      };
+      await repository.recordSample("turn_usage", fields);
+
+      const stored = insertValues.at(-1);
+      const serialized = JSON.stringify(stored);
+      expect(serialized).not.toContain(key);
+      expect(serialized).not.toContain(password);
+      expect(stored?.[1]).toMatchObject({
+        provider: fields.provider,
+        source: fields.source,
+        input_tokens: fields.input_tokens,
+        output_tokens: fields.output_tokens,
+        cache_read_tokens: fields.cache_read_tokens,
+        cache_write_tokens: fields.cache_write_tokens,
+      });
+      expect(typeof stored?.[1]).toBe("object");
+      expect(fields.model).toBe(model);
+    }
+  });
+
+  it("records a sample and prunes on the first write", async () => {
+    const repository = new MetricSampleRepository(injectedSql);
+    await repository.recordSample("cache_sizes", { heap_used_mb: 312 });
+
+    expect(inserts()).toHaveLength(1);
+    expect(inserts()[0]).toContain("INSERT INTO metric_samples");
+    expect(deletes()).toHaveLength(1);
+  });
+
+  // Retention is enforced here rather than by pg_cron, which is not installed in production and
+  // would be skipped anyway while schema management is off. If this gate ever stops firing the
+  // table grows unbounded with nothing to report it, which is the failure this test exists for.
+  it("prunes again once the interval has elapsed", async () => {
+    process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = "1";
+    const repository = new MetricSampleRepository(injectedSql);
+
+    await repository.recordSample("cache_sizes", { heap_used_mb: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await repository.recordSample("cache_sizes", { heap_used_mb: 2 });
+
+    expect(deletes()).toHaveLength(2);
+  });
+
+  it("does not prune twice inside the interval", async () => {
+    process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = String(60 * 60 * 1000);
+    const repository = new MetricSampleRepository(injectedSql);
+
+    await repository.recordSample("cache_sizes", { heap_used_mb: 1 });
+    await repository.recordSample("cache_sizes", { heap_used_mb: 2 });
+    await repository.recordSample("cache_sizes", { heap_used_mb: 3 });
+
+    expect(inserts()).toHaveLength(3);
+    expect(deletes()).toHaveLength(1);
+  });
+
+  it("falls back to the default retention when the env value is not a positive integer", async () => {
+    process.env.METRIC_SAMPLE_RETENTION_DAYS = "not-a-number";
+    const repository = new MetricSampleRepository(injectedSql);
+
+    await expect(repository.recordSample("cache_sizes", { heap_used_mb: 1 })).resolves.toBeUndefined();
+    expect(deletes()).toHaveLength(1);
+  });
+
+  // A telemetry sink must never be able to break the interval that feeds it, and must not retry
+  // into a pool that is already retiring queries.
+  it("swallows an insert failure without rejecting or pruning", async () => {
+    insertRejection = new Error("Idle timeout reached after 30s");
+    const repository = new MetricSampleRepository(injectedSql);
+
+    await expect(repository.recordSample("cache_sizes", { heap_used_mb: 1 })).resolves.toBeUndefined();
+    expect(inserts()).toHaveLength(1);
+    expect(deletes()).toHaveLength(0);
+  });
+  it("keeps recording local samples but stops pruning after primary loss", async () => {
+    let primary = false;
+    const gate = spyOn(leases, "isPrimaryProcess").mockImplementation(() => primary);
+    process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = "1";
+    const repository = new MetricSampleRepository(injectedSql);
+    try {
+      await repository.recordSample("cache_sizes", { discord_guilds: 8 });
+      expect(inserts()).toHaveLength(1);
+      expect(deletes()).toHaveLength(0);
+      primary = true;
+      await repository.recordSample("cache_sizes", { discord_guilds: 9 });
+      expect(deletes()).toHaveLength(1);
+      primary = false;
+      await repository.recordSample("cache_sizes", { discord_guilds: 10 });
+      expect(inserts()).toHaveLength(3);
+      expect(deletes()).toHaveLength(1);
+    } finally {
+      gate.mockRestore();
+    }
+  });
+});

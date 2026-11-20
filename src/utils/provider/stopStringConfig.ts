@@ -1,12 +1,9 @@
-function parsePositiveIntegerEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
+// Bounds on one server's stop-string list, both for the `/config` model panel that has to
+// render the merged list and because every stop string is sent with every request.
+export const MAX_STOP_STRINGS_PER_SERVER = 40;
+export const MAX_STOP_STRING_LENGTH = 200;
 
-export const MAX_STOP_STRINGS_PER_SERVER = parsePositiveIntegerEnv("BOT_MAX_STOP_STRINGS_PER_SERVER", 40);
-export const MAX_STOP_STRING_LENGTH = parsePositiveIntegerEnv("BOT_MAX_STOP_STRING_LENGTH", 200);
-
-export function decodeStopStringEscapes(value: string): string {
+function decodeStopStringEscapes(value: string): string {
   return value.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t");
 }
 

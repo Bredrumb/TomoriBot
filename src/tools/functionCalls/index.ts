@@ -31,8 +31,8 @@ export { ReviewCapabilitiesTool } from "./reviewCapabilities";
 export { CrossChannelMessageTool } from "./crossChannelMessageTool";
 export { CreateThreadTool } from "./createThreadTool";
 export { UpdateTaskTool } from "./updateTaskTool";
+export { UpdateUserInfoTool } from "./updateUserInfoTool";
 
-// Re-export common types for convenience
 export type {
   Tool,
   ToolContext,

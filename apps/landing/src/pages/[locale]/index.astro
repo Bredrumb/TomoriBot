@@ -1,0 +1,15 @@
+---
+import { DOCS_LOCALES } from "../../../../../src/constants/docsLocales";
+import LandingPage from "../index.astro";
+
+export function getStaticPaths() {
+  return DOCS_LOCALES.filter((locale) => locale.docsTree && locale.id !== "en").map((locale) => ({
+    params: { locale: locale.id },
+    props: { locale: locale.id },
+  }));
+}
+
+const { locale } = Astro.props;
+---
+
+<LandingPage locale={locale} />

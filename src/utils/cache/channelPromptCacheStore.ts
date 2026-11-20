@@ -1,8 +1,16 @@
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  invalidationDatabaseId,
+} from "@/utils/cache/invalidationBus";
 import type { ChannelPromptMode } from "@/types/db/schema";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
 /**
  * Resolved per-channel system prompt override.
- * `null` (cached) means the channel has no override — a negative-cache hit.
+ * `null` (cached) means the channel has no override : a negative-cache hit.
  */
 export type ChannelPromptOverride = {
   prompt: string;
@@ -15,8 +23,7 @@ export type ChannelPromptOverride = {
  */
 const channelPromptCache = new Map<string, { override: ChannelPromptOverride | null; expiresAt: number }>();
 
-const CACHE_TTL_MINUTES = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10);
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 function getCacheKey(serverId: number, channelDiscId: string): string {
   return `${serverId}:${channelDiscId}`;
@@ -48,6 +55,7 @@ export function setChannelPromptCache(
 
 export function invalidateChannelPromptCache(serverId: number, channelDiscId: string): void {
   channelPromptCache.delete(getCacheKey(serverId, channelDiscId));
+  broadcastInvalidation("channelPrompt", [[String(serverId), channelDiscId]]);
 }
 
 export function getChannelPromptCacheSize(): number {
@@ -65,4 +73,15 @@ export function invalidateAllChannelPromptCacheForServer(serverId: number): void
       channelPromptCache.delete(key);
     }
   }
+  broadcastInvalidation("channelPrompt", [[String(serverId)]]);
 }
+
+registerInvalidation(
+  "channelPrompt",
+  z.union([z.tuple([invalidationDatabaseId]), z.tuple([invalidationDatabaseId, invalidationKey])]),
+  ([server, channel]) => {
+    if (channel === undefined) invalidateAllChannelPromptCacheForServer(server);
+    else invalidateChannelPromptCache(server, channel);
+  },
+  clearChannelPromptCache,
+);

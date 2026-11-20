@@ -1,10 +1,36 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
+import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
 import { log } from "@/utils/misc/logger";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
+import { renderPromptConditionals, type PromptConditionPredicate } from "./promptConditionals";
+
+const PROMPT_CAPABILITY_NAMES = [
+  "tool_use",
+  "self_teaching",
+  "personal_memories",
+  "emoji_usage",
+  "sticker_usage",
+  "web_search",
+  "manage_message",
+  "thread_creation",
+  "image_generation",
+  "video_generation",
+  "voice_message",
+  "user_blocking",
+  "short_term_memory",
+  "time_awareness",
+] as const;
+
+type PromptCapabilityName = (typeof PROMPT_CAPABILITY_NAMES)[number];
+export type PromptCapabilityValues = Partial<Record<PromptCapabilityName, boolean>>;
 
 export interface ToolPromptMacroContext {
   provider?: string | null;
   stateForContext?: ToolStateForContext | null;
+  capabilities?: PromptCapabilityValues | null;
+  deliberateToolAllowedNames?: readonly string[] | null;
+  availableToolNames?: ReadonlySet<string> | null;
 }
 
 export interface ToolPromptMacroResolver {
@@ -17,13 +43,6 @@ interface ToolPromptMacroAvailability {
   guildUrlFetcherToolNames: string[];
 }
 
-export interface ToolPromptMacroDocEntry {
-  macro: string;
-  type: "static" | "dynamic";
-  currentTarget: string;
-  notes: string;
-}
-
 const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{capabilities_tool}": "review_capabilities",
   "{memory_tool}": "create_long_term_memory",
@@ -32,23 +51,27 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{task_tool}": "create_task",
   "{task_update_tool}": "update_task",
   "{cross_channel_tool}": "cross_channel_message",
+  "{create_thread_tool}": "create_thread",
   "{sticker_tool}": "select_sticker_for_response",
   "{manage_message_tool}": "manage_message",
   "{pin_tool}": "manage_message",
   "{message_interaction_tool}": "interact_with_recent_message",
+  "{conditioning_interaction_tool}": "interact_with_target",
   "{profile_picture_tool}": "peek_profile_picture",
   "{document_tool}": "read_file",
   "{message_metadata_tool}": "reveal_message_metadata",
   "{timestamp_refresh_tool}": "reveal_message_metadata",
-  "{media_context_tool}": "increase_media_context",
   "{gif_tool}": "process_gif",
   "{youtube_tool}": "process_youtube_video",
   "{image_analysis_tool}": "analyze_image",
   "{image_generation_tool}": "generate_image",
   "{anime_image_generation_tool}": "generate_image_nai",
+  "{tag_search_tool}": "danbooru_search_tags",
+  "{booru_post_search_tool}": "danbooru_search_posts",
   "{voice_message_tool}": "generate_voice_message",
   "{block_user_tool}": "block_user",
   "{unblock_user_tool}": "unblock_user",
+  "{user_info_tool}": "update_user_info",
 };
 
 const DYNAMIC_TOOL_PROMPT_MACROS = {
@@ -90,12 +113,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
   "{url_fetch_tool}": {
     currentTarget: "best available URL fetch tool",
     fallbackText: "the currently available URL fetch tool",
-    resolve: (availability: ToolPromptMacroAvailability) =>
-      resolveGuildFamilyToolName(
-        availability.guildUrlFetcherToolNames,
-        [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
-        [/metadata/, /meta/, /head/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"]),
+    resolve: (availability: ToolPromptMacroAvailability) => resolveUrlFetchToolName(availability),
   },
   "{url_metadata_tool}": {
     currentTarget: "best available URL metadata tool",
@@ -105,232 +123,116 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/metadata/, /meta/, /head/, /headers/, /preview/, /info/],
         [/fetch/, /read/, /crawl/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch_url", "fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url"]),
   },
 } as const;
 
 const STATIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(STATIC_TOOL_PROMPT_MACROS);
 const DYNAMIC_TOOL_PROMPT_MACRO_KEYS = Object.keys(DYNAMIC_TOOL_PROMPT_MACROS);
-const ALL_TOOL_PROMPT_MACRO_KEYS = [...STATIC_TOOL_PROMPT_MACRO_KEYS, ...DYNAMIC_TOOL_PROMPT_MACRO_KEYS];
 
-export const TOOL_PROMPT_MACRO_DOCS: ToolPromptMacroDocEntry[] = [
-  {
-    macro: "{capabilities_tool}",
-    type: "static",
-    currentTarget: "review_capabilities",
-    notes: "Inspect current tools/settings before making assumptions.",
-  },
-  {
-    macro: "{memory_tool}",
-    type: "static",
-    currentTarget: "create_long_term_memory",
-    notes: "Store a new long-term memory.",
-  },
-  {
-    macro: "{memory_update_tool}",
-    type: "static",
-    currentTarget: "update_long_term_memory",
-    notes: "Update an existing long-term memory by ID, or delete it by sending blank content.",
-  },
-  {
-    macro: "{short_term_memory_tool}",
-    type: "static",
-    currentTarget: "update_short_term_memory",
-    notes: "Update the current conversation's short-term memory.",
-  },
-  {
-    macro: "{task_tool}",
-    type: "static",
-    currentTarget: "create_task",
-    notes: "Create reminders or scheduled self-tasks.",
-  },
-  {
-    macro: "{task_update_tool}",
-    type: "static",
-    currentTarget: "update_task",
-    notes: "Update an existing reminder/task by ID, or delete it by sending blank content.",
-  },
-  {
-    macro: "{cross_channel_tool}",
-    type: "static",
-    currentTarget: "cross_channel_message",
-    notes: "Send an immediate message to another channel or thread.",
-  },
-  {
-    macro: "{create_thread_tool}",
-    type: "static",
-    currentTarget: "create_thread",
-    notes: "Create a Discord thread and send its first message.",
-  },
-  {
-    macro: "{sticker_tool}",
-    type: "static",
-    currentTarget: "select_sticker_for_response",
-    notes: "Attach a Discord sticker to the response.",
-  },
-  {
-    macro: "{manage_message_tool}",
-    type: "static",
-    currentTarget: "manage_message",
-    notes:
-      "Canonical macro for pinning any recent message or editing/deleting recent messages sent by you or another current character.",
-  },
-  {
-    macro: "{pin_tool}",
-    type: "static",
-    currentTarget: "manage_message",
-    notes: "Compatibility alias for `{manage_message_tool}`.",
-  },
-  {
-    macro: "{message_interaction_tool}",
-    type: "static",
-    currentTarget: "interact_with_recent_message",
-    notes: "React to or reply to a recent message for playful backtracking or commentary.",
-  },
-  {
-    macro: "{profile_picture_tool}",
-    type: "static",
-    currentTarget: "peek_profile_picture",
-    notes: "Inspect a user's avatar or banner.",
-  },
-  {
-    macro: "{document_tool}",
-    type: "static",
-    currentTarget: "read_file",
-    notes: "Read recent file attachments (PDF, source code, text, etc.).",
-  },
-  {
-    macro: "{message_metadata_tool}",
-    type: "static",
-    currentTarget: "reveal_message_metadata",
-    notes: "Canonical macro for annotating recent visible turns with refs and sent timestamps.",
-  },
-  {
-    macro: "{timestamp_refresh_tool}",
-    type: "static",
-    currentTarget: "reveal_message_metadata",
-    notes: "Compatibility alias for `{message_metadata_tool}`.",
-  },
-  {
-    macro: "{media_context_tool}",
-    type: "static",
-    currentTarget: "increase_media_context",
-    notes: "Bring older hidden images/videos back into context.",
-  },
-  {
-    macro: "{gif_tool}",
-    type: "static",
-    currentTarget: "process_gif",
-    notes: "Extract GIF frames for analysis.",
-  },
-  {
-    macro: "{youtube_tool}",
-    type: "static",
-    currentTarget: "process_youtube_video",
-    notes: "Analyze a YouTube video.",
-  },
-  {
-    macro: "{image_analysis_tool}",
-    type: "static",
-    currentTarget: "analyze_image",
-    notes: "Delegate image understanding to the vision model.",
-  },
-  {
-    macro: "{image_generation_tool}",
-    type: "static",
-    currentTarget: "generate_image",
-    notes: "Generate or edit images with the active provider.",
-  },
-  {
-    macro: "{anime_image_generation_tool}",
-    type: "static",
-    currentTarget: "generate_image_nai",
-    notes: "Generate anime-styled images with NovelAI.",
-  },
-  {
-    macro: "{voice_message_tool}",
-    type: "static",
-    currentTarget: "generate_voice_message",
-    notes: "Send a spoken voice-message response.",
-  },
-  {
-    macro: "{block_user_tool}",
-    type: "static",
-    currentTarget: "block_user",
-    notes: "Temporarily mute or block a Discord user for the active persona.",
-  },
-  {
-    macro: "{unblock_user_tool}",
-    type: "static",
-    currentTarget: "unblock_user",
-    notes: "Remove an active persona-scoped mute/block for a Discord user.",
-  },
-  {
-    macro: "{web_search_tool}",
-    type: "dynamic",
-    currentTarget: "best available web search tool",
-    notes: "Resolves to bundled Brave/DuckDuckGo search or a guild MCP web-search replacement when one is discovered.",
-  },
-  {
-    macro: "{image_search_tool}",
-    type: "dynamic",
-    currentTarget: "best available image search tool",
-    notes: "Prefers image-specific search, then falls back to the resolved web-search tool.",
-  },
-  {
-    macro: "{video_search_tool}",
-    type: "dynamic",
-    currentTarget: "best available video search tool",
-    notes: "Prefers video-specific search, then falls back to the resolved web-search tool.",
-  },
-  {
-    macro: "{news_search_tool}",
-    type: "dynamic",
-    currentTarget: "best available news search tool",
-    notes: "Prefers news-specific search, then falls back to the resolved web-search tool.",
-  },
-  {
-    macro: "{url_fetch_tool}",
-    type: "dynamic",
-    currentTarget: "best available URL fetch tool",
-    notes: "Resolves to bundled fetch or a guild MCP url_fetcher replacement when one is discovered.",
-  },
-  {
-    macro: "{url_metadata_tool}",
-    type: "dynamic",
-    currentTarget: "best available URL metadata tool",
-    notes: "Prefers metadata-specific fetcher functions, then falls back to a compatible URL fetch tool.",
-  },
-];
+// Names no tool, because a model shown a tool it cannot call tends to write the call out as chat text.
+export const UNAVAILABLE_TOOL_TEXT = "an unavailable tool";
 
-export function hasToolPromptMacros(text: string): boolean {
-  return ALL_TOOL_PROMPT_MACRO_KEYS.some((macro) => text.includes(macro));
+/**
+ * @param hasTools - The active model's narrowed flag, which carries the Deliberate Tool Mode kill switch that
+ *   `tool_use_enabled` alone does not.
+ */
+export function resolvePromptCapabilityValues(
+  config: AssembledServerConfig,
+  hasTools: boolean,
+): PromptCapabilityValues {
+  return {
+    tool_use: hasTools && (config.tool_use_enabled ?? true),
+    self_teaching: config.self_teaching_enabled,
+    personal_memories: config.personal_memories_enabled,
+    emoji_usage: config.emoji_usage_enabled,
+    sticker_usage: config.sticker_usage_enabled,
+    web_search: config.web_search_enabled,
+    manage_message: config.manage_message_enabled,
+    thread_creation: config.thread_creation_enabled,
+    image_generation: config.imagegen_enabled,
+    video_generation: config.videogen_enabled,
+    voice_message: config.voice_message_enabled,
+    user_blocking: config.user_blocking_enabled,
+    short_term_memory: config.short_term_memory_enabled,
+    time_awareness: config.time_awareness_enabled,
+  };
+}
+
+export function resolvePromptCapabilityValuesFromToolState(state: ToolStateForContext): PromptCapabilityValues {
+  return {
+    tool_use: state.llm.has_tools,
+    self_teaching: state.config.self_teaching_enabled,
+    sticker_usage: state.config.sticker_usage_enabled,
+    web_search: state.config.web_search_enabled,
+    manage_message: state.config.manage_message_enabled,
+    thread_creation: state.config.thread_creation_enabled,
+    image_generation: state.config.imagegen_enabled,
+    video_generation: state.config.videogen_enabled,
+    voice_message: state.config.voice_message_enabled,
+    user_blocking: state.config.user_blocking_enabled,
+    short_term_memory: true,
+  };
 }
 
 export function createToolPromptMacroResolver(context?: ToolPromptMacroContext | null): ToolPromptMacroResolver {
   let availabilityPromise: Promise<ToolPromptMacroAvailability> | null = null;
+  const warnedConditions = new Set<string>();
+
+  const warnOnce = (message: string): void => {
+    if (warnedConditions.has(message)) return;
+    warnedConditions.add(message);
+    log.warn(`[PromptConditionals] ${message}`);
+  };
+
+  const evaluateCondition = async (predicate: PromptConditionPredicate): Promise<boolean | undefined> => {
+    if (predicate.namespace === "capability") {
+      if (!PROMPT_CAPABILITY_NAMES.includes(predicate.name as PromptCapabilityName)) {
+        return undefined;
+      }
+      return context?.capabilities?.[predicate.name as PromptCapabilityName];
+    }
+
+    availabilityPromise ??= loadToolPromptMacroAvailability(context);
+    const availability = await availabilityPromise;
+    if (predicate.namespace === "tool") {
+      return availability.availableToolNames.has(predicate.name);
+    }
+
+    if (predicate.name === "url_fetch") {
+      return resolveUrlFetchToolName(availability) !== null;
+    }
+
+    return undefined;
+  };
 
   return {
     async expand(text: string): Promise<string> {
-      if (!text || !hasToolPromptMacros(text)) {
+      if (!text) {
         return text;
       }
 
-      let expanded = text;
+      let expanded = await renderPromptConditionals(text, {
+        evaluate: evaluateCondition,
+        warn: warnOnce,
+      });
 
-      for (const [macro, toolName] of Object.entries(STATIC_TOOL_PROMPT_MACROS)) {
-        if (expanded.includes(macro)) {
-          expanded = expanded.replaceAll(macro, formatResolvedToolName(toolName));
-        }
-      }
-
+      const presentStaticMacros = STATIC_TOOL_PROMPT_MACRO_KEYS.filter((macro) => expanded.includes(macro));
       const presentDynamicMacros = DYNAMIC_TOOL_PROMPT_MACRO_KEYS.filter((macro) => expanded.includes(macro));
-      if (presentDynamicMacros.length === 0) {
+      if (presentStaticMacros.length === 0 && presentDynamicMacros.length === 0) {
         return expanded;
       }
 
       availabilityPromise ??= loadToolPromptMacroAvailability(context);
       const availability = await availabilityPromise;
+
+      for (const macro of presentStaticMacros) {
+        const toolName = STATIC_TOOL_PROMPT_MACROS[macro];
+        expanded = expanded.replaceAll(
+          macro,
+          availability.availableToolNames.has(toolName) ? formatResolvedToolName(toolName) : UNAVAILABLE_TOOL_TEXT,
+        );
+      }
 
       for (const macro of presentDynamicMacros) {
         const definition = DYNAMIC_TOOL_PROMPT_MACROS[macro as keyof typeof DYNAMIC_TOOL_PROMPT_MACROS];
@@ -361,25 +263,50 @@ async function loadToolPromptMacroAvailability(
 
   const provider = context?.provider?.trim().toLowerCase();
   const stateForContext = context?.stateForContext;
-  if (!provider || !stateForContext?.server_id || !stateForContext.llm) {
+  if (
+    context?.capabilities?.tool_use === false ||
+    !provider ||
+    !stateForContext?.server_id ||
+    !stateForContext.llm ||
+    !stateForContext.llm.has_tools
+  ) {
     return fallbackAvailability;
   }
 
   try {
-    const [{ builtInTools, mcpFunctionNames }, guildToolNames] = await Promise.all([
-      getAvailableToolsWithMCP(provider, stateForContext),
-      loadGuildToolFamilyNames(stateForContext.server_id),
-    ]);
-    // Names that are filtered globally in `availability.ts` but might still
-    // appear in MCP listings — kept here as a defensive trim.
-    const providerHiddenGlobalFunctions = new Set([
-      "felo-search",
-      "iask-search",
-      "monica-search",
-      "fetch",
-      "fetch-url",
-      "url-metadata",
-    ]);
+    const preloadedToolNames = context?.availableToolNames;
+    if (preloadedToolNames) {
+      const guildToolNames = await loadGuildToolFamilyNames(stateForContext.server_id).catch(() => ({
+        webSearch: [],
+        urlFetcher: [],
+      }));
+      const families = Object.fromEntries([
+        ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
+        ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
+      ]);
+      const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(
+        context?.deliberateToolAllowedNames,
+        families,
+      );
+      const availableToolNames = deliberateToolAllowedNames
+        ? new Set([...preloadedToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
+        : new Set(preloadedToolNames);
+      return {
+        availableToolNames,
+        guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => availableToolNames.has(name)),
+        guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => availableToolNames.has(name)),
+      };
+    }
+
+    const {
+      builtInTools,
+      mcpFunctionNames,
+      mcpToolFamilies = {},
+    } = await getAvailableToolsWithMCP(provider, stateForContext);
+    const guildToolNames = {
+      webSearch: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "web_search"),
+      urlFetcher: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "url_fetcher"),
+    };
     const availableToolNames = new Set<string>();
 
     for (const tool of builtInTools) {
@@ -387,16 +314,22 @@ async function loadToolPromptMacroAvailability(
     }
 
     for (const functionName of mcpFunctionNames) {
-      if (providerHiddenGlobalFunctions.has(functionName)) {
-        continue;
-      }
       availableToolNames.add(functionName);
     }
 
+    const families = Object.fromEntries([
+      ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
+      ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
+    ]);
+    const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(context?.deliberateToolAllowedNames, families);
+    const filteredAvailableToolNames = deliberateToolAllowedNames
+      ? new Set([...availableToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
+      : availableToolNames;
+
     return {
-      availableToolNames,
-      guildWebSearchToolNames: guildToolNames.webSearch,
-      guildUrlFetcherToolNames: guildToolNames.urlFetcher,
+      availableToolNames: filteredAvailableToolNames,
+      guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => filteredAvailableToolNames.has(name)),
+      guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => filteredAvailableToolNames.has(name)),
     };
   } catch (error) {
     log.warn("[ToolPromptMacros] Failed to load tool availability for prompt macro expansion", error);
@@ -411,12 +344,11 @@ async function loadGuildToolFamilyNames(serverId: string): Promise<{ webSearch: 
   }
 
   const guildMcpManager = getGuildMcpManager();
-  const [webSearch, urlFetcher] = await Promise.all([
-    guildMcpManager.getGuildMCPFunctionNamesByServerType(parsedServerId, "web_search"),
-    guildMcpManager.getGuildMCPFunctionNamesByServerType(parsedServerId, "url_fetcher"),
-  ]);
-
-  return { webSearch, urlFetcher };
+  const { routes } = await guildMcpManager.getGuildMCPRouting(parsedServerId);
+  return {
+    webSearch: [...routes].filter(([, route]) => route.config.server_type === "web_search").map(([name]) => name),
+    urlFetcher: [...routes].filter(([, route]) => route.config.server_type === "url_fetcher").map(([name]) => name),
+  };
 }
 
 function resolveWebSearchToolName(availability: ToolPromptMacroAvailability): string | null {
@@ -467,6 +399,16 @@ function resolveGuildFamilyToolName(
   return bestScore > 0 ? bestName : (uniqueFunctionNames[0] ?? null);
 }
 
+function resolveUrlFetchToolName(availability: ToolPromptMacroAvailability): string | null {
+  return (
+    resolveGuildFamilyToolName(
+      availability.guildUrlFetcherToolNames,
+      [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
+      [/metadata/, /meta/, /head/],
+    ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url"])
+  );
+}
+
 function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames: string[]): string | null {
   for (const toolName of preferredToolNames) {
     if (availableToolNames.has(toolName)) {
@@ -475,4 +417,46 @@ function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames:
   }
 
   return null;
+}
+
+/**
+ * A resolver scoped to one generation attempt's provider and config. Macros are provider-specific,
+ * so a fallback attempt must not reuse the primary model's resolver.
+ */
+export function createToolPromptMacroResolverForState(
+  tomoriState: TomoriState,
+  deliberateToolAllowedNames?: readonly string[],
+): ToolPromptMacroResolver {
+  return createToolPromptMacroResolver({
+    provider: tomoriState.llm.llm_provider,
+    deliberateToolAllowedNames,
+    capabilities: resolvePromptCapabilityValues(tomoriState.config, tomoriState.llm.has_tools),
+    stateForContext:
+      tomoriState.server_id && tomoriState.llm
+        ? {
+            server_id: tomoriState.server_id.toString(),
+            activePersonaHasElevenlabsVoice: false,
+            llm: tomoriState.llm,
+            diffusion_model_id: tomoriState.config.diffusion_model_id,
+            nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
+            video_model_id: tomoriState.config.video_model_id,
+            config: {
+              emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
+              sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
+              web_search_enabled: tomoriState.config.web_search_enabled,
+              self_teaching_enabled: tomoriState.config.self_teaching_enabled,
+              manage_message_enabled: tomoriState.config.manage_message_enabled,
+              imagegen_enabled: tomoriState.config.imagegen_enabled,
+              videogen_enabled: tomoriState.config.videogen_enabled,
+              voice_message_enabled: tomoriState.config.voice_message_enabled,
+              user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+              user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
+              thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+              conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+              dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
+              danbooru_enabled: tomoriState.config.danbooru_enabled,
+            },
+          }
+        : undefined,
+  });
 }

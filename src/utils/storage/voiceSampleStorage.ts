@@ -10,6 +10,7 @@ import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { extractCloudObjectKeyFromUrl } from "@/utils/storage/cloudObjectStorage";
 import { log } from "@/utils/misc/logger";
 
 type VoiceSampleStoreOptions = {
@@ -20,7 +21,7 @@ type VoiceSampleStoreOptions = {
 
 type VoiceSampleStorageConfig =
   | { backend: "gcs"; bucket: string; prefix: string; publicBaseUrl: string }
-  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string };
+  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string; endpoint?: string };
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 const LOCAL_VOICE_SAMPLE_BASE_DIR = path.resolve(process.cwd(), "data", "voice-samples");
@@ -29,6 +30,7 @@ const SPEECH_SAMPLE_MAX_MB = Math.max(1, Number.parseInt(process.env.SPEECH_SAMP
 let cachedGcsStorage: Storage | null = null;
 let cachedS3Client: S3Client | null = null;
 let cachedS3Region: string | null = null;
+let cachedS3Endpoint: string | undefined;
 
 function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
   if (!IS_PRODUCTION) {
@@ -58,11 +60,12 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     process.env.AVATAR_S3_REGION?.trim() ||
     process.env.AWS_REGION?.trim() ||
     "us-east-1";
+  const endpoint = process.env.S3_ENDPOINT?.trim() || undefined;
   const prefix = (process.env.VOICE_SAMPLE_S3_PREFIX || "voice-samples").replace(/^\/+/, "").replace(/\/+$/, "");
   const publicBaseUrl =
     process.env.VOICE_SAMPLE_PUBLIC_BASE_URL?.trim() || `https://${s3Bucket}.s3.${region}.amazonaws.com`;
 
-  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region };
+  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region, endpoint };
 }
 
 function getGcsStorage(): Storage {
@@ -72,10 +75,14 @@ function getGcsStorage(): Storage {
   return cachedGcsStorage;
 }
 
-function getS3Client(region: string): S3Client {
-  if (!cachedS3Client || cachedS3Region !== region) {
+function getS3Client(region: string, endpoint?: string): S3Client {
+  if (!cachedS3Client || cachedS3Region !== region || cachedS3Endpoint !== endpoint) {
     cachedS3Region = region;
-    cachedS3Client = new S3Client({ region });
+    cachedS3Endpoint = endpoint;
+    cachedS3Client = new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    });
   }
   return cachedS3Client;
 }
@@ -114,36 +121,7 @@ function resolveLocalVoiceSamplePath(reference: string): string | null {
 }
 
 function extractKeyFromVoiceSampleUrl(config: VoiceSampleStorageConfig, url: string): string | null {
-  try {
-    if (config.backend === "gcs") {
-      // GCS public URLs: https://storage.googleapis.com/BUCKET/PREFIX/...
-      // Strip the publicBaseUrl prefix to recover the object key.
-      const baseUrl = config.publicBaseUrl.replace(/\/+$/, "");
-      if (!url.startsWith(`${baseUrl}/`)) {
-        return null;
-      }
-      const key = url.slice(baseUrl.length + 1);
-      return key.startsWith(`${config.prefix}/`) ? key : null;
-    }
-
-    // S3: match on hostname (supports custom CDN domains, virtual-hosted style, and path-style)
-    const parsed = new URL(url);
-    const baseHost = new URL(config.publicBaseUrl).hostname;
-    const hostname = parsed.hostname;
-    const pathName = parsed.pathname.replace(/^\/+/, "");
-
-    if (hostname !== baseHost) {
-      const s3Host = `${config.bucket}.s3.${config.region}.amazonaws.com`;
-      const s3HostLegacy = `${config.bucket}.s3.amazonaws.com`;
-      if (hostname !== s3Host && hostname !== s3HostLegacy) {
-        return null;
-      }
-    }
-
-    return pathName.startsWith(`${config.prefix}/`) ? pathName : null;
-  } catch {
-    return null;
-  }
+  return extractCloudObjectKeyFromUrl(config, url);
 }
 
 async function storeVoiceSampleLocally(options: VoiceSampleStoreOptions): Promise<string | null> {
@@ -183,14 +161,17 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
           log.success(`[Voice Sample Storage] Uploaded voice sample to GCS (${publicUrl})`);
           return publicUrl;
         } catch (error) {
-          log.warn("[Voice Sample Storage] Failed to upload voice sample to GCS", error);
+          await log.error("[Voice Sample Storage] Failed to upload voice sample to GCS", error, {
+            errorType: "GcsUploadError",
+            metadata: { bucket: config.bucket, key },
+          });
           return null;
         }
       }
 
       // S3 path
       try {
-        await getS3Client(config.region).send(
+        await getS3Client(config.region, config.endpoint).send(
           new PutObjectCommand({
             Bucket: config.bucket,
             Key: key,
@@ -203,7 +184,10 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
         log.success(`[Voice Sample Storage] Uploaded voice sample to S3 (${publicUrl})`);
         return publicUrl;
       } catch (error) {
-        log.warn("[Voice Sample Storage] Failed to upload voice sample to S3", error);
+        await log.error("[Voice Sample Storage] Failed to upload voice sample to S3", error, {
+          errorType: "S3UploadError",
+          metadata: { bucket: config.bucket, key },
+        });
         return null;
       }
     }
@@ -212,7 +196,8 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
   return storeVoiceSampleLocally(options);
 }
 
-export async function loadStoredVoiceSampleBuffer(reference: string): Promise<Buffer | null> {
+export async function loadStoredVoiceSampleBuffer(reference: string, signal?: AbortSignal): Promise<Buffer | null> {
+  signal?.throwIfAborted();
   const trimmedReference = reference.trim();
   if (!trimmedReference) {
     return null;
@@ -222,6 +207,7 @@ export async function loadStoredVoiceSampleBuffer(reference: string): Promise<Bu
     const downloadResult = await safeDownload(trimmedReference, {
       maxSizeMB: SPEECH_SAMPLE_MAX_MB,
       timeoutMs: 30_000,
+      externalSignal: signal,
     });
 
     if (!downloadResult.success || !downloadResult.buffer) {
@@ -237,7 +223,9 @@ export async function loadStoredVoiceSampleBuffer(reference: string): Promise<Bu
   }
 
   try {
-    return await fs.readFile(absolutePath);
+    const stat = await fs.stat(absolutePath);
+    if (stat.size > SPEECH_SAMPLE_MAX_MB * 1024 * 1024) return null;
+    return await fs.readFile(absolutePath, { signal });
   } catch (error) {
     log.warn(`[Voice Sample Storage] Failed to load local voice sample ${trimmedReference}`, error);
     return null;
@@ -271,14 +259,17 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
         log.info(`[Voice Sample Storage] Deleted voice sample object ${key} from GCS`);
         return true;
       } catch (error) {
-        log.warn(`[Voice Sample Storage] Failed to delete voice sample object ${key} from GCS`, error);
+        await log.error(`[Voice Sample Storage] Failed to delete voice sample object ${key} from GCS`, error, {
+          errorType: "GcsDeleteError",
+          metadata: { bucket: config.bucket, key },
+        });
         return false;
       }
     }
 
     // S3 path
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: key,
@@ -287,7 +278,10 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
       log.info(`[Voice Sample Storage] Deleted voice sample object ${key} from S3`);
       return true;
     } catch (error) {
-      log.warn(`[Voice Sample Storage] Failed to delete voice sample object ${key} from S3`, error);
+      await log.error(`[Voice Sample Storage] Failed to delete voice sample object ${key} from S3`, error, {
+        errorType: "S3DeleteError",
+        metadata: { bucket: config.bucket, key },
+      });
       return false;
     }
   }

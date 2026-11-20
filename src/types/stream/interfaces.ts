@@ -1,3 +1,6 @@
+import type { HumanizerSettings } from "@/constants/humanizer";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import type { PersonaDeliveryMode, PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
 /**
  * Streaming interfaces for modular LLM provider architecture
  *
@@ -26,7 +29,9 @@ import type {
 } from "../provider/interfaces";
 import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
+import type { DeliveredStreamMessage } from "../tool/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
+import { recordProviderErrorStat } from "@/utils/provider/providerErrorMetrics";
 
 /**
  * Normalized chunk format that all providers convert their raw chunks to
@@ -43,17 +48,13 @@ export interface ProcessedChunk {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Provider-specific error with normalized format
- */
 export interface ProviderError {
-  type: "api_error" | "rate_limit" | "content_blocked" | "timeout" | "provider_overloaded" | "unknown";
+  type: "api_error" | "rate_limit" | "content_blocked" | "timeout" | "provider_overloaded" | "model_error" | "unknown";
   message: string;
   code?: string;
   retryable: boolean;
   originalError?: unknown;
 
-  // Enhanced fields for provider-specific user-friendly error handling
   userMessage?: string; // User-friendly error message from provider
 }
 
@@ -62,22 +63,18 @@ export interface ProviderError {
  * Extends the base ProviderConfig with streaming-specific options
  */
 export interface StreamConfig extends ProviderConfig {
-  // Discord-specific settings
   maxMessageLength: number;
   flushBufferSize: number;
   flushBufferSizeCodeBlock: number;
 
-  // Timing settings
   inactivityTimeoutMs: number;
   baseTypeSpeedMsPerChar: number;
   maxTypingTimeMs: number;
   minVisibleTypingDurationMs: number;
 
-  // Humanization settings
-  humanizerDegree: number;
+  humanizer: HumanizerSettings;
   emojiUsageEnabled: boolean;
 
-  // Command-specific overrides
   modelOverride?: string;
   forceReason?: boolean;
   isManuallyTriggered?: boolean;
@@ -88,13 +85,51 @@ export interface StreamConfig extends ProviderConfig {
  * Contains all the Discord and application context needed for streaming
  */
 export interface StreamContext {
-  // Discord context
+  videoRequestDiagnostics?: {
+    model: string;
+    attempt: string;
+    omittedVideos: number;
+    httpStatus?: number;
+    requestId?: string;
+    generationId?: string;
+    servingProvider?: string;
+    videos: Array<{
+      source: "discord_cdn" | "youtube" | "remote_url" | "inline_data" | "invalid_url";
+      scheme: "http" | "https" | "data" | "invalid";
+      mimeType: string;
+      encodedBytes?: number;
+      expiresAtUnixSeconds?: number;
+    }>;
+  };
+  requestDiagnostics?: {
+    model: string;
+    contextItemCount: number;
+    contentsCount: number;
+    tailRoles: Array<"user" | "model" | "unknown">;
+    lastTurn: {
+      textParts: number;
+      inlineDataParts: number;
+      fileDataParts: number;
+      functionCallParts: number;
+      functionResponseParts: number;
+    };
+    functionHistoryCount: number;
+    currentTurnModelPartCount: number;
+    prefillPresent: boolean;
+    manuallyTriggered: boolean;
+    toolCount: number;
+    chunksReceived: number;
+    elapsedMs: number;
+  };
+  deliveryMode?: PersonaDeliveryMode;
+  deliveryReceipts?: PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
+  usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
   initialInteraction?: CommandInteraction;
   replyToMessage?: Message;
 
-  // Application context
   tomoriState: TomoriState;
   contextItems: StructuredContextItem[];
   currentTurnModelParts: Array<Record<string, unknown>>;
@@ -107,47 +142,56 @@ export interface StreamContext {
     preToolCallTextParts?: Array<Record<string, unknown>>;
   }>;
 
-  // Provider context
   provider: string;
   locale: string;
   suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
+  /** Whose credentials answered this turn; selects server- or personal-scoped provider error tips. */
+  textCredentialSource?: "server" | "personal";
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  /** The generation turn will retry an interrupted stream on the same key, so its error stays unsurfaced. */
+  retryStreamInterruption?: boolean;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
 
-  // Tool availability flags
   disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart
 
-  // Multi-persona webhook support
   webhook?: import("discord.js").Webhook; // Webhook for alter persona responses
   personaAvatarUrl?: string; // Avatar URL or data URI for current persona
   personaUsername?: string; // Username override for current persona (shown in Discord UI)
   prefixStrippingName?: string; // Name used for prefix stripping (may differ from personaUsername for user impersonation)
+  impersonatedSpeakerLabel?: string; // Naming-aware label the impersonation prompt asks the model to open with; stripped like prefixStrippingName
 
-  // Optional forced mention handles (e.g., reminder recipients)
   forcedMentions?: Array<{
     handle: string;
     userId: string;
   }>;
+  /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
+  mentionableUserIds?: readonly string[];
 
-  // Optional output prefill for hybrid prefix streaming
+  /** The attempt's `{bot}: {text}` prefill: stripped when the model echoes it, never shown. */
   outputPrefill?: string;
-  outputPrefillState?: { sent: boolean };
+  triggerMessageId?: string;
 
-  // NAI text suppression: keeps model state coherent but suppresses Discord output during tool retries
+  holdResponseText?: boolean;
+  pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
   suppressTextOutput?: boolean;
 
-  // NAI GLM-4.6 prompt continuation: incomplete trailing fragment from previous stream, appended to the
-  // assembled prompt so the model continues mid-sentence rather than starting a new response
-  naiContinuationPrefill?: string;
-
-  // External abort signal — allows the SDK call timeout to cancel the underlying HTTP request
   abortSignal?: AbortSignal;
 
-  // Progress callback for outer watchdog timers (provider chunk received or Discord send succeeded)
+  // Empty-response retry count of the current chat turn , so lets the opening-label leak guard
+  // discard-and-retry while budget remains, then strip-and-deliver on the final attempt
+  emptyResponseRetryCount?: number;
+
   onStreamProgress?: () => void;
 
-  // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
+
+  /** Internal `users` FK of the turn's triggerer; scopes provider-failure telemetry. */
+  triggererUserId?: number;
+  triggererDiscId?: string;
+
+  // Shared sink (reference threaded from StreamingContext) that the orchestrator appends to on
+  // every successful send, so sends from an abandoned timed-out stream still reach the turn.
+  deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 
 /**
@@ -161,16 +205,6 @@ export interface RawStreamChunk {
 }
 
 /**
- * Configuration for stream buffer management
- */
-export interface BufferConfig {
-  maxSize: number;
-  flushOnPunctuation: boolean;
-  codeBlockHandling: boolean;
-  punctuationPattern?: RegExp;
-}
-
-/**
  * Interface that provider-specific stream adapters must implement
  * This separates provider API logic from universal Discord logic
  */
@@ -178,24 +212,14 @@ export interface StreamProvider {
   /**
    * Initialize and start the streaming process with the provider's API
    * @param config - Provider-specific configuration
-   * @param context - Streaming context with Discord and app state
-   * @returns AsyncGenerator that yields raw chunks from the provider
    */
   startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown>;
 
   /**
    * Convert a raw provider chunk into normalized ProcessedChunk format
    * @param chunk - Raw chunk from the provider's streaming API
-   * @returns Normalized chunk that StreamOrchestrator can handle
    */
   processChunk(chunk: RawStreamChunk): ProcessedChunk;
-
-  /**
-   * Extract function call information from a raw chunk if present
-   * @param chunk - Raw chunk from the provider's streaming API
-   * @returns Function call data or null if no function call
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null;
 
   /**
    * Convert provider-specific errors into normalized ProviderError format
@@ -207,14 +231,12 @@ export interface StreamProvider {
   /**
    * Create provider-specific error description for display in embeds
    * @param error - The normalized provider error
-   * @param locale - The locale for localization
    * @returns Provider-specific error description string or null for fallback
    */
   createErrorDescription(error: ProviderError, locale: string): string | null;
 
   /**
    * Get provider-specific information for logging and debugging
-   * @returns Provider identification and capabilities
    */
   getProviderInfo(): {
     name: string;
@@ -235,8 +257,6 @@ export interface StreamAdapterInfo {
 }
 
 /**
- * Base class for provider stream adapters.
- *
  * Provider subclasses still own request construction, provider-native parsing,
  * and error normalization. The base class centralizes adapter lifecycle identity
  * and small lifecycle hooks/wrappers used when handing work to StreamOrchestrator.
@@ -248,15 +268,22 @@ export abstract class BaseStreamAdapter implements StreamProvider {
 
   abstract processChunk(chunk: RawStreamChunk): ProcessedChunk;
 
-  abstract extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null;
-
   abstract handleProviderError(error: unknown): ProviderError;
 
   abstract createErrorDescription(error: ProviderError, locale: string): string | null;
 
   protected onRawChunk(_chunk: RawStreamChunk): void {}
 
-  protected onProviderError(_error: unknown): void {}
+  /**
+   * Fired once per terminal provider failure, before the error chunk is yielded.
+   *
+   * The base implementation records the `provider_error` counter, which is the only aggregate
+   * record of provider failures that exists: `error_logs` is dead by decision, so a subclass that
+   * overrides this must call `super.onProviderError(...)` or that provider goes dark.
+   */
+  protected onProviderError(_error: unknown, providerError: ProviderError, context?: StreamContext): void {
+    recordProviderErrorStat(this.adapterInfo.name, providerError, context);
+  }
 
   getProviderInfo(): {
     name: string;
@@ -289,15 +316,21 @@ export abstract class BaseStreamAdapter implements StreamProvider {
     return chunk;
   }
 
+  /**
+   * @param context - The failing stream's context; omit only where none is in scope. Without it
+   *                  the failure cannot be scoped to a server and goes unrecorded.
+   */
   protected createProviderErrorChunk(
     error: unknown,
+    context?: StreamContext,
     metadata?: Record<string, unknown>,
     providerName = this.adapterInfo.name,
   ): RawStreamChunk {
-    this.onProviderError(error);
+    const providerError = this.handleProviderError(error);
+    this.onProviderError(error, providerError, context);
     return this.createRawChunk(
       {
-        error: this.handleProviderError(error),
+        error: providerError,
       },
       {
         error: true,
@@ -319,23 +352,6 @@ export interface StreamOrchestrator {
    *
    * @param provider - Provider-specific streaming adapter
    * @param config - Streaming configuration
-   * @param context - Discord and application context
-   * @returns Promise<StreamResult> - Outcome of the streaming operation
    */
   streamToDiscord(provider: StreamProvider, config: StreamConfig, context: StreamContext): Promise<StreamResult>;
-}
-
-/**
- * Interface for creating provider-specific configurations
- * This allows each provider to convert TomoriState into their specific config format
- */
-export interface StreamConfigFactory {
-  /**
-   * Create a streaming configuration for a specific provider
-   * @param tomoriState - Current Tomori state with settings
-   * @param apiKey - Decrypted API key for the provider
-   * @param provider - Provider name for configuration customization
-   * @returns Provider-specific streaming configuration
-   */
-  createStreamConfig(tomoriState: TomoriState, apiKey: string, provider: string): StreamConfig;
 }

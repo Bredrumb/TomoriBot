@@ -1,0 +1,498 @@
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
+import {
+  personalFallbackSettingsSchema,
+  savedProviderConfigSchema,
+  userSavedProviderConfigSchema,
+} from "@/types/db/schema";
+import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import { configRepository, llmModelRepo, llmProviderRepo, personaRepository } from "@/utils/db/repositories";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
+import * as channelPrompts from "@/utils/cache/channelPromptCache";
+import * as whitelist from "@/utils/cache/channelWhitelistCache";
+import * as spotlight from "@/utils/cache/personalSpotlightCache";
+import * as personaCache from "@/utils/cache/tomoriStateCache";
+import * as modals from "@/utils/discord/ui/modals";
+import * as textDisplayModals from "@/utils/discord/textDisplayModal";
+import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
+import * as providerFactory from "@/utils/provider/providerFactory";
+import * as hiddenImageTurn from "@/utils/provider/hiddenImageTurn";
+import * as generationModels from "@/utils/provider/generationModels";
+import { log } from "@/utils/misc/logger";
+import { type ProviderOptionCopyContext, registerProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { currentProviderUsageContext, ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import * as quota from "@/utils/quota/imageQuotaManager";
+import * as crypto from "@/utils/security/crypto";
+import * as context from "@/utils/text/contextBuilder";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { MessageIdMap } from "@/utils/text/messageIdMap";
+import * as participants from "@/utils/text/participants/preparation";
+import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
+import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { localizedCopy } from "../../helpers/localeCases";
+
+const state = createPersona({
+  llm: createLlmRow({ llm_id: 9, llm_provider: "openrouter", has_tools: true }),
+  config: { llm_id: 9, api_key: null, imagegen_enabled: true, diffusion_model_id: 2 },
+});
+const usageContext = { credentialProvider: "test-option", credentialScope: "server" as const };
+const savedConfig = savedProviderConfigSchema.parse({
+  server_id: state.server_id,
+  provider: "test-option",
+  api_key: null,
+  llm_id: 9,
+  diffusion_model_id: null,
+  embedding_model_id: null,
+  nai_diffusion_model_id: null,
+  nai_preset_name: null,
+});
+const provider = new OpenrouterProvider();
+const channel = { id: "synthetic-channel", messages: { fetch: async () => new Map() } };
+const disposers: Array<() => void> = [];
+const restores: Array<{ mockRestore(): void }> = [];
+let credentialAvailable = true;
+let command = makeFakeInteraction({ channel });
+let modal = makeFakeInteraction({ deferred: true });
+
+const resolveCredentials = mock(async () =>
+  credentialAvailable ? { apiKey: "synthetic-managed-key", usageContext } : null,
+);
+const createConfig = mock<OpenrouterProvider["createConfig"]>(async (resolved, apiKey) => ({
+  model: resolved.llm.llm_codename,
+  apiKey,
+  temperature: resolved.config.llm_temperature,
+}));
+const stream = mock(async () => {
+  expect(currentProviderUsageContext()).toBe(usageContext);
+  return { status: "function_call" as const, data: { name: "generate_image", args: {} } };
+});
+
+beforeAll(initializeLocalizer);
+
+beforeEach(() => {
+  credentialAvailable = true;
+  resolveCredentials.mockClear();
+  createConfig.mockClear();
+  stream.mockClear();
+  command = makeFakeInteraction({ channel });
+  modal = makeFakeInteraction({ deferred: true });
+  disposers.push(
+    registerProviderOption({
+      value: "test-option",
+      catalogProvider: "openrouter",
+      capabilities: ["text"],
+      copy: {
+        labelKey: "general.errors.api_key_missing_title",
+        entryDescriptionKeys: {
+          server: "general.errors.api_key_missing_description",
+          personal: "general.errors.api_key_missing_description",
+        },
+        addActionLabelKey: "general.errors.api_key_missing_title",
+        addActionDescriptionKeys: {
+          server: "general.errors.api_key_missing_description",
+          personal: "general.errors.api_key_missing_description",
+        },
+        removeImpactKey: "general.errors.api_key_missing_description",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        owns: (scope, capability) =>
+          scope.kind === "server" && scope.ownerId === state.server_id && capability === "text",
+        resolveCredentials,
+      },
+    }),
+  );
+  restores.push(
+    spyOn(personaRepository, "loadState").mockResolvedValue(state),
+    spyOn(personaRepository, "loadServerPersonaSummaries").mockResolvedValue([
+      {
+        persona_id: state.persona_id ?? 1,
+        persona_nickname: state.persona_nickname,
+        webhook_avatar_url: state.webhook_avatar_url ?? null,
+        is_alter: state.is_alter,
+        persona_prompt: state.persona_prompt,
+        attribute_list: state.attribute_list,
+        persona_lineage_id: state.persona_lineage_id,
+      },
+    ]),
+    spyOn(llmProviderRepo, "loadUserSavedProviderConfigs").mockResolvedValue([]),
+    spyOn(llmProviderRepo, "loadSavedProviderConfig").mockImplementation(async (_serverId, name) =>
+      name === "test-option" ? savedConfig : null,
+    ),
+    spyOn(configRepository, "loadModelCapabilityIds").mockResolvedValue(state.config),
+    spyOn(llmModelRepo, "loadById").mockResolvedValue(state.llm),
+    spyOn(cooldownRepository, "checkMessageTriggerCooldownWithWhitelist").mockResolvedValue({
+      isOnCooldown: false,
+      remainingSeconds: 0,
+      cooldownType: 0,
+    }),
+    spyOn(cooldownRepository, "setMessageTriggerCooldownWithWhitelist").mockResolvedValue(),
+    spyOn(whitelist, "getCachedWhitelistStatus").mockResolvedValue({
+      hasActiveWhitelist: false,
+      hasActiveChannelWhitelist: false,
+      isChannelWhitelisted: false,
+      hasActiveRoleWhitelist: false,
+      isRoleWhitelisted: false,
+      hasActivePersonaWhitelist: false,
+      isTriggerAllowed: true,
+      hasChannelCooldownOverride: false,
+    }),
+    spyOn(spotlight, "getCachedPersonalSpotlightStatus").mockResolvedValue(null),
+    spyOn(quota, "checkImageQuota").mockResolvedValue({ allowed: true }),
+    spyOn(crypto, "hasOptApiKey").mockResolvedValue(false),
+    spyOn(textDisplayModals, "attachTextDisplayModalCollector").mockImplementation(() => {}),
+    spyOn(modals, "promptWithRawModal").mockImplementation(async () => {
+      expect(command.interaction.deferred).toBe(false);
+      await command.interaction.showModal({});
+      return {
+        outcome: "submit",
+        interaction: modal.interaction as unknown as ModalSubmitInteraction,
+        values: { generate_image_auto_setting: "storybeat" },
+      };
+    }),
+    spyOn(providerFactory, "getProviderForTomori").mockResolvedValue(provider),
+    spyOn(provider, "createConfig").mockImplementation(createConfig),
+    spyOn(provider, "streamToDiscord").mockImplementation(stream),
+    spyOn(ToolRegistry, "executeTool").mockResolvedValue({ success: true, endTurn: true }),
+    spyOn(channelPrompts, "getCachedChannelPrompt").mockResolvedValue(null),
+    spyOn(personaCache, "getCachedAllPersonas").mockResolvedValue([state]),
+    spyOn(context, "buildContext").mockResolvedValue({
+      contextItems: [],
+      tailDirectives: [],
+      lowerPriorityTailDirectives: [],
+      messageIdMap: new MessageIdMap(),
+    }),
+    spyOn(participants, "prepareParticipantContext").mockResolvedValue({
+      requestScope: participants.createParticipantRequestScope(),
+      discoveryPlan: {
+        seeds: [],
+        evidence: [],
+        rejections: [],
+        aliasReferenceDiagnostics: {
+          evaluatedAliasCount: 0,
+          acceptedAliasCount: 0,
+          ambiguousAliasCount: 0,
+          unmatchedAliasCount: 0,
+        },
+      },
+      matrixUsers: new Map(),
+      syntheticUsers: new Map(),
+      messageProxyUsers: new Map(),
+      publicPersonaProfiles: [],
+      referencedUserRows: new Map(),
+      referencedUserIds: new Set(),
+      diagnostics: {
+        discoveryCacheHit: false,
+        discoveryDurationMs: 0,
+        candidateCount: 0,
+        includedCount: 0,
+        rejectionCounts: {
+          ineligible_state: 0,
+          bot: 0,
+          non_member: 0,
+          ambiguous_alias: 0,
+          existing_participant: 0,
+          blocked_source: 0,
+          missing_guild: 0,
+        },
+        externalCalls: {
+          candidateSourceReads: 0,
+          memberCacheHits: 0,
+          memberFetches: 0,
+          messageProxyIdentityReads: 0,
+        },
+        sourceContributions: [],
+      },
+    }),
+  );
+});
+
+afterEach(() => {
+  for (const restore of restores.splice(0)) restore.mockRestore();
+  for (const dispose of disposers.splice(0)) dispose();
+});
+
+async function execute(): Promise<void> {
+  await executeAutoImageCommand(
+    {} as Client,
+    command.interaction as unknown as ChatInputCommandInteraction,
+    createUserRow(),
+    "en-US",
+  );
+}
+
+describe("auto image planning credentials", () => {
+  it("renders a model validation refusal without starting the planner or logging an operational error", async () => {
+    const selection: generationModels.GenerationModelChoice = {
+      source: "server",
+      kind: "image",
+      provider: "openrouter",
+      modelId: 2,
+      name: "fixture/image",
+    };
+    command.interaction.options.getString = (name) =>
+      name === "model" ? generationModels.generationModelValue(selection) : null;
+    Object.assign(command.interaction.options, { getSubcommand: () => "image" });
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    restores.push(
+      errors,
+      spyOn(generationModels, "loadGenerationModelChoices").mockResolvedValue([selection]),
+      spyOn(generationModels, "validateGenerationModelSelection").mockRejectedValue(
+        new ProviderRequestDeniedError(undefined, (locale) => ({
+          titleKey: "general.errors.api_key_error_title",
+          description: localizedCopy(locale, "general.errors.api_key_error_description"),
+        })),
+      ),
+    );
+
+    await execute();
+
+    expect(JSON.stringify(modal.calls)).toContain(localizedCopy("en-US", "general.errors.api_key_error_description"));
+    expect(JSON.stringify(modal.calls)).not.toContain("error_full_detail");
+    expect(stream).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("generates through a registered option without a stored text key", async () => {
+    await execute();
+
+    expect(command.calls.map((call) => call.method)).toEqual(["showModal"]);
+    expect(resolveCredentials).toHaveBeenCalledWith({
+      scope: { kind: "server", ownerId: state.server_id },
+      capability: "text",
+      modelId: state.llm.llm_id,
+    });
+    expect(createConfig.mock.calls[0]?.[1]).toBe("synthetic-managed-key");
+    expect(stream).toHaveBeenCalled();
+    expect(JSON.stringify(modal.calls)).toContain(
+      localizedCopy("en-US", "commands.tool.visualize.success_description"),
+    );
+  });
+
+  it("keeps provider text out of the failure reply and offers it behind the gated button", async () => {
+    const providerText = "connect ECONNREFUSED 100.64.0.7:8188 at /home/mirri/ComfyUI";
+    restores.push(
+      spyOn(hiddenImageTurn, "runHiddenImageTurn").mockRejectedValue(new Error(providerText)),
+      spyOn(log, "error").mockResolvedValue(undefined),
+    );
+
+    await execute();
+
+    const reply = modal.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      embeds?: unknown[];
+      components?: unknown[];
+    };
+    expect(JSON.stringify(reply.embeds)).not.toContain("100.64.0.7");
+    expect(JSON.stringify(reply.components)).toContain("error_full_detail");
+  });
+
+  it("reports unavailable option credentials without requesting generation", async () => {
+    credentialAvailable = false;
+
+    await execute();
+
+    expect(command.calls.map((call) => call.method)).toEqual(["showModal"]);
+    expect(resolveCredentials).toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(createConfig).not.toHaveBeenCalled();
+    expect(JSON.stringify(modal.calls)).toContain(localizedCopy("en-US", "general.errors.api_key_missing_description"));
+    expect(JSON.stringify(modal.calls)).not.toContain(
+      localizedCopy("en-US", "commands.tool.visualize.success_description"),
+    );
+  });
+
+  it("includes a What You Can Do button pointing to /personal providers when image quota is exceeded", async () => {
+    let renderedModal: { title: string; content: string } | undefined;
+    restores.push(
+      spyOn(textDisplayModals, "attachTextDisplayModalCollector").mockImplementation((options) => {
+        renderedModal = options.render("en-US");
+      }),
+      spyOn(quota, "checkImageQuota").mockResolvedValue({
+        allowed: false,
+        reason: "user_quota_exceeded",
+        userRemaining: 0,
+        resetTime: new Date(Date.now() + 60_000),
+      }),
+    );
+
+    await execute();
+
+    const reply = command.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(stream).not.toHaveBeenCalled();
+    expect(reply.components?.[0]?.toJSON().components?.[0]?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
+    expect(renderedModal?.title).toBe(localizedCopy("en-US", "genai.tips.title"));
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+    expect(renderedModal?.content).toContain("/personal providers");
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.support_server"));
+  });
+
+  it("exempts Auto mode from pre-modal server quota when a personal image or image_nai provider is active", async () => {
+    const personalImageRow = userSavedProviderConfigSchema.parse({
+      user_id: 1,
+      provider: "openrouter",
+      api_key: Buffer.from("synthetic-personal-image-key"),
+      llm_id: null,
+      diffusion_model_id: 10,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      enabled_capabilities: ["image"],
+      assigned_capabilities: ["image"],
+    });
+    const personalNaiRow = userSavedProviderConfigSchema.parse({
+      user_id: 1,
+      provider: "novelai",
+      api_key: Buffer.from("synthetic-personal-nai-key"),
+      llm_id: null,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: 20,
+      nai_preset_name: null,
+      enabled_capabilities: ["image_nai"],
+      assigned_capabilities: ["image_nai"],
+    });
+
+    const quotaSpy = spyOn(quota, "checkImageQuota").mockResolvedValue({
+      allowed: false,
+      reason: "user_quota_exceeded",
+      userRemaining: 0,
+      resetTime: new Date(Date.now() + 60_000),
+    });
+    const loadPersonalConfigsSpy = spyOn(llmProviderRepo, "loadUserSavedProviderConfigs");
+    restores.push(quotaSpy, loadPersonalConfigsSpy);
+
+    for (const row of [personalImageRow, personalNaiRow]) {
+      command = makeFakeInteraction({ channel });
+      modal = makeFakeInteraction({ deferred: true });
+      stream.mockClear();
+      quotaSpy.mockClear();
+      loadPersonalConfigsSpy.mockResolvedValue([row]);
+
+      await execute();
+
+      expect(quotaSpy).not.toHaveBeenCalled();
+      expect(command.calls.map((call) => call.method)).toEqual(["showModal"]);
+      expect(stream).toHaveBeenCalled();
+      expect(JSON.stringify(modal.calls)).toContain(
+        localizedCopy("en-US", "commands.tool.visualize.success_description"),
+      );
+    }
+
+    const serverSelection: generationModels.GenerationModelChoice = {
+      source: "server",
+      kind: "image",
+      provider: "openrouter",
+      modelId: 2,
+      name: "fixture/image",
+    };
+    command = makeFakeInteraction({ channel });
+    command.interaction.options.getString = (name) =>
+      name === "model" ? generationModels.generationModelValue(serverSelection) : null;
+    Object.assign(command.interaction.options, { getSubcommand: () => "image" });
+    quotaSpy.mockClear();
+    loadPersonalConfigsSpy.mockResolvedValue([personalImageRow]);
+    restores.push(
+      spyOn(generationModels, "loadGenerationModelChoices").mockResolvedValue([serverSelection]),
+      spyOn(generationModels, "validateGenerationModelSelection").mockResolvedValue(serverSelection),
+    );
+
+    await execute();
+
+    expect(quotaSpy).toHaveBeenCalledTimes(1);
+    const reply = command.calls.findLast((call) => call.method === "editReply")?.args[0] as {
+      components?: Array<{ toJSON(): { components?: Array<{ label?: string }> } }>;
+    };
+    expect(reply.components?.[0]?.toJSON().components?.[0]?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
+  });
+
+  it("passes server image scope rather than personal text scope to recovery tips when server image quota is exceeded", async () => {
+    const personalTextRow = userSavedProviderConfigSchema.parse({
+      user_id: 1,
+      provider: "openrouter",
+      api_key: Buffer.from("synthetic-personal-text-key"),
+      llm_id: state.llm.llm_id,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      enabled_capabilities: ["text"],
+      assigned_capabilities: ["text"],
+    });
+    const fallbackSettings = personalFallbackSettingsSchema.parse({
+      fallback_model_refs: [],
+      model_randomizer_enabled: false,
+    });
+    const observedContexts: ProviderOptionCopyContext[] = [];
+    let renderedModal: { title: string; content: string } | undefined;
+    disposers.push(
+      registerProviderOption({
+        value: "quota-scope-observer",
+        catalogProvider: "openrouter",
+        capabilities: ["text"],
+        copy: {
+          labelKey: "general.errors.api_key_missing_title",
+          entryDescriptionKeys: {
+            server: "general.errors.api_key_missing_description",
+            personal: "general.errors.api_key_missing_description",
+          },
+          addActionLabelKey: "general.errors.api_key_missing_title",
+          addActionDescriptionKeys: {
+            server: "general.errors.api_key_missing_description",
+            personal: "general.errors.api_key_missing_description",
+          },
+          removeImpactKey: "general.errors.api_key_missing_description",
+        },
+        contributeCopy: async (context) => {
+          observedContexts.push(context);
+          return context.credentialScope === "server" && context.managedProvider === null
+            ? "genai.tips.wait_and_retry"
+            : null;
+        },
+        availability: () => ({ eligible: true }),
+        selection: {
+          load: async () => null,
+          ensure: async () => true,
+          claim: async () => true,
+          remove: async () => "removed",
+          owns: () => false,
+          resolveCredentials: async () => null,
+        },
+      }),
+    );
+    restores.push(
+      spyOn(llmProviderRepo, "loadUserSavedProviderConfigs").mockResolvedValue([personalTextRow]),
+      spyOn(llmProviderRepo, "loadPersonalFallbackSettings").mockResolvedValue(fallbackSettings),
+      spyOn(textDisplayModals, "attachTextDisplayModalCollector").mockImplementation((options) => {
+        renderedModal = options.render("en-US");
+      }),
+      spyOn(quota, "checkImageQuota").mockResolvedValue({
+        allowed: false,
+        reason: "user_quota_exceeded",
+        userRemaining: 0,
+        resetTime: new Date(Date.now() + 60_000),
+      }),
+    );
+
+    await execute();
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(observedContexts).toEqual([
+      {
+        surface: "recovery",
+        managedProvider: null,
+        userDiscId: command.interaction.user.id,
+        serverId: state.server_id,
+        credentialScope: "server",
+      },
+    ]);
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.wait_and_retry"));
+    expect(renderedModal?.content).toContain(localizedCopy("en-US", "genai.tips.use_personal_providers"));
+  });
+});

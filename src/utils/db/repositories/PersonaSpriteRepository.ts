@@ -3,7 +3,7 @@ import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCacheSt
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-export type PersonaSpriteUpsertInput = {
+type PersonaSpriteUpsertInput = {
   personaId: number;
   spriteName: string;
   spriteKey: string;
@@ -12,13 +12,13 @@ export type PersonaSpriteUpsertInput = {
   isIdentity: boolean;
 };
 
-export type PersonaSpriteUpsertResult = {
+type PersonaSpriteUpsertResult = {
   sprite: PersonaSpriteRow;
   previousAvatarUrl: string | null;
   replaced: boolean;
 };
 
-export type PersonaSpriteMetadataUpdateInput = {
+type PersonaSpriteMetadataUpdateInput = {
   // The sprite is identified by its CURRENT lookup key (stable across a
   // pointer→materialized fork, unlike sprite_id which is reassigned on copy).
   currentSpriteKey: string;
@@ -39,12 +39,12 @@ type PersonaSpriteUpdateRow = PersonaSpriteRow & {
   previous_avatar_url: string | null;
 };
 
-export type PersonaSpriteMetadataUpdateResult = {
+type PersonaSpriteMetadataUpdateResult = {
   sprite: PersonaSpriteRow;
   previousAvatarUrl: string | null;
 };
 
-export class PersonaSpriteRepository {
+class PersonaSpriteRepository {
   /**
    * Resolves a persona's sprites. For a live preset pointer, the sprites are
    * resolved from the shared `preset_sprites` table (so every server's pointer
@@ -52,17 +52,19 @@ export class PersonaSpriteRepository {
    * materialized/independent persona, its own `persona_sprites` rows are returned.
    *
    * @param personaId - Target persona id
-   * @returns Sprite rows (preset-resolved or persona-owned), or [] on error
+   * @returns Sprite rows (preset-resolved or persona-owned)
+   * @throws When the persona or sprite query fails, so callers that make cleanup decisions do not
+   * treat an unavailable snapshot as an empty sprite set.
    */
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
-      // 1. Live preset pointers resolve the shared official sprite set.
+      // Live preset pointers resolve the shared official sprite set.
       const pointer = await this.resolvePointerPreset(personaId);
       if (pointer) {
-        return await this.listPresetSpritesForPointer(personaId, pointer.lineageId, pointer.language);
+        return await this.listForPreset(personaId, pointer.lineageId, pointer.language);
       }
 
-      // 2. Otherwise read the persona's own sprite rows.
+      // Otherwise read the persona's own sprite rows.
       const rows = await sql<PersonaSpriteRow[]>`
         SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites
@@ -70,10 +72,10 @@ export class PersonaSpriteRepository {
         ORDER BY sprite_key ASC, sprite_id ASC
       `;
 
-      return this.parseRows(rows, `persona ${personaId}`);
+      return this.parseRowsStrict(rows, `persona ${personaId}`);
     } catch (error) {
       log.error(`Error loading persona sprites for persona ${personaId}:`, error);
-      return [];
+      throw error;
     }
   }
 
@@ -112,11 +114,7 @@ export class PersonaSpriteRepository {
    * `sprite_id` carries the preset row id (read-only context: mutation paths
    * materialize first, then operate on real persona_sprites rows).
    */
-  private async listPresetSpritesForPointer(
-    personaId: number,
-    lineageId: number,
-    language: string,
-  ): Promise<PersonaSpriteRow[]> {
+  async listForPreset(personaId: number, lineageId: number, language: string): Promise<PersonaSpriteRow[]> {
     const rows = await sql<PersonaSpriteRow[]>`
       SELECT
         preset_sprite_id AS sprite_id,
@@ -319,7 +317,8 @@ export class PersonaSpriteRepository {
    * Deletes ALL of a persona's own sprite rows (used when `/persona default`
    * re-points a persona, resetting it to the official preset sprite set).
    *
-   * @returns The deleted rows (for storage cleanup), or [] on error/no-op
+   * @returns The deleted rows (for storage cleanup), or [] when no rows matched
+   * @throws When the delete query fails
    */
   async deleteAllForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
@@ -328,14 +327,13 @@ export class PersonaSpriteRepository {
         WHERE persona_id = ${personaId}
         RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
       `;
-      const parsedRows = this.parseRows(rows, `persona ${personaId} sprite reset`);
-      if (parsedRows.length > 0) {
-        invalidatePersonaSpriteCache(personaId);
-      }
-      return parsedRows;
+      // A successful DELETE with no matching rows still establishes that the cache is not
+      // authoritative for this reset. Invalidation follows the completed write, never before it.
+      invalidatePersonaSpriteCache(personaId);
+      return this.parseRowsStrict(rows, `persona ${personaId} sprite reset`);
     } catch (error) {
       log.error(`Error clearing persona sprites for persona ${personaId}:`, error);
-      return [];
+      throw error;
     }
   }
 
@@ -346,6 +344,18 @@ export class PersonaSpriteRepository {
       if (parsed) {
         parsedRows.push(parsed);
       }
+    }
+    return parsedRows;
+  }
+
+  private parseRowsStrict(rows: PersonaSpriteRow[], context: string): PersonaSpriteRow[] {
+    const parsedRows: PersonaSpriteRow[] = [];
+    for (const row of rows) {
+      const parsed = this.parseRow(row, context);
+      if (!parsed) {
+        throw new Error(`Invalid persona_sprites row for ${context}`);
+      }
+      parsedRows.push(parsed);
     }
     return parsedRows;
   }

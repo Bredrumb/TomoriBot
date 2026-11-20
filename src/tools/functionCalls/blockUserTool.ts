@@ -1,10 +1,12 @@
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import { localizer } from "@/utils/text/localizer";
 import {
   buildFailureResult,
-  getBlockUserMaxDurationHours,
+  DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
+  missingBlockNoticePermission,
   parseBlockUserArgs,
   resolveDiscordBlockTarget,
-  sendUserBlockedEmbed,
+  sendUserBlockedNotice,
   upsertPersonaUserBlock,
 } from "@/tools/functionCalls/userBlockToolShared";
 
@@ -31,7 +33,7 @@ export class BlockUserTool extends BaseTool {
       },
       block_duration_hours: {
         type: "number",
-        description: `Positive integer duration in hours. Maximum is ${getBlockUserMaxDurationHours()} hours unless server config changes.`,
+        description: `Positive integer duration in hours. Maximum is ${DEFAULT_BLOCK_USER_MAX_DURATION_HOURS} hours.`,
       },
       block_reason: {
         type: "string",
@@ -76,6 +78,14 @@ export class BlockUserTool extends BaseTool {
       );
     }
 
+    const missingPermission = await missingBlockNoticePermission(context);
+    if (missingPermission) {
+      return buildFailureResult(
+        "user_block_failed_missing_permission",
+        localizer(context.locale, "tools.user_block.error_missing_permission", { permission: missingPermission }),
+      );
+    }
+
     const expiresAt = new Date(Date.now() + parsed.durationHours * 60 * 60 * 1000);
     const row = await upsertPersonaUserBlock({
       context,
@@ -89,7 +99,7 @@ export class BlockUserTool extends BaseTool {
       return buildFailureResult("user_block_failed_db_error", "Database operation failed to save the user block.");
     }
 
-    await sendUserBlockedEmbed({
+    await sendUserBlockedNotice({
       context,
       targetDisplayName: target.displayLabel,
       blockType: parsed.blockType,

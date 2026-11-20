@@ -1,0 +1,314 @@
+export default {
+  genai: {
+    tool_failure: {
+      endpoint_blocked: `Máy chủ này không cho phép gửi yêu cầu đến địa chỉ của endpoint này.`,
+      content_blocked: `Nhà cung cấp đã từ chối yêu cầu công cụ này qua bộ lọc nội dung.`,
+      authentication: `Nhà cung cấp đã từ chối thông tin xác thực dùng cho yêu cầu công cụ này.`,
+      quota: `Nhà cung cấp đã từ chối yêu cầu công cụ này vì đã chạm hạn mức sử dụng hoặc thanh toán.`,
+      rate_limit: `Nhà cung cấp nhận quá nhiều yêu cầu nên đã từ chối yêu cầu công cụ này.`,
+      timeout: `Nhà cung cấp không hoàn thành yêu cầu công cụ này trước thời gian chờ.`,
+      provider_overloaded: `Nhà cung cấp tạm thời không khả dụng hoặc đang quá tải.`,
+      invalid_request: `Nhà cung cấp không thể chấp nhận các tham số cho yêu cầu công cụ này.`,
+      malformed_response: `Nhà cung cấp đã trả về phản hồi không hợp lệ hoặc chưa đầy đủ cho yêu cầu công cụ này.`,
+      missing_voice: `Giọng đã chọn không còn khả dụng từ nhà cung cấp.`,
+      missing_sample: `Chưa có mẫu giọng nào được thiết lập cho yêu cầu này.`,
+      sample_read_failed: `Không thể đọc mẫu giọng đã lưu.`,
+      script_too_long: `Kịch bản giọng nói vượt quá giới hạn độ dài của model giọng nói đã chọn.`,
+      cancelled: `Yêu cầu công cụ này đã bị hủy.`,
+      model_error: `Nhà cung cấp đã từ chối model đã chọn cho yêu cầu công cụ này.`,
+      model_files_missing: `Máy chủ tạo nội dung chưa cài đặt các tệp model đã thiết lập sau: {models}.`,
+      not_configured: `Chưa có nhà cung cấp khả dụng nào được thiết lập cho công cụ này.`,
+      balance_exhausted: `Tài khoản nhà cung cấp dùng cho yêu cầu công cụ này đã hết tiền.`,
+      credit_limit: `Tài khoản nhà cung cấp không đủ chi trả cho độ dài đầu ra được yêu cầu.`,
+      context_length: `Yêu cầu công cụ này vượt quá giới hạn ngữ cảnh của model đã chọn.`,
+      provider_error: `Nhà cung cấp không thể hoàn thành yêu cầu công cụ này.`,
+    },
+    generic_error_title: `Lỗi tạo nội dung`,
+    error_stream_timeout_title: `Hết thời gian kết nối`,
+    error_stream_timeout_description: `Nếu tình trạng này tiếp diễn, có thể nhà cung cấp AI đã chọn gặp sự cố tạm thời. Vui lòng thử lại sau hoặc dùng \`/refresh\` để làm mới lịch sử ngữ cảnh.`,
+    empty_response_title: `Phản hồi trống`,
+    empty_response_description: `Mình nhận được phản hồi trống từ AI, hãy dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
+    max_iterations_title: `Vòng lặp suy nghĩ`,
+    max_iterations_streaming_description: `Mình bị kẹt trong vòng lặp suy nghĩ và không thể hoàn thành yêu cầu, hãy dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
+    still_working_title: `Vẫn đang xử lý...`,
+    still_working_description: `Tác vụ này đang mất nhiều bước hơn bình thường. Dùng \`/kill\` nếu bạn nghĩ mình bị kẹt.`,
+    tool_error_loop_title: `Vòng lặp lỗi công cụ`,
+    tool_error_loop_description: `Mình liên tục gặp lỗi công cụ và không thể hoàn tất yêu cầu. Hãy thử diễn đạt lại hoặc dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
+    fallback_used_title: `Đã dùng model dự phòng`,
+    fallback_used_details_description: `Dự phòng {slot} phản hồi bằng \`{success_model}\` sau các lỗi:
+{failure_list}`,
+    fallback_used_failure_line: `{index}. {model} gặp lỗi {error_detail}`,
+    fallback_used_details_button: `Đã dùng dự phòng`,
+    fallback_used_personal_opt_out_footer: `Ngừng để model của máy chủ trả lời thay khi nhà cung cấp cá nhân của bạn gặp lỗi trong \`/personal config\` > Model > Model dự phòng`,
+    markdown_table: {
+      show_button: `Hiện Markdown`,
+      source_expired_title: `Nguồn bảng đã hết hạn`,
+      source_expired: `Markdown của bảng đó không còn được lưu trong bộ nhớ đệm, nên mình không thể hiển thị mã nguồn nữa.`,
+      source_attached: `Bảng này quá dài để hiển thị trực tiếp, nên bảng được gửi dưới dạng tệp:`,
+    },
+    no_response_title: `Không có phản hồi`,
+    log_channel_chat_notice_title: `Không trò chuyện trong kênh nhật ký`,
+    log_channel_chat_notice_description: `Kênh này đang được đặt làm kênh nhật ký, nên mình không trả lời tin nhắn ở đây. Để trò chuyện ở đây, hãy xóa hoặc đổi kênh trong \`/config\` > Kênh > Nhật ký.`,
+    thought_log: {
+      title: `Nhật ký suy nghĩ`,
+      description: `Nguồn: {source_line}`,
+      personal_attribution: `Được tạo qua cấu hình {provider} cá nhân của {user_mention}.`,
+      personal_attribution_title: `Nguồn gốc nhà cung cấp cá nhân`,
+      randomizer_attribution: `Trình chọn model ngẫu nhiên: được trả lời bởi {model}.`,
+      randomizer_attribution_title: `Ghi nhận nguồn trình chọn model ngẫu nhiên`,
+      summary_field: `Tóm tắt suy nghĩ`,
+      raw_field: `Suy nghĩ gốc`,
+      fetched_content_field: `Nội dung đã lấy`,
+      footer: `Nhà cung cấp: {provider} | Model: {model}`,
+      footer_with_generation_time: `Nhà cung cấp: {provider} | Model: {model} | Thời gian tạo: {generation_time}`,
+      provider_with_serving: `{provider} qua {serving_provider}`,
+    },
+    message_interaction: {
+      reply_context_author: `Đang trả lời {user}`,
+      reply_context_description: `{message_url}`,
+      reply_context_footer: `Đang trả lời {user} • {message_url}`,
+    },
+    text_quota_exceeded_title: `🔴 Đã vượt hạn mức văn bản`,
+    text_quota_exceeded_description: `Bạn đã đạt hạn mức tạo văn bản. {reset_info}`,
+    text_user_quota_exceeded_description: `Bạn đã đạt hạn mức tạo văn bản hàng ngày. {reset_info}`,
+    text_serverwide_quota_exceeded_description: `Máy chủ này đã đạt hạn mức tạo văn bản cho khoảng thời gian này. {reset_info}`,
+    text_quota_resets_in_hours: `Hạn mức sẽ đặt lại sau {hours} giờ.`,
+    text_quota_resets_in_days: `Hạn mức sẽ đặt lại sau {days} ngày.`,
+    text_quota_exceeded_footer: `Hạn mức này được quản lý máy chủ định cấu hình qua \`/moderation\`.`,
+    text_quota_unavailable_title: `Hạn ngạch văn bản không khả dụng`,
+    text_quota_unavailable_description: `Mình không thể kiểm tra hạn ngạch tạo văn bản của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
+    stream: {
+      response_stopped_title: `Phản hồi bị gián đoạn`,
+      response_stopped_description: `Phản hồi đã bị gián đoạn vì lý do sau: {reason}. Hãy đảm bảo nội dung gửi không quá lớn đối với nhà cung cấp AI. Chạy \`/refresh\` để xóa nội dung trò chuyện.`,
+      streaming_failed_description: `Đã xảy ra sự cố khi truyền phản hồi theo luồng.`,
+      error_footer_server_provider: `Nguồn: {provider} • Lỗi này đến từ nhà cung cấp AI của máy chủ, không phải từ TomoriBot.`,
+      error_footer_dm_provider: `Nguồn: {provider} • Lỗi này đến từ nhà cung cấp AI, không phải từ TomoriBot.`,
+      error_footer_personal_provider: `Nguồn: {provider} (Cá nhân) • Lỗi này đến từ nhà cung cấp AI cá nhân của bạn, không phải từ TomoriBot.`,
+      error_footer_tomoribot: `Nguồn: TomoriBot • Đây là lỗi nội bộ của TomoriBot, không phải từ nhà cung cấp AI của bạn.`,
+      provider_error_interaction: `Phản hồi dạng luồng bị chặn/dừng. Lý do: {reason}.`,
+      api_error_title: `🔴 Lỗi API nhà cung cấp`,
+      privacy_error_title: `🔴 Cài đặt quyền riêng tư nhà cung cấp`,
+      model_error_title: `🔴 Lỗi cấu hình model`,
+      model_error_description: `Model đã chọn bị nhà cung cấp từ chối. Hãy kiểm tra tên model đã cấu hình và chuyển sang một trong các ID model được nhà cung cấp hỗ trợ.`,
+      rate_limit_title: `🟡 Đã vượt giới hạn tần suất nhà cung cấp`,
+      rate_limit_title_all_rotation_keys: `🟡 Đã vượt giới hạn tần suất nhà cung cấp (Mọi key xoay vòng)`,
+      content_blocked_title: `🔴️ Bộ lọc nội dung nhà cung cấp`,
+      timeout_title: `🟡️ Hết thời gian yêu cầu nhà cung cấp`,
+      provider_overloaded_title: `🔴 Nhà cung cấp quá tải`,
+      provider_overloaded_description: `Nhà cung cấp hiện đang quá tải hoặc tạm thời không khả dụng`,
+      connection_refused_description: `Kết nối tới nhà cung cấp đã bị từ chối. Hãy kiểm tra xem endpoint có đang chạy và địa chỉ có chính xác không.`,
+      context_length_title: `🔴 Tin nhắn quá dài cho model này`,
+      credit_limit_title: `🔴 Không đủ tín dụng nhà cung cấp`,
+      balance_exhausted_title: `🔴 Tài khoản nhà cung cấp hết số dư`,
+      endpoint_blocked_title: `Endpoint không được phép`,
+      flush_limit_title: `🟡️ Đã đạt giới hạn độ dài phản hồi`,
+      flush_limit_description: `Phản hồi này đã đạt giới hạn độ dài tin nhắn tối đa và đã bị dừng. Bạn có thể dùng \`/respond\` để tiếp tục phản hồi theo cách thủ công nếu cần.`,
+      inactivity_timeout_title: `🟡️ Phản hồi đã hết thời gian`,
+      inactivity_timeout_description: `Nhà cung cấp AI đã ngừng phản hồi và kết nối bị hết thời gian. Điều này có thể xảy ra khi nhà cung cấp bị quá tải hoặc gặp sự cố. Vui lòng thử lại.`,
+      first_token_timeout_description: `Nhà cung cấp AI đã nhận yêu cầu nhưng không bao giờ bắt đầu phản hồi, nên kết nối bị hết thời gian. Hàng đợi của họ có thể đang quá tải. Vui lòng thử lại, hoặc chuyển sang một model ít bận hơn.`,
+    },
+    error_detail: {
+      button: `Xem lỗi đầy đủ`,
+      title: `Lỗi đầy đủ từ nhà cung cấp`,
+      manage_server_only: `Chỉ thành viên có quyền \`Quản lý máy chủ\` mới xem được lỗi đầy đủ.`,
+      personal_only: `Lỗi này đến từ nhà cung cấp cá nhân, nên chỉ chủ sở hữu mới xem được lỗi đầy đủ.`,
+    },
+    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
+    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
+    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
+    tips: {
+      title: `💡 Điều bạn có thể làm`,
+      button: `Điều bạn có thể làm`,
+      revise_tool_request: `Kiểm tra lại dữ liệu đầu vào của công cụ và thử lại với yêu cầu đã điều chỉnh.`,
+      check_tool_configuration: `Kiểm tra model và cấu hình đã chọn cho công cụ này.`,
+      check_provider_quota: `Kiểm tra hạn mức và trạng thái thanh toán của nhà cung cấp trước khi thử lại.`,
+      wait_and_retry: `Vui lòng chờ vài phút trước khi thử lại.`,
+      api_key_rotation: `Nếu máy chủ này có nhiều key, hãy chọn nhà cung cấp trong \`/providers\` để quản lý nhóm xoay vòng.`,
+      model_fallback: `Thêm model dự phòng bằng \`/config\` > Models > Fallbacks & Randomizer để tăng độ ổn định.`,
+      model_fallback_personal: `Thêm model dự phòng bằng \`/personal config\` để tăng độ ổn định.`,
+      openrouter_free_models: `Đăng ký thêm model miễn phí từ [danh sách model OpenRouter miễn phí](https://openrouter.ai/models?max_price=0&output_modalities=text) bằng \`/providers\`.`,
+      openrouter_free_models_personal: `Đăng ký thêm model miễn phí từ [danh sách model OpenRouter miễn phí](https://openrouter.ai/models?max_price=0&output_modalities=text) bằng \`/personal providers\`.`,
+      openrouter_models: `Duyệt [danh sách model OpenRouter](https://openrouter.ai/models), đăng ký model bằng \`/providers\`, sau đó chuyển đổi bằng \`/config\` > Models > Switch Models.`,
+      openrouter_models_personal: `Duyệt [danh sách model OpenRouter](https://openrouter.ai/models), đăng ký model bằng \`/personal providers\`, sau đó chuyển đổi bằng \`/personal config\`.`,
+      choose_supported_model: `Chọn ID model được hỗ trợ bằng \`/config\` > Models > Switch Models hoặc cài đặt endpoint tùy chỉnh của bạn.`,
+      choose_supported_model_personal: `Chọn ID model được hỗ trợ bằng \`/personal config\` hoặc cài đặt endpoint tùy chỉnh của bạn.`,
+      verify_api_key: `Kiểm tra kỹ lại API key của máy chủ này, sau đó thử lại.`,
+      verify_api_key_personal: `Kiểm tra kỹ lại API key cá nhân của bạn bằng \`/personal providers\`, sau đó thử lại.`,
+      endpoint_not_allowed: `Chuyển sang một endpoint HTTPS công khai bằng \`/providers\`, hoặc hỏi người vận hành máy chủ này xem có thể cho phép máy chủ cục bộ hay không.`,
+      endpoint_not_allowed_personal: `Chuyển sang một endpoint HTTPS công khai bằng \`/personal providers\`, hoặc hỏi người vận hành máy chủ này xem có thể cho phép máy chủ cục bộ hay không.`,
+      verify_api_key_expiry: `API key NVIDIA NIM có hạn dùng, và NVIDIA từ chối key đã hết hạn bằng đúng lỗi như khi key bị gõ sai. Hãy kiểm tra ngày hết hạn tại [build.nvidia.com](https://build.nvidia.com) và tạo key mới nếu key đã hết hạn.`,
+      nvidia_register_free_model: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
+      nvidia_register_free_model_personal: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/personal providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
+      google_free_tier_daily: `API key này đã dùng hết các yêu cầu miễn phí của Gemini trong hôm nay. Hạn mức sẽ được làm mới vào nửa đêm theo giờ Thái Bình Dương.`,
+      google_free_tier_minute: `API key này đang gửi yêu cầu nhanh hơn mức gói miễn phí của Gemini cho phép. Vui lòng đợi một phút rồi thử lại.`,
+      google_credential_type: `Thông tin này có vẻ là token OAuth hoặc service account. Nhà cung cấp \`google\` cần API key thông thường từ [Google AI Studio](https://aistudio.google.com/apikey); hãy dùng nhà cung cấp \`vertex\` cho thông tin xác thực Google Cloud.`,
+      openrouter_privacy_settings: `Điều chỉnh cài đặt "Data Policy" tại [Cài đặt quyền riêng tư OpenRouter](https://openrouter.ai/settings/privacy) để cho phép model này, hoặc chọn model khác.`,
+      openrouter_fund_account: `Nạp ít nhất 10 tín dụng vào tài khoản OpenRouter của bạn để mở khóa 1000 yêu cầu model miễn phí mỗi ngày.`,
+      reduce_output_tokens: `Giảm giới hạn độ dài phản hồi bằng \`/config\` > Models > Samplers & Parameters (output tokens) để giải phóng dung lượng cho lịch sử trò chuyện.`,
+      reduce_output_tokens_personal: `Giảm giới hạn độ dài phản hồi bằng \`/personal config\` (output tokens) để giải phóng dung lượng cho lịch sử trò chuyện.`,
+      openrouter_add_credits: `Nạp tín dụng tại [Tín dụng OpenRouter](https://openrouter.ai/settings/credits), hoặc giảm độ dài phản hồi bằng \`/config\` > Models > Samplers & Parameters (output tokens).`,
+      openrouter_add_credits_personal: `Nạp tín dụng tại [Tín dụng OpenRouter](https://openrouter.ai/settings/credits), hoặc giảm độ dài phản hồi bằng \`/personal config\` (output tokens).`,
+      top_up_provider_balance: `API key của bạn hợp lệ, nhưng tài khoản đã hết số dư. Hãy nạp thêm tiền tại nhà cung cấp của bạn rồi thử lại. Việc rút ngắn tin nhắn hoặc giảm độ dài phản hồi sẽ không giúp ích trong trường hợp này.`,
+      deepseek_top_up: `Nạp thêm tiền tại [trang nạp tiền DeepSeek](https://platform.deepseek.com/top_up).`,
+      adjust_parameters: `Dùng \`/config\` > Models > Samplers & Parameters và điều chỉnh **Temperature** hoặc **Top P** để đảm bảo chỉ có một thông số được gửi.`,
+      adjust_parameters_personal: `Dùng \`/personal config\` và điều chỉnh **Temperature** hoặc **Top P** để đảm bảo chỉ có một thông số được gửi.`,
+      switch_model_provider: `Chuyển sang model hoặc nhà cung cấp khác bằng \`/config\` > Models > Switch Models hoặc \`/providers\`.`,
+      switch_model_provider_personal: `Chuyển đổi bằng \`/personal config\`, hoặc cập nhật nhà cung cấp trong \`/personal providers\`.`,
+      disable_personal_text_override: `Lỗi yêu cầu này bắt nguồn từ [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#your-own-providers) của bạn. Hãy cập nhật trong \`/personal providers\` hoặc chọn model đang hoạt động bằng \`/personal config\`.`,
+      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
+      support_server: `Ghé thăm [Máy chủ hỗ trợ chính thức](https://discord.gg/bjCfHm9QsB) để được trợ giúp.`,
+      shorten_message: `Hãy thử rút ngắn tin nhắn của bạn rồi gửi lại.`,
+      refresh_context: `Xóa ngữ cảnh cuộc trò chuyện bằng \`/refresh\`.`,
+      provider_overloaded_wait: `Nhà cung cấp hiện đang chịu tải nặng. Hãy thử lại sau giây lát hoặc chuyển nhà cung cấp.`,
+      nsfw_jailbreaks: `Bật \`/nsfw jailbreaks\` để giúp tránh bộ lọc này.`,
+      review_messages: `Xem lại các tin nhắn gần đây hoặc xóa chúng bằng \`/refresh\`.`,
+      review_memories: `Kiểm tra bộ nhớ và cấu hình của bạn (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
+      blacklist_member: `Đưa thành viên gây sự cố vào danh sách đen bằng \`/moderation\`.`,
+      use_personal_providers: `Dùng [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#your-own-providers) của riêng bạn với \`/personal providers\` để các yêu cầu của bạn không tính vào hạn mức của máy chủ này.`,
+    },
+    google: {
+      "400_default_message": `Định dạng yêu cầu của bạn có lỗi`,
+      "400_billing_default_message": `Dịch vụ này yêu cầu kích hoạt thanh toán`,
+      "401_default_message": `Thông tin xác thực Google của bạn bị từ chối. Hãy đảm bảo bạn đang dùng API key từ Google AI Studio`,
+      "403_default_message": `API key của bạn không có đủ quyền cần thiết. Vui lòng đảm bảo bạn đang dùng API key hợp pháp của chính mình từ Google AI Studio`,
+      "404_default_message": `Không tìm thấy tài nguyên được tham chiếu`,
+      "429_default_message": `Bạn đã gửi quá nhiều yêu cầu trong thời gian ngắn`,
+      "503_default_message": `Model AI hiện đang bị quá tải`,
+      "504_default_message": `Yêu cầu của bạn mất quá nhiều thời gian để xử lý`,
+      content_blocked_default_message: `Nội dung của bạn đã bị chặn bởi bộ lọc an toàn`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    vertex: {
+      config_error_message: `Vertex AI không đọc được cài đặt của nhà cung cấp này. Hãy nhập key theo dạng \`project-id::location\` trong \`/providers\`.`,
+      auth_error_message: `Vertex AI không xác thực được. Người host TomoriBot cần thiết lập Application Default Credentials của Google Cloud (\`gcloud auth application-default login\` hoặc \`GOOGLE_APPLICATION_CREDENTIALS\`).`,
+    },
+    vertexexpress: {
+      "403_predict_permission_message": `Key này không thể gọi các model Vertex AI Express. Hãy dùng key ở chế độ Express, hoặc dùng nhà cung cấp \`vertex\` riêng cho các dự án Google Cloud đầy đủ.`,
+    },
+    novelai: {
+      tokenizer_setup:
+        "Tokenizer của NovelAI bị thiếu hoặc không hợp lệ. Hãy nhờ người quản lý bot chạy `bun run setup:tokenizers` và khởi động lại TomoriBot.",
+      input_complexity:
+        "Prompt này chứa quá nhiều văn bản hoặc một từ viết liền dài bất thường. Hãy rút ngắn lại và thử lại.",
+      context_overflow:
+        "Persona, các ví dụ tối thiểu và cuộc trò chuyện gần đây vượt quá cửa sổ ngữ cảnh của model này. Hãy rút ngắn chúng hoặc chọn một model có cửa sổ lớn hơn.",
+      subscription_unavailable: "Không thể tải thông tin gói thuê bao NovelAI. Vui lòng thử lại sau giây lát.",
+      subscription_inactive: "Key NovelAI này không có gói thuê bao đang hoạt động.",
+      model_tier: "Gói thuê bao NovelAI này không bao gồm model văn bản đã chọn.",
+      xialong_opus:
+        "Xialong yêu cầu gói thuê bao NovelAI Opus đang hoạt động. Hãy dùng key Opus hoặc chọn một model văn bản khác.",
+      continuation_exhausted:
+        "NovelAI đã dừng trước khi tạo ra câu trả lời hoàn chỉnh trong giới hạn đầu ra. Hãy thử lại hoặc tăng độ dài đầu ra đã cấu hình.",
+      "400_default_message": `Định dạng yêu cầu hoặc tham số không hợp lệ. Vui lòng đảm bảo bạn đã nhập đúng API key.`,
+      "400_trial_message": `Tài khoản dùng thử của bạn cần xác minh recaptcha để tạo nội dung. Quyền truy cập API yêu cầu gói đăng ký NovelAI trả phí. Vui lòng nâng cấp tài khoản tại https://novelai.net/`,
+      "401_default_message": `NovelAI API key của bạn không hợp lệ hoặc đã hết hạn`,
+      "402_default_message": `Bạn không có đủ tín dụng Anlas`,
+      "429_default_message": `Bạn đang gửi quá nhiều yêu cầu, vui lòng thao tác chậm lại`,
+      "503_default_message": `Máy chủ NovelAI hiện đang bị quá tải`,
+      "504_default_message": `Yêu cầu của bạn mất quá nhiều thời gian để xử lý`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    openrouter: {
+      "404_privacy_policy_error": `**Hạn chế của chính sách quyền riêng tư**
+Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện trả phí, nhưng cài đặt quyền riêng tư tài khoản OpenRouter của bạn đang chặn.`,
+      "400_default_message": `Yêu cầu gửi tới OpenRouter không hợp lệ`,
+      "401_default_message": `OpenRouter API key của bạn không hợp lệ hoặc đã hết hạn`,
+      "402_default_message": `Tài khoản OpenRouter của bạn không đủ tín dụng`,
+      "403_default_message": `Truy cập bị từ chối: hãy kiểm tra cài đặt tài khoản OpenRouter của bạn`,
+      "408_default_message": `Yêu cầu tới OpenRouter đã hết thời gian chờ`,
+      "429_default_message": `Đã vượt giới hạn tần suất OpenRouter, vui lòng chờ trước khi thử lại`,
+      "429_free_models_message": `Đã vượt giới hạn tần suất OpenRouter cho các model miễn phí.`,
+      "500_default_message": `OpenRouter gặp lỗi máy chủ nội bộ`,
+      "502_default_message": `Nhà cung cấp AI thượng nguồn tạm thời không khả dụng`,
+      "503_default_message": `Model AI thượng nguồn hiện đang bị quá tải`,
+      "504_default_message": `Yêu cầu tới model thượng nguồn đã hết thời gian chờ`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    anthropic: {
+      "400_default_message": `Yêu cầu gửi tới Anthropic API không hợp lệ.`,
+      "401_default_message": `Anthropic API key của bạn không hợp lệ. Vui lòng kiểm tra key của bạn tại console.anthropic.com`,
+      "403_default_message": `Anthropic API key của bạn không có quyền thực hiện thao tác này.`,
+      "404_default_message": `Không tìm thấy model Anthropic được yêu cầu.`,
+      "429_default_message": `Đã vượt giới hạn tần suất Anthropic. Vui lòng chờ giây lát rồi thử lại.`,
+      "500_default_message": `Anthropic trả về lỗi máy chủ nội bộ.`,
+      "503_default_message": `Anthropic hiện không khả dụng hoặc đang bị quá tải.`,
+      temperature_top_p_conflict_message: `Anthropic đã từ chối yêu cầu này vì cả Temperature và Top-P đều được gửi.`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến khi kết nối với Anthropic.`,
+    },
+    custom: {
+      "402_default_message": `Tài khoản của bạn với endpoint này không đủ số dư`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `Máy chủ này không cho phép gửi yêu cầu đến địa chỉ của endpoint này.`,
+      REDIRECT_CREDENTIALS_WITHHELD_default_message: `Endpoint này đã chuyển hướng sang địa chỉ khác, vì vậy TomoriBot không gửi API key đến đó. Người quản lý endpoint này trong \`/providers\` có thể khắc phục bằng cách đổi URL thành địa chỉ chuyển hướng cuối cùng của máy chủ.`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    deepseek: {
+      "402_default_message": `Tài khoản DeepSeek của bạn không đủ số dư`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    zai: {
+      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
+      "429_balance_default_message": `Tài khoản Z.ai của bạn không đủ số dư`,
+      "429_plan_access_default_message": `Gói đăng ký Z.ai của bạn không bao gồm quyền truy cập vào model này`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    nvidia: {
+      "401_default_message": `NVIDIA không nhận ra key này. Hãy kiểm tra key đã được sao chép đầy đủ chưa, bao gồm cả tiền tố \`nvapi-\`.`,
+      "403_default_message": `NVIDIA đã từ chối key này. Key có thể bị gõ sai, đã hết hạn, hoặc tài khoản thiếu quyền truy cập inference.`,
+      "404_default_message": `Không tìm thấy model NVIDIA NIM được yêu cầu. Model có thể đã bị NVIDIA ngừng hỗ trợ.`,
+      "500_default_message": `Backend của NVIDIA phục vụ model này đã gặp lỗi. Lỗi này thường chỉ tạm thời, hãy thử lại sau giây lát. Nếu vẫn tiếp tục lỗi, người host TomoriBot có thể đọc báo cáo đầy đủ của NVIDIA trong log của bot.`,
+      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
+      // parameter. Asserting this cause on every 500 previously sent users to change settings the
+      // failing payload never carried.
+      "500_parameter_default_message": `NVIDIA đã từ chối một hoặc nhiều tham số yêu cầu cho model này. Trong \`/config\` > Models > Samplers & Parameters, hãy đặt các sampler không được hỗ trợ như \`min_p\` về \`0\` và xóa các mục \`logit_bias\` đã lưu.`,
+      unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
+    },
+    self_teach: {
+      memory_forgotten_description: `Đã quên một bộ nhớ tạm nghỉ để nhường chỗ:
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `Đã lưu:
+{memory_content}
+
+Đã quên:
+{forgotten_content}`,
+      server_memory_learned_title: `🧠 {persona_nickname} đã học được điều mới!`,
+      server_memory_learned_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được lưu:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ!`,
+      server_memory_updated_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được cập nhật:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ!`,
+      server_memory_deleted_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** đã được xóa:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_learned_title: `💡 {persona_nickname} đã học được điều mới về {user_nickname}!`,
+      personal_memory_learned_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được lưu:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ về {user_nickname}!`,
+      personal_memory_updated_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được cập nhật:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ về {user_nickname}!`,
+      personal_memory_deleted_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/long-term-memory/)** về {user_nickname} đã được xóa:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_footer: `Quản lý máy chủ có thể quản lý bộ nhớ này bằng \`/memories\`.`,
+      personal_memory_footer_manage: `Bạn có thể quản lý bộ nhớ cá nhân của mình bằng \`/personal memories\`.`,
+      personal_memory_footer_personalization_disabled: `Bộ nhớ này đã được lưu, nhưng các tính năng cá nhân hóa hiện đang bị tắt trên máy chủ này, nên sẽ không có hiệu lực ngay tại đây. Dùng \`/export personal memories\` để xem. Bạn có thể chọn không tham gia bằng \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted:
+        "Bộ nhớ này đã được lưu, nhưng người dùng được nhắc tới đang nằm trong danh sách đen của máy chủ này, nên mình bỏ qua họ ở đây và bộ nhớ sẽ không có hiệu lực. Dùng `/export personal memories` để xem. Bạn có thể chọn không tham gia bằng `/personal config`.",
+      expand_memory_button: `Xem toàn bộ bộ nhớ`,
+      expand_memory_title: `Nội dung bộ nhớ đầy đủ`,
+    },
+  },
+};

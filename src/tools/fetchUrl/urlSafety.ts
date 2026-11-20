@@ -1,5 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
+import { getEmbeddedIpv4 } from "@/utils/security/embeddedIpv4";
+import type { FetchUserRemoteUrlOptions } from "@/utils/security/userRemoteFetch";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 
@@ -12,10 +15,11 @@ interface ResolvedFetchAddress extends AddressClassification {
   address: string;
 }
 
-export type FetchUrlSafetyFailureCode =
+type FetchUrlSafetyFailureCode =
   | "INVALID_FORMAT"
   | "INVALID_PROTOCOL"
   | "DNS_RESOLUTION_FAILED"
+  | "METADATA_ADDRESS_BLOCKED"
   | "PRIVATE_NETWORK_BLOCKED";
 
 export interface FetchUrlSafetyResult {
@@ -25,9 +29,21 @@ export interface FetchUrlSafetyResult {
   details?: string;
 }
 
-function isPrivateNetworkFetchAllowed(): boolean {
+/**
+ * Whether `fetch_url` may reach private/internal network addresses.
+ *
+ * Only the explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in grants this, in every `RUN_ENV`,
+ * because self-hosted community instances commonly run in development mode with untrusted members.
+ */
+export function isPrivateNetworkFetchAllowed(): boolean {
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+}
+
+/** Gate-2 policy for `fetchUserRemoteUrl`, so every redirect hop follows the same opt-in as gate 1. */
+export function getFetchUrlRemotePolicy(): FetchUserRemoteUrlOptions {
+  const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
+  return { strict: !allowPrivateNetwork, allowPrivateNetwork };
 }
 
 function normalizeHostname(hostname: string): string {
@@ -39,39 +55,9 @@ function normalizeHostname(hostname: string): string {
   return normalized;
 }
 
-function getMappedIpv4Address(address: string): string | null {
-  const mapped = address.match(/^(?:::ffff:|0:0:0:0:0:ffff:)(.+)$/);
-  if (!mapped) {
-    return null;
-  }
-
-  const tail = mapped[1];
-  if (tail && isIP(tail) === 4) {
-    return tail;
-  }
-
-  const hexTail = tail?.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!hexTail) {
-    return null;
-  }
-
-  const high = Number.parseInt(hexTail[1] ?? "", 16);
-  const low = Number.parseInt(hexTail[2] ?? "", 16);
-  if (Number.isNaN(high) || Number.isNaN(low)) {
-    return null;
-  }
-
-  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-}
-
 function normalizeAddress(address: string): string {
   const normalized = address.trim().toLowerCase();
-  const mappedIpv4 = getMappedIpv4Address(normalized);
-  if (mappedIpv4) {
-    return mappedIpv4;
-  }
-
-  return normalized;
+  return getEmbeddedIpv4(normalized) ?? normalized;
 }
 
 function classifyIpv4Address(address: string): AddressClassification {
@@ -154,7 +140,6 @@ function buildBlockedFetchMessage(hostname: string, blocked: ResolvedFetchAddres
   const resolvedList = resolved.map((entry) => entry.address).join(", ");
   return (
     `The URL host '${hostname}' resolved to '${blocked.address}', which is ${blocked.reason}. ` +
-    `TomoriBot blocks private/internal URL fetch targets because ${PRIVATE_NETWORK_ENV}=false by default. ` +
     `Resolved addresses: ${resolvedList}.`
   );
 }
@@ -179,11 +164,12 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
-  if (isPrivateNetworkFetchAllowed()) {
-    return { allowed: true };
-  }
-
   const hostname = normalizeHostname(parsedUrl.hostname);
+  const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
+
+  // Resolution failures refuse even when the private-network guard is relaxed: the always-on
+  // metadata denylist below cannot judge an address it never saw, and the Crawl4AI engine
+  // dispatches out of process with no second gate.
   let resolvedAddresses: ResolvedFetchAddress[];
   try {
     resolvedAddresses = await resolveFetchAddresses(hostname);
@@ -203,6 +189,25 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
+  // Cloud-metadata and link-local addresses are the primary SSRF credential-theft target, so the
+  // private-network opt-in never reaches them.
+  const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
+  if (metadataAddress) {
+    const resolvedList = resolvedAddresses.map((entry) => entry.address).join(", ");
+    return {
+      allowed: false,
+      failureCode: "METADATA_ADDRESS_BLOCKED",
+      error:
+        `The URL host '${hostname}' resolved to '${metadataAddress.address}', a cloud instance-metadata ` +
+        `or link-local address that TomoriBot never fetches. Resolved addresses: ${resolvedList}.`,
+      details: `Cloud-metadata and link-local addresses are always blocked and cannot be enabled via ${PRIVATE_NETWORK_ENV}.`,
+    };
+  }
+
+  if (allowPrivateNetwork) {
+    return { allowed: true };
+  }
+
   const blockedAddress = resolvedAddresses.find((entry) => entry.blocked);
   if (blockedAddress) {
     const error = buildBlockedFetchMessage(hostname, blockedAddress, resolvedAddresses);
@@ -210,9 +215,6 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
       allowed: false,
       failureCode: "PRIVATE_NETWORK_BLOCKED",
       error,
-      details:
-        `Set ${PRIVATE_NETWORK_ENV}=true only in a trusted self-hosted deployment if you intentionally want ` +
-        "`fetch_url` to reach private network addresses.",
     };
   }
 

@@ -3,9 +3,9 @@ import type {
   ProviderFeatureImplementation,
   ProviderFeatureName,
   ProviderInfo,
-  SupportedParam,
 } from "@/types/provider/interfaces";
 import { getCustomProviderDisplayName, isCustomProvider } from "@/utils/provider/customProviderUtils";
+import { providerOptionDisplayName } from "@/utils/provider/providerOptionRegistry";
 import * as path from "node:path";
 import { Glob } from "bun";
 
@@ -44,6 +44,19 @@ async function discoverProviderInfos(): Promise<readonly ProviderInfo[]> {
 }
 
 const providerInfos = await discoverProviderInfos();
+
+const providerAddChoiceDescriptionKeys: Readonly<Record<string, string>> = {
+  anthropic: "commands.provider.add.provider_choice_descriptions.anthropic",
+  deepseek: "commands.provider.add.provider_choice_descriptions.deepseek",
+  google: "commands.provider.add.provider_choice_descriptions.google",
+  novelai: "commands.provider.add.provider_choice_descriptions.novelai",
+  nvidia: "commands.provider.add.provider_choice_descriptions.nvidia",
+  openrouter: "commands.provider.add.provider_choice_descriptions.openrouter",
+  vertex: "commands.provider.add.provider_choice_descriptions.vertex",
+  vertexexpress: "commands.provider.add.provider_choice_descriptions.vertexexpress",
+  zai: "commands.provider.add.provider_choice_descriptions.zai",
+  zaicoding: "commands.provider.add.provider_choice_descriptions.zaicoding",
+};
 
 const providerInfoByCanonicalName = new Map<string, ProviderInfo>(
   providerInfos.map((info) => [info.name.toLowerCase(), info]),
@@ -85,7 +98,9 @@ export function getStaticProviderInfo(providerName: string): ProviderInfo | null
   return providerInfoByCanonicalName.get(canonicalName) ?? null;
 }
 
-export function getProviderDisplayName(providerName: string): string {
+export function getProviderDisplayName(providerName: string, locale = "en-US"): string {
+  const optionName = providerOptionDisplayName(providerName, locale);
+  if (optionName) return optionName;
   if (isCustomProvider(providerName)) {
     return getCustomProviderDisplayName(providerName);
   }
@@ -146,11 +161,8 @@ export function getAllProviderChoices(): Array<{ name: string; value: string }> 
 }
 
 /**
- * Returns a locale-formatted list of provider display names
- * that support the given generation parameter.
+ * Returns the shared provider-picker description key, when one is available.
  */
-export function getProviderDisplayNamesForParam(param: SupportedParam, locale: string): string {
-  const separator = locale === "ja" ? "\u3001" : ", ";
-  const names = providerInfos.filter((info) => info.supportedParams.includes(param)).map((info) => info.displayName);
-  return names.join(separator);
+export function getProviderAddChoiceDescriptionKey(providerName: string): string | undefined {
+  return providerAddChoiceDescriptionKeys[normalizeProviderName(providerName)];
 }

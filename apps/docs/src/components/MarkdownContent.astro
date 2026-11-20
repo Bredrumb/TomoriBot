@@ -1,0 +1,147 @@
+---
+// Override of Starlight's MarkdownContent to prepend a review disclaimer to every docs page at
+// render time.
+//
+// Why render-time instead of injecting into each .md file:
+//   1. The docs markdown stays clean: no 100+ file diff, no marker to migrate.
+//   2. The wording lives in the shared locale table, so a new locale adds one entry.
+//   3. Opt-in is a single frontmatter flag, defaulted to false in the schema.
+//
+// Translations mirror the English source's aiGenerated flag, which marks substantively unreviewed
+// content. Unmarked content shows no notice in any locale. A translation marked `true` whose
+// English source is not marked retains the lighter translation notice.
+//
+// The default MarkdownContent is just <div class="sl-markdown-content"><slot/></div>, so we render
+// it and place the <Aside> as the first child: this keeps the note inside the markdown content flow,
+// inheriting the correct prose spacing.
+import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+import "katex/dist/katex.min.css";
+import { Aside } from "@astrojs/starlight/components";
+import { join } from "node:path";
+import {
+  DEFAULT_DOCS_LOCALE_ID,
+  buildDefaultLocaleDocsPageUrl,
+  getDocsLocaleConfig,
+} from "@docs-locales";
+import {
+  localeFromEntryId,
+  resolveTranslationNoticeMode,
+  stripLocaleFromEntryId,
+} from "../docsRouting";
+
+// Content root (the src/content/docs junction pointing at repo-root docs/).
+// Anchored to process.cwd() (the apps/docs project root during build) rather
+// than import.meta.url: compiled .astro modules execute from dist/.prerender/,
+// so a module-relative path would point at a directory that does not exist.
+const docsRoot = join(process.cwd(), "src/content/docs");
+
+// The optional translation notice covers files whose flag differs from their reviewed English
+// source. Synchronized pages use the source's substantive content review status. Set
+// DOCS_SHOW_TRANSLATION_NOTICE=true in the docs build environment to render it.
+const showTranslationNotice =
+  process.env.DOCS_SHOW_TRANSLATION_NOTICE?.trim().toLowerCase() === "true";
+
+const { entry, locale: routeLocale } = Astro.locals.starlightRoute;
+
+// The route locale rather than the entry's id prefix, because a fallback route carries the default
+// locale's entry while still being served and read at the requested locale's URL.
+const locale = routeLocale ?? localeFromEntryId(entry.id) ?? DEFAULT_DOCS_LOCALE_ID;
+const baseId = stripLocaleFromEntryId(entry.id);
+const notices = getDocsLocaleConfig(locale)?.notices ?? getDocsLocaleConfig(DEFAULT_DOCS_LOCALE_ID)?.notices;
+
+// Opt-in flag from frontmatter. Schema defaults it to false, so a page carries the notice only
+// when it explicitly sets `aiGenerated: true`.
+const mode = resolveTranslationNoticeMode({
+  docsRoot,
+  entryId: entry.id,
+  locale,
+  aiGenerated: entry.data.aiGenerated,
+  isFallback: Astro.locals.starlightRoute.isFallback,
+});
+
+// The notice links to the source page, which lives in the default locale. Both the sentence and the
+// link text come from the page locale's template, so a locale can name the language in its own
+// words. The anchor is injected as HTML because the template cannot be JSX, and no user input
+// reaches it.
+const englishUrl = buildDefaultLocaleDocsPageUrl(baseId);
+const englishLink = `<a href="${englishUrl}">${notices?.englishLinkText ?? "English"}</a>`;
+const translatedBody = (notices?.translatedBody ?? "").replace("{english}", englishLink);
+---
+
+<Default>
+  {
+    mode === "drafts" && notices && (
+      <Aside type="note" title={notices.draftsTitle}>
+        {notices.draftsBody}
+      </Aside>
+    )
+  }
+  {
+    mode === "translated" && showTranslationNotice && notices && (
+      <Aside type="note" title={notices.translatedTitle}>
+        <Fragment set:html={translatedBody} />
+      </Aside>
+    )
+  }
+  <slot />
+</Default>
+
+<script>
+  const getMermaidTheme = (): "dark" | "default" =>
+    document.documentElement.dataset.theme === "light" ? "default" : "dark";
+
+  const extractMermaidSource = (pre: HTMLPreElement): string => {
+    const lines = pre.querySelectorAll<HTMLElement>(".ec-line .code");
+    if (lines.length > 0) {
+      return Array.from(lines, (line) => line.textContent ?? "").join("\n");
+    }
+    return pre.textContent ?? "";
+  };
+
+  let mermaidPromise: Promise<(typeof import("mermaid"))["default"]> | undefined;
+
+  const renderMermaidDiagrams = async (): Promise<void> => {
+    const figures = document.querySelectorAll<HTMLElement>(
+      ".sl-markdown-content .expressive-code:has(pre[data-language='mermaid'])",
+    );
+    for (const figure of figures) {
+      const pre = figure.querySelector("pre");
+      if (!pre) continue;
+      const container = document.createElement("div");
+      container.className = "mermaid-diagram not-content";
+      container.dataset.mermaidSource = extractMermaidSource(pre);
+      figure.replaceWith(container);
+    }
+
+    const containers = document.querySelectorAll<HTMLElement>(
+      ".sl-markdown-content .mermaid-diagram[data-mermaid-source]",
+    );
+    if (containers.length === 0) return;
+
+    mermaidPromise ??= import("mermaid").then((mod) => mod.default);
+    const mermaid = await mermaidPromise;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: getMermaidTheme(),
+    });
+
+    for (const [index, container] of Array.from(containers).entries()) {
+      const source = container.dataset.mermaidSource?.trim();
+      if (!source) continue;
+      try {
+        const { svg } = await mermaid.render(`mermaid-${Date.now()}-${index}`, source);
+        container.innerHTML = svg;
+      } catch {
+        container.textContent = source;
+      }
+    }
+  };
+
+  void renderMermaidDiagrams();
+  document.addEventListener("astro:page-load", () => void renderMermaidDiagrams());
+  new MutationObserver(() => void renderMermaidDiagrams()).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+</script>

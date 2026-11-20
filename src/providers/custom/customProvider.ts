@@ -1,3 +1,6 @@
+import { pickHumanizerSettings } from "@/constants/humanizer";
+import { callCustomDecisions } from "@/providers/custom/customDecisions";
+import type { ProviderDecisionRequest, DecisionResult, SupportsDecisions } from "@/types/provider/featureInterfaces";
 /**
  * Custom provider implementation for self-hosted OpenAI-compatible endpoints
  *
@@ -5,7 +8,7 @@
  * endpoint such as Ollama, KoboldCPP, vLLM, LocalAI, or OpenRouter proxies.
  *
  * Available in all environments. In production, endpoint URLs are validated via
- * validateRemoteMcpUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
+ * validateRemoteUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
  *
  * Key differences from OpenRouter:
  * - Uses the server model config custom endpoint URL
@@ -14,6 +17,7 @@
  * - validateApiKey() performs health check rather than strict key validation
  */
 
+import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import type {
   BaseGuildTextChannel,
   BaseGuildVoiceChannel,
@@ -30,16 +34,16 @@ import {
 } from "@/providers/custom/customCompactGenerator";
 import { generatePresetFromPromptCustom } from "@/providers/custom/customPresetGenerator";
 import { callCustomStructuredJSON } from "@/providers/custom/customStructuredOutput";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { CustomStreamAdapter, type CustomStreamConfig } from "./customStreamAdapter";
 import type { ProviderError, StreamContext } from "../../types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "../../types/stream/types";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "../../tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import type { StreamingContext, ToolContext } from "../../types/tool/interfaces";
 import type { TomoriState } from "../../types/db/schema";
 import type { StructuredContextItem } from "../../types/misc/context";
@@ -76,9 +80,15 @@ import {
 } from "../../types/provider/interfaces";
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
-import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
+import {
+  resolveCustomEndpointForProvider,
+  resolveCustomTextEndpointTarget,
+} from "@/utils/provider/customEndpointService";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /**
  * Default model name placeholder for custom provider
@@ -92,6 +102,8 @@ const DEFAULT_CUSTOM_MODEL = "custom/default";
 export interface CustomProviderConfig extends ProviderConfig {
   /** Custom endpoint URL (e.g., http://localhost:11434/v1) */
   endpointUrl: string;
+  /** The backend server's connection, which keys its ComfyUI VRAM handoff. */
+  customConnectionId?: number | null;
   /** Whether the model supports image inputs (user-declared) */
   seesImages?: boolean;
   /** Whether the model supports video inputs (user-declared) */
@@ -113,6 +125,7 @@ export class CustomProvider
   extends BaseLLMProvider
   implements
     LLMProvider,
+    SupportsDecisions,
     SupportsStructuredOutput,
     SupportsConversationCompaction,
     SupportsPresetGeneration,
@@ -120,9 +133,10 @@ export class CustomProvider
     SupportsNativeImageGeneration,
     SupportsNativeVideoGeneration
 {
-  /**
-   * Get provider information and capabilities
-   */
+  async callDecisions(request: ProviderDecisionRequest): Promise<DecisionResult> {
+    return await callCustomDecisions(request);
+  }
+
   getInfo(): ProviderInfo {
     return customProviderInfo;
   }
@@ -136,7 +150,6 @@ export class CustomProvider
    * have a standard health check endpoint.
    *
    * @param apiKey - May contain endpoint URL or actual auth token
-   * @returns Promise<ApiKeyValidationResult> - Always returns valid unless endpoint is clearly broken
    */
   async validateApiKey(_apiKey: string): Promise<ApiKeyValidationResult> {
     // For custom provider, we're lenient - always return valid
@@ -163,14 +176,18 @@ export class CustomProvider
       throw new Error("Custom embedding endpoint is not configured.");
     }
 
-    const response = await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/embeddings`, {
-      method: "POST",
-      headers: buildCustomHeaders(request.apiKey),
-      body: JSON.stringify({
-        model: modelName,
-        input: request.inputs,
-      }),
-    });
+    const response = await fetchUserRemoteUrl(
+      `${endpointUrl.replace(/\/+$/, "")}/embeddings`,
+      {
+        method: "POST",
+        headers: buildCustomHeaders(request.apiKey),
+        body: JSON.stringify({
+          model: modelName,
+          input: request.inputs,
+        }),
+      },
+      getEndpointRemotePolicy(),
+    );
 
     if (!response.ok) {
       throw new Error(`Custom embedding request failed: ${response.status} ${response.statusText}`);
@@ -199,22 +216,24 @@ export class CustomProvider
    * Get available tools/functions based on Tomori's configuration
    * Uses the tool adapter that handles both built-in and MCP tools
    *
-   * @param tomoriState - The current Tomori state with configuration
    * @param streamingContext - Optional streaming context for context-aware tool availability
-   * @returns Promise<Array<Record<string, unknown>>> - Array of tool configurations
    */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
     // Only return tools if the model supports them (user-declared capability)
-    if (!tomoriState.llm.has_tools) {
-      log.info("Custom provider: Model does not support tools (user-declared capability)");
+    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
+      log.info(
+        `Custom provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
+      );
       return [];
     }
 
     try {
-      // Get built-in tools from the registry
+      if (streamingContext) {
+        streamingContext.speechToolState ??= { userId: streamingContext.triggererUserId };
+      }
       const toolStateForContext: ToolStateForContext = {
         server_id: tomoriState.server_id.toString(),
         activePersonaHasElevenlabsVoice: Boolean(
@@ -223,7 +242,11 @@ export class CustomProvider
             tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-        activePersonaVoiceName: tomoriState.speech_voice_name,
+        activePersonaVoiceSampleId: tomoriState.speech_voice_sample_id,
+        activePersonaVoiceId: tomoriState.speech_voice_id,
+        activePersonaVoiceSourcePriority: tomoriState.voice_source_priority,
+        speechToolState: streamingContext?.speechToolState,
+
         diffusion_model_id: tomoriState.config.diffusion_model_id,
         nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
         video_model_id: tomoriState.config.video_model_id,
@@ -236,6 +259,7 @@ export class CustomProvider
           supports_structoutput: tomoriState.llm.supports_structoutput,
         },
         config: {
+          emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
           sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
           web_search_enabled: tomoriState.config.web_search_enabled,
           self_teaching_enabled: tomoriState.config.self_teaching_enabled,
@@ -244,52 +268,38 @@ export class CustomProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+          conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+          dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
+          danbooru_enabled: tomoriState.config.danbooru_enabled,
         },
       };
 
-      // Use centralized tool filtering (built-in + MCP with feature flags)
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("custom", toolStateForContext);
 
-      // Apply streaming context filtering if available
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "Custom provider",
+        provider: "custom",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "custom" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState: tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("custom", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied streaming context filtering: ${availableBuiltInTools.length} → ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "Custom provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 
-      // Use the tool adapter to get all tools in OpenAI-compatible format
       const customAdapter = getCustomToolAdapter();
       const allToolsConfig = await customAdapter.getAllToolsInOpenAIFormat(
         finalBuiltInTools,
@@ -309,7 +319,6 @@ export class CustomProvider
   }
 
   /**
-   * Get the default model for this provider
    * Returns the placeholder since custom models are user-defined
    *
    * @returns Promise<string> - The default model placeholder
@@ -351,15 +360,6 @@ export class CustomProvider
       return undefined;
     }
 
-    const hasBraveApiKey = await isBraveSearchAvailable(request.tomoriState.server_id);
-
-    if (!hasBraveApiKey) {
-      const mcpManager = getMCPManager();
-      if (!mcpManager.isReady()) {
-        await mcpManager.initializeMCPServers();
-      }
-    }
-
     const toolStateForContext: ToolStateForContext = {
       server_id: request.tomoriState.server_id.toString(),
       activePersonaHasElevenlabsVoice: Boolean(
@@ -368,7 +368,10 @@ export class CustomProvider
           request.tomoriState.speech_voice_id?.trim(),
       ),
       activePersonaVoiceDesignPrompt: request.tomoriState.speech_voice_design_prompt?.trim() || null,
-      activePersonaVoiceName: request.tomoriState.speech_voice_name,
+      activePersonaVoiceSampleId: request.tomoriState.speech_voice_sample_id,
+      activePersonaVoiceId: request.tomoriState.speech_voice_id,
+      activePersonaVoiceSourcePriority: request.tomoriState.voice_source_priority,
+
       diffusion_model_id: request.tomoriState.config.diffusion_model_id,
       nai_diffusion_model_id: request.tomoriState.config.nai_diffusion_model_id,
       video_model_id: request.tomoriState.config.video_model_id,
@@ -381,6 +384,7 @@ export class CustomProvider
         supports_structoutput: request.tomoriState.llm.supports_structoutput,
       },
       config: {
+        emoji_usage_enabled: false,
         sticker_usage_enabled: false,
         web_search_enabled: true,
         self_teaching_enabled: false,
@@ -389,7 +393,11 @@ export class CustomProvider
         videogen_enabled: false,
         voice_message_enabled: false,
         user_blocking_enabled: false,
+        user_info_updates_enabled: false,
         thread_creation_enabled: false,
+        conditioning_interactions_enabled: false,
+        dice_rolling_enabled: false,
+        danbooru_enabled: false,
       },
     };
 
@@ -428,40 +436,21 @@ export class CustomProvider
   /**
    * Convert provider-specific configuration from TomoriState
    *
-   * @param tomoriState - The current Tomori state
    * @param apiKey - The decrypted API key (may be endpoint URL or auth token)
-   * @returns Promise<CustomProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<CustomProviderConfig> {
-    // Get endpoint URL — prefer the server model config mirror (populated when the active text model
-    // is a custom one). The mirror can be NULL when a persona override points at a custom LLM while
-    // the global text model is non-custom. In that case fall back to the custom_endpoints table.
-    let endpointUrl = tomoriState.config.custom_endpoint_url ?? null;
-    let endpointModelNameHint: string | null = null;
-    let endpointNumCtxHint: number | null = null;
-    if (!endpointUrl) {
-      // Pass the active model id so the correct endpoint is chosen when the label hosts several
-      // text models; falls back to the label default when unset (legacy rows / single model).
-      const textEndpoint = await resolveCustomEndpointForProvider(
-        tomoriState.llm.llm_provider.toLowerCase(),
-        "text",
-        tomoriState.llm.llm_id,
-      );
-      endpointUrl = textEndpoint?.endpoint_url ?? null;
-      endpointModelNameHint = textEndpoint?.model_name ?? null;
-      endpointNumCtxHint = textEndpoint?.num_ctx ?? null;
-    }
+    const {
+      endpointUrl,
+      modelNameHint: endpointModelNameHint,
+      numCtx,
+    } = await resolveCustomTextEndpointTarget(tomoriState);
 
     if (!endpointUrl) {
       throw new Error(
-        "Custom endpoint URL not configured. Register it with /provider custom-endpoint add or /personal custom-endpoint add, then select it again.",
+        "Custom endpoint URL not configured. Register it with /providers or /personal providers, then select it again.",
       );
     }
 
-    // Determine which model name to use:
-    // 1. If custom_model_name is set, use it (for Ollama, etc. that require exact model names)
-    // 2. Fall back to the endpoint's registered model_name hint (set during /provider custom-endpoint add)
-    // 3. Last resort: llm_codename (for KoboldCpp, etc. that don't care about model selection)
     const modelName = tomoriState.config.custom_model_name || endpointModelNameHint || tomoriState.llm.llm_codename;
 
     log.info(`Custom provider: Using endpoint URL: ${endpointUrl}`);
@@ -473,24 +462,28 @@ export class CustomProvider
     log.info(`Custom provider: sees_videos: ${tomoriState.llm.sees_videos}`);
     log.info(`Custom provider: supports_structoutput: ${tomoriState.llm.supports_structoutput}`);
 
-    // Build config object
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: CustomProviderConfig = {
       model: modelName, // Use custom_model_name if set, otherwise llm_codename
       apiKey: apiKey, // May be used for Bearer auth if endpoint requires it
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
-      maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 4096,
+      maxOutputTokens: resolveChatMaxOutputTokens({
+        provider: "custom",
+        configured: tomoriState.config.llm_max_output_tokens,
+        modelMaxOutputTokens: null,
+        contextWindow: numCtx,
+      }),
       endpointUrl: endpointUrl,
+      customConnectionId: parseCustomProvider(tomoriState.llm.llm_provider)?.connectionId ?? null,
       seesImages: tomoriState.llm.sees_images,
       seesVideos: tomoriState.llm.sees_videos,
       ...samplingParams,
       repetitionPenalty: 1.1,
-      numCtx: tomoriState.config.custom_num_ctx ?? endpointNumCtxHint ?? null,
+      numCtx,
     };
 
-    // Only add tools if the model supports them (user-declared)
-    if (tomoriState.llm.has_tools) {
+    if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
 
@@ -526,12 +519,10 @@ export class CustomProvider
     log.info(`CustomProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      // Convert the generic config to Custom-specific streaming config
       const customConfig = config as CustomProviderConfig;
 
       const streamConfig: CustomStreamConfig = {
         ...customConfig,
-        // Add Discord streaming constants
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
         flushBufferSizeCodeBlock: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
@@ -539,26 +530,24 @@ export class CustomProvider
         baseTypeSpeedMsPerChar: DISCORD_STREAMING_CONSTANTS.BASE_TYPE_SPEED_MS_PER_CHAR,
         maxTypingTimeMs: DISCORD_STREAMING_CONSTANTS.MAX_TYPING_TIME_MS,
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
-        humanizerDegree: tomoriState.config.humanizer_degree,
+        humanizer: pickHumanizerSettings(tomoriState.config),
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
         seesImages: tomoriState.llm.sees_images,
-        // Command-specific overrides from streaming context
         forceReason: streamingContext?.forceReason,
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Override tools with context-aware tools when streaming context is provided
-      if (streamingContext && tomoriState.llm.has_tools) {
+      if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("CustomProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
         streamConfig.tools = contextAwareTools;
         log.info(`Context-aware tools loaded: ${contextAwareTools.length} tools`);
-      } else if (streamingContext && !tomoriState.llm.has_tools) {
+      } else if (streamingContext && !resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("Skipping context-aware tool reload - model doesn't support tools");
       }
 
-      // Create streaming context
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "custom",
         channel,
         client,
         initialInteraction,
@@ -568,36 +557,17 @@ export class CustomProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "custom",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        suppressTextOutput: streamingContext?.suppressTextOutput,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
-
-        // Multi-persona webhook support
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
+      });
 
-        // Forced mentions (e.g., reminder recipients)
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
-
-      // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();
       const customAdapter = new CustomStreamAdapter();
 
-      // Execute streaming with the modular architecture
       log.info("CustomProvider: Delegating to StreamOrchestrator with CustomStreamAdapter");
       const result = await orchestrator.streamToDiscord(customAdapter, streamConfig, streamContext);
 

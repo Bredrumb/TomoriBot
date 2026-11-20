@@ -1,6 +1,7 @@
 import { log } from "@/utils/misc/logger";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 /** Timeout for /v1/audio/transcriptions requests, configurable via env. */
 const OPENAI_STT_TIMEOUT_MS =
@@ -8,7 +9,7 @@ const OPENAI_STT_TIMEOUT_MS =
     ? Number.parseInt(process.env.OPENAI_STT_TIMEOUT_MS ?? "", 10)
     : 60_000;
 
-export type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
+type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
 
 export interface OpenAITranscriptionResult {
   success: boolean;
@@ -31,7 +32,7 @@ export interface OpenAITranscriptionRequest {
  * Covers local WhisperX, whisper.cpp HTTP mode, and compatible cloud services.
  *
  * 1. Builds a multipart form with the audio file, model name, and optional language hint.
- * 2. POSTs to {endpoint_url}/v1/audio/transcriptions.
+ * 2. POSTs to {endpoint_url}/audio/transcriptions, adding /v1 when the stored URL omits it.
  * 3. Returns the transcript text from the JSON response.
  */
 export async function transcribeViaOpenAIAdapter(
@@ -41,9 +42,12 @@ export async function transcribeViaOpenAIAdapter(
 
   const modelName = (endpoint.extra_config.model as string | undefined) ?? "whisper-1";
   const languageHint = (endpoint.extra_config.language as string | undefined) ?? null;
-  const endpointUrl = endpoint.endpoint_url.replace(/\/+$/, "");
+  const baseUrl = endpoint.endpoint_url.replace(/\/+$/, "");
+  // Stored URLs may or may not carry /v1: new registrations normalize bare origins to /v1,
+  // while legacy rows and explicit custom paths can omit it. Only prepend when it is absent,
+  // so a URL that already ends in /v1 never becomes /v1/v1/audio/transcriptions.
+  const targetUrl = /\/v1$/i.test(baseUrl) ? `${baseUrl}/audio/transcriptions` : `${baseUrl}/v1/audio/transcriptions`;
 
-  // Build multipart form per the OpenAI transcriptions spec.
   const form = new FormData();
   form.append(
     "file",
@@ -66,18 +70,22 @@ export async function transcribeViaOpenAIAdapter(
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), OPENAI_STT_TIMEOUT_MS);
     try {
-      response = await fetchUserRemoteUrl(`${endpointUrl}/v1/audio/transcriptions`, {
-        method: "POST",
-        headers,
-        body: form,
-        signal: abortController.signal,
-      });
+      response = await fetchUserRemoteUrl(
+        targetUrl,
+        {
+          method: "POST",
+          headers,
+          body: form,
+          signal: abortController.signal,
+        },
+        getEndpointRemotePolicy(),
+      );
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
     const isTimeout = error instanceof Error && error.name === "AbortError";
-    log.warn(`[OpenAISTT] Request to ${endpointUrl} ${isTimeout ? "timed out" : "failed"}`, error);
+    log.warn(`[OpenAISTT] Request to ${targetUrl} ${isTimeout ? "timed out" : "failed"}`, error);
     return {
       success: false,
       errorKind: isTimeout ? "timeout" : "request_failed",
@@ -91,9 +99,7 @@ export async function transcribeViaOpenAIAdapter(
       const errorBody = (await response.json()) as { error?: string | { message?: string } };
       const msg = typeof errorBody.error === "string" ? errorBody.error : (errorBody.error?.message ?? null);
       if (msg) errorDetails += `: ${msg}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[OpenAISTT] Transcription endpoint returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }

@@ -1,0 +1,124 @@
+---
+title: "How do I use TomoriBot?"
+# Keyword-rich <title> targeting "add AI bot to Discord server" queries;
+# replaces Starlight's default for this page only. H1 and sidebar keep the
+# plain title.
+head:
+  - tag: title
+    content: "TomoriBot | Add an AI Bot to Your Discord Server"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "Self-host your own instance or invite the deployed version to your Discord server, connect an AI API key, and start chatting."
+aiGenerated: false
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This guide takes you from scratch to your first message with TomoriBot. You can either invite the ready public instance or self-host your own, then complete setup inside Discord.
+
+## 1. Add TomoriBot to Discord
+
+### Option A: Invite the Hosted Bot
+
+For convenience, you can invite the public instance with the button below, then pick the server you want her in. (You can also DM her directly)
+You need the `Manage Server` permission to add a bot.
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    Invite TomoriBot
+  </LinkButton>
+</div>
+
+
+### Option B: Self-Host Your Own
+
+If you prefer full control over your privacy and data, you can run your own TomoriBot instance on your own hardware:
+
+- **Option 1: Setup Wizard (Recommended)**: requires [Bun](https://bun.sh/) v1.3.2+, [PostgreSQL](https://www.postgresql.org/) or [Docker](https://www.docker.com/), and a [Discord bot token](https://discord.com/developers/applications) with `Presence Intent`, `Server Members Intent`, and `Message Content Intent` enabled:
+  ```sh
+  git clone https://github.com/Bredrumb/TomoriBot.git
+  cd TomoriBot
+  bun run setup # installs dependencies, configures .env, and sets up PostgreSQL
+  bun run dev # starts the bot and runs DB migrations automatically
+  ```
+- **Option 2: Docker Compose**: requires [Docker](https://www.docker.com/) and Docker Compose v2+, and a [Discord bot token](https://discord.com/developers/applications) with the same three intents enabled (see the [Docker Compose guide](/self-hosting/docker-compose/) for required `.env` variables and Linux directory permissions):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+</Tabs>
+
+After, invite her to any server you have `Manage Server` permissions in, or talk to her in DMs.
+
+<div class="button-row">
+  <LinkButton href="/self-hosting/" variant="secondary">
+    Full Self-Hosting Guides
+  </LinkButton>
+</div>
+
+## 2. Run `/setup`
+
+Run `/setup`, accomplish all items and then press `Finish Setup`:
+
+- **AI Provider**: choose `AI Provider (Recommended)`, pick your provider, and paste the key in.
+  Self-hosters can choose `Custom Endpoint` to register an endpoint connection and text model.
+  In a server, `User BYOK` lets every member supply their own personal provider.
+- **Starting Settings**: pick a starting persona, a reply style, a timezone, default system prompt, and optional features. All nine optional features start checked; uncheck any you do not want. You can adjust these settings later in `/config`.
+
+Nothing is saved while you work: the panel is a draft, `Finish Setup` is what encrypts the key,
+initializes her configuration for the server, and gets her ready to talk. `Cancel` discards the
+draft, and an untouched panel expires on its own. Each server keeps its own independent
+configuration.
+
+As a recommended follow-up, run `/expressions initialize` so she can use your server's custom emojis and stickers accurately.
+
+## 3. Start Chatting
+
+Mention her or reply to one of her messages (or slide into her DMs and say hi):
+
+```text
+@TomoriBot yo, what's up?
+```
+
+### Basic Commands & Next Steps
+
+- `/setup`: Initial bot setup for your server.
+- `/config` and `/personal config`: Tweak TomoriBot in the current Discord server or for yourself.
+- `/providers` and `/personal providers`: Add more model endpoints or cloud providers.
+- `/persona`: Give her a personality or add new characters. See [Multiple Personas](/features/chatting-personality/multiple-personas/).
+- `/memories`: Teach her facts across conversations. See [Memory](/features/knowledge/memory/long-term-memory/).
+
+Explore other customization options in the [Command Reference](/features/command-reference/) or [Features](/features/) tour.

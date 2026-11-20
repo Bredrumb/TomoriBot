@@ -1,0 +1,139 @@
+---
+title: "Threat Models"
+---
+
+Updated on: 2026-11-07
+
+TomoriBot accepts untrusted messages and files, lets models request tools, and stores credentials
+for guilds and personal scopes. This review groups threats by four places where input can gain
+access to a network, an action, or another tenant's data.
+
+## Scope and references
+
+This page describes application source on `main` and deployment defaults committed on `release`.
+It does not verify a running deployment or certify that every caller is safe. Paths prefixed with
+`release:` exist only on that branch; read them with `git show release:<path>`.
+
+The groupings are specific to TomoriBot. Review references are the
+[OWASP Agentic Top 10 (2026)](https://genai.owasp.org/download/52117/),
+[OWASP LLM Top 10 (2025)](https://genai.owasp.org/llm-top-10/), and
+[MITRE ATLAS](https://atlas.mitre.org/).
+
+| Trust boundary | Relevant categories |
+| :--- | :--- |
+| Inbound untrusted input | ASI06 (memory and context poisoning), LLM01 (prompt injection), LLM10 (unbounded consumption) |
+| Outbound egress and SSRF | ASI04 (agentic supply chain), ASI07 (insecure inter-agent communication), ATLAS exfiltration via AI agent tool invocation |
+| Agentic execution and confused deputy | ASI01 (goal hijack), ASI02 (tool misuse), ASI03 (privilege abuse), ASI05 (unexpected code execution), LLM05 (improper output handling), LLM06 (excessive agency) |
+| Multi-tenant data and secret custody | LLM02 (sensitive information disclosure), ATLAS credential harvesting and data leakage |
+
+SSRF means server-side request forgery: an attacker makes the bot request a destination such as
+cloud metadata. A confused deputy uses the bot's authority for an action the requester could not
+perform directly. Model text, including a reviewer verdict, grants no authority.
+
+ASI08 (cascading failures) and ASI10 (rogue agents) inform the execution limits below. ASI09
+(human-agent trust exploitation) remains a limitation: people can mistake model output for
+authorized instructions. TomoriBot does not train foundation models, so training-time poisoning
+is outside this review; poisoning stored memories and retrieved content is included.
+[NIST SP 800-218A](https://csrc.nist.gov/pubs/sp/800/218/a/final) provides secure-development guidance
+for generative AI systems, rather than evidence that these controls pass an audit.
+
+Related architecture: [Security & privacy](/architecture/subsystems/security/),
+[Tool system](/architecture/subsystems/tool-system/), [Tool loop](/architecture/pipelines/tool-loop/),
+[Matrix bridge](/architecture/integrations/matrix/bridge/), and
+[Shard ownership](/architecture/subsystems/sharding/).
+
+Several gateway shards can share one process, heap, and event loop. Shard leases and the cache
+invalidation listener run only when a process owns a subset of the configured shards.
+
+## 1. Inbound untrusted input
+
+Discord messages, Matrix events, attachments, imports, provider media, and stored memories can
+contain hostile data. Receiving an attachment or sending it to a configured model is an intended
+capability; malformed payloads, persistent injection, and forged senders cross security controls.
+
+| Threat | Control and source | Residual risk or operator duty |
+| :--- | :--- | :--- |
+| Oversized downloads or compressed media exhaust memory. | `src/utils/security/safeDownload.ts` validates URLs, bounds streamed bytes, and times out. `src/utils/image/naiImageGeneration.ts` caps ZIP replies at 32 MiB, rejects more than 8 entries, and checks declared image size before inflation and actual size afterward. | Byte limits do not bound decoder CPU. Concurrent downloads compete for memory across every shard in the process; keep media quotas conservative. |
+| A crafted PDF stalls document extraction. | `src/utils/documents/textExtractor.ts` downloads under a cap and parses PDFs in `pdfParseWorker.ts`, terminating the worker after 20 seconds. Unsupported binary formats are rejected. | Concurrent PDFs each start a worker and compete for CPU until their deadlines. |
+| Memories, documents, presets, or tool results poison later context. | Memory writes and management are scoped and limited in `src/utils/misc/memoryLimits.ts` and `src/utils/discord/interactions/memoriesRoutes.ts`. Tool authorization remains in execution code. | Server memory is shared. Moderators must remove poisoned or sensitive entries; context separation cannot make natural-language instructions trustworthy. |
+| An outsider forges Matrix appservice transactions. | `src/utils/bridges/matrix/client.ts` checks `MATRIX_HS_TOKEN`; the listener defaults to loopback. The public callback URL requires HTTPS except for localhost. | The callback URL does not enable listener TLS. A non-loopback bind needs restricted ingress and TLS when crossing an untrusted network. |
+
+## 2. Outbound egress and SSRF
+
+User URLs, administrator-selected endpoints, MCP servers, and redirects are separate from fixed
+provider API addresses. TomoriBot starts no local MCP process. A registered remote service sees
+its tool arguments and results and controls any fetching it performs itself.
+
+| Threat | Control and source | Residual risk or operator duty |
+| :--- | :--- | :--- |
+| A custom endpoint or download scans internal services or changes DNS after validation. | `src/utils/security/remoteUrlSecurity.ts` blocks private, reserved, and loopback addresses unless the caller passes the endpoint policy, which only custom endpoints, guild MCP servers, and the Matrix homeserver's media redirect do. Downloads of member-supplied media keep the block in every `RUN_ENV`; production also requires HTTPS. `userRemoteFetch.ts` connects to validated IPs with the original Host and TLS name. Custom adapters and setup probes use this fetcher. | With `ALLOW_PRIVATE_NETWORK=true`, the endpoint policy admits private endpoints over plain HTTP outside production, and any member who can add a personal endpoint can use them. Outside production the bot refuses to start until the host sets it. With untrusted members, choose `false`, run `RUN_ENV=production`, or list only the shared servers' `host:port` pairs; members can then reach every path on a listed server. URL validation alone is insufficient without the pinned transport. |
+| A URL steals cloud instance credentials. | Both URL gates use `src/utils/security/cloudMetadata.ts`: IPv4 link-local, IPv6 link-local, AWS and GCP IPv6 metadata addresses, and Alibaba's metadata address are always denied, including after DNS resolution. | Development mode and `FETCH_URL_ALLOW_PRIVATE_NETWORK` cannot relax this denylist. Other metadata addresses depend on the general private-range blocklist. |
+| A redirect sends a saved endpoint key to another host. | `src/utils/security/userRemoteFetch.ts` validates each hop, drops credential-bearing headers at an origin change, never restores them on later hops, and refuses credentialed HTTPS downgrades. | Editing the saved endpoint URL deliberately sends its key to the new origin. Register authenticated redirecting services at their final URL and restrict who can edit them. |
+| An MCP registration targets an internal service or redirects credentials. | `src/utils/mcp/guildMcpFetch.ts` uses pinned DNS, confines requests to the registered origin, refuses redirects, and caps replies. A sign-in access token is attached only after that origin check; the code and refresh token go only to the token endpoint recorded at discovery (`src/utils/mcp/oauth/`). | A registered server makes its own downstream requests, and neither those nor an MCP replacement's network behavior is covered by the bot's URL gate. |
+| Fetch or search escapes network policy through a browser or sidecar. | `src/tools/fetchUrl/urlSafety.ts` validates destinations; the safe HTTP engine pins DNS and caps bodies through `src/utils/security/boundedResponse.ts`. Private, loopback, and reserved targets are refused in every `RUN_ENV` unless `FETCH_URL_ALLOW_PRIVATE_NETWORK` is set, and Crawl4AI is admitted only under that opt-in. Bundled Crawl4AI publishes on loopback; SearXNG has no published port. | The opt-in lets any member who can use `fetch_url` read localhost and LAN pages. Crawl4AI resolves redirects and subresources itself. Keep browser and search services on restricted networks; the bot cannot verify their internal SSRF protections. SearXNG disables bot detection on that assumption. |
+| A stored Vertex configuration sends the host's Google credential to another host, or spends it on the operator's own project. | `src/providers/vertex/vertexClient.ts` accepts only plain-label project and location values, because the Google SDK builds the regional hostname and request path from them and attaches the host's Application Default Credentials token. `isVertexOwnerAllowed` in the same file refuses to save a configuration for a guild or user missing from `VERTEX_ALLOWED_OWNERS`, before the setup check calls Google. | Every Vertex configuration authenticates as the host identity. While `VERTEX_ALLOWED_OWNERS` is unset, any server or user can name any project that identity reaches, and project IDs are not secret. On a public bot, list trusted owners. The list is checked when a configuration is saved, so removing an owner leaves their saved configuration working until its row is deleted. |
+| A crafted Matrix media identifier escapes its authenticated route. | `src/utils/bridges/matrix/media.ts` validates `mxc://server/id` grammar, the exact path, and the homeserver origin before attaching a token. Redirects download anonymously through `safeDownload`. | Media and reply-event reads are capped. Homeserver operators remain trusted with their appservice traffic. |
+
+## 3. Agentic execution and confused deputy
+
+The model chooses tool arguments but the bot owns authorization. Availability filtering reduces
+what the model sees; dispatch and each tool must enforce the permissions of the actual caller.
+
+| Threat | Control and source | Residual risk or operator duty |
+| :--- | :--- | :--- |
+| Prompt injection triggers an unauthorized built-in action. | `src/tools/availability.ts` and `toolRegistry.ts` share checks for provider/model support, live context, feature flags, and declared bot permissions. Tool `execute()` implementations own invoker authorization, quotas, and target ownership. | There is no universal invoker-permission check. Bot visibility can exceed member visibility; every new target-sensitive tool needs an execution-time check. |
+| A member invokes a server-management interaction despite command defaults. | Sensitive routes re-check `memberPermissions`; `/config` applies `src/utils/discord/interactions/configPermissionPolicy.ts` on each interaction. | Guild admins can override Discord registration defaults. A default `ManageGuild` permission is insufficient as a runtime authorization control. |
+| A model copies messages from a channel the requester cannot view. | `src/tools/functionCalls/crossChannelMessageTool.ts` resolves the invoking guild member, requires the bot and member to have `ViewChannel` on the target, and applies the server blocklist. | Cross-channel reads have no separate feature flag. Block sensitive channels and limit the bot's channel access. |
+| An MCP description or name collision substitutes an attacker-controlled tool. | `src/utils/mcp/guildMcpManager.ts` reserves built-in names and routes only unique registrations or explicit replacements. Configuration through `src/utils/discord/interactions/configMcpRoutes.ts` requires `ManageGuild`; responses are capped and SDK-schema checked. | Descriptions and results remain untrusted. Registering shell, file, or database tools grants the remote service those capabilities; TomoriBot cannot sandbox that service. |
+| A signed-in MCP lets every member act as one external account, or a forwarded sign-in link attaches a victim's account to another server. | `src/utils/mcp/oauth/signIn.ts` signs state for the starting guild, uses PKCE and the recorded issuer, and exchanges the code only after a confirmation page names the Discord server and MCP host; sign-in pages cannot be framed. The panel and docs say whose account the tools use. | Members act within the signed-in account's granted scopes, and no Discord user is recorded as the signer. Admins must sign in with an account whose data the whole server may see. A victim who confirms despite the named server is connected. |
+| Repeated tool calls or external failures cause runaway work. | `src/utils/chat/toolLoop.ts` bounds iterations and consecutive errors; streams and tool calls have deadlines. Generation flags and quotas limit costly capabilities. Text, image, and video quotas reserve a unit before the paid request and refuse the request when the counter database is unavailable. | Cooldowns fail open on database errors. User concurrency and upload limits are process-local, so a user active across shard groups gets a separate allowance in each process. Accept that multiplication or share those limits before splitting ownership. |
+| Concurrent requests on different processes overcommit a supporter's remaining allowance. | `release:src/modules/supporter-billing/runtime/spendGuard.ts` checks estimated cost and reserves pending spend within one process. | Reservations are not shared. Keep supporter-funded inference in one process until spend admission and reconciliation coordinate across processes. |
+| A stale shard owner duplicates a delivery or paid request. | `src/utils/cluster/leaseKeeper.ts` aborts owner work when lease safety becomes uncertain. Chat, scheduled work, and webhook delivery check ownership before dispatch. | Cancellation cannot recall an accepted Discord or provider request. Stop old owners before changing topology; leases do not make mixed shard totals or an overlapping all-owner process safe. |
+| A malicious installed dependency gains runtime authority. | `bun.lock` records integrity hashes; frozen installs, dependency audits, and image controls reduce supply-chain changes. See the [dependency security policy](/contributing/policies/dependency-security/). | Dependency code shares runtime authority. A compromised bot process can use the credentials and provider access the bot needs; this design supplies no isolation for untrusted in-process plugins. |
+
+## 4. Multi-tenant data and secret custody
+
+### Key custody
+<!-- anchor: key-custody -->
+
+Provider credentials belong to guilds and personal scopes. PostgreSQL also stores managed webhook
+tokens and MCP authentication. A database dump, the corresponding encryption keys, and runtime
+diagnostics have different access requirements and must be stored separately.
+
+| Threat | Control and source | Residual risk or operator duty |
+| :--- | :--- | :--- |
+| Discord UI, prompt inspection, or an export reveals a stored credential. | Provider panels show credential presence rather than values or prefixes; credential modals do not prefill. `src/utils/db/repositories/ExportRepository.ts` omits credential columns; context templates do not serialize configuration objects. | Keep credentials out of endpoint URLs, free-text fields, prompts, and error payloads. Such text can be copied into context or logs. |
+| A missing owner filter leaks or changes another tenant's data. | `src/utils/db/repositories/LlmProviderRepository.ts` scopes credentials to server or user owners; `src/utils/provider/credentialResolver.ts` and `customEndpointService.ts` resolve an endpoint's URL and key together. Queries use parameterized values. | There is no row-level security. ID-only loads such as `loadVoiceSampleById` depend on callers' scope checks. `ConfigRepository` dynamic identifiers depend on typed constant callers. |
+| A missed notification leaves another process using an older privacy setting. | `src/utils/cache/userCache.ts` publishes eviction after settings change. `invalidationBus.ts` flushes registered caches when the listener subscribes or reconnects. | Delivery is best effort. Privacy settings can remain stale until the 30-minute cache expiry; failed database refreshes can prolong it. Changes are not guaranteed to take effect immediately across processes. |
+| A database client forges cache notifications or disrupts shard leases. | `src/utils/cache/invalidationBus.ts` bounds and validates eviction messages; they contain no cached values or credentials. `ClusterLeaseRepository.ts` matches the holder and token on renewals and releases. | Notification publishers are not authenticated by the bus. Restrict database access: forged evictions can increase database load, and lease-table writes can stop owners. |
+| A stolen dump exposes credentials, or retiring a key strands encrypted data. | `src/utils/security/crypto.ts` uses pgcrypto AES-256 with per-row key versions. `encryptedColumns.ts` defines the audit/rotation inventory; conditional rotation avoids overwriting concurrent replacements. | Use at least 32 random characters per master key; startup only warns about short keys. Stop all instances for rotation and retain versions required by backups. A dump plus its key archive exposes the encrypted credentials. |
+| PostgreSQL parameter logs or database access expose plaintext keys. | Production TCP connections use verified TLS in `src/utils/db/client.ts`. Encryption and decryption run inside PostgreSQL with bound parameters in `src/utils/security/crypto.ts`. | PostgreSQL receives the plaintext encryption key and, on encryption, the credential. Prevent parameter capture in statement, error, and diagnostic logging; verify database configuration separately. Encryption at rest does not protect against a database operator or runtime compromise. |
+| Logs, snapshots, or backups disclose secrets and private conversations. | `src/utils/misc/logger.ts` redacts sensitive fields and known key shapes. `src/init/heapSnapshot.ts` arms only with `HEAP_SNAPSHOT_DIR`; POSIX directory and file checks restrict access. New `src/utils/backup/dataBackup.ts` bundles omit `config.env`. | Redaction cannot recognize every secret. Snapshots may contain runtime secrets and conversations; legacy bundles include secrets. Keep diagnostics private, leave snapshots disabled routinely, and keep backup keys separate. See [Production tuning](/wiki/production-tuning/). |
+| A member reads prompt text outside the configured audience. | `canViewPromptText` in `src/utils/text/promptInspection/delivery.ts` admits `ManageGuild` or the enabled member-snapshot setting; context and status interactions use that gate. | Enabling member snapshots deliberately exposes prompts and memories. Model instructions are not secret storage. |
+| A stolen webhook token or forged webhook identity gains persona authority. | `src/utils/discord/webhook/webhookCore.ts` stores encrypted managed tokens. `src/utils/chat/webhookIdentity.ts` binds managed IDs to guild and channel before admission exemptions. | A managed token holder can post until rotation or deletion. Display names alone cannot prove identity to readers. |
+| A stored asset path reads or deletes another owner's files. | `src/utils/storage/charrefStorage.ts` confines character references to owner directories or object prefixes; `avatarStorage.ts` constrains stored local paths and uses guarded downloads. | `resolveAvatarPath` in `src/utils/image/avatarHelper.ts` has no containment check and relies on authored preset paths. Do not expose it to user-controlled paths. |
+
+## Accepted design boundaries
+<!-- anchor: accepted-design-boundaries -->
+
+These assumptions need review when their callers or deployment change. They do not establish that
+every repository query or URL entry point has been audited.
+
+| Area | Current assumption | Revisit when |
+| :--- | :--- | :--- |
+| Runtime custody | The bot process can decrypt credentials and call providers on users' behalf. | Third-party untrusted code enters the runtime and needs a separate execution boundary. |
+| Database encryption | Database-side encryption is retained; parameter logging needs operator verification. | Database configuration cannot prevent parameter capture or measured performance requires another design. |
+| Log redaction | Production logs errors by default; `info` and lower add full provider request payloads, including prompts and memories. Redaction covers known key names and credential shapes. | A concrete secret reaches logs despite those controls. |
+| Scoped helpers | Typed identifiers, voice-sample IDs, and authored preset paths depend on their callers. | A new caller accepts request-shaped identifiers or paths without ownership validation. |
+| Matrix audience | A manager links an unencrypted room; members can relay uploads and use `/kill` and `/refresh` for that channel. | Room membership bypasses an existing authorization rule or a Matrix role policy is introduced. |
+
+## Contributor checks
+
+- Re-check flags, permissions, quotas, and ownership when executing an action; a model or reviewer
+  instruction cannot replace authorization.
+- Use the existing validated, DNS-pinned fetch path for user URLs and guarded, bounded downloads
+  for media. Keep credentials bound to the configured origin.
+- Parameterize SQL values and scope reads and writes to the owner. Invalidate caches after
+  successful writes in the same code path.
+- Keep credentials out of UI values, prompts, logs, exports, and subprocess arguments. Treat
+  snapshots, legacy backup bundles, and encryption-key archives as secret-bearing artifacts.

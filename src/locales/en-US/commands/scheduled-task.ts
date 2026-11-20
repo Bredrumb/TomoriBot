@@ -1,5 +1,3 @@
-// locales/en-US/commands/scheduled-task.ts
-
 export default {
   "scheduled-task": {
     description: `Manage scheduled tasks and reminders.`,
@@ -12,14 +10,16 @@ export default {
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) {target_channel} | {reminder_type}{repeat_text}{manager_created_by_text}`,
       select_type_task: `task`,
       select_type_reminder: `reminder for {user_nickname}`,
-      select_repeat_text: ` | repeats every {interval}`,
+      select_repeat_text: ` | repeats every {hours}h`,
+      select_repeat_months_text: ` | repeats every {months}mo`,
+      select_repeat_minutes_text: ` | repeats every {minutes}m`,
       select_manager_created_by_text: ` | created by {creator_name}`,
       no_entries_title: `No Scheduled Tasks`,
       no_entries: `There are no scheduled tasks or reminders to edit. Set one by asking me to remind you or schedule a task.`,
       confirm_title: `Edit This Scheduled Task?`,
-      confirm_description: `**Content:** {reminder_purpose}
+      confirm_details: `**Content:** {reminder_purpose}
 **Next Trigger:** {reminder_time}
-**Interval:** {repetition_interval_text}
+**Repeat:** {repeat_text}
 **Type:** {reminder_type}
 **Target User:** {target_user}
 **Channel:** {target_channel}`,
@@ -30,12 +30,13 @@ export default {
       time_input_label: `Next Trigger Time`,
       time_input_description: `Use 24-hour time, such as 14:30 or 1430.`,
       time_input_placeholder: `14:30`,
-      interval_input_label: `Interval in Minutes`,
-      interval_input_description: `Set 0 to disable recurrence.`,
-      interval_input_placeholder: `0`,
+      interval_input_label: `Repeat Interval`,
+      interval_format_description: `Use 15m, 2h, 1mo, or 0 for a one-time task.`,
       repeat_limit_input_label: `Repeat Limit`,
-      repeat_limit_input_description: `Blank keeps current. Use count:4, until:18:00, or clear.`,
-      repeat_limit_input_placeholder: `count:4 or until:18:00`,
+      repeat_limit_input_description: `Enter deliveries left or YYYY-MM-DD_HH:MM in server time. Blank clears the limit.`,
+      invalid_repeat_limit_title: `Invalid Repeat Limit`,
+      invalid_repeat_limit_description: `Choose a repeat interval and a limit that allows the next delivery.`,
+      clear_window_for_months: `Ask the bot to clear the daily window before switching to months.`,
       reminder_checkbox_label: `Is a reminder for me`,
       reminder_checkbox_description: `Will ping you every trigger.`,
       type_reminder: `Reminder`,
@@ -46,15 +47,12 @@ export default {
       invalid_time_title: `Invalid Trigger Time`,
       invalid_time_description: `Enter a 24-hour time like \`14:30\`, \`1430\`, \`00:00\`, or \`2400\`.`,
       invalid_interval_title: `Invalid Interval`,
-      invalid_interval_description: `Interval must be a whole number of minutes. Use \`0\` to disable recurrence.`,
-      invalid_repeat_limit_title: `Invalid Repeat Limit`,
-      invalid_repeat_limit_description: `Use \`count:4\`, \`until:18:00\`, \`until:2026-06-22_18:00\`, \`clear\`, or leave it blank.`,
       no_changes_title: `No Changes`,
       no_changes_description: `The scheduled task was not changed.`,
       success_title: `Scheduled Task Updated`,
-      success_description: `**Content:** {reminder_purpose}
+      success_details: `**Content:** {reminder_purpose}
 **Next Trigger:** {reminder_time}
-**Interval:** {repetition_interval_text}
+**Repeat:** {repeat_text}
 **Type:** {reminder_type}
 **Target User:** {target_user}
 **Channel:** {target_channel}`,
@@ -66,7 +64,9 @@ export default {
       select_description: `Choose which scheduled task or reminder to remove`,
       select_placeholder: `Select a scheduled task...`,
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) #{target_channel}{repeat_text}{manager_created_by_text}`,
-      select_repeat_text: ` | repeats every {interval}`,
+      select_repeat_text: ` | repeats every {hours}h`,
+      select_repeat_months_text: ` | repeats every {months}mo`,
+      select_repeat_minutes_text: ` | repeats every {minutes}m`,
       select_manager_created_by_text: ` | created by {creator_name}`,
       no_entries_title: `No Scheduled Tasks`,
       no_entries: `There are no scheduled tasks or reminders to remove. Set one by asking me to remind you or schedule a task.`,

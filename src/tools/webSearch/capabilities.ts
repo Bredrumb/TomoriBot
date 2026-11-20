@@ -1,33 +1,10 @@
 import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import { isSearxngAvailable } from "@/tools/restAPIs/searxng/searxngService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
-import { log } from "@/utils/misc/logger";
 import { BASE_SEARCH_CATEGORIES, SEARCH_CATEGORIES, type SearchCategory, type WebSearchEngineName } from "./types";
 
 export interface WebSearchToolCapabilities {
   categories: SearchCategory[];
   engineLabel: string;
-}
-
-async function hasMcpSearchFunction(functionName: "web-search" | "felo-search"): Promise<boolean> {
-  const mcpManager = getMCPManager();
-  if (!mcpManager.isReady()) {
-    return false;
-  }
-
-  try {
-    const mcpTools = mcpManager.getMCPTools();
-    for (const mcpTool of mcpTools) {
-      const geminiTool = await mcpTool.tool();
-      if (geminiTool.functionDeclarations?.some((declaration) => declaration.name === functionName)) {
-        return true;
-      }
-    }
-  } catch (error) {
-    log.warn(`Web search MCP capability probe failed for ${functionName}`, error as Error);
-  }
-
-  return false;
 }
 
 function describeEngine(engineName: WebSearchEngineName): string {
@@ -36,14 +13,17 @@ function describeEngine(engineName: WebSearchEngineName): string {
       return "Brave Search";
     case "searxng":
       return "SearXNG";
+    case "openrouter":
+      return "OpenRouter Search";
     case "duckduckgo":
-      return "DuckDuckGo MCP";
-    case "felo":
-      return "Felo MCP";
+      return "DuckDuckGo";
   }
 }
 
-export async function resolveWebSearchToolCapabilities(serverId?: number): Promise<WebSearchToolCapabilities | null> {
+export async function resolveWebSearchToolCapabilities(
+  serverId?: number,
+  provider?: string,
+): Promise<WebSearchToolCapabilities> {
   const searxngAvailable = await isSearxngAvailable();
   const braveAvailable = await isBraveSearchAvailable(serverId);
 
@@ -63,19 +43,8 @@ export async function resolveWebSearchToolCapabilities(serverId?: number): Promi
     };
   }
 
-  if (await hasMcpSearchFunction("web-search")) {
-    return {
-      categories: ["text"],
-      engineLabel: describeEngine("duckduckgo"),
-    };
-  }
-
-  if (await hasMcpSearchFunction("felo-search")) {
-    return {
-      categories: ["text"],
-      engineLabel: describeEngine("felo"),
-    };
-  }
-
-  return null;
+  return {
+    categories: ["text"],
+    engineLabel: describeEngine(provider === "openrouter" ? "openrouter" : "duckduckgo"),
+  };
 }

@@ -1,14 +1,16 @@
-import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import type { Client } from "discord.js";
+import type { AssembledServerConfig, PersonaSpriteRow, TomoriState } from "@/types/db/schema";
+import { ContextItemTag, type RequestSnapshot, type StructuredContextItem } from "@/types/misc/context";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
+import type { MentionConverter } from "./templates";
 
 const DEFAULT_USAGE_INSTRUCTIONS = "Use when this sprite fits the current emotion or situation.";
 
 export function buildPersonaSpritePromptText(
   botName: string,
   sprites: readonly PersonaSpriteRow[],
-  maxCount = PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT,
+  maxCount: number = PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT,
 ): string | null {
   const usableSprites = sprites.slice(0, maxCount);
   if (usableSprites.length === 0) {
@@ -22,6 +24,7 @@ export function buildPersonaSpritePromptText(
     `\`${botName} ({sprite label}):\``,
     "",
     `If no listed sprite fits, respond normally as \`${botName}:\`.`,
+    `A sprite stays active on later lines until another label appears; start a line with \`${botName}:\` to return to ${botName}'s default appearance.`,
     "",
     "Valid sprite labels:",
   ];
@@ -35,9 +38,14 @@ export function buildPersonaSpritePromptText(
 }
 
 export async function buildPersonaSpriteContextItem(params: {
+  client: Client;
+  guildId: string;
   tomoriState?: TomoriState | null;
+  tomoriConfig: AssembledServerConfig;
   botName: string;
   isUserImpersonation: boolean;
+  snapshot?: RequestSnapshot;
+  convertMentions: MentionConverter;
 }): Promise<StructuredContextItem | null> {
   const personaId = params.tomoriState?.persona_id;
   if (params.isUserImpersonation || typeof personaId !== "number") {
@@ -52,7 +60,26 @@ export async function buildPersonaSpriteContextItem(params: {
 
   return {
     role: "system",
-    parts: [{ type: "text", text: promptText }],
+    parts: [
+      {
+        type: "text",
+        // Same generic "User" stand-in as the persona prompt, so `{user}` reads identically in
+        // attributes and sprite instructions.
+        text: await params.convertMentions(
+          promptText,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        ),
+      },
+    ],
     metadataTag: ContextItemTag.KNOWLEDGE_PERSONA_SPRITES,
+    personaSprites: {
+      personaId,
+      spriteKeys: sprites.slice(0, PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT).map((sprite) => sprite.sprite_key),
+    },
   };
 }

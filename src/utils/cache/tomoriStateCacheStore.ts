@@ -1,16 +1,14 @@
 import type { TomoriState } from "@/types/db/schema";
+import { invalidateServerPersonaAppearances, clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
+import { z } from "zod";
+import {
+  broadcastInvalidation,
+  registerInvalidation,
+  invalidationKey,
+  withoutInvalidationBroadcast,
+} from "@/utils/cache/invalidationBus";
 
-/**
- * Leaf-level store for the TomoriState in-memory cache.
- *
- * Owns the mutable Maps and the invalidation entry point. Kept deliberately
- * dependency-free (only a type import) so writer modules (e.g. repositories)
- * can invalidate the cache without pulling in `tomoriStateCache.ts`, which
- * imports the repositories barrel and would create a circular dependency.
- *
- * Reader functions (getCachedAllPersonas, getCachedMainPersona, etc.) live
- * in `tomoriStateCache.ts` and share state with writers via this module.
- */
+/** Repository writers import this store instead of the readers to avoid a repository dependency cycle. */
 
 /**
  * Cache entry structure for TomoriState data per server.
@@ -43,10 +41,10 @@ export const lastDbError = new Map<string, { message: string; timestamp: number 
  * @param serverDiscId - Discord server ID to invalidate
  */
 export function invalidateTomoriStateCache(serverDiscId: string): void {
-  // 1. Drop any cached persona snapshot for this server
+  invalidateServerPersonaAppearances(serverDiscId);
   cache.delete(serverDiscId);
-  // 2. Drop any recorded DB error so next read can re-evaluate freshly
   lastDbError.delete(serverDiscId);
+  broadcastInvalidation("tomoriState", [[serverDiscId]]);
 }
 
 /**
@@ -56,7 +54,23 @@ export function invalidateTomoriStateCache(serverDiscId: string): void {
  * @param serverDiscIds - Discord server IDs to invalidate
  */
 export function invalidateTomoriStateCaches(serverDiscIds: Iterable<string>): void {
-  for (const serverDiscId of serverDiscIds) {
-    invalidateTomoriStateCache(serverDiscId);
-  }
+  const tuples: [string][] = [];
+  withoutInvalidationBroadcast(() => {
+    for (const serverDiscId of serverDiscIds) {
+      invalidateTomoriStateCache(serverDiscId);
+      tuples.push([serverDiscId]);
+    }
+  });
+  broadcastInvalidation("tomoriState", tuples);
 }
+
+registerInvalidation(
+  "tomoriState",
+  z.tuple([invalidationKey]),
+  ([server]) => invalidateTomoriStateCache(server),
+  () => {
+    clearPersonaAppearances();
+    cache.clear();
+    lastDbError.clear();
+  },
+);

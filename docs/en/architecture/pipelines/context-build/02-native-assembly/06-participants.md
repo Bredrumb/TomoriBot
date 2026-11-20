@@ -1,0 +1,61 @@
+---
+title: "02.6: Participants"
+aiGenerated: true
+---
+
+The participant contributor keeps profiles and personal memories above history while emitting presence and the clock separately for the tail slot.
+
+## Preparation and hydration flow
+
+Participant processing separates discovery from prompt rendering across two main phases:
+
+```mermaid
+flowchart TD
+  prep["prepareParticipantContext(sanitizedMessages, ...)<br/>(extracts seeds from visible authors, mentions, references, bridges)"] --> ctx["PreparedParticipantContext<br/>{ discoveryPlan, seeds, matrixUsers, syntheticUsers, ... }"]
+  ctx --> build["buildParticipantContextItems(params)"]
+  build --> hydrate["hydrateParticipantProfiles(seeds, activePersonaScope, ...)<br/>- load user rows, privacy levels, blacklist status<br/>- fetch member roles and presence details<br/>- load personal memories (filtered by lineage and corpus tags)<br/>- load user reminders and persona self-tasks<br/>- resolve unique mention handles and collision indices"]
+  hydrate --> render["renderParticipantPrompt(hydratedProfiles, ...)<br/>separate profile, presence, and current-context text"]
+  render --> convert["convertMentions(renderedText, ...)<br/>→ profile item plus presence and current-context items"]
+```
+
+### Discovery preparation
+
+Callers invoke `prepareParticipantContext` in `src/utils/text/participants/preparation.ts` before calling `buildContext`. Discovery inspects visible message authors, bridge webhooks, and explicit text references across the history window. It produces an ordered `ParticipantDiscoveryPlan` containing typed `ParticipantSeed` records.
+
+A `ParticipantRequestScope` attached to the turn caches discovery results across multi-persona turns within the same request.
+
+### Profile hydration
+
+`hydrateParticipantProfiles` in `src/utils/text/participants/hydration.ts` receives seeds alongside an `activePersonaScope` (active persona ID, lineage ID, alter flag, and impersonation state). Hydration enriches each participant:
+
+- **Discord member details**: Resolves display names, server roles, and live presence details (online status and current activity via `getUserPresenceDetails`).
+- **Privacy and moderation**: Checks cached user privacy levels and blacklist status. Users with `PrivacyLevel.FULL` have custom nicknames and personal memories hidden.
+- **Personal memories**: Loads persona-scoped personal memories from `personalMemoryRepository.loadForUserLineage`. When `memory_tagging_enabled` is active, memories are tag-filtered against `conversationCorpus`.
+- **User reminders and persona tasks**: Loads pending reminders for human participants matching the active persona. Independently loads pending self-reminders (`self_reminder = true`) assigned to the active `persona_id`.
+- **Mention handles**: Assembles alias catalogs (server nicknames, usernames, global names). Normalizes handles and detects collisions so that only unambiguous handles are recommended as ping handles.
+
+### Prompt rendering
+
+`renderParticipantPrompt` in `src/utils/text/participants/renderer.ts` groups names, safe mention handles, personal memories, reminders, and persona tasks into profile text. It returns presence and the channel/time text separately. `buildParticipantContextItems` emits those as `KNOWLEDGE_USER_STATUS` and `KNOWLEDGE_CURRENT_CONTEXT`; the registry places them at the tail slot on native and preset paths. Profiles retain the tool-target metadata. Hydration decides what is safe to include before rendering.
+
+## Constraints and rationale
+
+- **Profile ownership**: `KNOWLEDGE_USERS_IN_CONVERSATION` remains a user-role reference block above history. Presence durations and clock changes cannot alter its text.
+- **Collision-aware mention handles**: Aliases claimed by multiple participants are dropped from the recommended mention handles list. The model is instructed to clarify rather than emit an ambiguous ping.
+- **Privacy enforcement**: Personal memories, pronouns, and physical appearance tags require at least `PrivacyLevel.MINIMAL`. Blacklisted users receive no memory recall or custom nickname expansion.
+- **Reminder and task scoping**: User reminders require context membership and an active-persona match (main personas also match legacy unassigned reminders). Persona self-tasks require an exact active `persona_id` match and do not require human participant membership. Persona self-tasks are omitted during user impersonation.
+- **Downstream target index**: The contributor attaches `participantTargetIndex` and a compatibility `conversationUsers` projection to the context item alongside text output. Downstream tool execution uses this index to resolve user parameters back to Discord snowflakes.
+- **Preset reassembly**: Tagged as `KNOWLEDGE_USERS_IN_CONVERSATION`, which SillyTavern preset reassembly flushes before the first dialogue anchor (`dialogueExamples` or `chatHistory`).
+
+The contributor also attaches a memory-only projection for NovelAI. It uses the hydrated visible
+`personal_memories` entries, preserving resolved contents, internal memory identities, and recency.
+NovelAI receives plain memory contents without added owner labels, tool IDs, or tag prefixes.
+Other providers receive their existing participant text without a second memory block; the nested system-role memory projection is for NovelAI.
+
+## Source pointers
+
+- `src/utils/text/context/participants.ts`: `buildParticipantContextItems`.
+- `src/utils/text/participants/preparation.ts`: `prepareParticipantContext` and request-scope caching.
+- `src/utils/text/participants/hydration.ts`: `hydrateParticipantProfiles` and privacy/memory loading.
+- `src/utils/text/participants/renderer.ts`: `renderParticipantPrompt`.
+- `src/utils/text/participants/targetIndex.ts`: `ParticipantTargetIndex` and downstream tool targeting.

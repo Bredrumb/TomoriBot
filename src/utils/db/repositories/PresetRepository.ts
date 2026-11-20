@@ -1,5 +1,10 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/imports";
+import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, lorebookEntryToInput } from "@/modules/lorebooks/db/types";
+import { sanitizeSillyTavernText } from "@/utils/text/sillyTavernText";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 /**
- * PresetRepository — manages SillyTavern preset data, persona preset import/export,
+ * PresetRepository: manages SillyTavern preset data, persona preset import/export,
  * and SillyTavern card conversion.
  *
  * Consolidates stPresetDb.ts, presetExport.ts, presetImport.ts, sillyTavernImport.ts.
@@ -23,7 +28,10 @@ import {
   type ImportResult,
   type ValidationResult,
   type PresetExportData,
+  type PresetImportMode,
 } from "@/types/preset/presetExport";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { log } from "@/utils/misc/logger";
 import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
 import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
@@ -32,8 +40,22 @@ import type { SillyTavernCardMetadata } from "@/utils/image/pngMetadata";
 import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes } from "@/utils/text/triggerWords";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
+import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import {
+  DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+  personaAuthoredIdleNudgesSchema,
+  sameNaturalNudgeInterests,
+  type PersonaAuthoredIdleNudge,
+} from "@/modules/natural-nudges/db/types";
 
-// ── SillyTavern conversion private types ──────────────────────────────────────
+export type StPresetsReadResult = { status: "fresh"; presets: StPresetRow[] } | { status: "unavailable"; presets: [] };
+
+export interface StPresetNodeCounts {
+  total: number;
+  enabled: number;
+}
 
 type JsonObject = Record<string, unknown>;
 
@@ -52,7 +74,7 @@ type ContentSection = {
   content: string;
 };
 
-export type SillyTavernConversionResult =
+type SillyTavernConversionResult =
   | {
       success: true;
       data: PresetExportData;
@@ -85,6 +107,29 @@ function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+/**
+ * Compares authored definitions field by field, because JSONB reorders object keys and a raw
+ * serialization would misread an unchanged list as a customization.
+ */
+function samePersonaAuthoredIdleNudges(cardList: readonly PersonaAuthoredIdleNudge[], stored: unknown): boolean {
+  const card = personaAuthoredIdleNudgesSchema.safeParse(cardList);
+  const preset = personaAuthoredIdleNudgesSchema.safeParse(stored);
+  if (!card.success || !preset.success) return false;
+  const key = (list: readonly PersonaAuthoredIdleNudge[]) =>
+    JSON.stringify(
+      list.map((nudge) => [
+        nudge.id,
+        nudge.category,
+        nudge.title,
+        nudge.brief,
+        nudge.agenda_hint,
+        nudge.prerequisites,
+        nudge.recommended_tools,
+      ]),
+    );
+  return key(card.data) === key(preset.data);
+}
+
 function normalizePresetPublicFlags(preset: TomoriPresetRow): boolean[] {
   return preset.preset_attribute_list.map(
     (_attribute, index) => preset.preset_attribute_public_flags?.[index] ?? false,
@@ -112,9 +157,7 @@ function normalizeNullableText(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export class PresetRepository {
-  // ── SillyTavern conversion private helpers (from sillyTavernImport.ts) ───────
-
+class PresetRepository {
   private asObject(value: unknown): JsonObject | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;
@@ -142,13 +185,6 @@ export class PresetRepository {
       .filter((item): item is string => typeof item === "string")
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
-  }
-
-  private sanitizeSillyTavernText(input: string): string {
-    return input
-      .replace(/\r\n/g, "\n")
-      .replace(/<!--[\s\S]*?--!?>/g, "")
-      .trim();
   }
 
   private capitalizeFirstLetter(input: string): string {
@@ -213,7 +249,7 @@ export class PresetRepository {
     content: string,
     maxAttributeLength: number,
   ): string[] {
-    const sanitized = this.sanitizeSillyTavernText(content);
+    const sanitized = sanitizeSillyTavernText(content);
     if (!sanitized) return [];
     const prefix = heading ? `${heading}\n` : "";
     const maxContentLength = Math.max(maxAttributeLength - prefix.length, 200);
@@ -277,7 +313,7 @@ export class PresetRepository {
       if (!rawContent) continue;
       turns.push({
         speaker: current.speaker,
-        content: this.sanitizeSillyTavernText(rawContent),
+        content: sanitizeSillyTavernText(rawContent),
       });
     }
 
@@ -312,7 +348,7 @@ export class PresetRepository {
 
   private parseMesExamplePairs(mesExample: string | null, maxDialogueLength: number): DialoguePair[] {
     if (!mesExample) return [];
-    const cleaned = this.sanitizeSillyTavernText(mesExample);
+    const cleaned = sanitizeSillyTavernText(mesExample);
     if (!cleaned) return [];
 
     const segments = cleaned
@@ -348,7 +384,7 @@ export class PresetRepository {
     rawOutputs.push(...alternateGreetings);
 
     return rawOutputs
-      .map((text) => this.sanitizeSillyTavernText(text))
+      .map((text) => sanitizeSillyTavernText(text))
       .filter((text) => text.length > 0)
       .map((text) => ({
         input: UNPAIRED_SAMPLE_DIALOGUE_SENTINEL,
@@ -390,35 +426,6 @@ export class PresetRepository {
     return this.asObject(cardData?.[key]) ?? this.asObject(rootData[key]);
   }
 
-  private collectCharacterBookSections(characterBook: JsonObject | null): ContentSection[] {
-    if (!characterBook) return [];
-    const entriesRaw = characterBook.entries;
-    if (!Array.isArray(entriesRaw)) return [];
-
-    const sections: ContentSection[] = [];
-    for (const entryRaw of entriesRaw) {
-      const entry = this.asObject(entryRaw);
-      if (!entry) continue;
-      const isEnabled = entry.enabled !== false;
-      if (!isEnabled) continue;
-      const content = this.getStringField(entry, "content");
-      if (!content) continue;
-
-      let entryTitle = this.getStringField(entry, "name") ?? "";
-      if (!entryTitle) {
-        const keys = this.getStringArrayField(entry, "keys");
-        if (keys.length > 0) entryTitle = keys.slice(0, 3).join(", ");
-      }
-
-      sections.push({
-        heading: entryTitle ? `Character Book - ${entryTitle}` : "Character Book Entry",
-        content,
-      });
-    }
-
-    return sections;
-  }
-
   /** Returns true if the given unknown value looks like a SillyTavern character card JSON. */
   private isUniqueViolation(error: unknown): boolean {
     return (
@@ -433,8 +440,9 @@ export class PresetRepository {
     }
 
     if (
+      (data.lorebook_entries?.length ?? 0) > 0 ||
       (data.physical_appearance_tags?.length ?? 0) > 0 ||
-      data.nai_char_ref_url ||
+      data.char_ref_url ||
       data.nai_attg_author ||
       data.nai_attg_title ||
       data.nai_attg_tags ||
@@ -454,6 +462,7 @@ export class PresetRepository {
     const expectedPublicFlags = data.attribute_public_flags ?? buildPrivateAttributePublicFlags(data.attribute_list);
     const expectedPrompt = normalizeNullableText(data.persona_prompt);
     const expectedTriggers = dedupeTriggerWords(data.trigger_words, { lowercase: false });
+    const expectedNamingConfig = data.naming_config ?? EMPTY_PERSONA_NAMING_CONFIG;
 
     return (
       presets.find((preset) => {
@@ -463,7 +472,15 @@ export class PresetRepository {
           arraysEqual(preset.preset_sample_dialogues_in, data.sample_dialogues_in) &&
           arraysEqual(preset.preset_sample_dialogues_out, data.sample_dialogues_out) &&
           arraysEqual(resolveOfficialPresetTriggerWords(preset), expectedTriggers) &&
-          resolveOfficialPresetPrompt(preset) === expectedPrompt
+          resolveOfficialPresetPrompt(preset) === expectedPrompt &&
+          JSON.stringify(preset.preset_naming_config) === JSON.stringify(expectedNamingConfig) &&
+          // Cards from before Natural Nudges carry none of these fields, so their absence still matches.
+          (data.natural_nudge_talkativeness === undefined ||
+            data.natural_nudge_talkativeness === preset.natural_nudge_talkativeness) &&
+          (data.natural_nudge_interests === undefined ||
+            sameNaturalNudgeInterests(data.natural_nudge_interests, preset.natural_nudge_interests)) &&
+          (data.natural_nudge_idle_nudges === undefined ||
+            samePersonaAuthoredIdleNudges(data.natural_nudge_idle_nudges, preset.natural_nudge_idle_nudges))
         );
       }) ?? null
     );
@@ -499,8 +516,6 @@ export class PresetRepository {
     return preset ?? null;
   }
 
-  // ── ST preset DB operations (from stPresetDb.ts) ──────────────────────────
-
   /**
    * Insert a new ST preset with its parsed nodes in a single transaction.
    * If a preset with the same name already exists for this server, the
@@ -517,25 +532,26 @@ export class PresetRepository {
     presetName: string,
     rawJson: unknown,
     nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[],
+    description?: string | null,
   ): Promise<StPresetRow | null> {
     try {
-      // 1. Use a transaction to ensure atomicity (preset + all nodes or nothing)
+      // Use a transaction to ensure atomicity (preset + all nodes or nothing)
       const result = await sql.begin(async (tx) => {
-        // 2. Remove any existing preset with the same name for this server.
-        //    The FK cascade on st_preset_nodes deletes old nodes automatically.
+        // Deleting the old preset first is safe because its nodes are covered by
+        // the st_preset_nodes foreign-key cascade.
         await tx`
           DELETE FROM st_presets
           WHERE server_id = ${serverId} AND preset_name = ${presetName}
         `;
 
-        // 3. Insert the preset metadata + raw JSON
+        // Insert the preset metadata + raw JSON
         const [preset] = await tx`
-          INSERT INTO st_presets (server_id, preset_name, raw_json)
-          VALUES (${serverId}, ${presetName}, ${JSON.stringify(rawJson)})
+          INSERT INTO st_presets (server_id, preset_name, raw_json, description)
+          VALUES (${serverId}, ${presetName}, ${JSON.stringify(rawJson)}, ${description ?? null})
           RETURNING *
         `;
 
-        // 4. Insert each node with a reference to the new preset_id
+        // Insert each node with a reference to the new preset_id
         for (const node of nodes) {
           await tx`
             INSERT INTO st_preset_nodes (
@@ -575,48 +591,51 @@ export class PresetRepository {
   }
 
   /**
-   * Load all ST presets for a server (metadata only, no nodes).
-   *
-   * @param serverId - Internal server_id
-   * @returns Array of preset rows ordered by creation date
+   * Load all ST presets for a server with read status provenance.
    */
-  async loadPresetsForServer(serverId: number): Promise<StPresetRow[]> {
+  async loadPresetsForServerResult(serverId: number): Promise<StPresetsReadResult> {
     try {
       const rows = await sql`
-        SELECT preset_id, server_id, preset_name, is_active, created_at, updated_at
+        SELECT preset_id, server_id, preset_name, is_active, description, created_at, updated_at
         FROM st_presets
         WHERE server_id = ${serverId}
         ORDER BY created_at ASC
       `;
-      return rows as StPresetRow[];
+      return { status: "fresh", presets: rows as StPresetRow[] };
     } catch (error) {
       log.error(`[PresetRepository] Failed to load presets for server ${serverId}`, error);
-      return [];
+      return { status: "unavailable", presets: [] };
     }
   }
 
   /**
-   * Load a single preset by ID (with raw JSON).
+   * Load all ST presets for a server (metadata only, no nodes).
    *
-   * @param presetId - The preset_id to load
-   * @returns The preset row or null if not found
+   * @returns Array of preset rows ordered by creation date
    */
-  async loadPresetById(presetId: number): Promise<StPresetRow | null> {
+  async loadPresetsForServer(serverId: number): Promise<StPresetRow[]> {
+    const result = await this.loadPresetsForServerResult(serverId);
+    return result.presets;
+  }
+
+  /**
+   * Load a single preset by ID and server scope (with raw JSON).
+   */
+  async loadPresetByIdForServer(presetId: number, serverId: number): Promise<StPresetRow | null> {
     try {
       const [row] = await sql`
-        SELECT * FROM st_presets WHERE preset_id = ${presetId}
+        SELECT * FROM st_presets
+        WHERE preset_id = ${presetId} AND server_id = ${serverId}
       `;
       return (row as StPresetRow) ?? null;
     } catch (error) {
-      log.error(`[PresetRepository] Failed to load preset ${presetId}`, error);
+      log.error(`[PresetRepository] Failed to load preset ${presetId} for server ${serverId}`, error);
       return null;
     }
   }
 
   /**
-   * Load the currently active preset for a server, if any.
    *
-   * @param serverId - Internal server_id
    * @returns The active preset row or null
    */
   async loadActivePreset(serverId: number): Promise<StPresetRow | null> {
@@ -656,6 +675,35 @@ export class PresetRepository {
   }
 
   /**
+   * Returns total non-marker and enabled non-marker node counts in a single query
+   * scoped to the server.
+   */
+  async countToggleableNodesForServer(presetId: number, serverId: number): Promise<StPresetNodeCounts> {
+    try {
+      const [row] = await sql`
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(CASE WHEN n.is_enabled = true THEN 1 END)::int AS enabled
+        FROM st_preset_nodes n
+        JOIN st_presets p ON p.preset_id = n.preset_id
+        WHERE n.preset_id = ${presetId}
+          AND p.server_id = ${serverId}
+          AND n.is_marker = false
+      `;
+      return {
+        total: Number(row?.total ?? 0),
+        enabled: Number(row?.enabled ?? 0),
+      };
+    } catch (error) {
+      log.error(
+        `[PresetRepository] Failed to count toggleable nodes for preset ${presetId} on server ${serverId}`,
+        error,
+      );
+      return { total: 0, enabled: 0 };
+    }
+  }
+
+  /**
    * Load ALL nodes for a preset (including markers), ordered by node_order.
    * Used by the context builder when assembling the full prompt.
    *
@@ -678,11 +726,11 @@ export class PresetRepository {
 
   /**
    * Batch-update enabled states for multiple nodes in a single transaction.
-   * Accepts a map of identifier → is_enabled for all nodes in the preset.
+   * Accepts a map of identifier -> is_enabled for all nodes in the preset.
    *
    * @param presetId - The preset_id owning these nodes
-   * @param enabledMap - Map of node identifier → desired enabled state
-   * @param serverId - Internal server_id for cache invalidation
+   * @param enabledMap - Map of node identifier -> desired enabled state
+   * @param serverId - Internal server_id for scope resolution and cache invalidation
    * @returns True if the update succeeded
    */
   async updateNodeEnabledStates(
@@ -691,7 +739,15 @@ export class PresetRepository {
     serverId: number,
   ): Promise<boolean> {
     try {
-      await sql.begin(async (tx) => {
+      const success = await sql.begin(async (tx) => {
+        const [preset] = await tx<Array<{ preset_id: number }>>`
+          SELECT preset_id FROM st_presets
+          WHERE preset_id = ${presetId} AND server_id = ${serverId}
+        `;
+        if (!preset) {
+          return false;
+        }
+
         for (const [identifier, isEnabled] of enabledMap) {
           await tx`
             UPDATE st_preset_nodes
@@ -699,11 +755,14 @@ export class PresetRepository {
             WHERE preset_id = ${presetId} AND identifier = ${identifier}
           `;
         }
+        return true;
       });
 
-      log.info(`[PresetRepository] Updated ${enabledMap.size} node states for preset ${presetId}`);
-      invalidateStPresetCache(serverId);
-      return true;
+      if (success) {
+        log.info(`[PresetRepository] Updated ${enabledMap.size} node states for preset ${presetId}`);
+        invalidateStPresetCache(serverId);
+      }
+      return success;
     } catch (error) {
       log.error(`[PresetRepository] Failed to update node states for preset ${presetId}`, error);
       return false;
@@ -714,22 +773,24 @@ export class PresetRepository {
    * Delete a preset and all its nodes (CASCADE handles node cleanup).
    *
    * @param presetId - The preset_id to delete
-   * @param serverId - Internal server_id for cache invalidation
+   * @param serverId - Internal server_id for scope resolution and cache invalidation
    * @returns True if a row was deleted
    */
   async deletePreset(presetId: number, serverId: number): Promise<boolean> {
     try {
-      const result = await sql`
-        DELETE FROM st_presets WHERE preset_id = ${presetId}
+      const rows = await sql<Array<{ preset_id: number }>>`
+        DELETE FROM st_presets
+        WHERE preset_id = ${presetId} AND server_id = ${serverId}
+        RETURNING preset_id
       `;
-      const deleted = (result as unknown[]).length > 0 || (result as { count?: number }).count === 1;
+      const deleted = rows.length > 0;
       if (deleted) {
-        log.success(`[PresetRepository] Deleted preset ${presetId}`);
+        log.success(`[PresetRepository] Deleted preset ${presetId} for server ${serverId}`);
         invalidateStPresetCache(serverId);
       }
       return deleted;
     } catch (error) {
-      log.error(`[PresetRepository] Failed to delete preset ${presetId}`, error);
+      log.error(`[PresetRepository] Failed to delete preset ${presetId} for server ${serverId}`, error);
       return false;
     }
   }
@@ -737,36 +798,65 @@ export class PresetRepository {
   /**
    * Set a preset as active and deactivate all others for the same server.
    * Uses a transaction to ensure only one preset is active at a time.
+   * Target preset must belong to serverId; forged or cross-scope targets perform no write.
    *
-   * @param serverId - Internal server_id
+   * @param serverId - Internal server_id for scope resolution and cache invalidation
    * @param presetId - The preset_id to activate
    * @returns True if the activation succeeded
    */
   async setActivePreset(serverId: number, presetId: number): Promise<boolean> {
     try {
-      await sql.begin(async (tx) => {
-        // 1. Deactivate all presets for this server
+      const success = await sql.begin(async (tx) => {
+        const [target] = await tx<Array<{ preset_id: number }>>`
+          SELECT preset_id FROM st_presets
+          WHERE preset_id = ${presetId} AND server_id = ${serverId}
+        `;
+        if (!target) {
+          return false;
+        }
+
         await tx`
           UPDATE st_presets SET is_active = false
           WHERE server_id = ${serverId}
         `;
-        // 2. Activate the target preset
         await tx`
           UPDATE st_presets SET is_active = true
           WHERE preset_id = ${presetId} AND server_id = ${serverId}
         `;
+        return true;
       });
 
-      log.success(`[PresetRepository] Activated preset ${presetId} for server ${serverId}`);
-      invalidateStPresetCache(serverId);
-      return true;
+      if (success) {
+        log.success(`[PresetRepository] Activated preset ${presetId} for server ${serverId}`);
+        invalidateStPresetCache(serverId);
+      }
+      return success;
     } catch (error) {
       log.error(`[PresetRepository] Failed to activate preset ${presetId} for server ${serverId}`, error);
       return false;
     }
   }
 
-  // ── Preset export (from presetExport.ts) ──────────────────────────────────
+  /**
+   * Deactivate all presets for a server.
+   *
+   * @param serverId - Internal server_id for scope resolution and cache invalidation
+   * @returns True if the deactivation succeeded
+   */
+  async deactivateAllPresets(serverId: number): Promise<boolean> {
+    try {
+      await sql`
+        UPDATE st_presets SET is_active = false
+        WHERE server_id = ${serverId}
+      `;
+      log.success(`[PresetRepository] Deactivated all presets for server ${serverId}`);
+      invalidateStPresetCache(serverId);
+      return true;
+    } catch (error) {
+      log.error(`[PresetRepository] Failed to deactivate all presets for server ${serverId}`, error);
+      return false;
+    }
+  }
 
   /**
    * Exports TomoriBot preset personality data for a given server.
@@ -778,7 +868,6 @@ export class PresetRepository {
    */
   async exportPresetData(serverDiscId: string, targetPersonaId?: number): Promise<ExportResult> {
     try {
-      // 1. Get internal server ID
       const serverRows = await sql`
         SELECT server_id
         FROM servers
@@ -792,32 +881,40 @@ export class PresetRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // 2. Query target persona row (explicit selection) or default main persona
+      // Query target persona row (explicit selection) or default main persona
       const personaRows =
         typeof targetPersonaId === "number"
           ? await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND persona_id = ${targetPersonaId}
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
+                pvc.speech_voice_design_prompt, pvc.voice_source_priority,
+                pic.physical_appearance_tags, pic.char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.persona_id = ${targetPersonaId}
               LIMIT 1
             `
           : await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND is_alter = false
-              ORDER BY updated_at DESC NULLS LAST, persona_id DESC
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
+                pvc.speech_voice_design_prompt, pvc.voice_source_priority,
+                pic.physical_appearance_tags, pic.char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.is_alter = false
+              ORDER BY p.updated_at DESC NULLS LAST, p.persona_id DESC
               LIMIT 1
             `;
 
@@ -827,6 +924,9 @@ export class PresetRepository {
 
       const presetData = personaRows[0];
       const pointerPreset = await this.loadPointerPresetForPersonaRow(presetData as Record<string, unknown>);
+      const nudgeConfig = (await naturalNudgeRepository.loadPersonaConfigs([presetData.persona_id as number])).get(
+        presetData.persona_id as number,
+      );
       if (typeof targetPersonaId !== "number") {
         const mainCountRows = await sql`
           SELECT COUNT(*)::int AS count
@@ -850,11 +950,10 @@ export class PresetRepository {
             ? Number(lineageIdRaw)
             : lineageIdRaw;
 
-      // 3. Load trigger words + persona prompt from persona-scoped config first
       let triggerWords: string[] | null = null;
       let personaPrompt: string | null = null;
       const personaConfigRows = await sql`
-        SELECT trigger_words, persona_prompt
+        SELECT trigger_words, persona_prompt, preserve_preset_identity
         FROM persona_configs
         WHERE persona_id = ${presetData.persona_id}
         LIMIT 1
@@ -864,8 +963,9 @@ export class PresetRepository {
         personaPrompt = personaConfigRows[0].persona_prompt ?? null;
       }
 
+      const preserveIdentity = personaConfigRows[0]?.preserve_preset_identity === true;
       if (pointerPreset) {
-        triggerWords = resolveOfficialPresetTriggerWords(pointerPreset);
+        if (!preserveIdentity) triggerWords = resolveOfficialPresetTriggerWords(pointerPreset);
         personaPrompt = resolveOfficialPresetPrompt(pointerPreset);
       }
 
@@ -885,22 +985,39 @@ export class PresetRepository {
         : attributeRows.length > 0
           ? attributeRows.map((row) => row.is_public)
           : exportedAttributes.map(() => false);
-      const exportedSampleDialoguesIn = pointerPreset
-        ? pointerPreset.preset_sample_dialogues_in
-        : ((presetData.sample_dialogues_in as string[] | undefined) ?? []);
+      const exportedSampleDialoguesIn = [
+        ...(pointerPreset
+          ? pointerPreset.preset_sample_dialogues_in
+          : ((presetData.sample_dialogues_in as string[] | undefined) ?? [])),
+      ];
       const exportedSampleDialoguesOut = pointerPreset
         ? pointerPreset.preset_sample_dialogues_out
         : ((presetData.sample_dialogues_out as string[] | undefined) ?? []);
+      while (exportedSampleDialoguesIn.length < exportedSampleDialoguesOut.length) {
+        exportedSampleDialoguesIn.push(UNPAIRED_SAMPLE_DIALOGUE_SENTINEL);
+      }
       const exportedPresetLineageId = pointerPreset
         ? normalizeLineageId(pointerPreset.preset_lineage_id)
         : normalizeLineageId(presetData.preset_lineage_id);
+      const namingConfigs =
+        pointerPreset && !preserveIdentity
+          ? null
+          : await userNamingRepository.loadPersonaConfigs([presetData.persona_id as number]);
+      const exportedNamingConfig =
+        pointerPreset && !preserveIdentity
+          ? pointerPreset.preset_naming_config
+          : (namingConfigs?.get(presetData.persona_id as number) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
-      // 4. Build export object with metadata (includes NovelAI persona fields)
+      const lore = await lorebookRepository.listScope(serverId, lineageId);
+      if (lore.status !== "fresh") return { success: false, error: "commands.persona.export.error_export_failed" };
+
+      // Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
         version: PRESET_EXPORT_VERSION,
         type: "preset",
         exported_at: new Date().toISOString(),
         data: {
+          lorebook_entries: lore.entries.map(lorebookEntryToInput),
           tomori_nickname: presetData.persona_nickname,
           attribute_list: exportedAttributes,
           attribute_public_flags: exportedPublicFlags,
@@ -908,21 +1025,31 @@ export class PresetRepository {
           sample_dialogues_out: exportedSampleDialoguesOut,
           trigger_words: triggerWords || [],
           persona_prompt: personaPrompt,
+          speech_voice_design_prompt: presetData.speech_voice_design_prompt ?? null,
+          voice_source_priority: presetData.voice_source_priority ?? "design",
+          naming_config: exportedNamingConfig,
           persona_lineage_id: lineageId,
           ...(exportedPresetLineageId !== null ? { preset_lineage_id: exportedPresetLineageId } : {}),
           physical_appearance_tags: presetData.physical_appearance_tags || [],
-          nai_char_ref_url: presetData.nai_char_ref_url ?? null,
+          char_ref_url: presetData.char_ref_url ?? null,
           nai_attg_author: presetData.nai_attg_author ?? null,
           nai_attg_title: presetData.nai_attg_title ?? null,
           nai_attg_tags: presetData.nai_attg_tags ?? null,
           nai_attg_genre: presetData.nai_attg_genre ?? null,
           nai_attg_stars: presetData.nai_attg_stars ?? null,
+          is_nsfw: pointerPreset ? pointerPreset.is_nsfw : presetData.is_nsfw === true,
+          ...(nudgeConfig
+            ? {
+                natural_nudge_interests: nudgeConfig.interests,
+                natural_nudge_talkativeness: nudgeConfig.talkativeness,
+                natural_nudge_idle_nudges: nudgeConfig.idle_nudges,
+              }
+            : {}),
         },
       };
 
-      // 5. Validate export data structure
-      const validated = presetExportSchema.safeParse(exportData);
-      if (!validated.success) {
+      const validated = this.validatePresetFile(exportData);
+      if (!validated.valid || !validated.data) {
         log.error(`Preset export validation failed for server ${serverDiscId}:`, validated.error);
         return { success: false, error: "commands.persona.export.error_validation_failed" };
       }
@@ -931,27 +1058,23 @@ export class PresetRepository {
         `Successfully exported preset for server ${serverDiscId}, persona ${presetData.persona_id}: ${presetData.persona_nickname}`,
       );
 
-      return { success: true, data: validated.data };
+      return { success: true, data: { ...exportData, data: validated.data } };
     } catch (error) {
       log.error(`Error exporting preset data for server ${serverDiscId}:`, error);
       return { success: false, error: "commands.persona.export.error_export_failed" };
     }
   }
 
-  // ── Preset import + validation (from presetImport.ts) ────────────────────
-
   /**
-   * Imports TomoriBot preset personality data, replacing existing personality.
+   * Replaces the existing personality.
    *
-   * @param serverDiscId - Discord server ID to import preset for
-   * @param importData - The validated preset export data to import
    * @param identityMode - preserve: keep/import lineage, fork: assign a fresh lineage
-   * @returns ImportResult indicating success or failure with item counts
    */
   async importPresetData(
     serverDiscId: string,
     importData: PresetExportData,
     identityMode: "preserve" | "fork" = "preserve",
+    importMode: PresetImportMode = "card",
   ): Promise<ImportResult> {
     try {
       const importValidation = this.validatePresetData(importData);
@@ -962,9 +1085,9 @@ export class PresetRepository {
         };
       }
       const validatedImportData = importValidation.data;
-      const matchingOfficialPreset = await this.findMatchingOfficialPresetForImport(validatedImportData);
+      const matchingOfficialPreset =
+        importMode === "bundle" ? null : await this.findMatchingOfficialPresetForImport(validatedImportData);
 
-      // 1. Validate persona-scoped config fields for SQL security.
       try {
         validatePersonaConfigFields(["trigger_words", "persona_prompt"]);
       } catch (error) {
@@ -972,7 +1095,7 @@ export class PresetRepository {
         return { success: false, error: "commands.persona.import.error_invalid_config" };
       }
 
-      // 2. Get internal server ID and tomori ID (main persona only)
+      // Get internal server ID and tomori ID (main persona only)
       const serverRows = await sql`
         SELECT s.server_id, t.persona_id, t.persona_lineage_id
         FROM servers s
@@ -991,7 +1114,7 @@ export class PresetRepository {
       const importedLineageId = validatedImportData.persona_lineage_id ?? null;
       const importedPresetLineageId = normalizeLineageId(validatedImportData.preset_lineage_id);
 
-      // 3. Enforce persona nickname uniqueness within this server (excluding current main persona)
+      // Enforce persona nickname uniqueness within this server (excluding current main persona)
       const conflictingNameRows = await sql<Array<{ persona_id: number }>>`
         SELECT persona_id
         FROM personas
@@ -1029,7 +1152,33 @@ export class PresetRepository {
         if (!pointerRow) {
           return { success: false, error: "commands.persona.import.error_import_failed" };
         }
+        if (
+          validatedImportData.lorebook_entries !== undefined &&
+          (await lorebookRepository.replaceLineageEntries(
+            serverId,
+            targetPersonaLineageId,
+            validatedImportData.lorebook_entries,
+          )) !== "replaced"
+        ) {
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        }
 
+        if (
+          !(await personaRepository.setVoiceConfig(
+            mainTomoriId,
+            {
+              speech_voice_design_prompt: validatedImportData.speech_voice_design_prompt ?? null,
+              voice_source_priority: validatedImportData.voice_source_priority ?? "design",
+              speech_voice_sample_id: null,
+              speech_voice_id: null,
+              speech_voice_name: null,
+            },
+            { materialize: Boolean(validatedImportData.speech_voice_design_prompt) },
+          ))
+        )
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        invalidateTomoriStateCache(serverDiscId);
+        await sql`UPDATE speech_voice_bindings SET pending_delete = true WHERE persona_id = ${mainTomoriId}`;
         log.success(
           `Successfully imported preset pointer for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`,
         );
@@ -1042,10 +1191,11 @@ export class PresetRepository {
             dialogueCount: validatedImportData.sample_dialogues_in.length,
             triggerWordCount: validatedImportData.trigger_words.length,
           },
+          mainPersonaIsPointer: !validatedImportData.speech_voice_design_prompt,
         };
       }
 
-      // 4. Format arrays as PostgreSQL array literals for safe insertion
+      // Format arrays as PostgreSQL array literals for safe insertion
       const attributeArrayLiteral = `{${validatedImportData.attribute_list
         .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
@@ -1063,14 +1213,9 @@ export class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
-      // 5. Build physical appearance tags array literal for safe insertion
-      const physicalAppearanceTagsArrayLiteral = `{${(validatedImportData.physical_appearance_tags ?? [])
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      // 6. Update personas table with personality data, lineage behavior, and image-related fields
+      let resolvedLineageId: number | null = null;
       try {
-        await sql`
+        const [updated] = await sql`
           UPDATE personas
           SET
             persona_nickname = ${validatedImportData.tomori_nickname},
@@ -1085,15 +1230,12 @@ export class PresetRepository {
             is_pointer = false,
             preset_lineage_id = ${importedPresetLineageId},
             preset_language = NULL,
-            physical_appearance_tags = ${physicalAppearanceTagsArrayLiteral}::text[],
-            nai_char_ref_url = ${validatedImportData.nai_char_ref_url ?? null},
-            nai_attg_author = ${validatedImportData.nai_attg_author ?? null},
-            nai_attg_title = ${validatedImportData.nai_attg_title ?? null},
-            nai_attg_tags = ${validatedImportData.nai_attg_tags ?? null},
-            nai_attg_genre = ${validatedImportData.nai_attg_genre ?? null},
-            nai_attg_stars = ${validatedImportData.nai_attg_stars ?? null}
+            is_nsfw = ${validatedImportData.is_nsfw === true}
           WHERE persona_id = ${mainTomoriId}
+          RETURNING persona_lineage_id
         `;
+        resolvedLineageId = normalizeLineageId(updated?.persona_lineage_id);
+        invalidateTomoriStateCache(serverDiscId);
       } catch (error) {
         if (this.isUniqueViolation(error)) {
           return {
@@ -1102,6 +1244,23 @@ export class PresetRepository {
           };
         }
         throw error;
+      }
+
+      const imageTagsUpdated = await personaRepository.setPhysicalAppearanceTags(
+        mainTomoriId,
+        validatedImportData.physical_appearance_tags ?? [],
+      );
+      const charRefUpdated = await personaRepository.setCharRef(mainTomoriId, validatedImportData.char_ref_url ?? null);
+      const attgUpdated = await personaRepository.setNaiAttg(mainTomoriId, {
+        nai_attg_author: validatedImportData.nai_attg_author ?? null,
+        nai_attg_title: validatedImportData.nai_attg_title ?? null,
+        nai_attg_tags: validatedImportData.nai_attg_tags ?? null,
+        nai_attg_genre: validatedImportData.nai_attg_genre ?? null,
+        nai_attg_stars: validatedImportData.nai_attg_stars ?? null,
+      });
+
+      if (!imageTagsUpdated || !charRefUpdated || !attgUpdated) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
       }
 
       const attributesUpdated = await personaRepository.replaceAttributes(
@@ -1113,7 +1272,6 @@ export class PresetRepository {
         return { success: false, error: "commands.persona.import.error_import_failed" };
       }
 
-      // 7. Update persona-scoped trigger words + optional persona prompt
       const importedPersonaPrompt =
         typeof validatedImportData.persona_prompt === "string" ? validatedImportData.persona_prompt : null;
 
@@ -1129,7 +1287,49 @@ export class PresetRepository {
           trigger_words = EXCLUDED.trigger_words,
           persona_prompt = EXCLUDED.persona_prompt
       `;
+      await userNamingRepository.savePersonaConfig(
+        mainTomoriId,
+        validatedImportData.naming_config ?? EMPTY_PERSONA_NAMING_CONFIG,
+      );
+      if (
+        !(await naturalNudgeRepository.savePersonaConfig(mainTomoriId, {
+          talkativeness: validatedImportData.natural_nudge_talkativeness ?? DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+          interests: validatedImportData.natural_nudge_interests ?? [],
+        }))
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
 
+      if (
+        (await naturalNudgeRepository.replacePersonaIdleNudges(
+          mainTomoriId,
+          validatedImportData.natural_nudge_idle_nudges ?? [],
+        )) !== "success"
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+
+      if (
+        !(await personaRepository.setVoiceConfig(mainTomoriId, {
+          speech_voice_design_prompt: validatedImportData.speech_voice_design_prompt ?? null,
+          voice_source_priority: validatedImportData.voice_source_priority ?? "design",
+          speech_voice_sample_id: null,
+          speech_voice_id: null,
+          speech_voice_name: null,
+        }))
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      if (
+        validatedImportData.lorebook_entries !== undefined &&
+        (resolvedLineageId === null ||
+          (await lorebookRepository.replaceLineageEntries(
+            serverId,
+            resolvedLineageId,
+            validatedImportData.lorebook_entries,
+          )) !== "replaced")
+      ) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      }
+      invalidateTomoriStateCache(serverDiscId);
+      await sql`UPDATE speech_voice_bindings SET pending_delete = true WHERE persona_id = ${mainTomoriId}`;
       log.success(`Successfully imported preset for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`);
 
       return {
@@ -1140,6 +1340,7 @@ export class PresetRepository {
           dialogueCount: validatedImportData.sample_dialogues_in.length,
           triggerWordCount: validatedImportData.trigger_words.length,
         },
+        mainPersonaIsPointer: false,
       };
     } catch (error) {
       log.error(`Error importing preset data for server ${serverDiscId}:`, error);
@@ -1148,10 +1349,8 @@ export class PresetRepository {
   }
 
   /**
-   * Validates already-extracted preset data, including converted imports and
-   * command-added trigger words.
-   * Runtime memory env limits are intentionally not applied here; preset import
-   * uses schema safety limits.
+   * Covers converted imports and command-added trigger words. Runtime memory env limits are
+   * intentionally not applied here; preset import uses schema safety limits.
    */
   validatePresetData(data: unknown): ValidationResult {
     const validated = presetExportDataSchema.safeParse(data);
@@ -1175,22 +1374,25 @@ export class PresetRepository {
       return { valid: false, error: "commands.persona.import.error_dialogue_mismatch" };
     }
 
+    if (getDiscordTextLength(normalizedData.tomori_nickname) > PERSONA_NICKNAME_MAX_LENGTH) {
+      return {
+        valid: false,
+        error: `commands.persona.import.error_nickname_too_long|${PERSONA_NICKNAME_MAX_LENGTH}`,
+      };
+    }
+
     return { valid: true, data: normalizedData };
   }
 
   /**
-   * Validates and parses a preset import file.
-   *
    * @param jsonData - The parsed JSON data from the PNG metadata
-   * @returns Validation result with parsed data or error message
    */
   validatePresetFile(jsonData: unknown): ValidationResult {
-    // 1. Check if data is an object
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.persona.import.error_not_json" };
     }
 
-    // 2. Check version compatibility
+    // Check version compatibility
     const version = (jsonData as { version?: string }).version;
     if (version !== PRESET_EXPORT_VERSION) {
       return {
@@ -1199,13 +1401,11 @@ export class PresetRepository {
       };
     }
 
-    // 3. Check type field
     const type = (jsonData as { type?: string }).type;
     if (type !== "preset") {
       return { valid: false, error: `commands.persona.import.error_invalid_type|${type}` };
     }
 
-    // 4. Validate with Zod schema
     const validated = presetExportSchema.safeParse(jsonData);
     if (!validated.success) {
       log.error("Preset import validation failed:", validated.error);
@@ -1214,8 +1414,6 @@ export class PresetRepository {
 
     return this.validatePresetData(validated.data.data);
   }
-
-  // ── SillyTavern conversion public API (from sillyTavernImport.ts) ─────────
 
   /**
    * Returns true if the given unknown value looks like a SillyTavern character card JSON.
@@ -1248,6 +1446,68 @@ export class PresetRepository {
    */
   convertSillyTavernMetadataToPresetData(metadata: SillyTavernCardMetadata): SillyTavernConversionResult {
     return this.convertSillyTavernJsonToPresetData(metadata.parsedJson);
+  }
+
+  convertPresetDataToSillyTavernCard(preset: PresetExportData) {
+    const convertMacros = (text: string): string =>
+      text.replace(/\{\{(user|bot|char)\}\}|(?<!\{)\{(user|bot|char)\}(?!\})/g, (_match, double, single) =>
+        (double ?? single) === "user" ? "{{user}}" : "{{char}}",
+      );
+
+    return {
+      spec: "chara_card_v2",
+      spec_version: "2.0",
+      data: {
+        name: preset.tomori_nickname,
+        description: preset.attribute_list.map(convertMacros).join("\n\n"),
+        personality: "",
+        scenario: "",
+        first_mes: "",
+        mes_example: preset.sample_dialogues_out
+          .map((output, index) => {
+            const input = preset.sample_dialogues_in[index];
+            const userTurn =
+              input && input !== UNPAIRED_SAMPLE_DIALOGUE_SENTINEL ? `{{user}}: ${convertMacros(input)}\n` : "";
+            return `<START>\n${userTurn}{{char}}: ${convertMacros(output)}`;
+          })
+          .join("\n\n"),
+        creator_notes: "",
+        system_prompt: convertMacros(preset.persona_prompt ?? ""),
+        post_history_instructions: "",
+        alternate_greetings: [],
+        tags: [],
+        creator: "",
+        character_version: "",
+        extensions: {},
+        ...(preset.lorebook_entries !== undefined
+          ? {
+              character_book: {
+                name: preset.tomori_nickname,
+                extensions: {},
+                entries: preset.lorebook_entries.map((entry, index) => ({
+                  id: index,
+                  keys: entry.keys,
+                  secondary_keys: entry.secondary_keys,
+                  content: convertMacros(entry.content),
+                  comment: entry.title,
+                  enabled: entry.enabled,
+                  insertion_order: entry.insertion_order,
+                  constant: entry.constant,
+                  selective: entry.secondary_keys.length > 0,
+                  position: entry.placement === 1 ? "after_char" : "before_char",
+                  extensions: {
+                    selectiveLogic: entry.selective_logic,
+                    probability: entry.trigger_chance,
+                    useProbability: true,
+                    scan_depth: entry.scan_depth,
+                    position: entry.placement,
+                  },
+                })),
+              },
+            }
+          : {}),
+      },
+    };
   }
 
   /**
@@ -1302,8 +1562,18 @@ export class PresetRepository {
     const depthPrompt = this.getStringField(this.asObject(extensions?.depth_prompt), "prompt");
     if (depthPrompt) sections.push({ heading: "Depth Prompt", content: depthPrompt });
 
-    const characterBook = this.pickObjectFromCard(cardData, rootData, "character_book");
-    sections.push(...this.collectCharacterBookSections(characterBook));
+    const characterBook = extractCharacterBook(rootData);
+    const lorebookConversion = characterBook ? convertCharacterBook(characterBook) : null;
+    const lorebookReport = lorebookConversion?.report;
+    if (lorebookReport && (lorebookReport.unsupportedKeys || lorebookReport.skippedEntries)) {
+      log.warn("Character Book import has unsupported activations", undefined, {
+        metadata: {
+          unsupportedKeys: lorebookReport.unsupportedKeys,
+          skippedEntries: lorebookReport.skippedEntries,
+        },
+      });
+    }
+    const lorebookEntries = lorebookConversion?.entries.slice(0, LOREBOOK_ENTRIES_PER_SCOPE_MAX);
 
     const attributeList = sections
       .flatMap((section) => this.buildAttributeSectionChunks(section.heading, section.content, maxAttributeLength))
@@ -1323,6 +1593,7 @@ export class PresetRepository {
     return {
       success: true,
       data: {
+        ...(lorebookEntries !== undefined ? { lorebook_entries: lorebookEntries } : {}),
         tomori_nickname: normalizedName,
         attribute_list: attributeList,
         sample_dialogues_in: cappedDialoguePairs.map((pair) => pair.input),

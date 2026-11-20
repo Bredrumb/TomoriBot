@@ -1,5 +1,5 @@
 /**
- * ConditioningMemoryRepository — manages the `conditioning_history` table.
+ * ConditioningMemoryRepository: manages the `conditioning_history` table.
  *
  * Conditioning memories record reward/punishment events that shape Tomori's
  * persona behavior over time. Reads are aggregated into ConditioningGroup
@@ -25,7 +25,7 @@ import {
 import type { IRepository } from "./IRepository";
 
 /** Portable conditioning export shape (expanded in Phase 6 #16.7). */
-export type ConditioningExportShape = {
+type ConditioningExportShape = {
   persona_lineage_id: number;
   groups: ConditioningGroup[];
 };
@@ -39,7 +39,9 @@ type ConditioningGroupRow = {
   action_text: string | null;
   count: number;
   updated_at: Date;
-  user_disc_id: string;
+  user_disc_id: string | null;
+  actor_persona_id: number | null;
+  actor_persona_name: string | null;
 };
 
 export type ConditioningGroup = {
@@ -51,12 +53,20 @@ export type ConditioningGroup = {
   totalCount: number;
   updatedAt: Date;
   userDiscIds: string[];
+  personaActors: Array<{ personaId: number; name: string }>;
   conditioningIds: number[];
 };
 
-export class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
+type ConditioningEventParams = {
+  serverId: number;
+  personaLineageId: number;
+  conditioningType: ConditioningType;
+  actionKey: ConditioningActionKey;
+  reason?: string | null;
+  actionText?: string | null;
+} & ({ userId: number; actorPersonaId?: never } | { actorPersonaId: number; userId?: never });
 
+class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
   /**
    * Loads aggregated conditioning groups for a persona lineage.
    * Groups cluster related events so the prompt assembly can summarize them.
@@ -74,23 +84,12 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
     return this.sqlLoadConditioningGroupsForPersona(serverId, personaLineageId, conditioningType);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Records a single conditioning event (reward or punishment).
    *
-   * @param params - Event parameters (serverId, personaLineageId, conditioningType, actionKey, userId, reason, actionText)
    * @returns Inserted or updated ConditioningHistoryRow, or null on failure
    */
-  async recordEvent(params: {
-    serverId: number;
-    personaLineageId: number;
-    conditioningType: ConditioningType;
-    actionKey: ConditioningActionKey;
-    userId: number;
-    reason?: string | null;
-    actionText?: string | null;
-  }): Promise<ConditioningHistoryRow | null> {
+  async recordEvent(params: ConditioningEventParams): Promise<ConditioningHistoryRow | null> {
     return this.sqlRecordConditioningEvent(params);
   }
 
@@ -99,7 +98,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
    *
    * @param personaId        - Internal tomori DB ID
    * @param conditioningType - Type to toggle (reward | punish)
-   * @param enabled         - New enabled state
    */
   async setPersonaConditioningEnabled(
     personaId: number,
@@ -114,7 +112,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
    *
    * @param serverId        - Internal server DB ID
    * @param conditioningType - Type to toggle (reward | punish)
-   * @param enabled         - New enabled state
    * @returns Number of personas updated
    */
   async setServerConditioningEnabled(
@@ -141,22 +138,31 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
     return this.sqlDeleteConditioningGroupsForPersona(serverId, personaLineageId, groups);
   }
 
-  // ── private SQL ────────────────────────────────────────────────────────────
-
-  private async sqlRecordConditioningEvent(params: {
-    serverId: number;
-    personaLineageId: number;
-    conditioningType: ConditioningType;
-    actionKey: ConditioningActionKey;
-    userId: number;
-    reason?: string | null;
-    actionText?: string | null;
-  }): Promise<ConditioningHistoryRow | null> {
+  private async sqlRecordConditioningEvent(params: ConditioningEventParams): Promise<ConditioningHistoryRow | null> {
     const reasonText = normalizeConditioningReason(params.reason);
     const reasonNormalized = normalizeConditioningReasonKey(params.reason);
 
     try {
-      const [row] = await sql`
+      const [row] =
+        params.actorPersonaId !== undefined
+          ? await sql`
+        INSERT INTO conditioning_history (
+          server_id, persona_lineage_id, conditioning_type, action_key,
+          reason_text, reason_normalized, action_text, actor_persona_id, count
+        )
+        VALUES (
+          ${params.serverId}, ${params.personaLineageId}, ${params.conditioningType}, ${params.actionKey},
+          ${reasonText}, ${reasonNormalized}, ${params.actionText ?? null}, ${params.actorPersonaId}, 1
+        )
+        ON CONFLICT (server_id, persona_lineage_id, conditioning_type, action_key, reason_normalized, actor_persona_id)
+        DO UPDATE SET
+          reason_text = EXCLUDED.reason_text,
+          action_text = EXCLUDED.action_text,
+          count = conditioning_history.count + 1,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `
+          : await sql`
         INSERT INTO conditioning_history (
           server_id, persona_lineage_id, conditioning_type, action_key,
           reason_text, reason_normalized, action_text, user_id, count
@@ -298,18 +304,22 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
           ? await sql<Array<ConditioningGroupRow>>`
               SELECT ch.conditioning_id, ch.conditioning_type, ch.action_key,
                      ch.reason_text, ch.reason_normalized, ch.action_text,
-                     ch.count, ch.updated_at, u.user_disc_id
+                     ch.count, ch.updated_at, u.user_disc_id,
+                     ch.actor_persona_id, p.persona_nickname AS actor_persona_name
               FROM conditioning_history ch
-              JOIN users u ON u.user_id = ch.user_id
+              LEFT JOIN users u ON u.user_id = ch.user_id
+              LEFT JOIN personas p ON p.persona_id = ch.actor_persona_id
               WHERE ch.server_id = ${serverId} AND ch.persona_lineage_id = ${personaLineageId}
               ORDER BY ch.updated_at DESC, ch.conditioning_id DESC
             `
           : await sql<Array<ConditioningGroupRow>>`
               SELECT ch.conditioning_id, ch.conditioning_type, ch.action_key,
                      ch.reason_text, ch.reason_normalized, ch.action_text,
-                     ch.count, ch.updated_at, u.user_disc_id
+                     ch.count, ch.updated_at, u.user_disc_id,
+                     ch.actor_persona_id, p.persona_nickname AS actor_persona_name
               FROM conditioning_history ch
-              JOIN users u ON u.user_id = ch.user_id
+              LEFT JOIN users u ON u.user_id = ch.user_id
+              LEFT JOIN personas p ON p.persona_id = ch.actor_persona_id
               WHERE ch.server_id = ${serverId}
                 AND ch.persona_lineage_id = ${personaLineageId}
                 AND ch.conditioning_type = ${conditioningType}
@@ -337,7 +347,11 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
             actionText: row.action_text ?? null,
             totalCount: row.count,
             updatedAt: row.updated_at,
-            userDiscIds: [row.user_disc_id],
+            userDiscIds: row.user_disc_id ? [row.user_disc_id] : [],
+            personaActors:
+              row.actor_persona_id !== null && row.actor_persona_name !== null
+                ? [{ personaId: row.actor_persona_id, name: row.actor_persona_name }]
+                : [],
             conditioningIds: [row.conditioning_id],
           });
           continue;
@@ -345,8 +359,15 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
 
         existing.totalCount += row.count;
         existing.conditioningIds.push(row.conditioning_id);
-        if (!existing.userDiscIds.includes(row.user_disc_id)) {
+        if (row.user_disc_id && !existing.userDiscIds.includes(row.user_disc_id)) {
           existing.userDiscIds.push(row.user_disc_id);
+        }
+        if (
+          row.actor_persona_id !== null &&
+          row.actor_persona_name !== null &&
+          !existing.personaActors.some((actor) => actor.personaId === row.actor_persona_id)
+        ) {
+          existing.personaActors.push({ personaId: row.actor_persona_id, name: row.actor_persona_name });
         }
         if (row.updated_at > existing.updatedAt) {
           existing.updatedAt = row.updated_at;
@@ -406,8 +427,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports conditioning groups for a persona lineage.
    * The ownerId is interpreted as personaLineageId; serverId defaults to 0
@@ -432,5 +451,5 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const conditioningMemoryRepository = new ConditioningMemoryRepository();

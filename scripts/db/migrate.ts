@@ -15,7 +15,6 @@ import { log } from "@/utils/misc/logger";
 
 config();
 
-// Build DATABASE_URL from individual POSTGRES_* vars if not explicitly set.
 // Bun's sql tag reads DATABASE_URL from the environment.
 if (!process.env.DATABASE_URL) {
   const host = process.env.POSTGRES_HOST || "localhost";

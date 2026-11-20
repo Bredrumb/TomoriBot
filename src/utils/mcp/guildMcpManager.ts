@@ -1,23 +1,21 @@
 /**
- * Guild MCP Manager — On-demand connection pool for per-guild remote MCP servers.
+ * Guild MCP Manager: On-demand connection pool for per-guild remote MCP servers.
  *
  * Singleton that manages lazy (production) or eager (dev) connections to remote
  * MCP servers registered by guild admins. Each connection is keyed by
  * "${serverId}:${name}" and auto-evicted after a configurable idle TTL.
  *
- * Transport: Smithery Connect → StreamableHTTPClientTransport → SSEClientTransport fallback.
- * Smithery-hosted servers (*.run.tools) use @smithery/api's managed transport;
- * all others follow the MCP SDK's recommended pattern for remote servers.
+ * Streamable HTTP and SSE share pinned URL validation and response-byte limits.
  */
 
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { Smithery } from "@smithery/api";
-import { createConnection as createSmitheryConnection } from "@smithery/api/mcp";
+import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js";
+import { extractWWWAuthenticateParams } from "@modelcontextprotocol/sdk/client/auth.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type CallableTool, mcpToTool } from "@google/genai";
 import { log } from "@/utils/misc/logger";
-import type { GuildMcpServerRow } from "@/types/db/schema";
+import type { GuildMcpFailureReason, GuildMcpServerRow } from "@/types/db/schema";
 import type {
   GuildMCPConnection,
   GuildMCPTestResult,
@@ -25,27 +23,44 @@ import type {
   MCPServerResponse,
 } from "@/types/tool/mcpTypes";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
+import { getGuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendFetchProgressNotice } from "@/utils/mcp/mcpExecutor";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { sendFetchProgressNotice } from "@/tools/fetchUrl/fetchProgressNotice";
+import { getEndpointRemotePolicy, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { localizer } from "@/utils/text/localizer";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import { refreshToolExecutionContext } from "@/tools/availability";
+import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
+import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
+import { createGuildMcpFetch, type GuildMcpFetchAuthorization } from "@/utils/mcp/guildMcpFetch";
+import { createMcpFetchAuthorization, type McpFetchAuthorization } from "@/utils/mcp/oauth/accessToken";
 
-/**
- * Checks if a URL is a Smithery-hosted MCP server (*.run.tools).
- * These servers require the Smithery Connect transport instead of direct HTTP/SSE.
- */
-function isSmitheryUrl(url: string): boolean {
-  try {
-    return new URL(url).hostname.endsWith(".run.tools");
-  } catch {
-    return false;
-  }
+interface GuildMcpRoute {
+  config: GuildMcpServerRow;
+  connection: GuildMCPConnection;
 }
 
-// ─── Configuration ───────────────────────────────────────────────────
+export interface GuildMcpRouting {
+  routes: Map<string, GuildMcpRoute>;
+  replaced: Set<string>;
+}
+
+async function validateReplacementUrls(value: unknown, schema: unknown, propertyName = ""): Promise<void> {
+  if (!schema || typeof schema !== "object") return;
+  const definition = schema as Record<string, unknown>;
+  if (typeof value === "string" && (definition.format === "uri" || /^(url|uri|urls)$/i.test(propertyName))) {
+    const result = await validateFetchUrlTarget(value);
+    if (!result.allowed) throw new Error(result.error);
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) await validateReplacementUrls(item, definition.items, propertyName);
+  } else if (value && typeof value === "object" && definition.properties && typeof definition.properties === "object") {
+    for (const [name, childSchema] of Object.entries(definition.properties)) {
+      await validateReplacementUrls((value as Record<string, unknown>)[name], childSchema, name);
+    }
+  }
+}
 
 /** How long an idle connection lives before eviction (default: 10 min) */
 const CONNECTION_TTL_MS = (Number(process.env.GUILD_MCP_CONNECTION_TTL_MINUTES) || 10) * 60 * 1000;
@@ -56,10 +71,54 @@ const CONNECT_TIMEOUT_MS = Number(process.env.GUILD_MCP_CONNECT_TIMEOUT_MS) || 1
 /** Timeout for individual tool execution calls (default: 30s) */
 const EXECUTION_TIMEOUT_MS = Number(process.env.GUILD_MCP_EXECUTION_TIMEOUT_MS) || 30_000;
 
+/**
+ * Base quarantine after a failed connect (default: 5 min). This is the circuit
+ * breaker that stops one unreachable server from re-paying the full connect
+ * timeout on every generation (and every fallback-model attempt), which
+ * otherwise stalls chat.
+ */
+const CONNECT_FAILURE_COOLDOWN_MS = Number(process.env.GUILD_MCP_FAILURE_COOLDOWN_MS) || 5 * 60_000;
+
+/**
+ * Quarantine multiplier per consecutive failure; the last entry repeats. At the
+ * default base this is 5m, 15m, 1h, then 3h, so a dead server costs about a dozen
+ * attempts a day while a recovered one returns within three hours.
+ */
+const CONNECT_FAILURE_BACKOFF_MULTIPLIERS = [1, 3, 12, 36] as const;
+
+/**
+ * A registration that has failed every attempt for this long is disabled in the
+ * database, and the panel shows why. The streak start is persisted, so restarts
+ * and deploys do not reset the window.
+ */
+const AUTO_DISABLE_AFTER_FAILING_MS = 24 * 60 * 60_000;
+
+/** Failures in memory outlive their retry time by this much, so a backoff survives quiet hours. */
+const CONNECT_FAILURE_MEMORY_MS = AUTO_DISABLE_AFTER_FAILING_MS;
+
+interface ConnectFailureState {
+  retryAt: number;
+  attempts: number;
+}
+
+/** Carries the failure kind across the transport fallback, whose message is a joined summary. */
+class GuildMcpConnectError extends Error {
+  constructor(
+    message: string,
+    readonly reason: GuildMcpFailureReason,
+  ) {
+    super(message);
+  }
+}
+
+/** Both SDK transport errors expose the HTTP status as `code`. */
+function isAuthRejection(error: unknown): boolean {
+  if (!(error instanceof StreamableHTTPError || error instanceof SseError)) return false;
+  return error.code === 401 || error.code === 403;
+}
+
 /** Eviction sweep interval (60s) */
 const EVICTION_INTERVAL_MS = 60_000;
-
-// ─── Singleton ───────────────────────────────────────────────────────
 
 class GuildMcpManager {
   private static instance: GuildMcpManager;
@@ -76,8 +135,14 @@ class GuildMcpManager {
   /** Set of pool keys currently being connected (prevents duplicate connect races) */
   private connectingKeys = new Set<string>();
 
+  /**
+   * Circuit breaker keyed by pool key. Cleared on successful connect and on explicit
+   * disconnect (which an administrator's enable or disable performs); an elapsed
+   * entry is kept so the next failure escalates the backoff.
+   */
+  private connectFailures = new Map<string, ConnectFailureState>();
+
   private constructor() {
-    // Start the eviction sweep
     this.evictionTimer = setInterval(() => this.evictIdleConnections(), EVICTION_INTERVAL_MS);
   }
 
@@ -88,33 +153,102 @@ class GuildMcpManager {
     return GuildMcpManager.instance;
   }
 
-  // ─── Public API ────────────────────────────────────────────────────
-
-  /**
-   * Get all guild MCP CallableTools for a server.
-   * Connects lazily to any enabled servers that aren't yet in the pool.
-   *
-   * @param serverId - Internal server_id (FK to servers table)
-   * @returns Array of CallableTool objects ready for provider adapters
-   */
-  async getGuildMCPTools(serverId: number): Promise<CallableTool[]> {
-    const configs = await getCachedEnabledGuildMcpConfigs(serverId);
-    if (configs.length === 0) return [];
-
-    const tools: CallableTool[] = [];
-
+  /** Raw names never grant ownership; only one selected registration can replace its own family. */
+  async getGuildMCPRouting(serverId: number): Promise<GuildMcpRouting> {
+    const read = await getGuildMcpConfigReadResult(serverId);
+    if (read.status !== "fresh") throw new Error("Current MCP registrations unavailable");
+    // A prose linter only reviews drafts; author routing would let the model call it (or a sibling
+    // tool such as slop-guard's `check_slop_file`, which reads paths on the MCP host).
+    const configs = read.configs.filter(
+      (config) => config.server_id === serverId && config.is_enabled && config.server_type !== "prose_linter",
+    );
+    const reserved = ToolRegistry.getReservedToolNames();
+    const replaced = new Set(
+      configs
+        .map((config) => config.server_type)
+        .filter((type): type is string => type === "url_fetcher" || type === "web_search"),
+    );
+    const candidates = new Map<string, GuildMcpRoute[]>();
     for (const config of configs) {
-      const key = this.poolKey(serverId, config.name);
-      const existing = this.pool.get(key);
-
-      // Lazy connect if not in pool
-      const conn = existing ?? (await this.connectServer(config));
-      if (!conn) continue; // Connection failed — skip this server
-
-      tools.push(conn.callableTool as CallableTool);
+      if (
+        replaced.has(config.server_type ?? "") &&
+        configs.filter((row) => row.server_type === config.server_type).length !== 1
+      )
+        continue;
+      const callable = await this.getRegisteredTool(config);
+      const connection = this.pool.get(this.poolKey(serverId, config.name));
+      if (!callable || !connection || connection.guildMcpId !== config.guild_mcp_id) continue;
+      for (const name of new Set(connection.functionNames)) {
+        const replacesOwnFamily =
+          (name === "fetch_url" && config.server_type === "url_fetcher") ||
+          (name === "web_search" && config.server_type === "web_search");
+        if (reserved.has(name) && !replacesOwnFamily) continue;
+        const entries = candidates.get(name) ?? [];
+        entries.push({ config, connection });
+        candidates.set(name, entries);
+      }
     }
+    return {
+      replaced,
+      routes: new Map(
+        [...candidates]
+          .filter(([, entries]) => entries.length === 1)
+          .map(([name, entries]) => [name, entries[0] as GuildMcpRoute]),
+      ),
+    };
+  }
 
-    return tools;
+  /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
+  async getRegisteredTool(config: GuildMcpServerRow, privateFailure = false): Promise<CallableTool | null> {
+    if (!config.is_enabled || config.oauth_status === "needs_reauthorization") return null;
+    const connection =
+      this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config, privateFailure));
+    return connection && connection.guildMcpId === config.guild_mcp_id
+      ? (connection.callableTool as CallableTool)
+      : null;
+  }
+
+  /** The caller revalidates the owned row; dispatch also checks the exact pooled registration. */
+  async callInternalRuleChecker(
+    config: GuildMcpServerRow,
+    toolName: string,
+    text: string,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    signal.throwIfAborted();
+    const connection = this.pool.get(this.poolKey(config.server_id, config.name));
+    if (!config.is_enabled || !connection || connection.guildMcpId !== config.guild_mcp_id)
+      throw new Error("Internal rule registration unavailable");
+    connection.lastUsedAt = Date.now();
+    return CallToolResultSchema.parse(
+      await (connection.client as MCPClient).callTool({ name: toolName, arguments: { text } }, CallToolResultSchema, {
+        signal,
+        timeout: EXECUTION_TIMEOUT_MS,
+      }),
+    );
+  }
+
+  async getGuildMCPTools(serverId: number): Promise<CallableTool[]> {
+    const { routes } = await this.getGuildMCPRouting(serverId);
+    const groups = new Map<GuildMCPConnection, Set<string>>();
+    for (const [name, route] of routes) {
+      const names = groups.get(route.connection) ?? new Set<string>();
+      names.add(name);
+      groups.set(route.connection, names);
+    }
+    return [...groups].map(([connection, names]) => {
+      const callable = connection.callableTool as CallableTool;
+      return {
+        tool: async () => {
+          const declaration = await callable.tool();
+          return {
+            ...declaration,
+            functionDeclarations: declaration.functionDeclarations?.filter((tool) => tool.name && names.has(tool.name)),
+          };
+        },
+        callTool: callable.callTool.bind(callable),
+      };
+    });
   }
 
   /**
@@ -122,7 +256,6 @@ class GuildMcpManager {
    * Used by toolRegistry to build the MCP function name list.
    *
    * @param serverId - Internal server_id
-   * @returns Array of function name strings
    */
   async getGuildMCPFunctionNames(serverId: number): Promise<string[]> {
     const tools = await this.getGuildMCPTools(serverId);
@@ -152,36 +285,16 @@ class GuildMcpManager {
    * exact replacement tool names provided by guild MCP servers.
    *
    * @param serverId - Internal server_id
-   * @param serverType - Capability family label such as "web_search" or "url_fetcher"
-   * @returns Array of function name strings for matching servers
    */
   async getGuildMCPFunctionNamesByServerType(serverId: number, serverType: string): Promise<string[]> {
-    const configs = await getCachedEnabledGuildMcpConfigs(serverId);
-    if (configs.length === 0) return [];
-
-    const matchingConfigs = configs.filter((config) => config.server_type === serverType);
-    if (matchingConfigs.length === 0) return [];
-
-    const names: string[] = [];
-
-    for (const config of matchingConfigs) {
-      const key = this.poolKey(serverId, config.name);
-      const existing = this.pool.get(key);
-      const conn = existing ?? (await this.connectServer(config));
-      if (!conn) continue;
-
-      names.push(...conn.functionNames);
-    }
-
-    return Array.from(new Set(names));
+    const { routes } = await this.getGuildMCPRouting(serverId);
+    return [...routes].filter(([, route]) => route.config.server_type === serverType).map(([name]) => name);
   }
 
   /**
    * Check if a function name belongs to a guild MCP server for this guild.
    *
    * @param serverId - Internal server_id
-   * @param functionName - Function name to check
-   * @returns True if the function is from a guild MCP server
    */
   async isGuildMCPFunction(serverId: number, functionName: string): Promise<boolean> {
     const names = await this.getGuildMCPFunctionNames(serverId);
@@ -193,10 +306,7 @@ class GuildMcpManager {
    * and returns a standardized TypedMCPToolResult using default MCP processing.
    *
    * @param serverId - Internal server_id
-   * @param functionName - Function name to execute
-   * @param args - Arguments for the function
    * @param context - Optional ToolContext for Discord operations
-   * @returns TypedMCPToolResult
    */
   async executeGuildMCPFunction(
     serverId: number,
@@ -207,8 +317,28 @@ class GuildMcpManager {
     const executionStartTime = Date.now();
 
     try {
-      // 1. Find the connection that owns this function
-      const conn = await this.findConnectionForFunction(serverId, functionName);
+      const route = (await this.getGuildMCPRouting(serverId)).routes.get(functionName);
+      if (context) {
+        const current = await refreshToolExecutionContext(context);
+        if (!current)
+          return {
+            success: false,
+            error: localizer(context.locale, "tools.execution.unavailable", { tool: functionName }),
+          };
+        context = current;
+      }
+      const conn = route?.connection;
+      if (route && (route.config.server_type === "url_fetcher" || route.config.server_type === "web_search")) {
+        if (!context || !configToFeatureFlags(context.tomoriState.config).web_search) {
+          return {
+            success: false,
+            error: localizer(context?.locale ?? "en-US", "tools.execution.unavailable", { tool: functionName }),
+          };
+        }
+        const declaration = await (route.connection.callableTool as CallableTool).tool();
+        const schema = declaration.functionDeclarations?.find((tool) => tool.name === functionName);
+        await validateReplacementUrls(args, schema?.parametersJsonSchema ?? schema?.parameters);
+      }
       if (!conn) {
         return {
           success: false,
@@ -218,21 +348,18 @@ class GuildMcpManager {
             source: "mcp",
             functionName,
             serverName: `guild:${serverId}`,
-            rawResult: {},
             executionTime: Date.now() - executionStartTime,
             status: "failed",
           },
         };
       }
 
-      // 2. Update last-used timestamp (keeps the connection alive)
+      if (context?.isExecutionCancelled?.()) return { success: false };
       conn.lastUsedAt = Date.now();
 
-      // 3. Send a user-facing embed to show the MCP tool is being invoked
       if (context?.channel && context.locale) {
         try {
-          if (functionName === "fetch") {
-            // Fetch-specific notice with pagination tracking
+          if (route?.config.server_type === "url_fetcher" && typeof args.url === "string") {
             await sendFetchProgressNotice(
               context,
               String(args.url || ""),
@@ -253,41 +380,52 @@ class GuildMcpManager {
             );
           }
         } catch (embedError) {
-          // Non-critical — don't block execution if the embed fails
+          // Non-critical, so don't block execution if the embed fails
           log.warn(`[GuildMcpManager] Failed to send MCP tool embed for ${functionName}:`, embedError);
         }
       }
 
-      // 4. Execute the function via the CallableTool
       log.info(`[GuildMcpManager] Executing guild MCP function: ${functionName} (server: ${conn.name})`);
 
-      const callableTool = conn.callableTool as CallableTool;
-      const mcpResult = await Promise.race([
-        callableTool.callTool([{ name: functionName, args }]),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Guild MCP execution timed out")), EXECUTION_TIMEOUT_MS),
-        ),
-      ]);
-
-      // 5. Process the result using default MCP processing
-      if (mcpResult && Array.isArray(mcpResult) && mcpResult.length > 0) {
-        const firstResult = mcpResult[0] as MCPServerResponse;
-        return this.processDefaultResult(functionName, firstResult, conn.name, executionStartTime, context);
+      if (context?.isExecutionCancelled?.()) return { success: false };
+      const currentRegistration = await getGuildMcpConfigReadResult(serverId);
+      const stillSelected =
+        currentRegistration.status === "fresh" &&
+        currentRegistration.configs.some(
+          (row) =>
+            row.server_id === serverId &&
+            row.guild_mcp_id === route?.config.guild_mcp_id &&
+            row.is_enabled &&
+            row.name === route.config.name &&
+            row.server_type === route.config.server_type,
+        ) &&
+        (!(route?.config.server_type === "url_fetcher" || route?.config.server_type === "web_search") ||
+          currentRegistration.configs.filter(
+            (row) => row.server_id === serverId && row.is_enabled && row.server_type === route.config.server_type,
+          ).length === 1);
+      if (!stillSelected)
+        return {
+          success: false,
+          error: localizer(context?.locale ?? "en-US", "tools.execution.unavailable", { tool: functionName }),
+        };
+      if (context) {
+        const current = await refreshToolExecutionContext(context);
+        const family = route?.config.server_type === "url_fetcher" || route?.config.server_type === "web_search";
+        if (!current || (family && !configToFeatureFlags(current.tomoriState.config).web_search))
+          return {
+            success: false,
+            error: localizer(context.locale, "tools.execution.unavailable", { tool: functionName }),
+          };
+        context = current;
       }
-
-      return {
-        success: false,
-        message: "Guild MCP function returned no results",
-        error: "No results",
-        data: {
-          source: "mcp",
-          functionName,
-          serverName: `guild:${conn.name}`,
-          rawResult: {},
-          executionTime: Date.now() - executionStartTime,
-          status: "failed",
-        },
-      };
+      if (context?.isExecutionCancelled?.()) return { success: false };
+      const mcpResult = CallToolResultSchema.parse(
+        await (conn.client as MCPClient).callTool({ name: functionName, arguments: args }, CallToolResultSchema, {
+          timeout: EXECUTION_TIMEOUT_MS,
+          signal: context?.abortSignal ?? context?.streamContext?.abortSignal,
+        }),
+      );
+      return this.processDefaultResult(functionName, mcpResult, conn.name, executionStartTime, context);
     } catch (error) {
       const executionTime = Date.now() - executionStartTime;
       log.error(`[GuildMcpManager] Guild MCP execution failed: ${functionName}`, error);
@@ -300,7 +438,6 @@ class GuildMcpManager {
           source: "mcp",
           functionName,
           serverName: `guild:${serverId}`,
-          rawResult: {},
           executionTime,
           status: "failed",
         },
@@ -314,18 +451,14 @@ class GuildMcpManager {
    * truncated to stay within Discord embed limits.
    *
    * @param args - The arguments record passed to the MCP function
-   * @param locale - The locale for fallback text
-   * @returns Formatted description string
    */
   private formatMcpArgs(args: Record<string, unknown>, locale: string): string {
     const entries = Object.entries(args);
 
-    // No parameters case
     if (entries.length === 0) {
       return localizer(locale, "tools.mcp.tool_invoke_no_params");
     }
 
-    // Format each argument as "key: value", truncating long values
     const MAX_VALUE_LENGTH = 200;
     const MAX_TOTAL_LENGTH = 900; // Stay under Discord's 1024 field limit with header
     const lines = entries.map(([key, value]) => {
@@ -338,7 +471,6 @@ class GuildMcpManager {
     const header = localizer(locale, "tools.mcp.tool_invoke_description");
     let body = lines.join("\n");
 
-    // Truncate the whole body if it exceeds limit
     if (body.length > MAX_TOTAL_LENGTH) {
       body = `${body.substring(0, MAX_TOTAL_LENGTH)}...`;
     }
@@ -348,25 +480,35 @@ class GuildMcpManager {
 
   /**
    * Test a remote MCP server connection without persisting anything.
-   * Used by `/config mcp add` to validate before saving.
+   * Used by MCP registration surfaces to validate before saving.
    *
-   * @param url - Remote MCP server URL
    * @param authToken - Optional bearer token
    * @returns Test result with tool count and names
    */
   async testConnection(url: string, authToken?: string): Promise<GuildMCPTestResult> {
     let client: MCPClient | null = null;
+    let unauthorized: GuildMCPTestResult["unauthorized"];
+    const recordChallenge = (response: Response) => {
+      const { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+      unauthorized ??= {
+        ...(resourceMetadataUrl ? { resourceMetadataUrl: resourceMetadataUrl.href } : {}),
+        ...(scope ? { scope } : {}),
+      };
+    };
     try {
-      client = new MCPClient({ name: "tomoribot-test", version: "1.0.0" });
+      // Connection testing uses the same guarded transports as runtime discovery.
+      // Returns the fresh client from whichever transport succeeded.
+      const discovered = await this.connectAndDiscover(
+        "tomoribot-test",
+        url,
+        authToken,
+        "test",
+        false,
+        recordChallenge,
+      );
+      client = discovered.client;
+      const { functionNames } = discovered;
 
-      // Connect with StreamableHTTP → SSE fallback + timeout
-      await this.connectWithFallback(client, url, authToken, "test");
-
-      // Discover tools
-      const toolResult = await client.listTools();
-      const functionNames = toolResult.tools.map((t) => t.name);
-
-      // Clean up
       await client.close();
 
       return {
@@ -375,31 +517,30 @@ class GuildMcpManager {
         functionNames,
       };
     } catch (error) {
-      // Best-effort cleanup
       try {
         await client?.close();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
 
       return {
         success: false,
         toolCount: 0,
         functionNames: [],
         error: error instanceof Error ? error.message : String(error),
+        ...(unauthorized ? { unauthorized } : {}),
       };
     }
   }
 
   /**
-   * Disconnect a specific guild server from the pool.
    * Called when removing or disabling a server via commands.
    *
    * @param serverId - Internal server_id
-   * @param name - Server name
    */
   async disconnectGuildServer(serverId: number, name: string): Promise<void> {
     const key = this.poolKey(serverId, name);
+    // Always clear any quarantine so a fixed/re-added server isn't skipped by the
+    // circuit breaker, even if it never made it into the pool.
+    this.connectFailures.delete(key);
     const conn = this.pool.get(key);
     if (!conn) return;
 
@@ -433,7 +574,7 @@ class GuildMcpManager {
   }
 
   /**
-   * Graceful shutdown — close all connections and stop eviction timer.
+   * Graceful shutdown: close all connections and stop eviction timer.
    */
   async cleanup(): Promise<void> {
     if (this.evictionTimer) {
@@ -474,20 +615,25 @@ class GuildMcpManager {
     };
   }
 
-  // ─── Private Helpers ───────────────────────────────────────────────
-
   /**
    * Connect to a single guild MCP server and add it to the pool.
    * Handles transport creation, connection, tool discovery, and collision checks.
    */
-  private async connectServer(config: GuildMcpServerRow): Promise<GuildMCPConnection | null> {
+  private async connectServer(config: GuildMcpServerRow, privateFailure = false): Promise<GuildMCPConnection | null> {
     const key = this.poolKey(config.server_id, config.name);
 
-    // Check if already in pool
     const existing = this.pool.get(key);
     if (existing) return existing;
+    // An expired grant needs a human rather than a disable, so it never enters the failure streak.
+    if (config.oauth_status === "needs_reauthorization") return null;
 
-    // Prevent duplicate connect races
+    // Circuit breaker: skip servers that recently failed to connect until their
+    // cooldown elapses. Without this, one unreachable server re-pays the full
+    // connect timeout on EVERY generation (and every fallback-model attempt),
+    // blowing the stream inactivity budget and stalling chat for that guild.
+    const failure = this.connectFailures.get(key);
+    if (failure && Date.now() < failure.retryAt) return null;
+
     if (this.connectingKeys.has(key)) {
       log.info(`[GuildMcpManager] Connection already in progress for ${key}, skipping`);
       return null;
@@ -495,27 +641,24 @@ class GuildMcpManager {
 
     this.connectingKeys.add(key);
 
+    let authorization: McpFetchAuthorization | undefined;
     try {
-      // 1. Decrypt auth token if present
-      const authToken = await toolRepository.decryptMcpAuthToken(config);
+      if (config.oauth_status) {
+        authorization = await createMcpFetchAuthorization(config.guild_mcp_id ?? 0, config.server_id);
+      }
+      const credential = authorization ?? (await toolRepository.decryptMcpAuthToken(config, privateFailure));
 
-      // 2. Create MCP client
-      const client = new MCPClient({
-        name: `tomoribot-guild-${config.server_id}-${config.name}`,
-        version: "1.0.0",
-      });
+      const { client, functionNames } = await this.connectAndDiscover(
+        `tomoribot-guild-${config.server_id}-${config.name}`,
+        config.url,
+        credential ?? undefined,
+        config.name,
+        privateFailure,
+      );
 
-      // 3. Connect with transport (StreamableHTTP → SSE fallback) + timeout
-      await this.connectWithFallback(client, config.url, authToken ?? undefined, config.name);
-
-      // 4. Create CallableTool via mcpToTool (same as global MCP servers)
+      // Create CallableTool via mcpToTool (same as global MCP servers)
       const callableTool = mcpToTool(client);
 
-      // 5. Discover function names
-      const toolResult = await client.listTools();
-      const functionNames = toolResult.tools.map((t) => t.name);
-
-      // 6. Build connection entry
       const conn: GuildMCPConnection = {
         guildMcpId: config.guild_mcp_id ?? 0,
         serverId: config.server_id,
@@ -528,6 +671,51 @@ class GuildMcpManager {
       };
 
       this.pool.set(key, conn);
+      client.onerror = (error) => {
+        const transport = client.transport;
+        if (
+          error instanceof StreamableHTTPError &&
+          error.code === 404 &&
+          transport instanceof StreamableHTTPClientTransport &&
+          transport.sessionId &&
+          this.pool.get(key) === conn
+        ) {
+          // A session-scoped 404 requires a fresh handshake. A late error from this client
+          // must not retire a replacement that has already connected under the same key.
+          this.pool.delete(key);
+          void this.safeCloseClient(client);
+        }
+      };
+      this.connectFailures.delete(key);
+      const guildMcpId = config.guild_mcp_id;
+      if (typeof guildMcpId === "number" && Number.isSafeInteger(guildMcpId) && guildMcpId > 0) {
+        if (config.failing_since || config.failure_reason) {
+          void toolRepository.clearMcpConnectFailure(config.server_id, guildMcpId);
+        }
+        try {
+          void toolRepository
+            .updateMcpToolNameSnapshot(config.server_id, guildMcpId, functionNames)
+            .then((snapshotResult) => {
+              if (snapshotResult === "failed") {
+                log.warn(
+                  `[GuildMcpManager] Tool-name snapshot refresh failed for MCP server ID ${guildMcpId} ` +
+                    `on server ${config.server_id}; keeping the live connection`,
+                );
+              }
+            })
+            .catch(() => {
+              log.warn(
+                `[GuildMcpManager] Tool-name snapshot refresh threw for MCP server ID ${guildMcpId} ` +
+                  `on server ${config.server_id}; keeping the live connection`,
+              );
+            });
+        } catch {
+          log.warn(
+            `[GuildMcpManager] Tool-name snapshot refresh threw for MCP server ID ${guildMcpId} ` +
+              `on server ${config.server_id}; keeping the live connection`,
+          );
+        }
+      }
       log.success(
         `[GuildMcpManager] Connected to guild MCP server "${config.name}" ` +
           `(server: ${config.server_id}, tools: ${functionNames.length}: ${functionNames.join(", ")})`,
@@ -535,10 +723,13 @@ class GuildMcpManager {
 
       return conn;
     } catch (error) {
-      log.error(
-        `[GuildMcpManager] Failed to connect to guild MCP server "${config.name}" (server: ${config.server_id})`,
-        error,
-      );
+      if (authorization?.reauthorizationRequired) {
+        log.info(
+          `[GuildMcpManager] Guild MCP server "${config.name}" (server: ${config.server_id}) needs sign-in again`,
+        );
+        return null;
+      }
+      await this.recordConnectFailure(config, key, error, privateFailure);
       return null;
     } finally {
       this.connectingKeys.delete(key);
@@ -546,61 +737,106 @@ class GuildMcpManager {
   }
 
   /**
-   * Connect an MCP client using the appropriate transport strategy:
-   *
-   * 1. **Smithery Connect** — For *.run.tools URLs, uses `@smithery/api/mcp`
-   *    to create a managed transport with the auth token as the Smithery API key.
-   * 2. **StreamableHTTP** — Modern MCP transport (tried first for non-Smithery URLs).
-   * 3. **SSE** — Legacy fallback when StreamableHTTP fails at runtime.
-   *
-   * The StreamableHTTP → SSE fallback is necessary because the StreamableHTTP
-   * constructor always succeeds — failures only surface during `client.connect()`
-   * when the server rejects the POST request (e.g., SSE-only servers like Supergateway).
-   *
-   * @param client - MCP client instance (will be connected in place)
-   * @param url - Remote server URL
-   * @param authToken - Optional bearer token (or Smithery API key for *.run.tools)
-   * @param serverLabel - Label for log messages
+   * Escalates the quarantine and extends the persisted failure streak. Failures are the guild's
+   * configuration or the remote host, not a bot fault, so they log as warnings: the full error once
+   * per streak, then one line per retry.
+   */
+  private async recordConnectFailure(
+    config: GuildMcpServerRow,
+    key: string,
+    error: unknown,
+    privateFailure: boolean,
+  ): Promise<void> {
+    const attempts = (this.connectFailures.get(key)?.attempts ?? 0) + 1;
+    const multiplier =
+      CONNECT_FAILURE_BACKOFF_MULTIPLIERS[Math.min(attempts, CONNECT_FAILURE_BACKOFF_MULTIPLIERS.length) - 1] ?? 1;
+    const retryDelayMs = CONNECT_FAILURE_COOLDOWN_MS * multiplier;
+    this.connectFailures.set(key, { retryAt: Date.now() + retryDelayMs, attempts });
+
+    const reason: GuildMcpFailureReason = error instanceof GuildMcpConnectError ? error.reason : "unreachable";
+    const label = `"${config.name}" (server: ${config.server_id})`;
+    if (!privateFailure) {
+      const summary =
+        `[GuildMcpManager] Failed to connect to guild MCP server ${label} (${reason}, attempt ${attempts}); ` +
+        `retrying in ${Math.round(retryDelayMs / 60_000)}m`;
+      if (attempts === 1) log.warn(summary, error);
+      else log.info(summary);
+    }
+
+    const guildMcpId = config.guild_mcp_id;
+    if (typeof guildMcpId !== "number" || !Number.isSafeInteger(guildMcpId) || guildMcpId <= 0) return;
+    const recorded = await toolRepository.recordMcpConnectFailure(
+      config.server_id,
+      guildMcpId,
+      reason,
+      AUTO_DISABLE_AFTER_FAILING_MS,
+    );
+    if (recorded.status !== "auto-disabled") return;
+    log.warn(
+      `[GuildMcpManager] Auto-disabled guild MCP server ${label} after failing since ` +
+        `${recorded.failingSince.toISOString()} (${reason})`,
+    );
+  }
+
+  /** A client whose discovery fails is closed here, so callers never hold a half-open transport. */
+  private async connectAndDiscover(
+    clientName: string,
+    url: string,
+    credential?: string | GuildMcpFetchAuthorization,
+    serverLabel?: string,
+    privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
+  ): Promise<{ client: MCPClient; functionNames: string[] }> {
+    const client = await this.connectWithFallback(
+      clientName,
+      url,
+      credential,
+      serverLabel,
+      privateFailure,
+      onUnauthorized,
+    );
+    try {
+      const toolResult = await client.listTools();
+      return { client, functionNames: toolResult.tools.map((tool) => tool.name) };
+    } catch (error) {
+      await this.safeCloseClient(client);
+      throw error;
+    }
+  }
+
+  /**
+   * SSE-only servers reject the Streamable HTTP handshake, so both attempts need
+   * fresh clients and the same guarded fetcher.
    */
   private async connectWithFallback(
-    client: MCPClient,
+    clientName: string,
     url: string,
-    authToken?: string,
+    credential?: string | GuildMcpFetchAuthorization,
     serverLabel?: string,
-  ): Promise<void> {
+    privateFailure = false,
+    onUnauthorized?: (response: Response) => void,
+  ): Promise<MCPClient> {
     const label = serverLabel ?? url;
-    const urlValidation = await validateRemoteMcpUrl(url);
+    const urlValidation = await validateRemoteUrl(url, getEndpointRemotePolicy());
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
     }
 
-    // 1. Try Smithery Connect for *.run.tools URLs
-    if (isSmitheryUrl(url) && authToken) {
-      try {
-        const smitheryClient = new Smithery({ apiKey: authToken });
-        const { transport: smitheryTransport } = await createSmitheryConnection({
-          client: smitheryClient,
-          mcpUrl: url,
-        });
-        await Promise.race([
-          client.connect(smitheryTransport),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Smithery connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-          ),
-        ]);
-        log.info(`[GuildMcpManager] Connected via Smithery Connect: ${label}`);
-        return;
-      } catch (smitheryError) {
-        log.info(
-          `[GuildMcpManager] Smithery Connect failed for "${label}", falling back to StreamableHTTP: ` +
-            `${smitheryError instanceof Error ? smitheryError.message : String(smitheryError)}`,
-        );
-      }
-    }
+    // Every transport attempt below uses its OWN fresh MCP client. The SDK's Client
+    // throws "Already connected to a transport" if the same instance is reused after
+    // a failed/timed-out connect, which previously broke the SSE fallback outright.
+    const errors: string[] = [];
+    let authRejected = false;
+
+    const guardedFetch = createGuildMcpFetch(
+      url,
+      onUnauthorized,
+      typeof credential === "object" ? credential : undefined,
+    );
 
     const headers: Record<string, string> = {};
-    if (authToken) {
-      headers.Authorization = `Bearer ${authToken}`;
+    if (typeof credential === "string" && credential) {
+      headers.Authorization = `Bearer ${credential}`;
     }
 
     const parsedUrl = new URL(url);
@@ -609,68 +845,96 @@ class GuildMcpManager {
       redirect: "error" as const,
     };
 
-    // 2. Try StreamableHTTP (modern MCP transport)
-    try {
-      const streamableTransport = new StreamableHTTPClientTransport(parsedUrl, {
-        fetch: fetchUserRemoteUrl,
-        requestInit,
-      });
-      await Promise.race([
-        client.connect(streamableTransport),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-        ),
-      ]);
-      log.info(`[GuildMcpManager] Connected via StreamableHTTP: ${label}`);
-      return;
-    } catch (streamableError) {
-      log.info(
-        `[GuildMcpManager] StreamableHTTP failed for "${label}", falling back to SSE: ` +
-          `${streamableError instanceof Error ? streamableError.message : String(streamableError)}`,
-      );
+    // Try StreamableHTTP (modern MCP transport)
+    {
+      const client = this.newMcpClient(clientName);
+      try {
+        const streamableTransport = new StreamableHTTPClientTransport(parsedUrl, {
+          fetch: guardedFetch,
+          requestInit,
+        });
+        await this.connectWithTimeout(client, streamableTransport, label, "StreamableHTTP");
+        log.info(`[GuildMcpManager] Connected via StreamableHTTP: ${label}`);
+        return client;
+      } catch (streamableError) {
+        authRejected ||= isAuthRejection(streamableError);
+        const message = privateFailure
+          ? "Transport connection failed"
+          : streamableError instanceof Error
+            ? streamableError.message
+            : String(streamableError);
+        errors.push(`StreamableHTTP: ${message}`);
+        await this.safeCloseClient(client);
+        log.info(`[GuildMcpManager] StreamableHTTP failed for "${label}", falling back to SSE: ${message}`);
+      }
     }
 
-    // 3. Fall back to SSE transport
-    const sseTransport = new SSEClientTransport(parsedUrl, {
-      fetch: fetchUserRemoteUrl,
-      requestInit,
-      eventSourceInit: {
-        fetch: fetchUserRemoteUrl,
-      },
-    });
-    await Promise.race([
-      client.connect(sseTransport),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`SSE connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-      ),
-    ]);
-    log.info(`[GuildMcpManager] Connected via SSE fallback: ${label}`);
+    {
+      const client = this.newMcpClient(clientName);
+      try {
+        const sseTransport = new SSEClientTransport(parsedUrl, {
+          fetch: guardedFetch,
+          requestInit,
+          eventSourceInit: {
+            fetch: guardedFetch,
+          },
+        });
+        await this.connectWithTimeout(client, sseTransport, label, "SSE");
+        log.info(`[GuildMcpManager] Connected via SSE fallback: ${label}`);
+        return client;
+      } catch (sseError) {
+        authRejected ||= isAuthRejection(sseError);
+        const message = privateFailure
+          ? "Transport connection failed"
+          : sseError instanceof Error
+            ? sseError.message
+            : String(sseError);
+        errors.push(`SSE: ${message}`);
+        await this.safeCloseClient(client);
+        throw new GuildMcpConnectError(
+          `All MCP transports failed for '${label}': ${errors.join("; ")}`,
+          authRejected ? "unauthorized" : "unreachable",
+        );
+      }
+    }
+  }
+
+  /** Create a fresh MCP client. One is used per transport attempt (see connectWithFallback). */
+  private newMcpClient(clientName: string): MCPClient {
+    return new MCPClient({ name: clientName, version: "1.0.0" });
   }
 
   /**
-   * Find the connection that owns a given function name for a specific server.
+   * Connect a client to a transport with a hard timeout, always clearing the timer.
+   *
+   * @param kind - Transport kind for the timeout message (e.g. "SSE")
    */
-  private async findConnectionForFunction(serverId: number, functionName: string): Promise<GuildMCPConnection | null> {
-    // 1. Check in-pool connections first (fast path)
-    for (const conn of this.pool.values()) {
-      if (conn.serverId === serverId && conn.functionNames.includes(functionName)) {
-        return conn;
-      }
+  private async connectWithTimeout(
+    client: MCPClient,
+    transport: Parameters<MCPClient["connect"]>[0],
+    label: string,
+    kind: string,
+  ): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${kind} connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
+  }
 
-    // 2. Not found in pool — try lazy-connecting missing servers
-    const configs = await getCachedEnabledGuildMcpConfigs(serverId);
-    for (const config of configs) {
-      const key = this.poolKey(serverId, config.name);
-      if (this.pool.has(key)) continue; // Already checked above
-
-      const conn = await this.connectServer(config);
-      if (conn?.functionNames.includes(functionName)) {
-        return conn;
-      }
+  /** Best-effort close of a failed client, releasing its transport. */
+  private async safeCloseClient(client: MCPClient): Promise<void> {
+    try {
+      await client.close();
+    } catch {
+      // ignore because the client may have no active transport to close
     }
-
-    return null;
   }
 
   /**
@@ -679,6 +943,14 @@ class GuildMcpManager {
   private async evictIdleConnections(): Promise<void> {
     const now = Date.now();
     const toEvict: string[] = [];
+
+    // Prune long-elapsed circuit-breaker entries so the map stays bounded even for
+    // servers that were removed from config and are never dialed again.
+    for (const [key, failure] of this.connectFailures.entries()) {
+      if (now - failure.retryAt >= CONNECT_FAILURE_MEMORY_MS) {
+        this.connectFailures.delete(key);
+      }
+    }
 
     for (const [key, conn] of this.pool.entries()) {
       if (now - conn.lastUsedAt > CONNECTION_TTL_MS) {
@@ -705,7 +977,6 @@ class GuildMcpManager {
 
   /**
    * Default result processing for guild MCP tools.
-   * Mirrors the processDefaultMCPResult logic from mcpExecutor.ts.
    */
   private processDefaultResult(
     functionName: string,
@@ -716,11 +987,21 @@ class GuildMcpManager {
   ): TypedMCPToolResult {
     const executionTime = Date.now() - executionStartTime;
 
+    const text = mcpResult.content
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("\n");
+    const message =
+      text ||
+      (mcpResult.structuredContent
+        ? JSON.stringify(mcpResult.structuredContent)
+        : "Guild MCP function executed successfully");
     if (mcpResult.isError) {
+      const error = text || "Guild MCP function execution failed";
       return {
         success: false,
-        message: mcpResult.text || "Guild MCP function execution failed",
-        error: mcpResult.text || "Unknown guild MCP error",
+        message: error,
+        error,
         data: {
           source: "mcp",
           functionName,
@@ -732,20 +1013,6 @@ class GuildMcpManager {
       };
     }
 
-    // Success — extract text from the various MCP result formats
-    let message = "Guild MCP function executed successfully";
-    if (mcpResult.text) {
-      message = mcpResult.text;
-    } else if (mcpResult.content && Array.isArray(mcpResult.content)) {
-      // Concatenate text content items
-      const textParts = mcpResult.content
-        .filter((item) => item.type === "text" && item.text)
-        .map((item) => item.text as string);
-      if (textParts.length > 0) {
-        message = textParts.join("\n");
-      }
-    }
-
     return {
       success: true,
       message,
@@ -755,6 +1022,7 @@ class GuildMcpManager {
         serverName: `guild:${serverName}`,
         rawResult: mcpResult,
         executionTime,
+        summary: message,
         status: "completed",
       },
     };
@@ -765,8 +1033,6 @@ class GuildMcpManager {
     return `${serverId}:${name}`;
   }
 }
-
-// ─── Exports ─────────────────────────────────────────────────────────
 
 /** Get the GuildMcpManager singleton */
 export function getGuildMcpManager(): GuildMcpManager {

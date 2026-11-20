@@ -1,0 +1,129 @@
+---
+title: "CosyVoice 3"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用阿里巴巴的[CosyVoice 3](https://github.com/QwenAudio/CosyVoice)，通过基于指令的情感表达合成自然的多语言人格语音。
+
+CosyVoice 3支持跨9种语言以及18种以上中文方言的零样本与跨语言语音克隆。TomoriBot在`servers/tts/cosyvoice3/`中对官方运行时进行了包装，暴露标准的`POST /synthesize`语音接口。随附的安装程序默认使用官方未量化的`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`模型，可在16 GB显存内流畅运行。
+
+CosyVoice支持9种语言与中文方言。如果日语发音不佳，上游建议将文本转换为片假名。
+
+请使用`纯文本`脚本标记，并通过`voice_instructions`提供表达指导。提供匹配的参考文本可启用零样本克隆；若没有参考文本，服务器则使用跨语言克隆。使用指令控制时会采用参考音频，但不使用其参考文本。
+
+## 硬件要求
+
+推荐硬件：
+
+- 配备16 GB显存的NVIDIA GPU
+- Python 3.10
+- 兼容CUDA 12的NVIDIA驱动
+- `git`
+- 用于语音样本标准化的`ffmpeg`
+- 若遇到音频兼容性问题，Linux上需安装`sox`和`libsox-dev`
+
+0.5B参数量的模型无需量化即可轻松装入16 GB显存。下载的检查点包含流模型、语音分词器、文本模型以及强化学习权重，加上Python依赖大致需要10 GB磁盘空间。
+
+虽然上游在技术上支持CPU推理，但其运行速度过慢，无法满足Discord语音交互的需求。
+
+## 安装
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+原生Windows作为尽力支持的备选路径提供。对于NVIDIA GPU配置，**强烈建议使用带有Ubuntu/Linux的WSL2**：上游依赖在Windows上默认安装纯CPU版本的ONNX Runtime，而在Linux与WSL2上安装的是GPU加速包。在Windows上，这会导致每个音色在第一次请求编码参考音频时慢约1.5秒；后续请求会复用该编码结果，直到服务器重启为止。
+
+请确保Python 3.10已在你的`PATH`中，然后在TomoriBot代码仓库根目录下执行：
+
+```powershell
+.\servers\tts\cosyvoice3\install-cosyvoice3.ps1
+.\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+推荐在配备NVIDIA GPU的Linux或WSL2上运行。请确保已安装`python3.10`、`git`、`ffmpeg`和`sox`（`libsox-dev`），然后在TomoriBot代码仓库根目录下执行：
+
+```bash
+bash servers/tts/cosyvoice3/install-cosyvoice3.sh
+servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
+```
+
+或者将已配置的服务器与TomoriBot一同启动：
+
+```bash
+bun run launch --cosyvoice3
+```
+
+上游依赖项会在Linux上安装PyTorch 2.3.1与CUDA 12.1包、CUDA 12 ONNX Runtime包以及TensorRT 10.13包。如果你的GPU需要更新版本的PyTorch，请在配置完成后于虚拟环境中安装兼容的PyTorch版本。
+
+</TabItem>
+<TabItem label="Mac">
+
+**随附安装程序不支持Mac。**CosyVoice 3固定了上游Python 3.10依赖，会拉取CUDA 12.1、TensorRT和GPU版ONNX Runtime包，而`install-cosyvoice3.sh`中没有macOS构建路径。请在Linux或Windows NVIDIA主机上运行CosyVoice 3，并通过[经过身份验证的远程隧道](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/)连接，或者在Mac上使用[VoxCPM2](/self-hosting/local-endpoints/text-to-speech/voxcpm2/)或[IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/)等兼容Mac的引擎。
+
+</TabItem>
+</Tabs>
+
+Windows和Linux安装程序会下载固定的运行时与模型版本，并拒绝覆盖包含未提交本地更改的代码检出目录。
+
+## 在TomoriBot中注册
+
+运行`/providers`，选择`+ 添加新自定义端点`，并配置语音端点：
+
+- 能力：`语音合成`
+- API兼容性：`TTS 克隆`（`tts-clone`）
+- 端点URL：`http://127.0.0.1:8017`
+- 声音来源模式：`声音克隆`
+- 脚本标记风格：`纯文本`
+- 支持指令：`是`（勾选`可以在脚本之外接收一条指令`）
+
+保存连接之后，选中它并添加一个语音合成模型。清晰的模型代号推荐使用`Fun-CosyVoice3-0.5B-2512`。
+
+然后打开`/config` > 模型 > 切换模型，激活CosyVoice 3语音端点。
+
+## 指定人格语音
+
+进行零样本语音克隆：
+
+1. 准备一段3到30秒的干净音频片段，仅包含单人说话且背景噪音极小。
+2. 打开`/config`下的模型 > TTS参数与语音并上传该样本。
+3. 若有匹配的参考文本，请一并输入。CosyVoice 3会将此文本作为零样本克隆的提示前缀进行分词；它应当对应音频的前30秒内容。
+4. 打开`/config`下的人格 > 语音，并将该样本分配给对应人格。
+
+包装脚本会自动将参考音频截取至前30秒。跨语言克隆可使用与生成文本语言不同的参考说话人音频。
+
+## 使用`/generate voice-message`测试
+
+使用`/generate voice-message`可以直接测试语音合成，无需等待聊天自动触发。你可以使用人格已分配的样本进行测试，也可以上传带有参考文本的一次性音频。
+
+若要指导情感与表达方式，可在弹窗中输入要求，或让人格提示词提供`voice_instructions`。请保持发音文本为纯文本对话；内联样式标签会在合成前被自动剔除。
+
+## 环境变量
+
+| 变量 | 默认值 | 用途 |
+|---|---|---|
+| `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | 本地检查点目录 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 包装脚本绑定地址；参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | 包装脚本端口 |
+| `COSYVOICE3_UPSTREAM_STREAM` | `0` | 启用CosyVoice内部流式生成器 |
+| `COSYVOICE3_SPEED` | `1.0` | 传递给上游推理的全局数字语速乘数 |
+| `COSYVOICE3_DEFAULT_INSTRUCT` | 空 | 当请求未提供指令时附加的可选默认指令 |
+| `COSYVOICE3_FP16` | `0` | 要求官方运行时使用fp16模式 |
+| `COSYVOICE3_LOAD_TRT` | `0` | 在准备就绪时启用上游TensorRT加载 |
+| `COSYVOICE3_LOAD_VLLM` | `0` | 在安装了单独依赖时启用上游vLLM加载 |
+
+默认情况下，TensorRT、vLLM和fp16均保持禁用。在16 GB的RTX 40系显卡上实测，fp16不仅速度没有更快，反而占用了更多显存，因此除非你自己在对应GPU上进行过实测对比，否则请保持关闭。标准PyTorch运行时无需额外的运行时依赖即可在16 GB显存的GPU上轻松运行。
+
+## 模型变体
+
+若想尝试自带的强化学习（RL）权重，请复制模型目录，在副本中将`llm.rl.pt`重命名为`llm.pt`，并将`COSYVOICE3_MODEL_DIR`指向该目录。可选的vLLM和TensorRT运行时需要单独安装额外依赖。
+
+## 许可证
+
+CosyVoice代码仓库与`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`权重基于Apache-2.0许可证发布。
+
+上游模型卡注明演示素材仅供学术评估使用。TomoriBot本身不分发模型权重。在进行商业部署前，请针对你的具体应用场景审查上游许可与条款。

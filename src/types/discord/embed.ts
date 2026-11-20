@@ -1,5 +1,5 @@
-import { ButtonStyle } from "discord.js";
-import type { ButtonInteraction, ColorResolvable, APIEmbedField, EmbedField, MessageFlags } from "discord.js";
+import type { ButtonStyle } from "discord.js";
+import type { AttachmentBuilder, ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
 
 /**
  * Options for creating a standard info/status embed.
@@ -13,9 +13,41 @@ export interface StandardEmbedOptions {
   color?: ColorResolvable;
   footerKey?: string;
   footerVars?: Record<string, string | number | boolean>;
+  /** Adds the shared `/config` > Behavior > Notices line below the footer, for notices a server can hide. */
+  configHint?: boolean;
+  /**
+   * Renders a Minimal notice: the title exactly as Verbose renders it (emoji and status circle
+   * included), in the notice color, and nothing else.
+   * Description, footer, config hint, thumbnail, and any expand button are all dropped.
+   */
+  minimal?: boolean;
   thumbnailUrl?: string;
   flags?: MessageFlags;
   timestamp?: boolean;
+  /**
+   * Optional atomic tip-item locale keys. When present, embed senders add a button that opens
+   * these keys as a dashed bullet list in a read-only text modal.
+   */
+  tipKeys?: string[];
+  /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */
+  tipVars?: Record<string, string | number | boolean>;
+  /**
+   * Raw diagnostic text behind a second button, rendered by `sendStandardEmbed` and `replyInfoEmbed`.
+   * The Components V2 fallback in `replyInfoEmbed` drops it along with the tip button.
+   */
+  restrictedDetail?: RestrictedDetailModal;
+  files?: AttachmentBuilder[];
+}
+
+/** Restricts who may open a read-only text modal; anyone else gets `deniedKey` as an ephemeral reply. */
+export interface TextDisplayModalAccess {
+  canOpen: (interaction: ButtonInteraction) => boolean;
+  deniedKey: string;
+}
+
+export interface RestrictedDetailModal {
+  content: string;
+  access: TextDisplayModalAccess;
 }
 
 /**
@@ -28,9 +60,6 @@ export interface TranslationEmbedOptions {
   timeout?: number;
 }
 
-/**
- * Options for confirmation embeds with buttons
- */
 export interface ConfirmationOptions {
   embedTitleKey: string;
   embedDescriptionKey: string;
@@ -42,19 +71,15 @@ export interface ConfirmationOptions {
   continueCustomId: string;
   cancelCustomId: string;
   timeout?: number;
+  continueStyle?: ButtonStyle.Secondary | ButtonStyle.Danger;
+  cancelStyle?: ButtonStyle.Secondary | ButtonStyle.Danger;
 }
 
-/**
- * Result type for confirmation interactions
- */
 export type ConfirmationResult = {
   outcome: "continue" | "cancel" | "timeout";
   interaction?: ButtonInteraction; // The button interaction if outcome is 'continue'
 };
 
-/**
- * Available translation providers
- */
 export enum TranslationProvider {
   GOOGLE = "google",
   BING = "bing",
@@ -68,29 +93,9 @@ export const TRANSLATOR_COLORS = {
   [TranslationProvider.BING]: "#7DDA58", // Bing green
 } as const satisfies Record<TranslationProvider, ColorResolvable>;
 
-/**
- * Discord button styles for translation providers
- */
-export const TRANSLATOR_STYLES = {
-  [TranslationProvider.GOOGLE]: ButtonStyle.Danger,
-  [TranslationProvider.BING]: ButtonStyle.Success,
-} as const satisfies Record<TranslationProvider, ButtonStyle>;
-
-/**
- * Helper type for accessing translator properties
- */
-export type Provider = keyof typeof TRANSLATOR_COLORS;
-
-/**
- * Field pair for summary embeds
- */
-export interface SummaryField {
-  nameKey: string;
-  value: string | number | APIEmbedField | EmbedField;
-  vars?: Record<string, string | number>;
-}
-
 export interface SummaryEmbedOptions extends StandardEmbedOptions {
+  docsPath?: string;
+  docsLabelKey?: string;
   fields: Array<{
     nameKey?: string;
     name?: string; // Allow direct name string
@@ -100,11 +105,13 @@ export interface SummaryEmbedOptions extends StandardEmbedOptions {
     valueVars?: Record<string, string | number | boolean>; // Variables for the value localization
     inline?: boolean;
   }>;
+  /**
+   * Extra pre-built embeds to send alongside the summary embed in the same message
+   * (e.g. a separate yellow "notes" embed). Sent after the main embed, in order.
+   */
+  appendEmbeds?: EmbedBuilder[];
 }
 
-/**
- * Interface for paginated choice options
- */
 export interface PaginatedChoiceOptions {
   titleKey: string; // Localization key for the embed title
   titleVars?: Record<string, string | number | boolean>; // Variables for the title localization
@@ -121,9 +128,6 @@ export interface PaginatedChoiceOptions {
   flags?: MessageFlags;
 }
 
-/**
- * Result of a paginated choice selection
- */
 export interface PaginatedChoiceResult {
   success: boolean; // Whether a selection was made successfully
   selectedIndex?: number; // The index of the selected item (if success is true)

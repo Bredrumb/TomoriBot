@@ -1,6 +1,7 @@
 import {
   ELEVENLABS_API_BASE_URL,
   getElevenLabsTtsConfig,
+  readElevenLabsErrorDetail,
   sanitizeElevenLabsTaggedScript,
 } from "@/utils/audio/elevenLabsShared";
 
@@ -17,6 +18,8 @@ export interface ElevenLabsTtsRequest {
   script: string;
   modelId?: string;
   voiceSettings?: Record<string, unknown>;
+  /** Turn-level cancellation from /kill, merged with the request timeout. */
+  abortSignal?: AbortSignal;
 }
 
 export interface ElevenLabsTtsResult {
@@ -30,6 +33,8 @@ export interface ElevenLabsTtsResult {
   errorKind?: ElevenLabsTtsErrorKind;
   statusCode?: number;
   details?: string;
+  /** ElevenLabs' status and response body, for the operator log and the gated error modal. */
+  providerDetail?: string;
 }
 
 function inferAudioOutputMetadata(outputFormat: string): {
@@ -107,28 +112,21 @@ export async function synthesizeSpeechWithElevenLabs(request: ElevenLabsTtsReque
           model_id: request.modelId ?? config.modelId,
           ...(request.voiceSettings ? { voice_settings: request.voiceSettings } : {}),
         }),
-        signal: controller.signal,
+        signal: request.abortSignal ? AbortSignal.any([controller.signal, request.abortSignal]) : controller.signal,
       },
     );
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      let details = `HTTP ${response.status}`;
-      try {
-        const responseJson = (await response.json()) as Record<string, unknown>;
-        if (typeof responseJson.detail === "string") {
-          details = responseJson.detail;
-        }
-      } catch {
-        // Ignore JSON parse failures for error bodies.
-      }
-
+      // Details reach the command reply and the voice tool's result to the model, so ElevenLabs'
+      // own message travels only in providerDetail.
       return {
         success: false,
         errorKind: "request_failed",
         statusCode: response.status,
-        details,
+        details: `HTTP ${response.status}`,
+        providerDetail: await readElevenLabsErrorDetail(response, request.apiKey),
       };
     }
 
@@ -153,7 +151,7 @@ export async function synthesizeSpeechWithElevenLabs(request: ElevenLabsTtsReque
     };
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError" && !request.abortSignal?.aborted) {
       return {
         success: false,
         errorKind: "timeout",

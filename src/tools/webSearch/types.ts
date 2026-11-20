@@ -2,7 +2,7 @@
  * Web Search engine-abstraction types.
  *
  * Defines the uniform interface implemented by each search engine
- * (Brave, DuckDuckGo, Felo — and SearXNG in Phase 2). The dispatcher
+ * (Brave, SearXNG, OpenRouter, and DuckDuckGo). The dispatcher
  * walks an ordered chain of engines per category, calling `search()`
  * on the first one whose `available()` returns true.
  */
@@ -18,24 +18,30 @@ export const BASE_SEARCH_CATEGORIES = ["text", "image", "video", "news"] as cons
 /**
  * SearXNG-only vertical categories. The dispatcher will skip engines that
  * don't support these and return the normal category-unavailable message when
- * no SearXNG sidecar is configured.
+ * no SearXNG server is configured.
  */
-export const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
+const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
 
 export const SEARCH_CATEGORIES = [...BASE_SEARCH_CATEGORIES, ...SEARXNG_ONLY_SEARCH_CATEGORIES] as const;
 
 /**
  * Search categories supported by the unified `web_search` tool.
  *
- * Only `text` has fallback engines (DDG/Felo). Brave supports the base four.
+ * Only `text` has a keyless fallback (DuckDuckGo). Brave supports the base four.
  * SearXNG supports the base four plus the SearXNG-only verticals above.
  */
 export type SearchCategory = (typeof SEARCH_CATEGORIES)[number];
 
+/** Why an engine failed, carried on its failed result's `data` so the dispatcher can tell a refusal from an outage. */
+export interface WebSearchEngineFailure {
+  failure: string;
+  status?: number;
+}
+
 /**
  * Canonical engine identifiers. Used for logging and embed labelling.
  */
-export type WebSearchEngineName = "brave" | "searxng" | "duckduckgo" | "felo";
+export type WebSearchEngineName = "brave" | "searxng" | "openrouter" | "duckduckgo";
 
 /**
  * Uniform contract every web-search engine implements so the dispatcher
@@ -43,7 +49,7 @@ export type WebSearchEngineName = "brave" | "searxng" | "duckduckgo" | "felo";
  * which engine handles them.
  */
 export interface WebSearchEngine {
-  /** Stable identifier — used for logs, telemetry, and embed provider labels. */
+  /** Stable identifier : used for logs, telemetry, and embed provider labels. */
   readonly name: WebSearchEngineName;
 
   /**
@@ -57,14 +63,14 @@ export interface WebSearchEngine {
 
   /**
    * Whether this engine can handle the given category.
-   * DDG/Felo return true only for `text`; Brave supports the base four;
+   * DuckDuckGo returns true only for `text`; Brave supports the base four;
    * SearXNG supports the base four plus its specialty verticals.
    */
   supportsCategory(category: SearchCategory): boolean;
 
   /**
    * Execute the search. Implementations are expected to return a fully
-   * formed ToolResult — including any Discord side-effects (embeds /
+   * formed ToolResult : including any Discord side-effects (embeds /
    * attachments) the engine wants to surface.
    *
    * @param count - Optional result count hint from the LLM. Engines that

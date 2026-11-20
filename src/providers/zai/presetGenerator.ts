@@ -15,15 +15,19 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
 import type { OpenAICompatibleToolAdapter } from "@/providers/openaiCompatible/openaiCompatibleToolAdapter";
 import { getZaiToolAdapter } from "@/providers/zai/zaiToolAdapter";
-import { sanitizeSampleDialogueText } from "@/providers/google/presetGenerator";
 import { toZaiApiModelName, ZAI_GENERAL_CHAT_COMPLETIONS_URL, ZAI_REASONING_MODELS } from "@/providers/zai/zaiShared";
 import {
   buildPresetResponseSchema,
   buildPresetPrompt,
   buildToolErrorResult,
+  extractPresetGenerationFields,
+  PRESET_SCHEMA_MISS_CODES,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
   type PresetMessage,
   type PresetToolCall,
 } from "@/providers/utils/presetCommon";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
 /** Options for Z.ai preset generation. */
 interface ZaiPresetGenerationOptions {
@@ -32,9 +36,9 @@ interface ZaiPresetGenerationOptions {
   tools?: Array<Record<string, unknown>>;
   toolContext?: ToolContext;
   maxToolRounds?: number;
-  /** Override endpoint URL — used by Zaicoding to point to its coding endpoint. */
+  /** Override endpoint URL: used by Zaicoding to point to its coding endpoint. */
   endpointUrl?: string;
-  /** Override tool adapter — used by Zaicoding to supply its own adapter. */
+  /** Override tool adapter: used by Zaicoding to supply its own adapter. */
   toolAdapter?: OpenAICompatibleToolAdapter;
 }
 
@@ -57,8 +61,6 @@ function buildZaiPresetSystemPrompt(): string {
 /**
  * Generate preset data from user prompts using the Z.ai API.
  *
- * @param apiKey - Decrypted Z.ai API key
- * @param params - Generation parameters (character info, instructions, image)
  * @param _locale - User's locale (reserved for future error localisation)
  * @param options - Z.ai-specific options (model, tools, temperature, endpointUrl, toolAdapter)
  * @returns Generated preset or a typed error result
@@ -73,7 +75,6 @@ export async function generatePresetFromPromptZai(
     return { error: "Invalid Z.ai API key", errorType: "API_KEY" };
   }
 
-  // Strip the zai/ prefix so the API receives the raw model name
   const apiModel = toZaiApiModelName(options.model);
   const toolAdapter = options.toolAdapter ?? getZaiToolAdapter();
   const endpointUrl = options.endpointUrl ?? ZAI_GENERAL_CHAT_COMPLETIONS_URL;
@@ -81,7 +82,6 @@ export async function generatePresetFromPromptZai(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildZaiPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },
@@ -89,18 +89,18 @@ export async function generatePresetFromPromptZai(
 
   const maxToolRounds = options.maxToolRounds ?? 3;
   let toolRounds = 0;
+  const maxOutputTokens = resolvePresetGenerationMaxOutputTokens({ configured: params.maxOutputTokens });
 
   while (true) {
-    // 2. Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       response_format: { type: "json_object" },
       stream: false,
     };
 
-    // 3. Skip temperature for reasoning models (they don't support it)
+    // Skip temperature for reasoning models (they don't support it)
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = options.temperature ?? 1.0;
     }
@@ -110,7 +110,6 @@ export async function generatePresetFromPromptZai(
       body.tool_choice = "auto";
     }
 
-    // 4. Send the request
     const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
@@ -131,7 +130,7 @@ export async function generatePresetFromPromptZai(
         },
       });
       return {
-        error: `Z.ai request failed (${response.status}): ${response.statusText}`,
+        error: `Z.ai request failed (HTTP ${response.status}).`,
         errorType: "CONNECTION",
       };
     }
@@ -153,7 +152,6 @@ export async function generatePresetFromPromptZai(
       };
     }
 
-    // 5. Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -206,7 +204,11 @@ export async function generatePresetFromPromptZai(
           }
         }
 
-        const convertedResult = toolAdapter.convertResult(toolResult ?? buildToolErrorResult("Tool execution failed"));
+        if (!toolResult?.success) {
+          return { error: "Persona web search failed.", errorType: "MODEL_ERROR", failureStage: "web_search" };
+        }
+
+        const convertedResult = toolAdapter.convertResult(toolResult);
         const resultContent =
           typeof convertedResult.content === "string"
             ? convertedResult.content
@@ -222,7 +224,6 @@ export async function generatePresetFromPromptZai(
       continue;
     }
 
-    // 6. Extract and parse the final JSON response
     const responseText = typeof message.content === "string" ? message.content.trim() : "";
     if (!responseText) {
       return {
@@ -231,59 +232,23 @@ export async function generatePresetFromPromptZai(
       };
     }
 
-    let parsedResponse: {
-      attribute_list?: string[];
-      sample_dialogues_in?: string[];
-      sample_dialogues_out?: string[];
-    };
-
-    try {
-      parsedResponse = JSON.parse(responseText);
-    } catch (parseError) {
-      log.error("Z.ai preset generation JSON parse failed", parseError as Error);
+    const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
+      log.error("Z.ai preset generation response could not be parsed", parseError),
+    );
+    if (!decoded.ok) {
+      log.error(`Z.ai preset generation rejected: ${decoded.failure.code}`);
       return {
-        error: "Invalid JSON response from Z.ai.",
-        errorType: "INVALID_JSON",
+        error: PRESET_SCHEMA_MISS_CODES.includes(decoded.failure.code)
+          ? presetGenerationFailureMessage(decoded.failure)
+          : "Invalid JSON response from Z.ai.",
+        errorType: presetGenerationFailureErrorType(decoded.failure),
       };
     }
-
-    if (!parsedResponse.attribute_list || !parsedResponse.sample_dialogues_in || !parsedResponse.sample_dialogues_out) {
-      return {
-        error: "Generated character data is incomplete. Please try again.",
-        errorType: "INVALID_JSON",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-      return {
-        error: "Generated attribute list must contain exactly 6 items. Please try again.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 user inputs.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 character responses.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-    const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
     const preset = {
       tomori_nickname: params.characterName,
       trigger_words: [params.characterName],
-      attribute_list: parsedResponse.attribute_list,
-      sample_dialogues_in: sanitizedDialoguesIn,
-      sample_dialogues_out: sanitizedDialoguesOut,
+      ...decoded.preset,
     };
 
     log.success(`Z.ai preset generation successful for ${params.characterName}`);

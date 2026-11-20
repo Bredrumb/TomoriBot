@@ -1,6 +1,14 @@
+import { buildExampleJsonFromSchema } from "@/providers/utils/structuredOutput";
+import {
+  parsePrivateStructuredOutput,
+  privateStructuredFailure,
+  readStructuredResponse,
+} from "@/providers/utils/structuredReview";
 import type { z } from "zod";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
+import { buildZaiThinkingRequest } from "@/utils/provider/thinkingControl";
 import {
   toZaiApiModelName,
   ZAI_GENERAL_CHAT_COMPLETIONS_URL,
@@ -12,56 +20,6 @@ import {
  * Build an example JSON object from a JSON Schema definition.
  * Used to steer the model toward the correct output shape.
  */
-function buildExampleJsonFromSchema(schema: unknown): unknown {
-  if (!schema || typeof schema !== "object") {
-    return {};
-  }
-
-  const record = schema as Record<string, unknown>;
-
-  if ("const" in record) {
-    return record.const;
-  }
-
-  if (Array.isArray(record.enum) && record.enum.length > 0) {
-    return record.enum[0];
-  }
-
-  if (Array.isArray(record.anyOf) && record.anyOf.length > 0) {
-    return buildExampleJsonFromSchema(record.anyOf[0]);
-  }
-
-  const schemaType = record.type;
-  if (schemaType === "object") {
-    const properties =
-      record.properties && typeof record.properties === "object" ? (record.properties as Record<string, unknown>) : {};
-    const example: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(properties)) {
-      example[key] = buildExampleJsonFromSchema(value);
-    }
-    return example;
-  }
-
-  if (schemaType === "array") {
-    return [buildExampleJsonFromSchema(record.items)];
-  }
-
-  if (schemaType === "integer" || schemaType === "number") {
-    const minimum = typeof record.minimum === "number" && Number.isFinite(record.minimum) ? record.minimum : 0;
-    return minimum;
-  }
-
-  if (schemaType === "boolean") {
-    return false;
-  }
-
-  if (schemaType === "string") {
-    return "<string>";
-  }
-
-  return {};
-}
-
 /**
  * Build a system prompt that steers the model toward valid JSON output
  * matching the provided schema.
@@ -92,7 +50,6 @@ function buildZaiStructuredSystemPrompt(
  * Call Z.ai with JSON Output (`response_format: json_object`).
  * Uses prompt-steered schema injection + Zod validation,
  * similar to the DeepSeek structured output approach.
- * @param request - The structured JSON request parameters
  * @param responseSchema - JSON Schema describing the expected response shape
  * @param zodSchema - Zod schema for runtime validation of the parsed response
  * @returns Structured output result with parsed data or error
@@ -114,7 +71,6 @@ export async function callZaiStructuredJSON<T>(
   }
 
   try {
-    // 1. Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages: [
@@ -145,12 +101,13 @@ export async function callZaiStructuredJSON<T>(
       stream: false,
     };
 
-    // 2. Skip temperature for reasoning models
-    if (!ZAI_REASONING_MODELS.includes(apiModel)) {
+    const thinking = request.thinkingLevel === undefined ? undefined : buildZaiThinkingRequest(request.thinkingLevel);
+    if (thinking?.thinking) body.thinking = thinking.thinking;
+    // Skip temperature for reasoning models
+    if (!ZAI_REASONING_MODELS.includes(apiModel) && !thinking?.omitSampling) {
       body.temperature = request.temperature ?? 1.0;
     }
 
-    // 3. Send the request
     const response = await fetch(request.endpointUrl || ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -158,9 +115,20 @@ export async function callZaiStructuredJSON<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: request.abortSignal,
     });
 
     if (!response.ok) {
+      if (request.privateOutput) {
+        return privateStructuredFailure(
+          request,
+          "transport",
+          response.status,
+          undefined,
+          undefined,
+          await readProviderErrorBody(response, request.apiKey),
+        );
+      }
       const errorBody = await response.text();
       log.error("Z.ai structured JSON request failed", new Error(errorBody), {
         errorType: "ZaiStructuredJSONHttpError",
@@ -175,9 +143,9 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 4. Parse the response
-    const result = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
+    const result = (await readStructuredResponse(request, response)) as {
+      usage?: unknown;
+      choices?: Array<{ message?: { content?: unknown; refusal?: unknown } }>;
     };
     const messageContent = result.choices?.[0]?.message?.content;
     const responseText =
@@ -199,6 +167,14 @@ export async function callZaiStructuredJSON<T>(
               .trim()
           : "";
 
+    if (request.privateOutput)
+      return parsePrivateStructuredOutput(
+        request,
+        responseText,
+        zodSchema,
+        result.usage,
+        Boolean(result.choices?.[0]?.message?.refusal),
+      );
     if (!responseText) {
       log.warn("Z.ai structured JSON returned empty response", {
         model: apiModel,
@@ -209,7 +185,6 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 5. Parse JSON
     let parsed: unknown;
     try {
       parsed = JSON.parse(responseText);
@@ -228,7 +203,6 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 6. Validate with Zod
     const validationResult = zodSchema.safeParse(parsed);
     if (!validationResult.success) {
       log.error("Z.ai structured JSON validation failed", validationResult.error);
@@ -243,6 +217,7 @@ export async function callZaiStructuredJSON<T>(
       data: validationResult.data,
     };
   } catch (error) {
+    if (request.privateOutput) return privateStructuredFailure(request);
     log.error("Error calling Z.ai structured JSON", error as Error, {
       errorType: "ZaiStructuredJSONError",
       metadata: {

@@ -1,0 +1,58 @@
+diff --git a/index.ts b/index.ts
+index 5352759b4ae7efb40ed84899e38a7f3d811f4b1b..b6743333399354f23c530efea309622ea3d82683 100644
+--- a/index.ts
++++ b/index.ts
+@@ -54,6 +54,7 @@ export default function starlightLlmsTxt(opts: StarlightLllmsTextOptions = {}):
+ 								promote: opts.promote ?? ['index*'],
+ 								demote: opts.demote ?? [],
+ 								exclude: opts.exclude ?? [],
++								excludeFull: opts.excludeFull ?? [],
+ 								defaultLocale: config.defaultLocale,
+ 								locales: config.locales,
+ 								pageSeparator: opts.pageSeparator ?? '\n\n',
+diff --git a/llms-full.txt.ts b/llms-full.txt.ts
+index 03f408bf7106a64f1730c381d422ac4a911aeea9..751f65800183e4178ed0969b8ed0cc58e759bf7c 100644
+--- a/llms-full.txt.ts
++++ b/llms-full.txt.ts
+@@ -1,6 +1,7 @@
+ import type { APIRoute } from 'astro';
+ import { generateLlmsTxt } from './generator';
+ import { getSiteTitle } from './utils';
++import { starlightLllmsTxtContext } from 'virtual:starlight-llms-txt/context';
+ 
+ // Explicitly set this to prerender so it works the same way for sites in `server` mode.
+ 
+@@ -13,6 +14,7 @@ export const GET: APIRoute = async (context) => {
+ 	const body = await generateLlmsTxt(context, {
+ 		minify: false,
+ 		description: `This is the full developer documentation for ${getSiteTitle()}`,
++		exclude: starlightLllmsTxtContext.excludeFull,
+ 	});
+ 	return new Response(body);
+ };
+diff --git a/types.ts b/types.ts
+index 47fce20aadc36d3d23992007e023e35c6204e02b..e8a048861d17166c230e624a0942d948f06f6647 100644
+--- a/types.ts
++++ b/types.ts
+@@ -28,6 +28,7 @@ export interface ProjectContext {
+ 	promote: NonNullable<StarlightLllmsTextOptions['promote']>;
+ 	demote: NonNullable<StarlightLllmsTextOptions['demote']>;
+ 	exclude: NonNullable<StarlightLllmsTextOptions['exclude']>;
++	excludeFull: NonNullable<StarlightLllmsTextOptions['excludeFull']>;
+ 	pageSeparator: NonNullable<StarlightLllmsTextOptions['pageSeparator']>;
+ 	rawContent: NonNullable<StarlightLllmsTextOptions['rawContent']>;
+ 	customSelectors: NonNullable<StarlightLllmsTextOptions['customSelectors']>;
+@@ -197,6 +198,13 @@ export interface StarlightLllmsTextOptions {
+ 	 */
+ 	exclude?: string[];
+ 
++	/**
++	 * Slugs of pages to exclude from `llms-full.txt`. Supports glob patterns.
++	 *
++	 * @default []
++	 */
++	excludeFull?: string[];
++
+ 	/**
+ 	 * String used to separate pages in the generated text.
+ 	 * @default "\n\n"

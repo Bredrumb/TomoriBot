@@ -1,6 +1,81 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import type { RawStreamChunk } from "@/types/stream/interfaces";
+import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
+import { log } from "@/utils/misc/logger";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+it("records the final Google request shape on rejection without retaining its content", async () => {
+  const info = spyOn(log, "info").mockImplementation(() => {});
+  const section = spyOn(log, "section").mockImplementation(() => {});
+  try {
+    for (const withToolHistory of [false, true]) {
+      let requestRoles: string[] = [];
+      globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { contents: Array<{ role: string }> };
+        requestRoles = body.contents.map((content) => content.role);
+        return new Response(JSON.stringify({ error: { code: 400, message: "Rejected", status: "INVALID_ARGUMENT" } }), {
+          status: 400,
+        });
+      }) as typeof fetch;
+      const context = {
+        channel: { id: "channel-1" },
+        client: {},
+        tomoriState: createPersona({
+          llm: createLlmRow({ llm_provider: "google", llm_codename: "gemini-3.5-flash-lite" }),
+        }),
+        contextItems: Array.from({ length: 8 }, (_, index) => ({
+          role: index % 2 === 0 ? "user" : "model",
+          parts: [{ type: "text", text: index === 7 && !withToolHistory ? "PRIVATE_PREFILL" : "PRIVATE_PROMPT" }],
+        })),
+        currentTurnModelParts: [],
+        provider: "google",
+        locale: "en-US",
+        outputPrefill: withToolHistory ? undefined : "PRIVATE_PREFILL",
+        functionInteractionHistory: withToolHistory
+          ? [
+              {
+                functionCall: { name: "fixture_tool", args: { value: "PRIVATE_ARGUMENT" } },
+                functionResponse: { functionResponse: { name: "fixture_tool", response: { value: "PRIVATE_RESULT" } } },
+              },
+            ]
+          : undefined,
+      } as unknown as StreamContext;
+      const adapter = new GoogleStreamAdapter();
+      const chunks: RawStreamChunk[] = [];
+      for await (const chunk of adapter.startStream(
+        { model: "gemini-3.5-flash-lite", apiKey: "PRIVATE_KEY" } as StreamConfig,
+        context,
+      )) {
+        chunks.push(chunk);
+      }
+      expect(adapter.processChunk(chunks.at(-1) as RawStreamChunk).type).toBe("error");
+      expect(context.requestDiagnostics).toMatchObject({
+        model: "gemini-3.5-flash-lite",
+        contextItemCount: 8,
+        contentsCount: requestRoles.length,
+        tailRoles: requestRoles.slice(-5),
+        functionHistoryCount: withToolHistory ? 1 : 0,
+        prefillPresent: !withToolHistory,
+        chunksReceived: 0,
+        lastTurn: { textParts: withToolHistory ? 0 : 1, functionResponseParts: withToolHistory ? 1 : 0 },
+      });
+      const diagnostics = JSON.stringify(context.requestDiagnostics);
+      for (const value of ["PRIVATE_KEY", "PRIVATE_PROMPT", "PRIVATE_PREFILL", "PRIVATE_ARGUMENT", "PRIVATE_RESULT"]) {
+        expect(diagnostics).not.toContain(value);
+      }
+    }
+  } finally {
+    info.mockRestore();
+    section.mockRestore();
+  }
+});
 
 /**
  * Builds a RawStreamChunk wrapping a Google-shaped data object.
@@ -173,6 +248,58 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
     expect(result.retryable).toBe(true);
   });
 
+  it("maps HTTP 401 JSON error to api_error, not retryable", () => {
+    const adapter = new GoogleStreamAdapter();
+    // Google double-nests the real payload inside error.message, and its ErrorInfo metadata echoes
+    // the called method back. Both shapes matter here: the code must survive extraction, and the
+    // method name must not steer classification.
+    const nested = JSON.stringify({
+      error: {
+        code: 401,
+        message:
+          "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential.",
+        status: "UNAUTHENTICATED",
+        details: [
+          {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            reason: "ACCESS_TOKEN_TYPE_UNSUPPORTED",
+            metadata: {
+              method: "google.ai.generativelanguage.v1beta.GenerativeService.StreamGenerateContent",
+              service: "generativelanguage.googleapis.com",
+            },
+          },
+        ],
+      },
+    });
+    const error = new Error(JSON.stringify({ error: { message: nested, code: 401, status: "Unauthorized" } }));
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).toBe("api_error");
+    expect(result.retryable).toBe(false);
+    expect(result.code).toBe("401");
+  });
+
+  it("does not treat the 'rate' inside GenerateContent method names as a rate limit", () => {
+    const adapter = new GoogleStreamAdapter();
+    // No parseable status code, so classification falls through to the message-content heuristics.
+    // "StreamGenerateContent" contains "rate", which used to match the rate-limit branch outright.
+    const error = new Error(
+      "Stream failed for google.ai.generativelanguage.v1beta.GenerativeService.StreamGenerateContent",
+    );
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).not.toBe("rate_limit");
+  });
+
+  it("classifies an explicit rate limit message as rate_limit", () => {
+    const adapter = new GoogleStreamAdapter();
+    const error = new Error("Rate limit exceeded for this project, please retry later");
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).toBe("rate_limit");
+    expect(result.retryable).toBe(true);
+  });
+
   it("maps HTTP 403 JSON error to api_error, not retryable", () => {
     const adapter = new GoogleStreamAdapter();
     const error = new Error('{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}');
@@ -193,7 +320,7 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("classifies RESOURCE_EXHAUSTED message as rate_limit when no JSON code present", () => {
     const adapter = new GoogleStreamAdapter();
-    // Plain error message without JSON structure — triggers fallback message-content classification.
+    // Plain error message without JSON structure, so triggers fallback message-content classification.
     // Must not include "API key" since that branch fires first in the default case.
     const error = new Error("RESOURCE_EXHAUSTED: quota exceeded for this project");
     const result = adapter.handleProviderError(error);

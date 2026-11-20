@@ -20,24 +20,11 @@ import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import type { ReminderSelectionRow } from "@/utils/db/repositories";
-import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { isBridgeUserId } from "@/utils/bridges";
+import { buildReminderOptionParts } from "@/utils/discord/reminderSelectOptions";
 
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";
 
-function formatIntervalText(minutes: number): string {
-  if (minutes <= 0) return "0 minutes";
-  if (minutes % 60 === 0) return `${minutes / 60}h`;
-  return `${minutes}m`;
-}
-
-/**
- * @param reminderToRemove - Reminder data to remove
- * @param replyInteraction - Interaction to reply to
- * @param locale - User locale
- * @param suppressSuccessReply - Skip the success embed when true
- */
 async function performReminderRemoval(
   reminderToRemove: { reminder_id: number; reminder_purpose: string },
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -79,12 +66,6 @@ async function performReminderRemoval(
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.scheduled-task.remove.description"));
 
-/**
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -119,7 +100,6 @@ export async function execute(
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
     const state = tomoriState;
 
-    // 1. Load all reminders for this server, tagged with their owning persona name
     const reminders = await serverScheduleRepository.loadReminderSelections(
       tomoriState.server_id,
       hasManagePermission ? undefined : userData.user_id,
@@ -135,51 +115,24 @@ export async function execute(
       return;
     }
 
-    // 2. Build select options — persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder: ReminderSelectionRow, index: number) => {
-      const personaName = reminder.persona_nickname ?? state.persona_nickname;
-      const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+      const parts = buildReminderOptionParts({
+        reminder,
+        state,
+        locale,
+        timezoneOffset,
+        hasManagePermission,
+        viewerUserId: userData.user_id,
+        repeatTextKey: "commands.scheduled-task.remove.select_repeat_text",
+        repeatMonthsTextKey: "commands.scheduled-task.remove.select_repeat_months_text",
+        repeatMinutesTextKey: "commands.scheduled-task.remove.select_repeat_minutes_text",
+        managerCreatedByKey: "commands.scheduled-task.remove.select_manager_created_by_text",
       });
       const channelName =
         interaction.guild?.channels.cache.get(reminder.channel_disc_id)?.name ?? reminder.channel_disc_id;
-      const repeatMinutes =
-        typeof reminder.repetition_interval_minutes === "number" && reminder.repetition_interval_minutes >= 1
-          ? reminder.repetition_interval_minutes
-          : typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-            ? reminder.repetition_interval_hours * 60
-            : 0;
-      const repeatText =
-        repeatMinutes >= 1
-          ? localizer(locale, "commands.scheduled-task.remove.select_repeat_text", {
-              interval: formatIntervalText(repeatMinutes),
-            })
-          : "";
-      // For Matrix-originated reminders (created_by_user_id = null, user_discord_id
-      // is a Matrix ID like "@bred:localhost"), show who the reminder is for so
-      // server managers can identify and clean up "orphan" reminders.
-      const isMatrixReminder = reminder.created_by_user_id === null && isBridgeUserId(reminder.user_discord_id);
-      const creatorName = isMatrixReminder
-        ? `${reminder.user_nickname} (Matrix)`
-        : (reminder.created_by_nickname ??
-          (reminder.created_by_user_id ? `user #${reminder.created_by_user_id}` : "unknown"));
-      const managerCreatedByText =
-        hasManagePermission && reminder.created_by_user_id !== userData.user_id
-          ? localizer(locale, "commands.scheduled-task.remove.select_manager_created_by_text", {
-              creator_name: creatorName,
-            })
-          : "";
       const description = localizer(locale, "commands.scheduled-task.remove.select_option_description", {
-        persona_name: personaName,
-        reminder_time: formattedTime,
-        timezone: formatUTCOffset(timezoneOffset),
+        ...parts,
         target_channel: channelName,
-        repeat_text: repeatText,
-        manager_created_by_text: managerCreatedByText,
       });
 
       return {
@@ -189,7 +142,6 @@ export async function execute(
       };
     });
 
-    // 3. Prompt user to pick a reminder to remove
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.scheduled-task.remove.modal_title",
@@ -235,7 +187,6 @@ export async function execute(
       return;
     }
 
-    // 4. Delete and show result
     const removalSucceeded = await performReminderRemoval(selectedReminder, modalSubmitInteraction, locale, true);
     if (!removalSucceeded) {
       return;

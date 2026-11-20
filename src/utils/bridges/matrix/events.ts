@@ -3,19 +3,28 @@ import type { Request as BridgeRequest, WeakEvent } from "matrix-appservice-brid
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { clearShortTermMemoryForChannel } from "@/utils/cache/shortTermMemoryCache";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { GENERIC_WEBHOOK_AVATAR_URL } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { sendMatrixInviteSetupNotice } from "./client";
-import { downloadMatrixMedia, MATRIX_MAX_ATTACHMENT_BYTES } from "./media";
-import { getDiscordChannelForRoom, getJoinViaServers } from "./rooms";
+import { downloadMatrixMedia } from "./media";
+import { ensureRoomRelayable, getDiscordChannelForRoom, getJoinViaServers } from "./rooms";
 import {
   getPersonaReplyEventMetadata,
   getTrackedPersonaReply,
   markPendingMatrixReply,
   stripMatrixReplyFallback,
 } from "./stateSync";
-import { getMatrixBridge, MATRIX_MEMBER_EVENT_TYPE, MATRIX_TEXT_MSG_TYPE } from "./state";
+import {
+  getMatrixBridge,
+  getMatrixSettings,
+  MATRIX_ENCRYPTED_EVENT_TYPE,
+  MATRIX_ENCRYPTION_STATE_TYPE,
+  MATRIX_MEMBER_EVENT_TYPE,
+  MATRIX_TEXT_MSG_TYPE,
+} from "./state";
 import { rememberMatrixDisplayName, sendMatrixTypingIndicator } from "./userMapping";
 
 export async function handleMatrixEvent(
@@ -30,6 +39,11 @@ export async function handleMatrixEvent(
     return;
   }
 
+  if (event.type === MATRIX_ENCRYPTION_STATE_TYPE || event.type === MATRIX_ENCRYPTED_EVENT_TYPE) {
+    await recheckLinkedRoomEncryption(event, discordClient);
+    return;
+  }
+
   if (event.type !== MATRIX_TEXT_MSG_TYPE) return;
 
   const isOwnVirtualUser = event.sender.startsWith("@_tomori_") && event.sender.endsWith(`:${serverName}`);
@@ -37,6 +51,7 @@ export async function handleMatrixEvent(
 
   const channelDiscId = await getDiscordChannelForRoom(event.room_id);
   if (!channelDiscId) return;
+  if (!(await ensureRoomRelayable(event.room_id, discordClient))) return;
 
   const channel = await discordClient.channels.fetch(channelDiscId).catch(() => null);
   if (!channel?.isTextBased() || channel.isDMBased()) return;
@@ -78,11 +93,22 @@ export async function handleMatrixEvent(
   const { webhook } = await getOrCreateWebhook(channel as BaseGuildTextChannel);
   if (!webhook) return;
 
-  await webhook.send({
+  await sendWebhookMessageWithIdentity(webhook, {
     content: relayContent,
     username,
+    avatarURL: GENERIC_WEBHOOK_AVATAR_URL,
     allowedMentions: { parse: [] },
   });
+}
+
+/**
+ * An encryption state event is authorized by the room's power levels, so it forces a fresh check.
+ * Any member can send an encrypted-message event, so that one only reuses the cached confirmation
+ * and catches a state change the bridge missed while offline.
+ */
+async function recheckLinkedRoomEncryption(event: WeakEvent, discordClient: Client): Promise<void> {
+  if (!(await getDiscordChannelForRoom(event.room_id))) return;
+  await ensureRoomRelayable(event.room_id, discordClient, { refresh: event.type === MATRIX_ENCRYPTION_STATE_TYPE });
 }
 
 async function handleInviteEvent(event: WeakEvent, botUserId: string): Promise<boolean> {
@@ -123,11 +149,12 @@ async function relayMatrixMediaIfNeeded(
 
   const info = content.info as Record<string, unknown> | undefined;
   const knownSize = typeof info?.size === "number" ? info.size : undefined;
-  if (knownSize !== undefined && knownSize > MATRIX_MAX_ATTACHMENT_BYTES) {
+  if (knownSize !== undefined && knownSize > getMatrixSettings().maxAttachmentBytes) {
     const sizeMb = (knownSize / (1024 * 1024)).toFixed(1);
-    await webhook.send({
+    await sendWebhookMessageWithIdentity(webhook, {
       content: `[Matrix: attachment too large to relay (${sizeMb} MB)]`,
       username,
+      avatarURL: GENERIC_WEBHOOK_AVATAR_URL,
       allowedMentions: { parse: [] },
     });
     return true;
@@ -142,18 +169,20 @@ async function relayMatrixMediaIfNeeded(
       knownSize,
     );
     if (media) {
-      await webhook.send({
+      await sendWebhookMessageWithIdentity(webhook, {
         files: [{ attachment: media.buffer, name: filename }],
         username,
+        avatarURL: GENERIC_WEBHOOK_AVATAR_URL,
         allowedMentions: { parse: [] },
       });
       return true;
     }
   }
 
-  await webhook.send({
+  await sendWebhookMessageWithIdentity(webhook, {
     content: `[Matrix: attachment unavailable - ${filename}]`,
     username,
+    avatarURL: GENERIC_WEBHOOK_AVATAR_URL,
     allowedMentions: { parse: [] },
   });
   return true;
@@ -194,8 +223,8 @@ async function handleMatrixRefresh(channel: BaseGuildTextChannel, channelDiscId:
   await channel.send({
     embeds: [
       new EmbedBuilder()
-        .setTitle(localizer("en-US", "commands.tool.refresh.title"))
-        .setDescription(localizer("en-US", "commands.tool.refresh.response"))
+        .setTitle(localizer("en-US", "commands.refresh.title"))
+        .setDescription(localizer("en-US", "commands.refresh.response"))
         .setColor(ColorCode.SECTION),
     ],
     flags: MessageFlags.SuppressNotifications,
