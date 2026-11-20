@@ -107,7 +107,7 @@ describe("comment policy", () => {
 
     const findings = inspectCommentPolicySource(source);
 
-    expect(findings.map((finding) => finding.rule)).toEqual(["numbered-narration"]);
+    expect(findings.map((finding) => finding.rule)).toEqual(["numbered-narration", "disallowed-jsdoc"]);
   });
 
   it("finds compound, sub-indexed, and parenthesized narration", () => {
@@ -195,104 +195,21 @@ describe("comment policy", () => {
     ).toEqual(["obvious-narration"]);
   });
 
-  it("finds JSDoc tags that only repeat the identifier or its type", () => {
+  it("rejects JSDoc while allowing single-line public directives and license headers", () => {
     const source = [
+      "/** Copyright example */",
+      "/** @public dynamic timer */",
+      "export const timer = 1;",
+      "/** Description */",
+      "export const value = 1;",
+      "/** @public */",
+      "export const invalid = 1;",
       "/**",
-      " * Resolve one request.",
-      " * @param request - Provider native image generation request",
+      " * @public dynamic timer",
       " */",
-      "export function resolve(request: ProviderNativeImageGenerationRequest): void {}",
-      "/**",
-      " * Find a server.",
-      " * @returns Promise<string | null>",
-      " */",
-      "export function find(name: string): Promise<string | null> {",
-      "  return Promise.resolve(name);",
-      "}",
-      "",
+      "export const multiline = 1;",
     ].join("\n");
-
-    expect(inspectCommentPolicySource(source).map((finding) => finding.rule)).toEqual([
-      "jsdoc-restatement",
-      "jsdoc-restatement",
-    ]);
-  });
-
-  it("reports a JSDoc summary that echoes the identifier only while auditing", () => {
-    const source = [
-      "/**",
-      " * Build system prompt for LLM",
-      " */",
-      "export function buildSystemPrompt(): string {",
-      '  return "";',
-      "}",
-      "",
-    ].join("\n");
-
-    expect(inspectCommentPolicySource(source)).toEqual([]);
-    expect(
-      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map((finding) => finding.rule),
-    ).toEqual(["obvious-narration"]);
-  });
-
-  it("sees through abbreviations, inflections, and condition words when a summary echoes a name", () => {
-    const source = [
-      "/**",
-      " * Parses a positive-integer environment variable, falling back to the given",
-      " * default when unset, non-numeric, or non-positive.",
-      " */",
-      "function parsePositiveIntEnv(name: string, fallback: number): number {",
-      "  return fallback;",
-      "}",
-      "",
-    ].join("\n");
-
-    expect(
-      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map((finding) => finding.rule),
-    ).toEqual(["obvious-narration"]);
-  });
-
-  it("checks type and constant docblocks, and keeps one that states a unit", () => {
-    const source = [
-      "/** News search result */",
-      "export interface NewsResult {}",
-      "",
-      "/** Timeout in milliseconds for the GitHub API fetch */",
-      "const GITHUB_API_TIMEOUT_MS = 10000;",
-      "",
-    ].join("\n");
-
-    expect(
-      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map((finding) => finding.text),
-    ).toEqual(["/** News search result */"]);
-  });
-
-  it("keeps a JSDoc summary that documents a side effect beyond the identifier", () => {
-    const source = [
-      "/**",
-      " * Connect to a single guild MCP server and register it in the shared pool.",
-      " */",
-      "export function connectGuildMcpServer(): void {}",
-      "",
-    ].join("\n");
-
-    expect(inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true })).toEqual([]);
-  });
-
-  it("keeps JSDoc tags that add what the type cannot express", () => {
-    const source = [
-      "/**",
-      " * Join supported modes.",
-      " * @param modes - Empty when the provider reports no capabilities",
-      " * @returns Comma-joined list, or empty string when no modes are supported",
-      " */",
-      "export function joinModes(modes: string[]): string {",
-      '  return modes.join(",");',
-      "}",
-      "",
-    ].join("\n");
-
-    expect(inspectCommentPolicySource(source)).toEqual([]);
+    expect(inspectCommentPolicySource(source).filter((finding) => finding.rule === "disallowed-jsdoc")).toHaveLength(3);
   });
 
   it("finds a continuation left without its opening comment", () => {
@@ -330,7 +247,7 @@ describe("comment policy", () => {
   it("finds empty JSDoc left after partial cleanup", () => {
     const findings = inspectCommentPolicySource("/**\n *\n */\nexport function value(): void {}\n");
 
-    expect(findings.map((finding) => finding.rule)).toEqual(["orphaned-comment"]);
+    expect(findings.map((finding) => finding.rule)).toEqual(["orphaned-comment", "disallowed-jsdoc"]);
   });
 });
 
@@ -352,35 +269,22 @@ describe("new comments", () => {
     "",
   ].join("\n");
 
-  it("holds a new line-comment block to three lines", () => {
-    expect(rulesFor(FOUR_LINE_BLOCK)).toEqual([["long-new-comment", "error"]]);
-    expect(rulesFor(FOUR_LINE_BLOCK.split("\n").slice(1).join("\n"))).toEqual([]);
+  it("limits new comments to two lines and one sentence", () => {
+    expect(
+      rulesFor("// The cache stays warm because callers reuse it. Another sentence.\nconst value = true;\n"),
+    ).toEqual([["new-multi-sentence", "error"]]);
+    expect(
+      rulesFor(
+        "// The cache stays warm because\n// callers reuse it across requests.\n// This continues the rationale.\nconst value = true;\n",
+      ),
+    ).toEqual([
+      ["long-new-comment", "error"],
+      ["new-multi-sentence", "error"],
+    ]);
   });
 
   it("leaves an older long block alone when only one of its lines changed", () => {
     expect(rulesFor(FOUR_LINE_BLOCK, new Map([["fixture.ts", new Set([2])]]))).toEqual([]);
-  });
-
-  it("counts JSDoc description lines but not tags", () => {
-    const tagged = [
-      "/**",
-      " * Copies a persona's sprite because history shows it by label.",
-      " * @param modifier - Label text without the colon",
-      " * @param context - Stream state, read for the guild",
-      " * @returns Null when no participant matches",
-      " */",
-      "export function resolve(modifier: string, context: string): string | null {",
-      "  return modifier || context;",
-      "}",
-      "",
-    ].join("\n");
-    const narrative = tagged.replace(
-      " * Copies a persona's sprite because history shows it by label.",
-      [" * First line of story.", " * Second line of story.", " * Third line of story.", " * Fourth line."].join("\n"),
-    );
-
-    expect(rulesFor(tagged)).toEqual([]);
-    expect(rulesFor(narrative)).toEqual([["long-new-comment", "error"]]);
   });
 
   it("warns when a new comment states no reason, without repeating a narration error", () => {
@@ -627,7 +531,7 @@ describe("audit block signals", () => {
         auditLimits: DEFAULT_AUDIT_LIMITS,
         auditNarration: true,
       }),
-    ).toEqual([]);
+    ).toEqual([expect.objectContaining({ rule: "disallowed-jsdoc" })]);
   });
 
   it("reports the length rule as a warning that never fails the command", () => {

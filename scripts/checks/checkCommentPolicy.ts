@@ -72,49 +72,6 @@ const RATIONALE_PATTERN = new RegExp(
 // Units are contract information a caller cannot infer from a name or type.
 const UNIT_SIGNALS = ["bytes", "characters", "days", "hours", "milliseconds", "minutes", "seconds"];
 const REASON_PATTERN = new RegExp(String.raw`\b(?:${[...REASON_SIGNALS, ...UNIT_SIGNALS].join("|")})\b|[:(]`, "i");
-// Identifiers abbreviate what prose spells out, so both sides collapse to the long form before
-// they are compared.
-const IDENTIFIER_ALIASES: Readonly<Record<string, string>> = {
-  arg: "argument",
-  attr: "attribute",
-  cfg: "configuration",
-  config: "configuration",
-  ctx: "context",
-  db: "database",
-  env: "environment",
-  fn: "function",
-  impl: "implementation",
-  int: "integer",
-  msg: "message",
-  num: "number",
-  param: "parameter",
-  perm: "permission",
-  repo: "repository",
-  req: "request",
-  res: "response",
-  str: "string",
-  util: "utility",
-};
-const SUMMARY_STOPWORDS = new Set([
-  "all",
-  "and",
-  "any",
-  "are",
-  "for",
-  "from",
-  "given",
-  "his",
-  "into",
-  "its",
-  "not",
-  "specific",
-  "the",
-  "their",
-  "this",
-  "was",
-  "with",
-]);
-const SUMMARY_ADDED_WORD_LIMIT = 2;
 const SECTION_DIVIDER_PATTERN = /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
@@ -122,9 +79,7 @@ const LICENSE_HEADER_PATTERN =
 // decision rather than rationale copied between call sites.
 const INLINE_SUPPRESSION_PATTERN = /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable/;
 const TEST_PATH_PATTERN = /(?:^|\/)tests\//;
-// The policy's own ceiling: past this, a comment "usually retells how the code came to be".
-const NEW_COMMENT_MAX_LINES = 3;
-const JSDOC_TAG_LINE_PATTERN = /^@\w/;
+const NEW_COMMENT_MAX_LINES = 2;
 
 // Thresholds are passed via this interface instead of ambient env reads so self-tests stay deterministic under
 // maintainer overrides.
@@ -139,7 +94,7 @@ export const DEFAULT_AUDIT_LIMITS: CommentAuditLimits = {
   // short identifier runs from triggering on word count alone.
   duplicateMinChars: 60,
   duplicateMinWords: 12,
-  longBlockMinLines: 11,
+  longBlockMinLines: 8,
 };
 
 // Whole-string digit matching is used instead of `parseInt` so typos like `12words` or `2.5` fall back to the default
@@ -167,7 +122,8 @@ export type CommentPolicyRule =
   | "long-comment-block"
   | "long-new-comment"
   | "orphaned-comment"
-  | "jsdoc-restatement"
+  | "disallowed-jsdoc"
+  | "new-multi-sentence"
   | "numbered-narration"
   | "obvious-narration"
   | "prose-dash"
@@ -289,7 +245,7 @@ export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Pr
     const fileFindings = [
       ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
       ...collectStructuralCommentFindings(source, file),
-      ...collectJsDocFindings(source, file, options),
+      ...collectJsDocFindings(source, file),
       ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, auditLimits) : []),
       ...collectNewCommentFindings(source, file, options.changedLines),
       ...collectLocaleStringFindings(source, file),
@@ -338,7 +294,7 @@ export function inspectCommentPolicySource(
     ...collectLocaleStringFindings(source, file),
     ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
     ...collectStructuralCommentFindings(source, file),
-    ...collectJsDocFindings(source, file, options),
+    ...collectJsDocFindings(source, file),
     ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, limits) : []),
     ...collectNewCommentFindings(source, file, options.changedLines),
   ];
@@ -408,8 +364,6 @@ export function findDuplicateCommentBlocks(
   return findings;
 }
 
-// JSDoc and test files stay excluded because JSDoc rules govern contracts and test comments explain fixture context
-// names cannot carry.
 export function collectLongCommentBlockFindings(
   source: string,
   file: string,
@@ -461,6 +415,16 @@ export function collectNewCommentFindings(
       findings.push(lengthFinding(block.startLine, block.lines.length, text));
     }
     const prose = block.lines.join(" ");
+    if (/[.!?]["')\]]*\s+[A-Z]/.test(prose)) {
+      findings.push({
+        file,
+        line: block.startLine,
+        message: "Keep one sentence per comment.",
+        rule: "new-multi-sentence",
+        severity: "error",
+        text,
+      });
+    }
     const firstLine: CommentLine = { file, kind: "line", line: block.startLine, standalone: true, text };
     if (!RATIONALE_PATTERN.test(prose) && !REASON_PATTERN.test(prose) && !isNarrationCandidate(firstLine)) {
       findings.push({
@@ -474,34 +438,7 @@ export function collectNewCommentFindings(
     }
   }
 
-  for (const token of collectCommentTokens(source, file)) {
-    if (token.kind !== "block" || token.inline || (token.line <= 10 && LICENSE_HEADER_PATTERN.test(token.text))) {
-      continue;
-    }
-    const prose = jsDocProseLines(token);
-    const [first] = prose;
-    if (first && prose.length > NEW_COMMENT_MAX_LINES && isNew(prose.map((line) => line.line))) {
-      findings.push(lengthFinding(first.line, prose.length, first.text));
-    }
-  }
   return findings;
-}
-
-// JSDoc tags are excluded because dedicated JSDoc rules check them and kept tags carry contract detail rather than
-// narrative.
-function jsDocProseLines(token: CommentToken): { line: number; text: string }[] {
-  const lines: { line: number; text: string }[] = [];
-  for (const [offset, raw] of token.text.split(/\r?\n/).entries()) {
-    const text = raw
-      .trim()
-      .replace(/^\/\*\*?/, "")
-      .replace(/\*\/$/, "")
-      .replace(/^\*/, "")
-      .trim();
-    if (JSDOC_TAG_LINE_PATTERN.test(text)) break;
-    if (text) lines.push({ line: token.line + offset, text });
-  }
-  return lines;
 }
 
 async function loadExceptions(path: string): Promise<CommentPolicyException[]> {
@@ -536,7 +473,7 @@ function isCommentPolicyException(value: unknown): value is CommentPolicyExcepti
     typeof entry.file === "string" &&
     typeof entry.reason === "string" &&
     typeof entry.text === "string" &&
-    (entry.rule === "jsdoc-restatement" ||
+    (entry.rule === "disallowed-jsdoc" ||
       entry.rule === "orphaned-comment" ||
       entry.rule === "numbered-narration" ||
       entry.rule === "prose-dash" ||
@@ -750,173 +687,19 @@ function inspectCommentLine(
   return findings;
 }
 
-// Type matching is exact after normalization, never substring, because descriptions containing a type name often add
-// units, nullability, or failure behavior.
-function collectJsDocFindings(
-  source: string,
-  file: string,
-  options: Pick<CommentPolicyOptions, "auditNarration" | "changedLines">,
-): CommentPolicyFinding[] {
-  const scriptKind = file.toLowerCase().endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
-  const sourceLines = source.split(/\r?\n/);
-  const findings: CommentPolicyFinding[] = [];
-
-  const record = (tag: ts.JSDocTag, message: string): void => {
-    const line = sourceFile.getLineAndCharacterOfPosition(tag.getStart(sourceFile)).line;
-    findings.push({
+function collectJsDocFindings(source: string, file: string): CommentPolicyFinding[] {
+  return collectCommentTokens(source, file)
+    .filter((token) => token.kind === "block" && token.text.startsWith("/**"))
+    .filter((token) => !(token.line <= 10 && LICENSE_HEADER_PATTERN.test(token.text)))
+    .filter((token) => !/^\/\*\*\s+@public[ \t]+[^\s*][^\r\n]*?\s*\*\/$/.test(token.text))
+    .map((token) => ({
       file,
-      line: line + 1,
-      message,
-      rule: "jsdoc-restatement",
-      severity: "error",
-      text: (sourceLines[line] ?? "").trim(),
-    });
-  };
-
-  const recordSummaryEcho = (block: ts.JSDoc, summary: string): void => {
-    const start = sourceFile.getLineAndCharacterOfPosition(block.getStart(sourceFile)).line;
-    const end = sourceFile.getLineAndCharacterOfPosition(block.getEnd()).line;
-    let line = start;
-    for (let index = start; index <= end; index++) {
-      if (stripJsDocDecoration(sourceLines[index] ?? "")) {
-        line = index;
-        break;
-      }
-    }
-
-    const changed = options.changedLines?.get(file)?.has(line + 1);
-    if (!options.auditNarration && !changed) {
-      return;
-    }
-
-    findings.push({
-      file,
-      line: line + 1,
-      message: `This summary restates "${summary}" back from the identifier; add rationale or remove the block.`,
-      rule: "obvious-narration",
-      severity: changed ? "error" : "warning",
-      text: (sourceLines[line] ?? "").trim(),
-    });
-  };
-
-  const visit = (node: ts.Node): void => {
-    const block = (node as ts.Node & { jsDoc?: ts.JSDoc[] }).jsDoc?.[0];
-    const identifier = block ? documentedIdentifier(node, sourceFile) : undefined;
-    if (block && identifier) {
-      const body = (ts.getTextOfJSDocComment(block.comment) ?? "").replace(/\s+/g, " ").trim();
-      if (body && !REASON_PATTERN.test(body) && echoesIdentifier(identifier, firstClause(body))) {
-        recordSummaryEcho(block, identifier);
-      }
-    }
-
-    if (ts.isFunctionLike(node)) {
-      for (const tag of ts.getAllJSDocTags(node, ts.isJSDocParameterTag)) {
-        const described = normalizeJsDocPhrase(ts.getTextOfJSDocComment(tag.comment));
-        if (!described) {
-          continue;
-        }
-
-        const parameterName = tag.name.getText(sourceFile);
-        const declared = node.parameters.find((parameter) => parameter.name.getText(sourceFile) === parameterName);
-        const declaredType = declared?.type ? normalizeJsDocPhrase(declared.type.getText(sourceFile)) : "";
-
-        if (described === normalizeJsDocPhrase(parameterName)) {
-          record(tag, `@param ${parameterName} only restates the parameter name; drop the tag.`);
-        } else if (declaredType && described === declaredType) {
-          record(tag, `@param ${parameterName} only restates its TypeScript type; drop the tag.`);
-        }
-      }
-
-      for (const tag of ts.getAllJSDocTags(node, ts.isJSDocReturnTag)) {
-        const described = normalizeJsDocPhrase(ts.getTextOfJSDocComment(tag.comment));
-        const returnType = node.type ? normalizeJsDocPhrase(node.type.getText(sourceFile)) : "";
-        if (described && returnType && described === returnType) {
-          record(tag, "@returns only restates the return type; drop the tag.");
-        }
-      }
-    }
-    node.forEachChild(visit);
-  };
-
-  visit(sourceFile);
-  return findings;
-}
-
-function documentedIdentifier(node: ts.Node, sourceFile: ts.SourceFile): string | undefined {
-  if (ts.isVariableStatement(node)) {
-    return node.declarationList.declarations[0]?.name.getText(sourceFile);
-  }
-  if (
-    ts.isFunctionLike(node) ||
-    ts.isClassDeclaration(node) ||
-    ts.isInterfaceDeclaration(node) ||
-    ts.isTypeAliasDeclaration(node) ||
-    ts.isEnumDeclaration(node)
-  ) {
-    return (node as ts.Node & { name?: ts.Node }).name?.getText(sourceFile);
-  }
-  return undefined;
-}
-
-function firstClause(body: string): string {
-  return body.split(/[,;:(]|\.(?:\s|$)/)[0] ?? body;
-}
-
-// Stemming stays intentionally minimal because collapsing inflections like `Count` and `Counting` needs no full
-// stemmer at warning severity.
-function echoesIdentifier(identifier: string, summary: string): boolean {
-  const tokens = splitIdentifierWords(identifier);
-  if (tokens.length < 2) {
-    return false;
-  }
-
-  const words = summary
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length > 2 && !SUMMARY_STOPWORDS.has(word))
-    .map(canonicalWord);
-  if (!tokens.every((token) => words.includes(token))) {
-    return false;
-  }
-
-  // A summary that echoes the name AND carries several words of its own is usually
-  // documenting a side effect or an ordering guarantee, which the policy keeps.
-  const added = words.filter((word) => !tokens.includes(word));
-  return new Set(added).size <= SUMMARY_ADDED_WORD_LIMIT;
-}
-
-function splitIdentifierWords(identifier: string): string[] {
-  return identifier
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/_+/g, " ")
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word.length > 2)
-    .map(canonicalWord);
-}
-
-// Trailing `e` is stripped last so `parse` and `parses` collapse to the same stem instead of `parse` and `pars`.
-function stemWord(word: string): string {
-  return word.replace(/(?:es|s|ing|ed)$/, "").replace(/e$/, "");
-}
-
-function canonicalWord(word: string): string {
-  return stemWord(IDENTIFIER_ALIASES[word] ?? word);
-}
-
-function stripJsDocDecoration(line: string): string {
-  return line
-    .replace(/^\s*\/?\*+\/?/, "")
-    .replace(/\*\/\s*$/, "")
-    .trim();
-}
-
-function normalizeJsDocPhrase(value: string | undefined): string {
-  return (value ?? "")
-    .replace(/^\s*(?:the|a|an)\s+/i, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+      line: token.line,
+      message: "Remove JSDoc or retain an invisible constraint as a line comment.",
+      rule: "disallowed-jsdoc" as const,
+      severity: "error" as const,
+      text: token.text.split(/\r?\n/)[0] ?? "",
+    }));
 }
 
 function isNarrationCandidate(comment: CommentLine): boolean {

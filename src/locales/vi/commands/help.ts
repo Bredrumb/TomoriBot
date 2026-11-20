@@ -150,6 +150,9 @@ export default {
         quotas: `Hạn ngạch`,
       },
     },
+    features: {
+      title: `Tính năng TomoriBot (Phiên bản {version})`,
+    },
     matrix: {
       bot_user_fallback: `tài khoản bot Matrix đã cấu hình`,
     },

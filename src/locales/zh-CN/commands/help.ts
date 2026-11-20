@@ -150,6 +150,9 @@ export default {
         quotas: `配额`,
       },
     },
+    features: {
+      title: `TomoriBot 功能（版本 {version}）`,
+    },
     matrix: {
       bot_user_fallback: `已配置的 Matrix bot 账号`,
     },

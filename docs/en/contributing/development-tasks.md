@@ -49,8 +49,8 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
   Share one timestamp across every file in a multipart export, sanitize user-provided subjects, and
   omit server, account, and Discord IDs from privacy-minimized exports.
   Operational host backups (`backup_*`, `personas_*`) keep their existing directory conventions.
-- Comments follow the [comment policy](/contributing/policies/comments/). JSDoc on exported functions
-  only where behavior is not obvious from the name and types.
+- Comments follow the [comment policy](/contributing/policies/comments/). Use no JSDoc except
+  single-line `@public` Knip directives.
 - **Workspace**: in code and contributor docs, a workspace is a Discord server or a DM scope.
   User-facing text says "server", or "your DMs" where the DM case matters.
 - Log with `log` from `src/utils/misc/logger.ts`, with context such as `errorType` and IDs. Handle

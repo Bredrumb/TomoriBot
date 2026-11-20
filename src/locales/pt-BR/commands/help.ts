@@ -150,6 +150,9 @@ export default {
         quotas: `Cotas`,
       },
     },
+    features: {
+      title: `Recursos da TomoriBot (Versão {version})`,
+    },
     matrix: {
       bot_user_fallback: `a conta configurada do bot Matrix`,
     },
