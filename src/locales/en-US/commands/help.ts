@@ -150,9 +150,6 @@ export default {
         quotas: `Quotas`,
       },
     },
-    features: {
-      title: `TomoriBot Features (Version {version})`,
-    },
     matrix: {
       bot_user_fallback: `the configured Matrix bot account`,
     },

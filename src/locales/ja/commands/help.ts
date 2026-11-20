@@ -150,9 +150,6 @@ export default {
         quotas: `クォータ`,
       },
     },
-    features: {
-      title: `TomoriBotの機能（バージョン {version}）`,
-    },
     matrix: {
       bot_user_fallback: `設定されているMatrixボットアカウント`,
     },
