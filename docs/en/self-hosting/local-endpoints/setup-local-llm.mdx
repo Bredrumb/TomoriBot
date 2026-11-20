@@ -99,9 +99,13 @@ After saving the connection, select it and choose `+ Add new Text Model` from it
 Fill in:
 
 - **Model Name (exact API ID):** `gemma4:12b`, the exact tag from `ollama list`.
-- **Context Window Override**: optional, Ollama / KoboldCPP only. Set this (e.g. `8192`,
-  `16384`) to raise Ollama's default `num_ctx`, which is otherwise small enough to truncate
-  long TomoriBot context. Leave blank to use the server default.
+- **Context Window:** enter the token limit TomoriBot should budget for. Leave it blank if the
+  server's limit is unknown. For Ollama, set the effective context size in Ollama and enter the
+  same value here. Ollama's OpenAI-compatible API
+  sets the model's context size through a `Modelfile` with `PARAMETER num_ctx` or through Ollama's
+  own context settings. Use `ollama ps` after a reply to check the loaded model's context.
+  See [Ollama's context settings](https://docs.ollama.com/context-length) and
+  [OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility#setting-the-local-context-size).
 - **Toggles:** enable `Tool calling` if the model supports function calling; enable
   `Image input` only for a vision model; `Structured output` if the model handles JSON
   schemas well. For our example, Gemma 4 supports all of them, so tick them all.
@@ -145,7 +149,7 @@ TomoriBot supports any OpenAI-compatible endpoint, but the servers below are rec
 
 - Start with OpenAI-compat enabled (built in). Default: `http://127.0.0.1:5001/v1`.
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Honors the `Context Window Override` like Ollama.
+- `Context Window` sets TomoriBot's context budget and is honored by KoboldCPP.
 - To unload the model during ComfyUI jobs, also launch with `--admin` and `--admindir` (see
   [Share one GPU with ComfyUI](#4-optional-share-one-gpu-with-comfyui)).
 - Loads GGUF models; the Model Name is whatever the loaded model reports (often the file
@@ -159,8 +163,7 @@ TomoriBot supports any OpenAI-compatible endpoint, but the servers below are rec
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Set the context window at launch with `-c` which is the modal's `Context Window Override` is
-  Ollama/KoboldCPP-only and has no effect here.
+- Set the server's context window at launch with `-c`, then enter the same value in `Context Window` so TomoriBot budgets for it.
 - Model Name is whatever `/v1/models` reports; give it a clean one with `--alias my-model`.
 - If you started it with `--api-key`, put that key in `auth_token`.
 

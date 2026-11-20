@@ -40,7 +40,7 @@ it("keeps the retained start stable until a stride of exchanges exhausts the bud
         const snapshot = truncateDialogueHistory(items, 1000, 100, [], limit);
         const live = await applyProviderContextTruncation(items, persona);
         const dropped = added > stride ? stride * 2 : stride;
-        expect(snapshot.historyPairsDropped).toBe(dropped / 2);
+        expect(snapshot.report.historyPairsDropped).toBe(dropped / 2);
         expect(snapshot.truncated).toEqual(items.slice(dropped));
         expect(live).toEqual(snapshot.truncated);
         expect(items).toHaveLength(80 + added);
@@ -58,7 +58,13 @@ it("preserves fixed context, samples, and the newest request when even all dropp
   const items = [system, sample, ...history(9)];
   const result = truncateDialogueHistory(items, 1000, 100);
   expect(result.truncated).toEqual([system, sample, items.at(-1) as StructuredContextItem]);
-  expect(result.historyPairsDropped).toBe(4);
+  expect(result.report).toEqual({
+    historyPairsDropped: 4,
+    transcriptTrimmed: false,
+    inputTokensBefore: 2090,
+    inputTokensAfter: 2010,
+    inputBudget: 810,
+  });
   expect(result.sampleItemsDropped).toBe(0);
 });
 
@@ -66,7 +72,7 @@ it("budgets reserved tail content before deciding whether to drop a stride", () 
   const items = history(80);
   const tail: StructuredContextItem[] = [{ role: "model", parts: [{ type: "text", text: "x".repeat(80) }] }];
   const result = truncateDialogueHistory(items, 1000, 100, tail, 20);
-  expect(result.historyPairsDropped).toBe(3);
+  expect(result.report.historyPairsDropped).toBe(3);
   expect(result.truncated).toEqual(items.slice(6));
   expect(result.truncated).not.toContain(tail[0]);
 });
@@ -162,6 +168,9 @@ it("fits a boomerang transcript to the remaining input budget while preserving i
       .flatMap((item) => item.parts)
       .reduce((sum, part) => sum + (part.type === "text" ? part.text.length : 0), 0);
     expect(chars / 4).toBeLessThanOrEqual(Math.floor((contextLength - 100) * 0.9));
+    expect(result.report.transcriptTrimmed).toBe(true);
+    expect(result.report.inputTokensBefore).toBeGreaterThan(result.report.inputBudget);
+    expect(result.report.inputTokensAfter).toBe(Math.floor(chars / 4));
     expect(result.truncated).toContain(instruction);
     expect(transcript.parts[0]).toHaveProperty("text", "transcript ".repeat(2000));
   }

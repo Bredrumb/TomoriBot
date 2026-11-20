@@ -41,9 +41,28 @@ and [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
 
 ### Inspecting the prompt
 
-- `/tool prompt snapshot` saves the assembled prompt to a file, including active memories, documents, and lorebooks.
+- `/tool prompt snapshot` saves the prompt after trimming to fit the model. The download card reports
+  what was cut.
 - `/context` shows a visual breakdown of context usage and estimated input cost.
 - `/tool estimate cost` breaks down the prompt by size and cost.
+
+### Context fitting
+
+The message limit sets how far back TomoriBot looks. Fitting starts with the history selected within
+that limit. For most providers, the input budget is what remains of the model's context window after
+reserving room for the reply and allowing for estimation error. At 150%, the prompt needs one and a
+half times that input budget before trimming.
+
+When the estimate exceeds that budget, TomoriBot drops the oldest chat exchanges in batches and
+keeps the latest request. Fixed content such as instructions and sample dialogue can leave the
+prompt over budget after all eligible exchanges are gone. TomoriBot fits the text first. When tool
+schemas are included in an inspection, the fitting warning also checks their estimated size.
+The provider applies its own chat template and token count. It may trim more context or reject
+an oversized request.
+
+NovelAI counts tokens from its rendered prompt and caps memory separately. It can cut sample
+dialogue, memories, and older chat turns, then reduce the reply cap. The inspection and export
+details are in [Prompt Snapshot](/architecture/subsystems/prompt-snapshot/).
 
 ### Where are Tools defined?
 
@@ -59,9 +78,3 @@ interface.
 | `/refresh` made her forget | Refresh cuts off Recent messages and clears this channel's Short-term memory, but shouldn't remove long-term memory. Delete the refresh embed to remove the cut-off. |
 
 If you want something to survive all of the above, it has to become a long-term memory. See [Memory](/features/knowledge/memory/long-term-memory/).
-
-:::tip
-A larger message limit does not guarantee that more history reaches the model. When the prompt is
-too large for the model's context window, the oldest exchanges are dropped before sending;
-`/context` shows how much room is left.
-:::

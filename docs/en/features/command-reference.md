@@ -394,7 +394,7 @@ Utility actions for conversation context, prompts, and diagnostics.
 |---|---|
 | `/tool delete turn` | Delete the last persona's turn from the channel. |
 | `/tool estimate cost` | Estimate API costs for paid AI providers |
-| `/tool prompt snapshot` | Dump the exact LLM prompt for a persona to a file for debugging. |
+| `/tool prompt snapshot` | Reconstruct a persona's current prompt and export it to a file for debugging. |
 
 ## `/troubleshoot`
 

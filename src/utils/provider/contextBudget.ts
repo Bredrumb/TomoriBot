@@ -43,7 +43,7 @@ export async function applyProviderContextTruncation(
   const budget = await resolveContextBudget(tomoriState);
   if (!budget) return contextItems;
 
-  const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
+  const { truncated, report, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
     contextItems,
     budget.contextLength,
     budget.outputReserve,
@@ -53,7 +53,7 @@ export async function applyProviderContextTruncation(
   if (totalDropped === 0) return truncated;
 
   log.warn(
-    `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,
+    `History truncation: dropped ${report.historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,
   );
   return truncated;
 }

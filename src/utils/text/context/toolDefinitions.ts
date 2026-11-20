@@ -6,6 +6,7 @@ import { log } from "@/utils/misc/logger";
 import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
+import { getMcpToolSchemaFraction } from "@/utils/text/tokenEstimate";
 
 // Kept terse without full calling-format instructions because the accompanying verbatim nudge near the dialogue tail
 // already provides them.
@@ -17,7 +18,7 @@ async function buildVerbatimToolDefinitionsJson(
   contextItems: StructuredContextItem[],
   isUserImpersonation: boolean,
   userId?: number,
-): Promise<Array<Record<string, unknown>>> {
+): Promise<{ tools: Record<string, unknown>[]; mcpFunctionNames: string[] }> {
   const provider = tomoriState.llm.llm_provider;
   const toolStateForContext: ToolStateForContext = {
     server_id: tomoriState.server_id.toString(),
@@ -65,7 +66,7 @@ async function buildVerbatimToolDefinitionsJson(
 
   // Uses OpenAI-compatible schemas for all providers because verbatim mode expects uniform JSON parameter definitions.
   const adapter = new OpenAICompatibleToolAdapter(provider);
-  return adapter.getAllToolsInProviderFormat(
+  const tools = await adapter.getAllToolsInProviderFormat(
     applyStreamContextAvailability({
       providerLabel: provider,
       provider,
@@ -80,6 +81,7 @@ async function buildVerbatimToolDefinitionsJson(
     tomoriState.server_id,
     mcpFunctionNames,
   );
+  return { tools, mcpFunctionNames };
 }
 
 // Tool schemas are serialized in-band under the verbatim-nudge gate so endpoints that ignore the native tools field
@@ -96,7 +98,7 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
       return null;
     }
 
-    const tools = await buildVerbatimToolDefinitionsJson(
+    const { tools, mcpFunctionNames } = await buildVerbatimToolDefinitionsJson(
       tomoriState,
       params.contextItems,
       params.isUserImpersonation,
@@ -113,6 +115,7 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
       role: "user",
       parts: [{ type: "text", text }],
       metadataTag: ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
+      mcpToolSchemaFraction: getMcpToolSchemaFraction(tools, mcpFunctionNames, 2),
     };
   } catch (error) {
     log.warn("Failed to add verbatim tool definitions context", error);

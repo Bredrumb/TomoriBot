@@ -65,7 +65,7 @@ import {
 } from "@/utils/provider/providerInfoRegistry";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { buildContext } from "@/utils/text/contextBuilder";
-import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
+import { type ContextTruncationReport, truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
@@ -79,6 +79,8 @@ import {
   getFollowUpToolIntentResult,
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { getMcpToolSchemaFraction } from "@/utils/text/tokenEstimate";
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -280,15 +282,15 @@ async function fetchProviderTools(
   toolFilter?: SnapshotToolFilter | null,
   userId?: number,
   contextItems?: StructuredContextItem[],
-): Promise<Array<Record<string, unknown>>> {
+): Promise<{ data: Record<string, unknown>[]; mcpToolSchemaFraction: number }> {
   const activeLlm = persona.persona_llm ?? persona.llm;
 
   if (
     getStaticProviderInfo(providerName)?.supportsFunctionCalling === false ||
-    !activeLlm.has_tools ||
+    !resolveToolsEnabled({ llm: activeLlm, config: persona.config }, activeLlm.has_tools) ||
     toolFilter?.disabledByDeliberateMode
   ) {
-    return [];
+    return { data: [], mcpToolSchemaFraction: 0 };
   }
 
   const toolStateForContext: ToolStateForContext = {
@@ -350,7 +352,8 @@ async function fetchProviderTools(
   }
 
   const adapter = selectToolAdapter(providerName);
-  return adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
+  const data = await adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
+  return { data, mcpToolSchemaFraction: getMcpToolSchemaFraction(data, mcpFunctionNames) };
 }
 
 export function resolveInspectedPersona(
@@ -387,9 +390,10 @@ export interface PromptInspection {
   capturedAt: string;
   contextItems: StructuredContextItem[];
   toolsData: Array<Record<string, unknown>> | null;
+  mcpToolSchemaFraction: number;
   budget: ContextBudget | null;
   novelaiRequest?: PreparedNovelAIRequest;
-  historyPairsDropped: number;
+  truncation: ContextTruncationReport | null;
 }
 
 export async function assemblePromptInspection(request: PromptInspectionRequest): Promise<PromptInspection | null> {
@@ -398,11 +402,8 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   if (!("messages" in textChannel)) return null;
 
   // Mirrors generationTurn.ts override precedence so cross-provider overrides swap in saved keys and samplers.
-  const channelLlmOverride = await getCachedChannelLlm(
-    selectedPersona.server_id,
-    textChannel.id,
-    textChannel.isThread() ? textChannel.parentId : null,
-  );
+  const parentChannelId = textChannel.isThread() ? textChannel.parentId : null;
+  const channelLlmOverride = await getCachedChannelLlm(selectedPersona.server_id, textChannel.id, parentChannelId);
   const effectiveLlm = selectedPersona.persona_llm ?? channelLlmOverride ?? selectedPersona.llm;
 
   // The per-channel system prompt override (append/replace) mirrors contextPipeline.ts.
@@ -424,11 +425,21 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     }
   }
 
-  const answeringState = await resolveSnapshotAnsweringState({
+  const isRpChannel =
+    effectivePersona.config.rp_channel_ids.includes(textChannel.id) ||
+    (parentChannelId !== null && effectivePersona.config.rp_channel_ids.includes(parentChannelId));
+  const disabledExpressions = { emoji_usage_enabled: false, sticker_usage_enabled: false };
+  if (isRpChannel) {
+    effectivePersona = { ...effectivePersona, config: { ...effectivePersona.config, ...disabledExpressions } };
+  }
+  const resolvedState = await resolveSnapshotAnsweringState({
     selectedPersona,
     effectivePersona,
     userId: userData.user_id ?? null,
   });
+  const answeringState = isRpChannel
+    ? { ...resolvedState, config: { ...resolvedState.config, ...disabledExpressions } }
+    : resolvedState;
 
   const messageFetchLimit = normalizeMessageFetchLimit(selectedPersona.config.message_fetch_limit);
   const fetchedMessages = await textChannel.messages.fetch({ limit: messageFetchLimit });
@@ -729,7 +740,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     channelName,
     channelId: textChannel.id,
     // Thread → parent-channel privacy inheritance (mirrors tomoriChat.ts)
-    parentChannelId: textChannel.isThread() ? textChannel.parentId : null,
+    parentChannelId,
     client,
     triggererName: snapshotNaming.nickname,
     triggererFormattedName: snapshotNaming.formattedName,
@@ -831,10 +842,10 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   const presetData = await getCachedActivePreset(selectedPersona.server_id);
   const providerName = normalizeProviderName(answeringState.llm.llm_provider);
 
-  let toolsData: Array<Record<string, unknown>> | null = null;
+  let tools: Awaited<ReturnType<typeof fetchProviderTools>> | null = null;
   if (request.includeTools) {
     try {
-      toolsData = await fetchProviderTools(
+      tools = await fetchProviderTools(
         answeringState,
         providerName,
         snapshotToolFilter,
@@ -859,7 +870,8 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     capturedAt: new Date().toISOString(),
     contextItems: novelaiRequest?.contextItems ?? truncation?.truncated ?? resolvedContextItems,
     novelaiRequest,
-    toolsData,
+    toolsData: tools?.data ?? null,
+    mcpToolSchemaFraction: tools?.mcpToolSchemaFraction ?? 0,
     budget: novelaiRequest
       ? {
           contextLength: novelaiRequest.report.window,
@@ -870,6 +882,6 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
           exact: true,
         }
       : budget,
-    historyPairsDropped: truncation?.historyPairsDropped ?? 0,
+    truncation: truncation?.report ?? null,
   };
 }

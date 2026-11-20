@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { createHash } from "node:crypto";
 import type { Client } from "discord.js";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import * as toolRegistry from "@/tools/toolRegistry";
 import { userSavedProviderConfigSchema } from "@/types/db/schema";
 import * as channelLlm from "@/utils/cache/channelLlmCache";
 import * as channelPrompt from "@/utils/cache/channelPromptCache";
@@ -21,9 +22,11 @@ import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { clearNovelaiSubscriptionCache, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { assemblePromptInspection, type PromptInspectionRequest } from "@/utils/text/promptInspection/assemble";
 import { buildJsonSnapshot, buildRequestConfig, buildTextSnapshot } from "@/utils/text/promptInspection/serialize";
+import { buildPromptTrimmingSummary } from "@/utils/text/promptInspection/trimming";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
+import { localizedCopy } from "../../helpers/localeCases";
 import { NovelaiStreamAdapter } from "@/providers/novelai/novelaiStreamAdapter";
 import { prepareNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
@@ -123,6 +126,8 @@ describe("NovelAI prompt inspection credentials", () => {
       );
       expect(prepared.report.excluded.some((id) => id.includes(ContextItemTag.SYSTEM_INSTRUCTION_BLOCK))).toBe(true);
       expect(prepared.report.trimmed.some((id) => id.includes(ContextItemTag.KNOWLEDGE_SERVER_MEMORIES))).toBe(true);
+      expect(prepared.report.trimmedCounts).toEqual({ historyTurns: 0, sampleTurns: 0, memories: 1 });
+      expect(prepared.report.inputTokensBefore).toBeGreaterThan(prepared.report.inputTokens);
       expect(prepared.report.included.some((id) => id.includes(ContextItemTag.SYSTEM_PERSONALITY))).toBe(true);
       const profile = getNovelAIProfile(model);
       expect(prepared.report.inputTokens).toBe(
@@ -168,6 +173,7 @@ describe("NovelAI prompt inspection credentials", () => {
     let builtItems: StructuredContextItem[] = [];
     let inspectedHistoryStart: string | undefined;
     let inspectedAgenda: boolean | undefined;
+    let inspectedExpressions: boolean[] = [];
     const agendas = new Map<string, string>();
     const spies = [
       spyOn(naturalNudgeRepository, "loadAgendas").mockImplementation(async () => agendas),
@@ -182,6 +188,7 @@ describe("NovelAI prompt inspection credentials", () => {
       spyOn(participants, "prepareParticipantContext").mockResolvedValue(prepared),
       spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => {
         inspectedHistoryStart = params.simplifiedMessageHistory[0]?.id;
+        inspectedExpressions = [params.tomoriConfig.emoji_usage_enabled, params.tomoriConfig.sticker_usage_enabled];
         inspectedAgenda = params.simplifiedMessageHistory.find(
           (message) => message.id === "synthetic-nudge-agenda-12",
         )?.isSystemNotice;
@@ -338,6 +345,11 @@ describe("NovelAI prompt inspection credentials", () => {
     expect(snapshots[1].novelaiRequest?.report.trimmed.length).toBeGreaterThan(
       snapshots[0].novelaiRequest?.report.trimmed.length ?? 0,
     );
+    const trimmedTurns = snapshots[1].novelaiRequest?.report.trimmedCounts.historyTurns ?? 0;
+    expect(trimmedTurns).toBeGreaterThan(0);
+    expect(buildPromptTrimmingSummary("en-US", snapshots[1])).toContain(
+      localizedCopy("en-US", "commands.context.fit_history_turns", { count: trimmedTurns }),
+    );
     expect(seenKeys).toEqual([]);
     expect(rotated).not.toHaveBeenCalled();
     const budgetPersona = createPersona({
@@ -357,7 +369,8 @@ describe("NovelAI prompt inspection credentials", () => {
       selectedPersona: budgetPersona,
       personas: [budgetPersona],
     });
-    expect(budgetSnapshot?.historyPairsDropped).toBe(3);
+    expect(budgetSnapshot?.truncation?.historyPairsDropped).toBe(3);
+    expect(inspectedExpressions).toEqual([true, true]);
     applyPromptLayoutInserts(builtItems, []);
     expect(budgetSnapshot?.contextItems).toEqual(await applyProviderContextTruncation(builtItems, budgetPersona));
     const longEmbedDescription = `${"Detailed field report on the northern observatory calibration. ".repeat(10)}Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.`;
@@ -399,5 +412,39 @@ describe("NovelAI prompt inspection credentials", () => {
     const inspectedText = JSON.stringify(windowSnapshot?.contextItems ?? []);
     expect(inspectedText).toContain("Final conclusion: the telescope mirror alignment drifted by 0.42 arcseconds.");
     expect(inspectedText).toContain("Instrument: Primary spectrograph");
+    const roleplayPersona = {
+      ...budgetPersona,
+      config: { ...budgetPersona.config, rp_channel_ids: ["roleplay-1"] },
+    };
+    const roleplaySnapshot = await assemblePromptInspection({
+      ...request,
+      channel: { ...request.channel, isThread: () => true, parentId: "roleplay-1" } as typeof request.channel,
+      tomoriState: roleplayPersona,
+      selectedPersona: roleplayPersona,
+      personas: [roleplayPersona],
+    });
+    expect(inspectedExpressions).toEqual([false, false]);
+    expect(roleplaySnapshot?.answeringState.config).toMatchObject({
+      emoji_usage_enabled: false,
+      sticker_usage_enabled: false,
+    });
+    const listTools = spyOn(toolRegistry, "getAvailableToolsWithMCP").mockRejectedValue(
+      new Error("Tool listing failed"),
+    );
+    restores.push(() => listTools.mockRestore());
+    const toolsDisabledPersona = {
+      ...budgetPersona,
+      llm: { ...budgetPersona.llm, has_tools: true },
+      config: { ...budgetPersona.config, tool_use_enabled: false },
+    };
+    const toolsDisabledSnapshot = await assemblePromptInspection({
+      ...request,
+      tomoriState: toolsDisabledPersona,
+      selectedPersona: toolsDisabledPersona,
+      personas: [toolsDisabledPersona],
+      includeTools: true,
+    });
+    expect(toolsDisabledSnapshot?.toolsData).toEqual([]);
+    expect(listTools).not.toHaveBeenCalled();
   });
 });

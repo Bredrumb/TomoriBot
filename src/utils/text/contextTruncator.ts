@@ -27,9 +27,17 @@ export function computeSafeInputBudget(contextLength: number, maxCompletionToken
   return Math.floor((contextLength - maxCompletionTokens) * 0.9);
 }
 
+export interface ContextTruncationReport {
+  historyPairsDropped: number;
+  transcriptTrimmed: boolean;
+  inputTokensBefore: number;
+  inputTokensAfter: number;
+  inputBudget: number;
+}
+
 type TruncationResult = {
   truncated: StructuredContextItem[];
-  historyPairsDropped: number;
+  report: ContextTruncationReport;
   sampleItemsDropped: number;
   totalDropped: number;
 };
@@ -45,8 +53,11 @@ export function truncateDialogueHistory(
     computeSafeInputBudget(contextLength, maxCompletionTokens) - estimateInputTokens(reservedTailItems);
 
   const items = [...contextItems];
+  const inputTokensBefore = estimateInputTokens(items);
+  let inputTokensAfter = inputTokensBefore;
   let historyPairsDropped = 0;
   const sampleItemsDropped = 0;
+  let transcriptTrimmed = false;
 
   const findNewestDialogueUserIndex = (): number => {
     for (let i = items.length - 1; i >= 0; i--) {
@@ -106,12 +117,13 @@ export function truncateDialogueHistory(
 
   // Drop a full stride so later exchanges can grow without moving the retained start.
   const exchangesPerStride = historyWindowStride(messageFetchLimit) / 2;
-  while (estimateInputTokens(items) > safeInputBudget) {
+  while (inputTokensAfter > safeInputBudget) {
     let dropped = 0;
     while (dropped < exchangesPerStride && dropOldestDroppableHistoryExchange()) {
       dropped++;
     }
     if (dropped === 0) break;
+    inputTokensAfter = estimateInputTokens(items);
   }
   for (let index = 0; index < items.length; index++) {
     const item = items[index];
@@ -127,18 +139,28 @@ export function truncateDialogueHistory(
     const availableChars = Math.max(0, safeInputBudget * 4 - otherChars);
     const text = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
     if (text.length > availableChars) {
+      transcriptTrimmed = true;
       items[index] = {
         ...item,
         parts: [{ type: "text", text: availableChars > 0 ? text.slice(-availableChars) : "" }],
       };
     }
   }
-  if (historyPairsDropped > 0 && (getCacheablePrefixBoundary(contextItems) || contextItems.some(getPromptLayoutInsert)))
+  const repositionInserts =
+    historyPairsDropped > 0 && (getCacheablePrefixBoundary(contextItems) || contextItems.some(getPromptLayoutInsert));
+  if (repositionInserts) {
     applyPromptLayoutInserts(items, []);
+  }
 
   return {
     truncated: items,
-    historyPairsDropped,
+    report: {
+      historyPairsDropped,
+      transcriptTrimmed,
+      inputTokensBefore,
+      inputTokensAfter: transcriptTrimmed || repositionInserts ? estimateInputTokens(items) : inputTokensAfter,
+      inputBudget: safeInputBudget,
+    },
     sampleItemsDropped,
     totalDropped: historyPairsDropped + sampleItemsDropped,
   };

@@ -101,7 +101,6 @@ Mình có các tính năng tích hợp sẵn để giúp giảm chi phí từ ng
         file_hint_try_json: `Chạy lại lệnh với một định dạng JSON để xem định dạng gốc. Chọn \`JSON kèm công cụ\` để kèm theo định nghĩa công cụ.`,
         file_hint_try_text: `Chạy lại lệnh với \`format: Text\` để xem định dạng dễ đọc hơn.`,
         file_privacy_warning: `**Đừng chia sẻ tệp này với bất kỳ ai.** Tệp có thể chứa prompt máy chủ, bộ nhớ và nội dung trò chuyện, bao gồm cả những điều riêng tư bạn đã nói với mình.`,
-        file_truncated_note: `Lịch sử trò chuyện vượt quá giới hạn của model, nên {count} lượt trao đổi cũ nhất đã được lược bỏ, giống như trong câu trả lời thực tế.`,
         no_personas_title: `Không tìm thấy persona nào`,
         no_personas_description: `Không tìm thấy persona nào cho máy chủ này.`,
         build_failed_title: `Tạo snapshot thất bại`,

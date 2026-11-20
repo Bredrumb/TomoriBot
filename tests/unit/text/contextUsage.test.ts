@@ -8,6 +8,7 @@ import {
   layoutContextGrid,
   measureContextUsage,
 } from "@/utils/text/promptInspection/contextUsage";
+import { charsToTokensJson, getMcpToolSchemaFraction } from "@/utils/text/tokenEstimate";
 
 const GRID_CELLS = CONTEXT_GRID_COLUMNS * CONTEXT_GRID_ROWS;
 
@@ -51,6 +52,29 @@ describe("measureContextUsage", () => {
     const usage = measureContextUsage([textItem(ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS, 8)], tools);
 
     expect(usage.segments).toEqual([{ id: "tools", tokens: 2 + Math.ceil(JSON.stringify(tools).length / 3.5) }]);
+  });
+
+  test("attributes built-in and MCP schemas across provider formats while preserving the Tools total", () => {
+    const builtIn = { name: "weather", description: "x".repeat(40) };
+    const mcp = { ...builtIn, name: "mcp_doc" };
+    const verbatim = {
+      ...textItem(ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS, 80),
+      mcpToolSchemaFraction: 0.25,
+    };
+    for (const tools of [
+      [builtIn, mcp],
+      [{ functionDeclarations: [builtIn, mcp] }],
+      [builtIn, mcp].map((fn) => ({ type: "function", function: fn })),
+    ]) {
+      const nativeToolTokens = charsToTokensJson(JSON.stringify(tools).length);
+      const nativeMcpTokens = Math.round(nativeToolTokens / 2);
+      const usage = measureContextUsage([verbatim], tools, getMcpToolSchemaFraction(tools, [mcp.name]));
+      expect(usage.toolDefinitions).toEqual({
+        builtIn: nativeToolTokens - nativeMcpTokens + 15,
+        mcp: nativeMcpTokens + 5,
+      });
+      expect(usage.segments).toEqual([{ id: "tools", tokens: nativeToolTokens + 20 }]);
+    }
   });
 
   test("skips media parts, whose token cost differs per provider", () => {

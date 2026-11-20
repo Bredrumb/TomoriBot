@@ -101,7 +101,6 @@ Tengo funciones integradas para ayudar a reducir los costos de abusadores o spam
         file_hint_try_json: `Ejecuta el comando nuevamente con un formato JSON para el formato sin procesar. Elige \`JSON con herramientas\` para incluir las definiciones de herramientas.`,
         file_hint_try_text: `Ejecuta el comando nuevamente con \`format: Text\` para un formato más legible.`,
         file_privacy_warning: `**No compartas este archivo con nadie.** Puede contener prompts del servidor, memorias y texto de conversaciones, incluidas cosas privadas que me hayas dicho.`,
-        file_truncated_note: `El historial de chat superaba el presupuesto del modelo, así que los {count} intercambios más antiguos se han omitido, tal como sucedería en una respuesta real.`,
         no_personas_title: `No se encontraron personas`,
         no_personas_description: `No se encontraron personas para este servidor.`,
         build_failed_title: `Instantánea fallida`,
