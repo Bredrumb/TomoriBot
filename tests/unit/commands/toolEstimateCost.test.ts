@@ -3,9 +3,12 @@ import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { execute as estimateCost, measureOpenRouterInputTokens } from "@/commands/tool/estimate/cost";
 import { OpenrouterProvider, type OpenrouterProviderConfig } from "@/providers/openrouter/openrouterProvider";
 import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
+import { DeepseekProvider } from "@/providers/deepseek/deepseekProvider";
 import { useEnvSandbox } from "../../helpers/env";
 import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
+import { localizedCopy } from "../../helpers/localeCases";
 import { userSavedProviderConfigSchema } from "@/types/db/schema";
 import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import * as credentials from "@/utils/provider/credentialResolver";
@@ -26,6 +29,84 @@ afterEach(() => {
   fetchSpy?.mockRestore();
   configSpy?.mockRestore();
   messagesSpy?.mockRestore();
+});
+
+describe("DeepSeek live token estimate", () => {
+  it("counts tool definitions and visible chat history with thinking disabled", async () => {
+    const model = createLlmRow({
+      llm_id: 19,
+      llm_provider: "deepseek",
+      llm_codename: "deepseek-flash",
+      input_price_per_million: 1,
+      output_price_per_million: 2,
+    });
+    const state = createPersona({ llm: model, config: { thinking_level: "high" } });
+    const fake = makeFakeInteraction({
+      guild: { id: "fixture-guild", name: "Fixture guild" },
+      guildId: "fixture-guild",
+      channel: {
+        id: "fixture-channel",
+        isTextBased: () => true,
+        isThread: () => false,
+        messages: { fetch: async () => new Map() },
+      },
+    });
+    const tools = [{ type: "function", function: { name: "roll_dice" } }];
+    const probe = stubGlobalFetch((_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.tools).toEqual(tools);
+      expect(body.messages).toContainEqual(expect.objectContaining({ role: "assistant" }));
+      if (body.thinking?.type !== "disabled") return new Response(null, { status: 400 });
+      return Response.json({ usage: { prompt_tokens: 731 } });
+    });
+    const spies = [
+      spyOn(DeepseekProvider.prototype, "createConfig").mockResolvedValue({
+        apiKey: "fixture-key",
+        model: model.llm_codename,
+        endpointUrl: "https://api.deepseek.com/chat/completions",
+        temperature: 0.7,
+        tools,
+      }),
+      spyOn(personaRepository, "loadState").mockResolvedValue(state),
+      spyOn(stateCache, "getCachedTomoriState").mockResolvedValue(state),
+      spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue([state]),
+      spyOn(channelPromptCache, "getCachedChannelPrompt").mockResolvedValue(null),
+      spyOn(contextBudget, "applyProviderContextTruncation").mockImplementation(async () => [
+        { role: "user", parts: [{ type: "text", text: "Roll a die." }] },
+        { role: "model", parts: [{ type: "text", text: "The result is 3." }] },
+        { role: "user", parts: [{ type: "text", text: "Try again." }] },
+      ]),
+      spyOn(llmModelRepo, "loadById").mockResolvedValue(model),
+      spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
+        provider: "deepseek",
+        source: "server",
+        modelId: 19,
+        apiKey: "fixture-key",
+        keyVersion: 1,
+        savedConfig: null,
+      }),
+    ];
+    try {
+      await estimateCost(
+        { user: { id: "fixture-bot" }, guilds: { cache: new Map() } } as unknown as Client,
+        fake.interaction as unknown as ChatInputCommandInteraction,
+        createUserRow(),
+        "en-US",
+      );
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(fake.calls)).toContain(
+        JSON.stringify(
+          localizedCopy("en-US", "commands.tool.estimate.cost.current_input_value", {
+            inputTokens: "731",
+            inputCost: "$0.00073",
+          }),
+        ),
+      );
+    } finally {
+      probe.mockRestore();
+      for (const spy of spies.reverse()) spy.mockRestore();
+    }
+  });
 });
 
 describe("OpenRouter live token estimate attribution", () => {

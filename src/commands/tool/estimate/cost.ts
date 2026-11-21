@@ -75,6 +75,7 @@ import { llmSections } from "@/db/seed/catalog/models";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
+import { buildDeepSeekThinkingRequest } from "@/utils/provider/thinkingControl";
 
 // Per-message wrapper overhead is included because chat-format role markers and separators add up across ~80 history
 // messages.
@@ -995,6 +996,7 @@ async function measureDeepseekInputTokens(
 ): Promise<LiveCostMeasurement> {
   const provider = new DeepseekProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as DeepseekProviderConfig;
+  const { thinking } = buildDeepSeekThinkingRequest(providerConfig.model, "none");
   const messages = await buildOpenAICompatibleMessages({
     adapterName: "ToolEstimateCostDeepSeek",
     contextItems,
@@ -1008,6 +1010,7 @@ async function measureDeepseekInputTokens(
     max_tokens: 1,
     stream: false,
     temperature: providerConfig.temperature,
+    ...(thinking && { thinking }),
   };
 
   if (providerConfig.tools && providerConfig.tools.length > 0) {
