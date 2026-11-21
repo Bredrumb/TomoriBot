@@ -121,9 +121,13 @@ async function runAdmittedChatTurn(
       if (turnPlan.turns.length > 0) {
         try {
           for (const turn of turnPlan.turns) {
-            if (incoming.fastRegeneration && !(await prepareFastRegeneration(turn, incoming.fastRegeneration))) {
-              await releaseTextQuotaForTrigger(turn.textQuotaTriggerKey);
-              continue;
+            if (incoming.fastRegeneration) {
+              const preparation = await prepareFastRegeneration(turn, incoming.fastRegeneration);
+              if (preparation !== "ready") {
+                await releaseTextQuotaForTrigger(turn.textQuotaTriggerKey);
+                incoming.fastRegeneration.onDecline?.(preparation);
+                continue;
+              }
             }
             await runWithChatTurnLatency(latencyInvocation, admissionMs, planMs, async () => {
               const typingPromise =

@@ -6,6 +6,7 @@ export default {
       unavailable: `Reply Control Unavailable`,
       only_triggerer: `Only the person who prompted this reply can use its controls.`,
       stale: `This reply is no longer available for Retry or Continue.`,
+      retry_newer_messages: `Retry is available when this reply is the last message in the conversation.`,
     },
     panel_notice: {
       outdated_heading: `Panel Out Of Date`,

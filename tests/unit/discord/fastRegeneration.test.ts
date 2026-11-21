@@ -3,6 +3,7 @@ import {
   ActionRowBuilder,
   Collection,
   ComponentType,
+  MessageFlags,
   type Message,
   type MessageEditOptions,
   type Webhook,
@@ -23,6 +24,8 @@ import * as authoringWebhook from "@/utils/discord/webhook/fallback";
 import * as messageDelivery from "@/utils/discord/webhook/singleAttemptMessage";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
+import { localizedProse } from "../../helpers/localeCases";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(initializeLocalizer);
@@ -83,7 +86,8 @@ function setupTurn(webhookId: string | null = null, inThread = false) {
   ]);
   const fetch = mock(async (options: string | { message?: string; limit?: number }) => {
     if (typeof options === "string") return latest.get(options);
-    return options.message ? latest.get(options.message) : latest;
+    if (options.message) return latest.get(options.message);
+    return new Collection([...latest.entries()].slice(0, options.limit));
   });
   const channel = {
     id: CHANNEL,
@@ -165,7 +169,7 @@ describe("Fast regeneration", () => {
     expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "continue")).toMatchObject({ status: "stale" });
   });
 
-  it("acknowledges routed clicks before running chat as the triggering member", async () => {
+  it("acknowledges authorized Retry clicks and reports a refusal privately", async () => {
     const { context, result, trigger, reply, tail } = setupTurn();
     await offerFastRegeneration(context, result);
     const row = tail.edit.mock.calls[0]?.[0]?.components?.[0];
@@ -209,12 +213,17 @@ describe("Fast regeneration", () => {
           member: { id: USER },
         },
       );
-      runChat.mockImplementation(async () => {
+      runChat.mockImplementation(async (input) => {
         expect(authorized.deferred).toBe(true);
+        input.fastRegeneration?.onDecline?.("newer-messages");
         return "run";
       });
       expect(await dispatchGlobalInteraction(context.client, authorized as unknown as GlobalRoutableInteraction)).toBe(
         true,
+      );
+      expect(authorized.replies[0]).toMatchObject({ flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+      expect(collectTextDisplays(authorized.replies[0]).join("\n")).toMatch(
+        localizedProse("en-US", "general.reply_controls.retry_newer_messages"),
       );
       expect(runChat).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -299,14 +308,17 @@ describe("Fast regeneration", () => {
         expect.any(Function),
       );
 
-      latest.reverse().set(controls.id, controls).reverse();
+      const humanMessage = message("400000000000000007", USER);
+      latest.reverse().set(controls.id, controls).set(humanMessage.id, humanMessage).reverse();
       expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "continue")).toMatchObject({ status: "stale" });
       const selection = await resolveFastRegeneration(CHANNEL, controls.id, USER, "continue");
       if (selection.status !== "ready") throw new Error("Expected active fallback controls");
       expect(selection.request).toMatchObject({ replyId: tail.id, messageIds: [reply.id, tail.id] });
-      expect(await prepareFastRegeneration(turn, selection.request)).toBe(true);
+      expect(selection.request.relatedDeliveryIds).toEqual(new Set([controls.id]));
+      expect(await prepareFastRegeneration(turn, selection.request)).toBe("ready");
       expect(controls.delete).toHaveBeenCalledTimes(1);
       expect(tail.delete).not.toHaveBeenCalled();
+      expect(humanMessage.delete).not.toHaveBeenCalled();
     } finally {
       resolve.mockRestore();
       send.mockRestore();
@@ -314,27 +326,44 @@ describe("Fast regeneration", () => {
     }
   });
 
-  it("keeps the controls through idle time and newer human chat and deletes only the selected turn", async () => {
+  it("restores Retry eligibility when all newer chat is deleted without timing out the row", async () => {
     const { context, result, turn, original, trigger, reply, tail, latest } = setupTurn();
     const clock = spyOn(Date, "now");
     const timer = spyOn(globalThis, "setTimeout");
     const config = spyOn(tomoriStateCache, "getCachedMainPersona").mockResolvedValue(persona);
     try {
       const before = Date.now();
+      const notice = message("400000000000000005");
+      latest.reverse().set(notice.id, notice).reverse();
+      context.streamingContext.deliveryReceipts = [
+        { messageId: notice.id, channelId: CHANNEL, route: "bot", webhookId: null, identity: {}, speaker: null },
+      ];
       await offerFastRegeneration(context, result);
       expect(timer.mock.calls).toHaveLength(0);
       clock.mockReturnValue(before + 60_000);
 
-      const newer = message("400000000000000005", USER);
-      latest.reverse().set(newer.id, newer).reverse();
+      const newer = message("400000000000000006", USER);
+      const newest = message("400000000000000007", USER);
+      latest.reverse().set(newer.id, newer).set(newest.id, newest).reverse();
       const selection = await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry");
       if (selection.status !== "ready") throw new Error("Expected the latest persona's controls");
-      expect(await prepareFastRegeneration(turn, selection.request)).toBe(true);
+      expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
+      expect(tail.delete).not.toHaveBeenCalled();
+
+      latest.delete(newest.id);
+      expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
+      expect(reply.delete).not.toHaveBeenCalled();
+
+      latest.delete(newer.id);
+      const retry = await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry");
+      if (retry.status !== "ready") throw new Error("Expected the same row to remain active");
+      expect(await prepareFastRegeneration(turn, retry.request)).toBe("ready");
       expect(reply.delete).toHaveBeenCalledTimes(1);
       expect(tail.delete).toHaveBeenCalledTimes(1);
       expect(original.delete).not.toHaveBeenCalled();
       expect(trigger.delete).not.toHaveBeenCalled();
       expect(newer.delete).not.toHaveBeenCalled();
+      expect(notice.delete).not.toHaveBeenCalled();
     } finally {
       config.mockRestore();
       timer.mockRestore();
@@ -355,7 +384,7 @@ describe("Fast regeneration", () => {
       context.streamingContext.deliveredMessageRefs = [{ messageId: newer.id, channelId: CHANNEL, webhookId: null }];
       await offerFastRegeneration(context, result);
 
-      expect(await prepareFastRegeneration(turn, selection.request)).toBe(false);
+      expect(await prepareFastRegeneration(turn, selection.request)).not.toBe("ready");
       expect(reply.delete).not.toHaveBeenCalled();
       expect(tail.delete).not.toHaveBeenCalled();
       expect(await resolveFastRegeneration(CHANNEL, newer.id, USER, "retry")).toMatchObject({ status: "ready" });
@@ -376,7 +405,13 @@ describe("Fast regeneration", () => {
         message,
         isFromQueue: false,
         isManuallyTriggered: true,
-        fastRegeneration: { action: "retry", replyId: tail.id, messageIds: [tail.id], consume: () => true },
+        fastRegeneration: {
+          action: "retry",
+          replyId: tail.id,
+          messageIds: [tail.id],
+          relatedDeliveryIds: new Set(),
+          consume: () => true,
+        },
       }),
     };
     const entry = getOrCreateChannelLockEntry(CHANNEL, GUILD);
@@ -411,9 +446,10 @@ describe("Fast regeneration", () => {
           action: "retry",
           replyId: tail.id,
           messageIds: [tail.id],
+          relatedDeliveryIds: new Set(),
           consume: () => true,
         }),
-      ).toBe(false);
+      ).toBe("unavailable");
       expect(reply.delete).not.toHaveBeenCalled();
       expect(tail.delete).not.toHaveBeenCalled();
     } finally {

@@ -1,5 +1,6 @@
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
+  type FastRegenerationDecline,
   REPLY_CONTROLS_NAMESPACE,
   REPLY_CONTROLS_VERSION,
   resolveFastRegeneration,
@@ -45,6 +46,7 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
     if (!member) return;
 
     const message = action === "retry" ? selection.trigger : selection.reply;
+    let decline: FastRegenerationDecline | undefined;
     const disposition = await tomoriChat({
       client,
       message,
@@ -60,13 +62,21 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
         locale,
         member,
       },
-      fastRegeneration: selection.request,
+      fastRegeneration: {
+        ...selection.request,
+        onDecline: (reason) => {
+          decline = reason;
+        },
+      },
     });
-    if (disposition !== "run") {
+    if (disposition !== "run" || decline) {
       await replyPanelReceipt(interaction, {
         tone: "warning",
         heading: localizer(locale, "general.reply_controls.unavailable"),
-        detail: localizer(locale, "general.reply_controls.stale"),
+        detail: localizer(
+          locale,
+          decline === "newer-messages" ? "general.reply_controls.retry_newer_messages" : "general.reply_controls.stale",
+        ),
       });
     }
   },

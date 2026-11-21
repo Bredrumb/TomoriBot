@@ -287,7 +287,13 @@ describe("history reply context", () => {
       }
       if (olderReplyControl) {
         incoming.isManuallyTriggered = true;
-        incoming.fastRegeneration = { action: "continue", replyId: "100", messageIds: ["100"], consume: () => true };
+        incoming.fastRegeneration = {
+          action: "continue",
+          replyId: "100",
+          messageIds: ["100"],
+          relatedDeliveryIds: new Set(),
+          consume: () => true,
+        };
         const result = await buildChatTurnContext(turn);
         expect(fetchAnchor).toHaveBeenCalledWith("100");
         expect(result.simplifiedMessages.map(({ id }) => id)).toEqual(["100", "101"]);
