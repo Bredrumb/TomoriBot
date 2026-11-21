@@ -24,7 +24,11 @@ import { isDeliveredTurnResult, runPostTurnEffects, shouldRetryEmptyResponse } f
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { releaseTextQuotaForTrigger } from "@/utils/chat/textQuotaState";
-import { offerFastRegeneration, prepareFastRegeneration } from "@/utils/discord/fastRegeneration";
+import {
+  observeReplyControlMessage,
+  offerFastRegeneration,
+  prepareFastRegeneration,
+} from "@/utils/discord/fastRegeneration";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 
 export {
@@ -238,6 +242,7 @@ async function runAdmittedChatTurn(
 
 /** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
+  observeReplyControlMessage(message);
   // Discord emits pin notifications as ChannelPinnedMessage system messages with
   // a message reference to the pinned message. That reference is context metadata,
   // not an intentional conversational reply, so it must never enter the trigger path.

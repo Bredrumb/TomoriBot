@@ -44,29 +44,117 @@ interface ControlSurface {
 }
 
 interface ReplyControls {
+  channel: Message["channel"];
+  locale: string;
+  botUserId: string | undefined;
+  webhook: NonNullable<ChatTurnContext["responseTarget"]>["webhook"];
   replyId: string;
   trigger: Message;
   userId: string;
   personaId: number;
   messageIds: string[];
-  relatedDeliveryIds: string[];
+  relatedDeliveryIds: Set<string>;
   actions: readonly Action[];
+  companionId?: string;
+  visible: boolean;
+  historyRevision: number;
   publication: Promise<ControlSurface | undefined>;
 }
 
 const replyControlsByChannel = new Map<string, ReplyControls>();
 
+function ownsRow(component: Message["components"][number]): boolean {
+  return (
+    component.type === ComponentType.ActionRow &&
+    component.components.some((child) => child.customId?.startsWith(`${REPLY_CONTROLS_NAMESPACE}:`))
+  );
+}
+
+async function isLatestReply(channel: Message["channel"], replyId: string, relatedIds: ReadonlySet<string>) {
+  const latest = await channel.messages.fetch({
+    limit: Math.min(MAX_MESSAGE_FETCH_LIMIT, relatedIds.size + 1),
+    cache: false,
+  });
+  return latest.find((message) => !relatedIds.has(message.id))?.id === replyId;
+}
+
+function setControlsVisible(entry: ReplyControls, visible: boolean): Promise<ControlSurface | undefined> {
+  if (entry.visible === visible) return entry.publication;
+  entry.visible = visible;
+  entry.publication = entry.publication
+    .then(async (surface) => {
+      if (visible) return publishControls(entry);
+      await surface?.remove();
+      return undefined;
+    })
+    .catch((error) => {
+      if (!(error instanceof DiscordAPIError && error.code === RESTJSONErrorCodes.UnknownMessage)) {
+        log.warn(
+          `[fastRegeneration] Could not ${visible ? "add" : "remove"} controls for messageId=${entry.replyId}`,
+          error,
+        );
+      }
+      return undefined;
+    });
+  return entry.publication;
+}
+
 function removeControls(channelId: string, entry: ReplyControls): boolean {
   if (replyControlsByChannel.get(channelId) !== entry) return false;
   replyControlsByChannel.delete(channelId);
-  void entry.publication
-    .then((surface) => surface?.remove())
-    .catch((error) => {
-      if (!(error instanceof DiscordAPIError && error.code === RESTJSONErrorCodes.UnknownMessage)) {
-        log.warn(`[fastRegeneration] Could not remove controls for messageId=${entry.replyId}`, error);
-      }
-    });
+  void setControlsVisible(entry, false);
   return true;
+}
+
+export function clearReplyControls(channelId: string): void {
+  const entry = replyControlsByChannel.get(channelId);
+  if (entry) removeControls(channelId, entry);
+}
+
+async function reconcileLatestReply(entry: ReplyControls): Promise<void> {
+  const revision = ++entry.historyRevision;
+  const relatedIds = new Set(entry.relatedDeliveryIds);
+  if (entry.companionId) relatedIds.add(entry.companionId);
+  try {
+    const visible = await isLatestReply(entry.channel, entry.replyId, relatedIds);
+    if (entry.historyRevision === revision && replyControlsByChannel.get(entry.channel.id) === entry) {
+      await setControlsVisible(entry, visible);
+    }
+  } catch (error) {
+    log.warn(`[fastRegeneration] Could not check channel history for messageId=${entry.replyId}`, error);
+  }
+}
+
+export function observeReplyControlMessage(message: Message): void {
+  const entry = replyControlsByChannel.get(message.channelId);
+  if (
+    !entry ||
+    BigInt(message.id) <= BigInt(entry.replyId) ||
+    entry.relatedDeliveryIds.has(message.id) ||
+    message.id === entry.companionId ||
+    (!message.webhookId &&
+      message.author.id === entry.botUserId &&
+      message.reference?.messageId === entry.replyId &&
+      message.components.some(ownsRow))
+  )
+    return;
+
+  entry.historyRevision++;
+  void setControlsVisible(entry, false);
+}
+
+export async function observeReplyControlDeletions(channelId: string, messageIds: Iterable<string>): Promise<void> {
+  const entry = replyControlsByChannel.get(channelId);
+  if (!entry) return;
+  let removedNewerMessage = false;
+  for (const id of messageIds) {
+    if (entry.messageIds.includes(id)) {
+      removeControls(channelId, entry);
+      return;
+    }
+    if (id !== entry.companionId && BigInt(id) > BigInt(entry.replyId)) removedNewerMessage = true;
+  }
+  if (removedNewerMessage) await reconcileLatestReply(entry);
 }
 
 export async function resolveFastRegeneration(
@@ -79,9 +167,9 @@ export async function resolveFastRegeneration(
   | { status: "ready"; trigger: Message; reply: Message; personaId: number; request: FastRegenerationRequest }
 > {
   const entry = replyControlsByChannel.get(channelId);
-  if (!entry?.actions.includes(action)) return { status: "stale" };
+  if (!entry?.visible || !entry.actions.includes(action)) return { status: "stale" };
   const surface = await entry.publication;
-  if (surface?.messageId !== controlsMessageId || replyControlsByChannel.get(channelId) !== entry) {
+  if (!entry.visible || surface?.messageId !== controlsMessageId || replyControlsByChannel.get(channelId) !== entry) {
     return { status: "stale" };
   }
   if (entry.userId !== userId) return { status: "denied" };
@@ -97,16 +185,17 @@ export async function resolveFastRegeneration(
       replyId: entry.replyId,
       messageIds: entry.messageIds,
       relatedDeliveryIds,
-      consume: () => removeControls(channelId, entry),
+      consume: () => entry.visible && removeControls(channelId, entry),
     },
   };
 }
 
-async function publishControls(context: ChatTurnContext, entry: ReplyControls): Promise<ControlSurface | undefined> {
-  const { channel, locale } = context;
-  const assertOwned = captureDiscordOwnership(context.message.guildId);
-  const reply = await channel.messages.fetch(entry.replyId);
-  const isCurrent = () => replyControlsByChannel.get(channel.id) === entry;
+async function publishControls(entry: ReplyControls): Promise<ControlSurface | undefined> {
+  const { channel, locale } = entry;
+  const isCurrent = () => entry.visible && replyControlsByChannel.get(channel.id) === entry;
+  if (!isCurrent()) return;
+  const assertOwned = captureDiscordOwnership(entry.trigger.guildId);
+  const reply = await channel.messages.fetch({ message: entry.replyId, cache: false, force: true });
   if (!isCurrent()) return;
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -117,15 +206,12 @@ async function publishControls(context: ChatTurnContext, entry: ReplyControls): 
         .setStyle(ButtonStyle.Secondary),
     ),
   );
-  const ownsRow = (component: Message["components"][number]) =>
-    component.type === ComponentType.ActionRow &&
-    component.components.some((child) => child.customId?.startsWith(`${REPLY_CONTROLS_NAMESPACE}:`));
   const existing = reply.components.filter((component) => !ownsRow(component));
 
   let edit: ((components: NonNullable<MessageEditOptions["components"]>) => Promise<Message>) | undefined;
   if (reply.webhookId) {
-    const author = await resolveAuthoringWebhook(channel, reply.webhookId, context.responseTarget?.webhook);
-    if (author && (!author.applicationId || author.applicationId === context.client.user?.id)) {
+    const author = await resolveAuthoringWebhook(channel, reply.webhookId, entry.webhook);
+    if (author && (!author.applicationId || author.applicationId === entry.botUserId)) {
       edit = (components) =>
         author.editMessage(reply.id, {
           components,
@@ -133,7 +219,7 @@ async function publishControls(context: ChatTurnContext, entry: ReplyControls): 
           ...(channel.isThread() ? { threadId: channel.id } : {}),
         });
     }
-  } else if (reply.author.id === context.client.user?.id) {
+  } else if (reply.author.id === entry.botUserId) {
     edit = (components) => reply.edit({ components });
   }
 
@@ -177,6 +263,7 @@ async function publishControls(context: ChatTurnContext, entry: ReplyControls): 
       if (!isCurrent()) throw new DOMException("Reply controls were superseded", "AbortError");
     },
   );
+  entry.companionId = controlsMessage.id;
   return {
     messageId: controlsMessage.id,
     reply,
@@ -227,28 +314,27 @@ export async function offerFastRegeneration(context: ChatTurnContext, result: Ge
 
   const messageIds = [...new Set(refs.map((ref) => ref.messageId))];
   const entry: ReplyControls = {
+    channel,
+    locale: context.locale,
+    botUserId: context.client.user?.id,
+    webhook: context.responseTarget?.webhook,
     replyId: reply.messageId,
     trigger: message,
     userId: userDiscId,
     personaId,
     messageIds,
-    relatedDeliveryIds: (context.streamingContext.deliveryReceipts ?? [])
-      .filter((receipt) => receipt.channelId === channel.id && BigInt(receipt.messageId) > BigInt(reply.messageId))
-      .map((receipt) => receipt.messageId),
+    relatedDeliveryIds: new Set(
+      (context.streamingContext.deliveryReceipts ?? [])
+        .filter((receipt) => receipt.channelId === channel.id && BigInt(receipt.messageId) > BigInt(reply.messageId))
+        .map((receipt) => receipt.messageId),
+    ),
     actions,
-    publication: Promise.resolve()
-      .then(() => publishControls(context, entry))
-      .catch((error) => {
-        if (replyControlsByChannel.get(channel.id) === entry) {
-          log.warn(`[fastRegeneration] Could not add controls to messageId=${reply.messageId}`, error);
-        }
-        return undefined;
-      }),
+    visible: false,
+    historyRevision: 0,
+    publication: Promise.resolve(undefined),
   };
   replyControlsByChannel.set(channel.id, entry);
-  if (!(await entry.publication) && replyControlsByChannel.get(channel.id) === entry) {
-    removeControls(channel.id, entry);
-  }
+  await reconcileLatestReply(entry);
 }
 
 export async function prepareFastRegeneration(
@@ -264,7 +350,7 @@ export async function prepareFastRegeneration(
     const state = await getCachedMainPersona(guild.id);
     if (request.action === "continue") {
       if (!state?.config.fast_regeneration_continue_enabled) return "unavailable";
-      await channel.messages.fetch({ message: request.replyId, cache: false, force: true });
+      if (!(await isLatestReply(channel, request.replyId, request.relatedDeliveryIds))) return "newer-messages";
       return !signal?.aborted && request.consume() ? "ready" : "unavailable";
     }
     if (!state?.config.fast_regeneration_retry_enabled) return "unavailable";
@@ -286,13 +372,7 @@ export async function prepareFastRegeneration(
     );
     if (signal?.aborted || (!canManageMessages && blockMessages.some((message) => !message.webhookId)))
       return "unavailable";
-    const latest = await channel.messages.fetch({
-      limit: Math.min(MAX_MESSAGE_FETCH_LIMIT, request.relatedDeliveryIds.size + 1),
-      cache: false,
-    });
-    if (latest.find((message) => !request.relatedDeliveryIds.has(message.id))?.id !== request.replyId) {
-      return "newer-messages";
-    }
+    if (!(await isLatestReply(channel, request.replyId, request.relatedDeliveryIds))) return "newer-messages";
     if (signal?.aborted || !request.consume()) return "unavailable";
     const { failedCount } = await deletePersonaTurnMessages(channel, blockMessages, canManageMessages, signal);
     return failedCount === 0 ? "ready" : "unavailable";

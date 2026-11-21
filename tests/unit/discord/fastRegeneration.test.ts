@@ -14,6 +14,9 @@ import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { channelLocks, getOrCreateChannelLockEntry, runWithChannelLock } from "@/utils/chat/channelQueue";
 import type { ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import {
+  clearReplyControls,
+  observeReplyControlDeletions,
+  observeReplyControlMessage,
   offerFastRegeneration,
   prepareFastRegeneration,
   resolveFastRegeneration,
@@ -131,16 +134,12 @@ function setupTurn(webhookId: string | null = null, inThread = false) {
     streamResults: [],
   };
 
-  return { context, result, turn, original, trigger, reply, tail, latest };
+  return { context, result, turn, original, trigger, reply, tail, latest, fetch };
 }
 
 afterEach(async () => {
-  for (const id of ["400000000000000004", "400000000000000005", "400000000000000006"]) {
-    for (const action of ["retry", "continue"] as const) {
-      const selection = await resolveFastRegeneration(CHANNEL, id, USER, action);
-      if (selection.status === "ready") selection.request.consume();
-    }
-  }
+  clearReplyControls(CHANNEL);
+  await new Promise<void>((done) => setImmediate(done));
 });
 
 describe("Fast regeneration", () => {
@@ -223,7 +222,7 @@ describe("Fast regeneration", () => {
       );
       expect(authorized.replies[0]).toMatchObject({ flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
       expect(collectTextDisplays(authorized.replies[0]).join("\n")).toMatch(
-        localizedProse("en-US", "general.reply_controls.retry_newer_messages"),
+        localizedProse("en-US", "general.reply_controls.newer_messages"),
       );
       expect(runChat).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -252,9 +251,13 @@ describe("Fast regeneration", () => {
     context.currentPersona = createPersona();
     await offerFastRegeneration(context, result);
 
+    await new Promise<void>((done) => setImmediate(done));
     expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry")).toMatchObject({ status: "stale" });
     expect(tail.edit).toHaveBeenLastCalledWith({ components: [] });
     expect(newer.edit).not.toHaveBeenCalled();
+    latest.delete(newer.id);
+    await observeReplyControlDeletions(CHANNEL, [newer.id]);
+    expect(tail.components).toHaveLength(0);
   });
 
   it("edits and clears inline controls through the authoring webhook in a thread", async () => {
@@ -295,7 +298,12 @@ describe("Fast regeneration", () => {
     const resolve = spyOn(authoringWebhook, "resolveAuthoringWebhook").mockResolvedValue({
       applicationId: "500000000000000002",
     } as Webhook);
-    const send = spyOn(messageDelivery, "sendChannelMessageOnce").mockResolvedValue(controls as unknown as Message);
+    const send = spyOn(messageDelivery, "sendChannelMessageOnce").mockImplementation(async (_channel, options) => {
+      controls.applyComponents({ components: options.components as MessageEditOptions["components"] });
+      const companion = Object.assign(controls, { reference: { messageId: tail.id } });
+      observeReplyControlMessage(companion as unknown as Message);
+      return companion as unknown as Message;
+    });
     const config = spyOn(tomoriStateCache, "getCachedMainPersona").mockResolvedValue(persona);
     try {
       await offerFastRegeneration(context, result);
@@ -315,6 +323,8 @@ describe("Fast regeneration", () => {
       if (selection.status !== "ready") throw new Error("Expected active fallback controls");
       expect(selection.request).toMatchObject({ replyId: tail.id, messageIds: [reply.id, tail.id] });
       expect(selection.request.relatedDeliveryIds).toEqual(new Set([controls.id]));
+      expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
+      latest.delete(humanMessage.id);
       expect(await prepareFastRegeneration(turn, selection.request)).toBe("ready");
       expect(controls.delete).toHaveBeenCalledTimes(1);
       expect(tail.delete).not.toHaveBeenCalled();
@@ -326,7 +336,7 @@ describe("Fast regeneration", () => {
     }
   });
 
-  it("restores Retry eligibility when all newer chat is deleted without timing out the row", async () => {
+  it("hides both actions until the same unused turn is last again", async () => {
     const { context, result, turn, original, trigger, reply, tail, latest } = setupTurn();
     const clock = spyOn(Date, "now");
     const timer = spyOn(globalThis, "setTimeout");
@@ -342,21 +352,34 @@ describe("Fast regeneration", () => {
       expect(timer.mock.calls).toHaveLength(0);
       clock.mockReturnValue(before + 60_000);
 
-      const newer = message("400000000000000006", USER);
+      const unknownWebhook = "500000000000000001";
+      const newer = message("400000000000000006", unknownWebhook, unknownWebhook);
       const newest = message("400000000000000007", USER);
       latest.reverse().set(newer.id, newer).set(newest.id, newest).reverse();
-      const selection = await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry");
-      if (selection.status !== "ready") throw new Error("Expected the latest persona's controls");
-      expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
-      expect(tail.delete).not.toHaveBeenCalled();
+      for (const action of ["retry", "continue"] as const) {
+        const selection = await resolveFastRegeneration(CHANNEL, tail.id, USER, action);
+        if (selection.status !== "ready") throw new Error("Expected a click before the gateway updates the row");
+        expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
+      }
+
+      observeReplyControlMessage(newer as unknown as Message);
+      observeReplyControlMessage(newest as unknown as Message);
+      await new Promise<void>((done) => setImmediate(done));
+      expect(tail.components).toHaveLength(0);
+      expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry")).toMatchObject({ status: "stale" });
+      expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "continue")).toMatchObject({ status: "stale" });
 
       latest.delete(newest.id);
-      expect(await prepareFastRegeneration(turn, selection.request)).toBe("newer-messages");
+      await observeReplyControlDeletions(CHANNEL, [newest.id]);
+      expect(tail.components).toHaveLength(0);
       expect(reply.delete).not.toHaveBeenCalled();
 
       latest.delete(newer.id);
+      await observeReplyControlDeletions(CHANNEL, [newer.id]);
+      expect(tail.components).toHaveLength(1);
+      expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "continue")).toMatchObject({ status: "ready" });
       const retry = await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry");
-      if (retry.status !== "ready") throw new Error("Expected the same row to remain active");
+      if (retry.status !== "ready") throw new Error("Expected the same row to be restored");
       expect(await prepareFastRegeneration(turn, retry.request)).toBe("ready");
       expect(reply.delete).toHaveBeenCalledTimes(1);
       expect(tail.delete).toHaveBeenCalledTimes(1);
@@ -371,6 +394,44 @@ describe("Fast regeneration", () => {
     }
   });
 
+  it("does not restore a row cleared by a conversation reset", async () => {
+    const { context, result, tail, latest } = setupTurn();
+    await offerFastRegeneration(context, result);
+    clearReplyControls(CHANNEL);
+    const reset = message("400000000000000005");
+    latest.reverse().set(reset.id, reset).reverse();
+    observeReplyControlMessage(reset as unknown as Message);
+    latest.delete(reset.id);
+    await observeReplyControlDeletions(CHANNEL, [reset.id]);
+    await new Promise<void>((done) => setImmediate(done));
+    expect(tail.components).toHaveLength(0);
+    expect(await resolveFastRegeneration(CHANNEL, tail.id, USER, "retry")).toMatchObject({ status: "stale" });
+  });
+
+  it("keeps both actions hidden if a new message arrives while deletion is being reconciled", async () => {
+    const { context, result, tail, latest, fetch } = setupTurn();
+    await offerFastRegeneration(context, result);
+    const newer = message("400000000000000005", USER);
+    latest.reverse().set(newer.id, newer).reverse();
+    observeReplyControlMessage(newer as unknown as Message);
+    await new Promise<void>((done) => setImmediate(done));
+
+    latest.delete(newer.id);
+    const history = Promise.withResolvers<typeof latest>();
+    fetch.mockImplementationOnce(() => history.promise);
+    const reconcile = observeReplyControlDeletions(CHANNEL, [newer.id]);
+    const newest = message("400000000000000006", USER);
+    latest.reverse().set(newest.id, newest).reverse();
+    observeReplyControlMessage(newest as unknown as Message);
+    history.resolve(new Collection([[tail.id, tail]]));
+    await reconcile;
+    expect(tail.components).toHaveLength(0);
+
+    latest.delete(newest.id);
+    await observeReplyControlDeletions(CHANNEL, [newest.id]);
+    expect(tail.components).toHaveLength(1);
+  });
+
   it("rejects a pending Retry when a new persona reply takes over before the click can claim the row", async () => {
     const { context, result, turn, reply, tail, latest } = setupTurn();
     const config = spyOn(tomoriStateCache, "getCachedMainPersona").mockResolvedValue(persona);
@@ -380,7 +441,7 @@ describe("Fast regeneration", () => {
       if (selection.status !== "ready") throw new Error("Expected the original reply's controls");
 
       const newer = message("400000000000000005");
-      latest.set(newer.id, newer);
+      latest.reverse().set(newer.id, newer).reverse();
       context.streamingContext.deliveredMessageRefs = [{ messageId: newer.id, channelId: CHANNEL, webhookId: null }];
       await offerFastRegeneration(context, result);
 

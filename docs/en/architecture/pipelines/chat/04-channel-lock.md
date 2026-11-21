@@ -53,11 +53,11 @@ When an admitted turn arrives:
 
 After streaming, TomoriBot adds Retry and Continue to the final message. If its webhook cannot
 carry interactive components, the bot sends a separate button row as a reply to that message.
-The shard owner keeps one active row per channel in memory. A newer persona reply replaces it.
-Both actions use normal chat admission and reject requests while a turn is active or replay is
-pending. The action claims the active row under the channel lock. Retry checks live Discord
-history for newer messages before claiming the row and deletes the exact text message IDs
-recorded for that turn.
+The shard owner keeps one turn record per channel in memory. Message creation hides the row
+and deletion can restore it while that reply is still the newest persona turn. Same-turn
+delivery notices and the separate button row are excluded from the latest-message check.
+Both actions use normal chat admission and check live Discord history under the channel lock
+before claiming the row. Retry deletes the exact text message IDs recorded for that turn.
 
 ### Interruption and cancellation ownership
 

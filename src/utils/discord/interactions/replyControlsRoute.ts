@@ -75,7 +75,7 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
         heading: localizer(locale, "general.reply_controls.unavailable"),
         detail: localizer(
           locale,
-          decline === "newer-messages" ? "general.reply_controls.retry_newer_messages" : "general.reply_controls.stale",
+          decline === "newer-messages" ? "general.reply_controls.newer_messages" : "general.reply_controls.stale",
         ),
       });
     }
