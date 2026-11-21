@@ -46,6 +46,21 @@ describe("NVIDIA image request resolution", () => {
     expect(url).toBe("https://example.test/v1/img");
   });
 
+  it("sends a hosted FLUX request without the rejected seed field", async () => {
+    const fetch = stubGlobalFetch(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      if ("seed" in body) return new Response(null, { status: 422 });
+      expect(body).toMatchObject({ prompt: "a quiet street at dusk", mode: "base", width: 1344, height: 768 });
+      return Response.json({ artifacts: [{ base64: "aW1hZ2U=" }] });
+    });
+    try {
+      const result = await generateNvidiaNativeImage(createRequest({ aspectRatio: "16:9" }));
+      expect(result).toEqual({ imageData: "aW1hZ2U=", mimeType: "image/jpeg" });
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it("sends FLUX width/height instead of the retired SD3 aspect_ratio field", () => {
     const { body } = resolveNvidiaImageRequest(createRequest({ aspectRatio: "16:9" }));
     expect(body).toMatchObject({ mode: "base", width: 1344, height: 768 });
