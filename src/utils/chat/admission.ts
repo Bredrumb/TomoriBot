@@ -69,10 +69,10 @@ function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
   return botMember?.isCommunicationDisabled() ?? false;
 }
 
-// Admission runs before user registration or DB load, so stored user locale is unavailable and invoker or guild
-// locale is used.
-function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
-  return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
+function resolveAdmissionNoticeLocale(incoming: ChatIncoming, languagePreference?: string): string {
+  return (
+    languagePreference ?? incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US"
+  );
 }
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -384,6 +384,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     earlyTomoriState,
     isWebhookMessage,
     isBotAuthor,
+    userDiscId,
   });
   if (audioDisposition) {
     return audioDisposition;
@@ -412,7 +413,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   return {
     incoming,
     disposition: "run",
-    locale: "en-US",
+    locale: resolveAdmissionNoticeLocale(incoming),
     client: incoming.client,
     message: incoming.message,
     channel: incoming.message.channel,
@@ -576,8 +577,9 @@ async function evaluateAudioTranscriptionAdmission(args: {
   earlyTomoriState: TomoriState | null;
   isWebhookMessage: boolean;
   isBotAuthor: boolean;
+  userDiscId: string;
 }): Promise<NonRunnableChatAdmission | null> {
-  const { incoming, earlyTomoriState, isWebhookMessage, isBotAuthor } = args;
+  const { incoming, earlyTomoriState, isWebhookMessage, isBotAuthor, userDiscId } = args;
   const { message } = incoming;
   if (hasHandledAudioTranscription(message) || !earlyTomoriState || isWebhookMessage || isBotAuthor) {
     return null;
@@ -652,9 +654,10 @@ async function evaluateAudioTranscriptionAdmission(args: {
       transcriptionResult.failureReason !== "no_endpoint" &&
       transcriptionResult.failureReason !== "missing_api_key"
     ) {
+      const triggerUser = userDiscId === message.author.id ? sender : await getCachedUserRow(userDiscId);
       await sendStandardEmbed(
         message.channel as Parameters<typeof sendStandardEmbed>[0],
-        resolveAdmissionNoticeLocale(incoming),
+        resolveAdmissionNoticeLocale(incoming, triggerUser?.language_pref),
         {
           color: ColorCode.WARN,
           titleKey: "general.errors.voice_transcription_failed_title",
@@ -811,7 +814,8 @@ export async function resolveAdmissionChannelScope(
     shouldShowError = true;
   }
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
-    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming), {
+    const user = await getCachedUserRow(userDiscId);
+    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming, user?.language_pref), {
       color: ColorCode.ERROR,
       titleKey: "general.errors.channel_not_supported_title",
       descriptionKey: "general.errors.channel_not_supported_description",

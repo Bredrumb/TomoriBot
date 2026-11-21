@@ -2,6 +2,12 @@ export default {
   general: {
     restarting_title: `Reiniciando`,
     restarting: `TomoriBot se está reiniciando. Por favor, intenta de nuevo en breve.`,
+    reply_controls: {
+      unavailable: `Control de respuesta no disponible`,
+      only_triggerer: `Solo la persona que originó esta respuesta puede usar sus controles.`,
+      stale: `Esta respuesta ya no está disponible para Reintentar o Continuar.`,
+      newer_messages: `Estos controles están disponibles cuando esta respuesta es el último mensaje en la conversación.`,
+    },
     panel_notice: {
       outdated_heading: `Panel desactualizado`,
       unavailable_heading: `No disponible`,
@@ -190,6 +196,11 @@ export default {
     task_update_repeat_none: `una vez`,
     task_update_repeat_hours: `cada {repetition_interval_hours} hora(s)`,
     task_update_repeat_months: `cada {repetition_interval_months} mes(es)`,
+    task_update_repeat_minutes: `cada {repetition_interval_minutes} min`,
+    task_update_repeat_count: `entregas restantes: {count}`,
+    task_update_repeat_until: `hasta {time} ({offset})`,
+    task_update_repeat_window: `diario de {start} a {end} ({offset})`,
+    triggered_footer_recurring_completed: `La generación falló, por lo que el contenido programado se muestra sin cambios. La programación alcanzó su límite de repeticiones.`,
     expand_task_button: `Mostrar tarea completa`,
     expand_task_title: `Contenido completo de la tarea`,
     reminder_triggered_title: `🟡 Recordatorio activado (entrega fallida)`,

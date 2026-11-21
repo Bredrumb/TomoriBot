@@ -20,7 +20,7 @@ on the 31st of every month, remind me to pay rent
 
 Ela analisa o tempo solicitado e a recorrência. Os lembretes enviam ping ao usuário alvo quando eles são acionados. As tarefas são ações silenciosas que a persona realiza quando chega a hora.
 
-Um agendamento pode se repetir a cada poucas horas ou a cada poucos meses. Um agendamento mensal mantém o mesmo dia e horário. Em um mês que não tenha esse dia, ele será executado no último dia do mês (30 de abril para o dia 31) e voltará ao dia 31 no mês seguinte.
+Um agendamento pode se repetir por minuto, hora ou mês. Peça uma quantidade de entregas ou um horário limite para encerrá-lo automaticamente. Se você disser "lembre-me a cada hora" sem informar um horário de início, o primeiro lembrete fica para daqui a uma hora. Agendamentos por minuto e por hora também podem usar uma janela diária no fuso horário do servidor, como de 09:00 a 17:00. Um acionamento fora da janela passa para a próxima abertura. Um agendamento mensal mantém o mesmo dia e horário. Em um mês que não tenha esse dia, ele será executado no último dia do mês (30 de abril para o dia 31) e voltará ao dia 31 no mês seguinte.
 
 ## Fusos Horários
 
@@ -32,7 +32,7 @@ Quando um lembrete é direcionado a um usuário cujo fuso horário pessoal é di
 
 Dois comandos de barra permitem revisar e ajustar programações existentes:
 
-- `/scheduled-task edit`: altera o conteúdo de uma tarefa, o próximo horário de acionamento, o intervalo de repetição (em horas ou meses) ou o alvo do lembrete. Defina o intervalo como `0` para tornar uma tarefa recorrente única.
+- `/scheduled-task edit`: altera o conteúdo de uma tarefa, o próximo horário de acionamento, o intervalo de repetição (em minutos, horas ou meses), o limite de repetição ou o alvo do lembrete. Insira um intervalo como `15m`, `2h` ou `1mo`. Defina como `0` para uma tarefa única. Limpe o campo de limite para repetir indefinidamente.
 - `/scheduled-task remove`: exclua um lembrete ou tarefa.
 
 Ambos os comandos abrem um seletor listando suas programações existentes por persona, horário, canal e recorrência.

@@ -92,6 +92,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     });
     incoming.shouldSurfaceUserErrors = shouldSurfaceNoStateError;
     if (shouldSurfaceNoStateError) {
+      const user = await getCachedUserRow(userDiscId);
       await validateDirectChatTrigger({
         client,
         message,
@@ -103,7 +104,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
         isManuallyTriggered: incoming.isManuallyTriggered,
         userDiscId,
         serverDiscId,
-        locale: admission.locale ?? "en-US",
+        locale: user?.language_pref ?? admission.locale,
       });
     }
     log.info(`No persona state available for message ${message.id} in server ${serverDiscId}.`);
@@ -114,12 +115,9 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
-  const userRow = await loadOrRegisterTriggerUser(message, guild, userDiscId, incoming.manualTriggerInvoker);
+  const userRow = await loadOrRegisterTriggerUser(message, userDiscId, admission.locale, incoming.manualTriggerInvoker);
   // A borrowed trigger's author is a bystander, so a guild turn speaks the server's language, not theirs.
-  const locale =
-    incoming.borrowsTriggerMessage && guild
-      ? (guild.preferredLocale ?? "en-US")
-      : (userRow.language_pref ?? incoming.manualTriggerInvoker?.locale ?? admission.locale);
+  const locale = incoming.borrowsTriggerMessage && guild ? (guild.preferredLocale ?? "en-US") : userRow.language_pref;
   admission.locale = locale;
   admission.userRow = userRow;
   admission.tomoriState = tomoriState;
@@ -582,14 +580,13 @@ async function resolveNamingSubject(params: {
 
 async function loadOrRegisterTriggerUser(
   message: Message,
-  guild: Guild | null,
   userDiscId: string,
+  locale: string,
   manualTriggerInvoker: LockedChatTurn["admission"]["incoming"]["manualTriggerInvoker"],
 ): Promise<UserRow> {
   const existing = await getCachedUserRow(userDiscId);
   if (existing) return existing;
 
-  const locale = manualTriggerInvoker?.locale ?? guild?.preferredLocale ?? "en-US";
   // A persona webhook message is credited to the bot, so the persona's webhook name must not name the bot's row.
   const author = userDiscId === message.client.user?.id ? message.client.user : message.author;
   const displayName = resolvePreferredDiscordDisplayName({

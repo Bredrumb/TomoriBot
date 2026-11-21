@@ -19,6 +19,13 @@ De forma predeterminada, ella responde cuando tú:
 
 En un DM, envíe un mensaje directamente sin ninguna palabra de activación ni mención.
 
+### Controles de respuesta
+
+Los administradores de servidores pueden habilitar Reintentar y Continuar en `/config` > `Comportamiento` > `Comportamiento de activación` > `Controles de respuesta`. Solo el miembro que originó una respuesta puede usar sus botones, y solo mientras la respuesta esté al final de la conversación. Los mensajes nuevos ocultan los botones. Eliminar esos mensajes vuelve a mostrar los botones si la misma respuesta sin usar vuelve a ser la última. Usar un botón, una respuesta más reciente de una persona o `/refresh` retira esos controles.
+
+- `↻` reintenta toda la respuesta eliminándola y pidiéndole a la misma persona que responda de nuevo. El bot necesita `Gestionar mensajes` para eliminar respuestas enviadas desde su propia cuenta.
+- `→` le pide a la misma persona que continúe en un mensaje nuevo.
+
 ### Administrar palabras de activación
 <!-- anchor: managing-trigger-words -->
 

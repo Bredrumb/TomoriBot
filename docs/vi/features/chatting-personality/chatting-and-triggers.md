@@ -19,6 +19,13 @@ Theo mặc định, cô ấy sẽ trả lời khi bạn:
 
 Trong DM, hãy gửi tin nhắn trực tiếp mà không cần bất kỳ từ kích hoạt hoặc đề cập nào.
 
+### Điều khiển phản hồi
+
+Người quản lý máy chủ có thể bật thử lại và tiếp tục trong `/config` > `Hành vi` > `Hành vi kích hoạt` > `Điều khiển phản hồi`. Chỉ thành viên đã kích hoạt phản hồi mới có thể dùng các nút của phản hồi đó, và chỉ khi phản hồi nằm ở cuối cuộc trò chuyện. Tin nhắn mới sẽ ẩn các nút này. Nếu các tin nhắn đó bị xóa khiến chính phản hồi chưa sử dụng đó lại nằm ở cuối cùng, các nút sẽ xuất hiện trở lại. Việc nhấn một nút, có phản hồi mới hơn của persona hoặc dùng `/refresh` sẽ vô hiệu hóa vĩnh viễn các nút điều khiển đó.
+
+- `↻` thử lại toàn bộ phản hồi bằng cách xóa nó đi và yêu cầu chính persona đó trả lời lại. Bot cần quyền `Quản lý tin nhắn` để xóa các phản hồi được gửi bằng tài khoản của chính bot.
+- `→` yêu cầu chính persona đó tiếp tục trong một tin nhắn mới.
+
 ### Quản lý từ kích hoạt
 <!-- anchor: managing-trigger-words -->
 

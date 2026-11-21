@@ -2,6 +2,12 @@ export default {
   general: {
     restarting_title: `正在重启`,
     restarting: `TomoriBot 正在重启。请稍后重试。`,
+    reply_controls: {
+      unavailable: `回复控制不可用`,
+      only_triggerer: `只有触发这条回复的人可以使用它的控制按钮。`,
+      stale: `这条回复已无法再使用「重试」或「继续」。`,
+      newer_messages: `只有当这条回复是对话中的最后一条消息时，才可以使用这些控制按钮。`,
+    },
     panel_notice: {
       outdated_heading: `面板已过期`,
       unavailable_heading: `不可用`,
@@ -191,6 +197,11 @@ export default {
     task_update_repeat_none: `一次性`,
     task_update_repeat_hours: `每 {repetition_interval_hours} 小时`,
     task_update_repeat_months: `每 {repetition_interval_months} 个月`,
+    task_update_repeat_minutes: `每 {repetition_interval_minutes} 分钟`,
+    task_update_repeat_count: `剩余发送次数：{count}`,
+    task_update_repeat_until: `直到 {time}（{offset}）`,
+    task_update_repeat_window: `每天 {start} 到 {end}（{offset}）`,
+    triggered_footer_recurring_completed: `生成失败，所以这里原样显示计划内容。这个计划已经达到重复上限。`,
     expand_task_button: `查看完整提醒`,
     expand_task_title: `完整提醒内容`,
     reminder_triggered_title: `🟡 提醒已触发（发送失败）`,

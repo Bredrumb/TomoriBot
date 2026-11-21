@@ -2,6 +2,12 @@ export default {
   general: {
     restarting_title: `再起動中`,
     restarting: `TomoriBotは再起動中です。しばらくしてからもう一度お試しください。`,
+    reply_controls: {
+      unavailable: `返信コントロールを利用できません`,
+      only_triggerer: `この返信をトリガーした本人のみがコントロールを使用できます。`,
+      stale: `この返信では再試行または続行を使用できなくなりました。`,
+      newer_messages: `これらのコントロールは、この返信が会話の最後のメッセージである場合に使用できます。`,
+    },
     panel_notice: {
       outdated_heading: `パネルが古い状態です`,
       unavailable_heading: `利用不可`,
@@ -192,6 +198,11 @@ export default {
     task_update_repeat_none: `1回のみ`,
     task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
     task_update_repeat_months: `{repetition_interval_months}か月ごと`,
+    task_update_repeat_minutes: `{repetition_interval_minutes}分ごと`,
+    task_update_repeat_count: `残り配信回数：{count}`,
+    task_update_repeat_until: `{time}（{offset}）まで`,
+    task_update_repeat_window: `毎日{start}から{end}（{offset}）`,
+    triggered_footer_recurring_completed: `生成に失敗したため、スケジュールされた内容をそのまま表示しています。このスケジュールは繰り返し上限に達しました。`,
     expand_task_button: `全文を表示`,
     expand_task_title: `タスクの全文`,
     reminder_triggered_title: `🟡 リマインダー通知（配信失敗）`,

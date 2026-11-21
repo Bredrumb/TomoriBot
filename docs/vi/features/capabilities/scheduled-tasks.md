@@ -20,7 +20,7 @@ on the 31st of every month, remind me to pay rent
 
 Cô phân tích thời gian được yêu cầu và sự lặp lại. Lời nhắc ping người dùng mục tiêu khi họ kích hoạt. Nhiệm vụ là những hành động thầm lặng mà cá nhân thực hiện khi thời điểm đến.
 
-Lịch trình có thể lặp lại sau mỗi vài giờ hoặc sau mỗi vài tháng. Lịch lặp lại hàng tháng sẽ giữ nguyên ngày và giờ. Vào tháng không có ngày đó, tác vụ sẽ chạy vào ngày cuối cùng của tháng (ngày 30 tháng 4 đối với ngày 31) và quay trở lại ngày 31 vào tháng sau.
+Lịch trình có thể lặp lại theo phút, giờ hoặc tháng. Hãy yêu cầu một số lần gửi nhất định hoặc thời điểm kết thúc để lịch trình tự động dừng. Nếu bạn nói "nhắc tôi mỗi giờ" mà không nêu thời gian bắt đầu, lời nhắc đầu tiên sẽ đến hạn sau một giờ. Lịch trình theo phút và giờ cũng có thể dùng khung giờ hằng ngày theo múi giờ của máy chủ, chẳng hạn từ 09:00 đến 17:00. Lần kích hoạt ngoài khung giờ sẽ dời sang thời điểm mở khung giờ tiếp theo. Lịch lặp lại hàng tháng giữ nguyên ngày và giờ. Vào tháng không có ngày đó, tác vụ sẽ chạy vào ngày cuối cùng của tháng (ngày 30 tháng 4 đối với ngày 31) và quay trở lại ngày 31 vào tháng sau.
 
 ## Múi giờ
 
@@ -32,7 +32,7 @@ Khi lời nhắc nhắm mục tiêu đến người dùng có múi giờ cá nh�
 
 Hai lệnh gạch chéo cho phép bạn xem lại và điều chỉnh lịch trình hiện có:
 
-- `/scheduled-task edit`: thay đổi nội dung của tác vụ, thời gian kích hoạt tiếp theo, khoảng cách lặp lại (theo giờ hoặc theo tháng) hoặc người nhận lời nhắc. Đặt khoảng thời gian thành `0` để chuyển tác vụ định kỳ thành một lần.
+- `/scheduled-task edit`: thay đổi nội dung của tác vụ, thời gian kích hoạt tiếp theo, khoảng cách lặp lại (theo phút, giờ hoặc tháng), giới hạn lặp lại hoặc người nhận lời nhắc. Nhập khoảng cách như `15m`, `2h` hoặc `1mo`. Đặt thành `0` cho tác vụ một lần. Xóa trống trường giới hạn để lặp lại vô thời hạn.
 - `/scheduled-task remove`: xóa lời nhắc hoặc tác vụ.
 
 Cả hai lệnh đều mở một bộ chọn liệt kê các lịch trình hiện có của bạn theo persona, thời gian, kênh và tần suất lặp lại.
