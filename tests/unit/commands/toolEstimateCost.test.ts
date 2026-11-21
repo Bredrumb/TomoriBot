@@ -9,7 +9,7 @@ import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtur
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { localizedCopy } from "../../helpers/localeCases";
-import { userSavedProviderConfigSchema } from "@/types/db/schema";
+import { savedProviderConfigSchema, userSavedProviderConfigSchema } from "@/types/db/schema";
 import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import * as credentials from "@/utils/provider/credentialResolver";
 import * as stateCache from "@/utils/cache/tomoriStateCache";
@@ -83,7 +83,17 @@ describe("DeepSeek live token estimate", () => {
         modelId: 19,
         apiKey: "fixture-key",
         keyVersion: 1,
-        savedConfig: null,
+        savedConfig: savedProviderConfigSchema.parse({
+          server_id: state.server_id,
+          provider: "deepseek",
+          llm_id: 19,
+          thinking_level: "high",
+          api_key: null,
+          diffusion_model_id: null,
+          embedding_model_id: null,
+          nai_diffusion_model_id: null,
+          nai_preset_name: null,
+        }),
       }),
     ];
     try {
