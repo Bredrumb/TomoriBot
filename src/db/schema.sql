@@ -1787,6 +1787,12 @@ CREATE TABLE IF NOT EXISTS reminders (
   repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
   repetition_interval_months INTEGER,                  -- Optional: repeat interval in calendar months; exclusive with hours
   repetition_anchor_day SMALLINT,                      -- Day a monthly series returns to after a short month; NULL = reminder_time's day
+  repetition_interval_minutes INTEGER,
+  repeat_remaining_count INTEGER,
+  repeat_until_time TIMESTAMP WITH TIME ZONE,
+  daily_window_start_minutes SMALLINT,
+  daily_window_end_minutes SMALLINT,
+  daily_window_timezone_offset DOUBLE PRECISION,
   self_reminder BOOLEAN DEFAULT false,               -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1801,6 +1807,12 @@ SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_months', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_anchor_day', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repeat_remaining_count', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repeat_until_time', 'TIMESTAMP WITH TIME ZONE');
+SELECT add_column_if_not_exists('reminders', 'daily_window_start_minutes', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'daily_window_end_minutes', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'daily_window_timezone_offset', 'DOUBLE PRECISION');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 -- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.

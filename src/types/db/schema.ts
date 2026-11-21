@@ -1516,6 +1516,12 @@ export const reminderSchema = z.object({
   failed_occurrence_count: z.number().int().nonnegative().default(0),
   repetition_interval_hours: z.number().int().nullable().optional(),
   repetition_interval_months: z.number().int().nullable().optional(),
+  repetition_interval_minutes: z.number().int().nullable().optional(),
+  repeat_remaining_count: z.number().int().nullable().optional(),
+  repeat_until_time: z.date().nullable().optional(),
+  daily_window_start_minutes: z.number().int().nullable().optional(),
+  daily_window_end_minutes: z.number().int().nullable().optional(),
+  daily_window_timezone_offset: z.number().nullable().optional(),
   repetition_anchor_day: z.number().int().nullable().optional(), // Monthly target day after a short-month clamp
   self_reminder: z.boolean().nullable().optional(),
   created_by_user_id: z.number().nullable(), // NULL if user was deleted
