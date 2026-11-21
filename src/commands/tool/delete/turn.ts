@@ -1,5 +1,5 @@
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
-import type { AnyThreadChannel, ChatInputCommandInteraction, Client, Message } from "discord.js";
+import type { ChatInputCommandInteraction, Client, Message } from "discord.js";
 import { BaseGuildTextChannel, MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState, UserRow } from "@/types/db/schema";
@@ -13,48 +13,15 @@ import {
 } from "@/utils/discord/ui/personaWorkflow";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { findLastPersonaTurnBlock } from "@/utils/discord/personaTurnDetection";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
+import { deletePersonaTurnMessages, tryAcquirePersonaTurnDeletion } from "@/utils/discord/personaTurnDeletion";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-
-/** Module-level lock set keyed by channelId, so prevents double-invocation. */
-const activeDeleteLocks = new Set<string>();
-
-/**
- * Max message age (in ms) below which Discord allows bulk deletion.
- * Messages older than 14 days must be deleted individually.
- */
-const BULK_DELETE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 interface DeleteTurnStatus {
   titleKey: string;
   descriptionKey: string;
   descriptionVars?: Record<string, string | number | boolean>;
   color: ColorCode;
-}
-
-/**
- * Resolves the parent text channel that owns the webhook for the given channel.
- * Threads cannot own webhooks, so the parent channel is used instead.
- * @returns The BaseGuildTextChannel that owns webhooks, or null if unavailable
- */
-function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextChannel | null {
-  const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
-  if (isThread) {
-    const parent = (channel as AnyThreadChannel).parent;
-    return parent && "fetchWebhooks" in parent ? (parent as BaseGuildTextChannel) : null;
-  }
-  return "fetchWebhooks" in channel && "createWebhook" in channel ? (channel as BaseGuildTextChannel) : null;
-}
-
-/**
- * Resolves the thread ID for webhook message deletion.
- * When deleting webhook messages inside a thread, the thread ID must be passed
- * as the second argument to `webhook.deleteMessage()`.
- * @returns The thread ID if in a thread, otherwise undefined
- */
-function resolveWebhookThreadId(channel: Message["channel"]): string | undefined {
-  return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 }
 
 /**
@@ -153,8 +120,8 @@ export async function execute(
     botHasManageMessages = Boolean(channel.permissionsFor(botMember)?.has("ManageMessages"));
   }
 
-  // Race-condition lock check, so prevents double-invocation for the same channel
-  if (activeDeleteLocks.has(channelId)) {
+  const releaseDeletion = tryAcquirePersonaTurnDeletion(channelId);
+  if (!releaseDeletion) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.delete.turn.already_running_title",
       descriptionKey: "commands.tool.delete.turn.already_running_description",
@@ -162,9 +129,6 @@ export async function execute(
     });
     return;
   }
-
-  // Acquire lock before any async work
-  activeDeleteLocks.add(channelId);
 
   let personaWorkflowStarted = false;
 
@@ -217,144 +181,11 @@ export async function execute(
         color: ColorCode.INFO,
       });
 
-      const now = Date.now();
-      const webhookMessages: Message[] = [];
-      const directBotMessages: Message[] = [];
-
-      for (const msg of blockMessages) {
-        if (msg.webhookId) {
-          webhookMessages.push(msg);
-        } else {
-          directBotMessages.push(msg);
-        }
-      }
-
-      let deletedCount = 0;
-      let failedCount = 0;
-
-      // Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
-      if (webhookMessages.length > 0) {
-        const hostChannel = resolveWebhookHostChannel(channel);
-        const threadId = resolveWebhookThreadId(channel);
-
-        // Group messages by webhookId to minimize resolution calls.
-        // The filter narrows the type from (string | null) to string.
-        const webhooksOnly = webhookMessages.filter((m): m is Message & { webhookId: string } => !!m.webhookId);
-
-        const messagesByWebhook = new Map<string, Message[]>();
-        for (const msg of webhooksOnly) {
-          const group = messagesByWebhook.get(msg.webhookId) ?? [];
-          group.push(msg);
-          messagesByWebhook.set(msg.webhookId, group);
-        }
-
-        for (const [webhookId, messages] of messagesByWebhook) {
-          const webhook = hostChannel ? await resolveManagedWebhookForChannel(hostChannel, webhookId) : null;
-
-          for (const msg of messages) {
-            try {
-              if (webhook) {
-                // Webhook API deletion: no channel permission required
-                await webhook.deleteMessage(msg.id, threadId);
-                deletedCount++;
-              } else if (botHasManageMessages) {
-                await msg.delete();
-                deletedCount++;
-              } else {
-                log.warn(
-                  `[deleteTurn] Cannot delete webhook messageId=${msg.id}: webhook not resolvable and bot lacks MANAGE_MESSAGES`,
-                );
-                failedCount++;
-              }
-            } catch (delError) {
-              log.warn(`[deleteTurn] Webhook deletion failed for messageId=${msg.id}`, delError);
-              if (botHasManageMessages) {
-                try {
-                  await msg.delete();
-                  deletedCount++;
-                } catch (fallbackError) {
-                  log.warn(`[deleteTurn] Fallback delete also failed for messageId=${msg.id}`, fallbackError);
-                  failedCount++;
-                }
-              } else {
-                failedCount++;
-              }
-            }
-          }
-        }
-      }
-
-      // Delete direct bot messages (requires MANAGE_MESSAGES)
-      if (directBotMessages.length > 0) {
-        if (botHasManageMessages) {
-          // Partition by age for bulk delete optimization
-          const recentIds: string[] = [];
-          const oldDirectMessages: Message[] = [];
-
-          for (const msg of directBotMessages) {
-            if (now - msg.createdTimestamp < BULK_DELETE_MAX_AGE_MS) {
-              recentIds.push(msg.id);
-            } else {
-              oldDirectMessages.push(msg);
-            }
-          }
-
-          // Bulk-delete recent direct messages (≥ 2 IDs, text channel only)
-          if (recentIds.length >= 2 && channel instanceof BaseGuildTextChannel) {
-            try {
-              await channel.bulkDelete(recentIds);
-              deletedCount += recentIds.length;
-            } catch (bulkError) {
-              log.warn(
-                `[deleteTurn] bulkDelete failed for channelId=${channelId} — falling back to individual deletion`,
-                bulkError,
-              );
-              for (const id of recentIds) {
-                try {
-                  const msg = fetched.get(id);
-                  if (msg) {
-                    await msg.delete();
-                    deletedCount++;
-                  }
-                } catch (indivError) {
-                  log.warn(`[deleteTurn] Failed to individually delete messageId=${id}`, indivError);
-                  failedCount++;
-                }
-              }
-            }
-          } else {
-            for (const id of recentIds) {
-              try {
-                const msg = fetched.get(id);
-                if (msg) {
-                  await msg.delete();
-                  deletedCount++;
-                }
-              } catch (singleError) {
-                log.warn(`[deleteTurn] Failed to delete messageId=${id}`, singleError);
-                failedCount++;
-              }
-            }
-          }
-
-          // Delete old direct messages individually (bulk-delete not allowed > 14 days)
-          for (const msg of oldDirectMessages) {
-            try {
-              await msg.delete();
-              deletedCount++;
-            } catch (oldError) {
-              log.warn(`[deleteTurn] Failed to delete old messageId=${msg.id}`, oldError);
-              failedCount++;
-            }
-          }
-        } else {
-          // Bot lacks MANAGE_MESSAGES, so cannot delete direct bot messages at all
-          failedCount += directBotMessages.length;
-          log.warn(
-            `[deleteTurn] Bot lacks MANAGE_MESSAGES in channelId=${channelId}; skipping ${directBotMessages.length} direct bot messages`,
-          );
-        }
-      }
+      const { deletedCount, failedCount } = await deletePersonaTurnMessages(
+        channel,
+        blockMessages,
+        botHasManageMessages,
+      );
 
       const embedValues: Record<string, string> = {
         persona_name: displayName,
@@ -526,6 +357,6 @@ export async function execute(
     }
   } finally {
     // Always release the channel lock regardless of outcome
-    activeDeleteLocks.delete(channelId);
+    releaseDeletion();
   }
 }

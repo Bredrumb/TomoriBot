@@ -119,6 +119,27 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
     }
   });
 
+  it("preserves independent reply reaction settings through the workspace export and import", async () => {
+    const off = { fast_regeneration_retry_enabled: false, fast_regeneration_continue_enabled: false };
+    const retryOnly = { ...off, fast_regeneration_retry_enabled: true };
+    const continueOnly = { ...off, fast_regeneration_continue_enabled: true };
+    const { serverDiscId } = FIXTURE_IDS;
+    expect((await personaRepository.loadState(serverDiscId))?.config).toMatchObject(off);
+    try {
+      expect(await configRepository.updateTriggerBehaviorConfig(refs.serverId, retryOnly)).toBe(true);
+      expect((await personaRepository.loadState(serverDiscId))?.config).toMatchObject(retryOnly);
+      expect((await personaRepository.loadAllForServer(serverDiscId))[0]?.config).toMatchObject(retryOnly);
+      const portable = await exportRepository.exportWorkspaceConfig(serverDiscId);
+      if (!portable.success || portable.data?.type !== "workspace_config") throw new Error("Expected workspace export");
+      expect(portable.data.data.triggers).toMatchObject(retryOnly);
+      expect(await configRepository.updateTriggerBehaviorConfig(refs.serverId, continueOnly)).toBe(true);
+      expect((await importRepository.importWorkspaceConfig(serverDiscId, portable.data)).success).toBe(true);
+      expect((await personaRepository.loadState(serverDiscId))?.config).toMatchObject(retryOnly);
+    } finally {
+      await configRepository.updateTriggerBehaviorConfig(refs.serverId, off);
+    }
+  });
+
   it("defaults new server member memory management rows to opt-in", async () => {
     const [column] = await testSql<Array<{ column_default: string | null }>>`
       SELECT column_default

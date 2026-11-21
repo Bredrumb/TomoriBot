@@ -1008,6 +1008,8 @@ const serverTriggerBehaviorConfigSchema = z.object({
   server_id: z.number().int(),
   always_reply_enabled: z.boolean().default(false),
   deliberate_trigger_mode: z.boolean().default(false),
+  fast_regeneration_retry_enabled: z.boolean().default(false),
+  fast_regeneration_continue_enabled: z.boolean().default(false),
   deliberate_tool_mode: z.boolean().default(false), // Tools require explicit tool intent when enabled
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null), // Successful tools remain available for this many following channel turns; NULL uses env default
   deliberate_tool_triggers: z.preprocess(

@@ -644,6 +644,8 @@ const defaultDependencies: ConfigRouteDependencies = {
       alwaysReplyEnabled: state.config.always_reply_enabled ?? false,
       cooldownType: state.config.cooldown_type ?? 0,
       cooldownLength: state.config.cooldown_length ?? 5,
+      fastRegenerationRetryEnabled: state.config.fast_regeneration_retry_enabled,
+      fastRegenerationContinueEnabled: state.config.fast_regeneration_continue_enabled,
     };
     const experimental: ConfigBehaviorExperimentalView = {
       deliberateToolMode: state.config.deliberate_tool_mode ?? false,

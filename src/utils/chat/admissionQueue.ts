@@ -12,6 +12,7 @@ import {
 import {
   enqueueBusyChannelMessage,
   getOrCreateChannelLockEntry,
+  hasPendingChannelWork,
   queueFollowUpForLockedTurn,
   releaseStaleChannelLockIfExpired,
   requestNaturalStopForLockedTurn,
@@ -107,6 +108,9 @@ async function evaluateLockedChannelAdmission(
 
   const channelId = message.channel.id;
   const lockEntry = getOrCreateChannelLockEntry(channelId, channelScope.serverDiscId);
+  if (incoming.fastRegeneration && hasPendingChannelWork(lockEntry)) {
+    return { incoming, disposition: "ignore", locale: "en-US", reason: "locked_fast_regeneration" };
+  }
   releaseStaleChannelLockIfExpired(channelId, lockEntry);
   if (!lockEntry.isLocked) {
     return null;

@@ -197,6 +197,8 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "deliberate_tool_mode",
         "deliberate_tool_context_turns",
         "deliberate_tool_triggers",
+        "fast_regeneration_retry_enabled",
+        "fast_regeneration_continue_enabled",
         "cooldown_type",
         "cooldown_length",
       ],
@@ -1195,6 +1197,8 @@ class ImportRepository {
         config.deliberate_tool_mode !== undefined ||
         config.deliberate_tool_context_turns !== undefined ||
         config.deliberate_tool_triggers !== undefined ||
+        config.fast_regeneration_retry_enabled !== undefined ||
+        config.fast_regeneration_continue_enabled !== undefined ||
         config.cooldown_type !== undefined ||
         config.cooldown_length !== undefined
           ? configRepository.updateTriggerBehaviorConfig(serverId, {
@@ -1210,6 +1214,12 @@ class ImportRepository {
               }),
               ...(config.deliberate_tool_triggers !== undefined && {
                 deliberate_tool_triggers: config.deliberate_tool_triggers,
+              }),
+              ...(config.fast_regeneration_retry_enabled !== undefined && {
+                fast_regeneration_retry_enabled: config.fast_regeneration_retry_enabled,
+              }),
+              ...(config.fast_regeneration_continue_enabled !== undefined && {
+                fast_regeneration_continue_enabled: config.fast_regeneration_continue_enabled,
               }),
               ...(config.cooldown_type !== undefined && { cooldown_type: config.cooldown_type }),
               ...(config.cooldown_length !== undefined && { cooldown_length: config.cooldown_length }),

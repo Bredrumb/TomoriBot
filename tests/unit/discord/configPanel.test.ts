@@ -1534,6 +1534,8 @@ describe("config Behavior pages", () => {
       alwaysReplyEnabled: false,
       cooldownType: 1,
       cooldownLength: 5,
+      fastRegenerationRetryEnabled: false,
+      fastRegenerationContinueEnabled: false,
     },
   };
 
@@ -1633,14 +1635,43 @@ describe("config Behavior pages", () => {
 
   it("renders Trigger as direct Off/On state controls and no live values for a member", () => {
     const manager = build(GUILD_MANAGER, { category: "behavior", page: "trigger", behaviorView });
-    const controls = walk(manager).filter((component) => component.label === "Off" || component.label === "On");
-    expect(controls.map((component) => component.style)).toEqual([2, 2, 2, 2]);
-    expect(controls.map((component) => component.disabled)).toEqual([false, true, true, false]);
+    for (const [action, enabled] of [
+      ["behavior-dtm-set", true],
+      ["behavior-always-set", false],
+    ] as const) {
+      expect(buttonFor(manager, { action, locale: "en-US", enabled })?.disabled).toBe(true);
+      expect(buttonFor(manager, { action, locale: "en-US", enabled: !enabled })?.disabled).toBe(false);
+    }
     expect(walk(manager).some((component) => component.content?.includes("<#channel-1>"))).toBe(true);
 
     const member = build(GUILD_MEMBER, { category: "behavior", page: "trigger", behaviorView });
     expect(walk(member).some((component) => component.content?.includes("Cascade limit: 3"))).toBe(false);
     expect(buttonFor(member, { action: "behavior-dtm-set", locale: "en-US", enabled: true })).toBeUndefined();
+  });
+
+  it("fits reply reaction controls with random triggers and a receipt across locales", () => {
+    expectForEveryLocale((locale) => {
+      const trigger = behaviorView.trigger.randomTriggers[0];
+      if (!trigger) throw new Error("Expected a random trigger fixture");
+      const randomTriggers = Array.from({ length: 10 }, (_, index) => ({
+        ...trigger,
+        trigger_id: index + 1,
+        channel_disc_id: String(300000000000000000n + BigInt(index)),
+      }));
+      const payload = build(GUILD_MANAGER, {
+        locale,
+        category: "behavior",
+        page: "trigger",
+        behaviorView: {
+          ...behaviorView,
+          trigger: { ...behaviorView.trigger, randomTriggers, fastRegenerationRetryEnabled: true },
+        },
+        receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+      });
+      expect(buttonFor(payload, { action: "behavior-retry-set", locale, enabled: false })?.disabled).toBe(false);
+      expect(buttonFor(payload, { action: "behavior-continue-set", locale, enabled: true })?.disabled).toBe(false);
+      expectSafePanelPayload(payload, locale);
+    });
   });
 
   it("describes deliberate trigger mode with the effective behavior for both selected states", () => {

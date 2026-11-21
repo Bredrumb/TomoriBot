@@ -860,7 +860,7 @@ async function buildSimplifiedHistory(
   reactedMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
-  const channel = turn.lockedTurn.admission.channel;
+  const { channel, incoming, message: trigger } = turn.lockedTurn.admission;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
   let messages =
     "messages" in channel
@@ -881,6 +881,14 @@ async function buildSimplifiedHistory(
   ) {
     messages.push(turn.lockedTurn.admission.message);
     messages.sort((left, right) => left.id.length - right.id.length || left.id.localeCompare(right.id));
+  }
+  if (incoming.fastRegeneration && !messages.some((message) => message.id === trigger.id)) {
+    try {
+      const anchor = await channel.messages.fetch({ message: trigger.id, cache: false, force: true });
+      messages.unshift(anchor);
+    } catch (error) {
+      log.warn(`[fastRegeneration] Could not load history anchor messageId=${trigger.id}`, error);
+    }
   }
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
@@ -1189,7 +1197,6 @@ async function buildSimplifiedHistory(
     userIds.add(turn.lockedTurn.admission.client.user.id);
   }
 
-  const incoming = turn.lockedTurn.admission.incoming;
   if (incoming.reminderData && (incoming.reminderRecipientID || incoming.reminderData.self_reminder)) {
     const isSelfReminder = incoming.reminderData.self_reminder === true;
     let reminderContent = "";
@@ -1743,7 +1750,7 @@ function appendTailDirectives(args: {
     const isEmbedMessage =
       lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
 
-    if (isFromSelectedPersona && !isEmbedMessage) {
+    if (incoming.fastRegeneration?.action === "continue" || (isFromSelectedPersona && !isEmbedMessage)) {
       log.info(
         `Manual trigger (${args.turn.persona.persona_nickname} as last speaker): injecting continuation directive`,
       );

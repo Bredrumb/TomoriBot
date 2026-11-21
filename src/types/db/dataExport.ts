@@ -313,6 +313,8 @@ const serverTriggerBehaviorConfigExportSchema = z.object({
   deliberate_trigger_mode: z.boolean().optional(),
   deliberate_tool_mode: z.boolean().optional(), // Added May 2026
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(), // Added May 2026
+  fast_regeneration_retry_enabled: z.boolean().optional(),
+  fast_regeneration_continue_enabled: z.boolean().optional(),
   deliberate_tool_triggers: z
     .preprocess(normalizeJsonColumn, z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)))
     .optional(), // Added May 2026 - keyed by tool target, values are literal strings or {type, value} entries (regex). Shared schema with DB row to prevent drift. The optional sits outside the preprocess because a pipe rejects an absent key before its transform runs.

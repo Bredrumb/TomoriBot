@@ -24,6 +24,11 @@ import { isDeliveredTurnResult, runPostTurnEffects, shouldRetryEmptyResponse } f
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { releaseTextQuotaForTrigger } from "@/utils/chat/textQuotaState";
+import {
+  observeReplyControlMessage,
+  offerFastRegeneration,
+  prepareFastRegeneration,
+} from "@/utils/discord/fastRegeneration";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 
 export {
@@ -106,7 +111,7 @@ async function runAdmittedChatTurn(
     userDiscId: admission.userDiscId,
   });
 
-  await runWithChannelLock(
+  const replyControls = await runWithChannelLock(
     admission,
     async (lockedTurn, startTyping) => {
       const planStartedAt = performance.now();
@@ -115,10 +120,19 @@ async function runAdmittedChatTurn(
       recordChatDiagnostic({ kind: "turns_planned", count: turnPlan.turns.length });
       let generationResultCount = 0;
       let nudgeContinues = false;
+      let offerLatestReplyControls: (() => Promise<void>) | undefined;
 
       if (turnPlan.turns.length > 0) {
         try {
           for (const turn of turnPlan.turns) {
+            if (incoming.fastRegeneration) {
+              const preparation = await prepareFastRegeneration(turn, incoming.fastRegeneration);
+              if (preparation !== "ready") {
+                await releaseTextQuotaForTrigger(turn.textQuotaTriggerKey);
+                incoming.fastRegeneration.onDecline?.(preparation);
+                continue;
+              }
+            }
             await runWithChatTurnLatency(latencyInvocation, admissionMs, planMs, async () => {
               const typingPromise =
                 turn === turnPlan.turns[0]
@@ -144,6 +158,9 @@ async function runAdmittedChatTurn(
               );
 
               await runPostTurnEffects(context, result);
+              if (context.streamingContext?.deliveredMessageRefs?.length) {
+                offerLatestReplyControls = () => offerFastRegeneration(context, result);
+              }
               generationResultCount++;
               // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
               nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
@@ -174,6 +191,7 @@ async function runAdmittedChatTurn(
           personaResponses: [],
         });
       }
+      return { publication: offerLatestReplyControls?.() };
     },
     {
       handleStopResponse,
@@ -217,12 +235,14 @@ async function runAdmittedChatTurn(
     },
   );
 
+  await replyControls?.publication;
   recordChatDiagnostic({ kind: "invocation_finished", disposition: "run" });
   return "run";
 }
 
 /** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
+  observeReplyControlMessage(message);
   // Discord emits pin notifications as ChannelPinnedMessage system messages with
   // a message reference to the pinned message. That reference is context metadata,
   // not an intentional conversational reply, so it must never enter the trigger path.

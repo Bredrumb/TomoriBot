@@ -5,6 +5,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 import { clearShortTermMemoryForChannel } from "@/utils/cache/shortTermMemoryCache";
+import { clearReplyControls } from "@/utils/discord/fastRegeneration";
 
 export const configureCommand = (command: SlashCommandBuilder) =>
   command.setName("refresh").setDescription(localizer("en-US", "commands.refresh.description"));
@@ -21,6 +22,7 @@ export async function execute(
 ): Promise<void> {
   if (interaction.channel) {
     clearShortTermMemoryForChannel(interaction.channel.id);
+    clearReplyControls(interaction.channel.id);
     log.info(`[refreshCommand] Cleared short-term memories for channel - channelId=${interaction.channel.id}`);
   }
 

@@ -638,6 +638,7 @@ export type ConfigPanelRoute =
   | { action: "behavior-limits-submit"; locale: string; nonce: string }
   | { action: "behavior-dtm-set"; locale: string; enabled: boolean }
   | { action: "behavior-always-set"; locale: string; enabled: boolean }
+  | { action: "behavior-retry-set" | "behavior-continue-set"; locale: string; enabled: boolean }
   | { action: "behavior-cooldown-open"; locale: string }
   | { action: "behavior-cooldown-submit"; locale: string; nonce: string }
   | { action: "behavior-tool-mode-set"; locale: string; enabled: boolean }
@@ -1225,6 +1226,8 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "behavior-limits-submit": { wireToken: "beh-limits-sub", fields: [nonceField] },
   "behavior-dtm-set": { wireToken: "beh-dtm-set", fields: [enabledField] },
   "behavior-always-set": { wireToken: "beh-always-set", fields: [enabledField] },
+  "behavior-retry-set": { wireToken: "beh-retry-set", fields: [enabledField] },
+  "behavior-continue-set": { wireToken: "beh-continue-set", fields: [enabledField] },
   "behavior-cooldown-open": { wireToken: "beh-cooldown-open", fields: [] },
   "behavior-cooldown-submit": { wireToken: "beh-cooldown-sub", fields: [nonceField] },
   "behavior-tool-mode-set": { wireToken: "beh-tool-mode-set", fields: [enabledField] },

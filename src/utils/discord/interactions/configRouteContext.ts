@@ -138,6 +138,8 @@ export interface ConfigBehaviorTriggerView {
   alwaysReplyEnabled: boolean;
   cooldownType: number;
   cooldownLength: number;
+  fastRegenerationRetryEnabled: boolean;
+  fastRegenerationContinueEnabled: boolean;
 }
 
 export interface ConfigBehaviorExperimentalView {
@@ -754,6 +756,8 @@ export async function repaint(
               alwaysReplyEnabled: state.config.always_reply_enabled ?? false,
               cooldownType: state.config.cooldown_type ?? 0,
               cooldownLength: state.config.cooldown_length ?? 5,
+              fastRegenerationRetryEnabled: state.config.fast_regeneration_retry_enabled,
+              fastRegenerationContinueEnabled: state.config.fast_regeneration_continue_enabled,
             },
             experimental: {
               deliberateToolMode: state.config.deliberate_tool_mode ?? false,

@@ -804,6 +804,8 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
   ],
   ["config:v2:beh-dtm-set:en-US:1", { action: "behavior-dtm-set", locale: "en-US", enabled: true }],
   ["config:v2:beh-always-set:en-US:0", { action: "behavior-always-set", locale: "en-US", enabled: false }],
+  ["config:v2:beh-retry-set:en-US:1", { action: "behavior-retry-set", locale: "en-US", enabled: true }],
+  ["config:v2:beh-continue-set:en-US:0", { action: "behavior-continue-set", locale: "en-US", enabled: false }],
   ["config:v2:beh-cooldown-open:en-US", { action: "behavior-cooldown-open", locale: "en-US" }],
   [
     "config:v2:beh-cooldown-sub:en-US:nonce1234567",

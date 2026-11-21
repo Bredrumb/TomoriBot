@@ -166,6 +166,8 @@ const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
   alwaysReplyEnabled: false,
   cooldownType: 0,
   cooldownLength: 5,
+  fastRegenerationRetryEnabled: false,
+  fastRegenerationContinueEnabled: false,
 };
 
 /**
