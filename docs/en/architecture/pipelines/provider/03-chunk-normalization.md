@@ -68,6 +68,10 @@ differentiate failure causes:
 - **Context overflow:** Identifies token window limits that prompt history trimming.
 - **Provider timeouts:** Normalizes network read and socket timeouts into the `timeout` category.
 
+An OpenAI-compatible endpoint can signal a content block inside a successful HTTP stream with
+`finish_reason: "content_filter"`. The adapter routes that chunk to the provider error UI and drops
+any text carried in the same chunk. A refusal sent as ordinary completion text follows the text path.
+
 Public sinks show only the provider's localized, classified headline from `createErrorDescription()`.
 The upstream response text never reaches error embeds, interaction replies, the fallback notice, or
 tool results returned to the model, because an endpoint can echo the bearer value it received in an
