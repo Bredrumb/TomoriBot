@@ -20,6 +20,10 @@ Os toques foram pensados para parecer um amigo que aparece para conversar:
 
 O Natural Nudges funciona apenas em servidores, nunca em mensagens diretas (DMs).
 
+Ambos os tipos pausam após 14 dias sem ninguém conversar diretamente com a TomoriBot. Uma menção,
+uma palavra-gatilho de persona ou uma [resposta que a acione](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her)
+os retoma.
+
 ## Toques Ativos
 <!-- anchor: active-nudges -->
 

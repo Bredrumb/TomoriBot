@@ -13,7 +13,7 @@ TomoriBot responde quando convocado. Esta página aborda as maneiras como ela po
 Por padrão, ela responde quando você:
 
 - **Mencione ela**: `@TomoriBot`
-- **Responder** a uma de suas mensagens (incluindo a mensagem de webhook de uma pessoa)
+- **Responder** com `@ ON` a uma mensagem da conta do bot, ou responder à mensagem de webhook de uma persona
 - **Use uma palavra-gatilho**: qualquer palavra-gatilho registrada em qualquer lugar da mensagem
 - **Use `/respond`**: solicite uma resposta manualmente
 
@@ -71,7 +71,7 @@ Quando DTM está ativo:
 
 - `@{trigger}` (a palavra acionadora prefixada com `@`) aciona uma resposta
 - Discord menciona que `@TomoriBot` ainda aciona uma resposta
-- As respostas às mensagens ainda funcionam
+- [Respostas que a acionam](#how-to-trigger-her) ainda funcionam
 - `/respond` ainda funciona
 - Palavras-gatilho simples sem `@` não a ativam mais
 

@@ -30,6 +30,7 @@ export default {
     },
     docs: {
       open_button_label: `詳しく見る`,
+      prompt_macros_link: `[プロンプトマクロ](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `今すぐ`,

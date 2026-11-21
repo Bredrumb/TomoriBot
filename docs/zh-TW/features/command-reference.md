@@ -394,7 +394,7 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 |---|---|
 | `/tool delete turn` | 從頻道刪除人格的最後一輪發言。 |
 | `/tool estimate cost` | 估算付費 AI 供應商的 API 費用 |
-| `/tool prompt snapshot` | 將某個人格的完整 LLM 提示詞匯出成檔案，方便除錯。 |
+| `/tool prompt snapshot` | 重建某個人格目前的提示詞並匯出成檔案，方便除錯。 |
 
 ## `/troubleshoot`
 

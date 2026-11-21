@@ -85,7 +85,7 @@ export default {
     prompt: {
       description: `檢視 TomoriBot 送給模型的提示詞。`,
       snapshot: {
-        description: `將某個人格的完整 LLM 提示詞匯出成檔案，方便除錯。`,
+        description: `重建某個人格目前的提示詞並匯出成檔案，方便除錯。`,
         persona_description: `要擷取快照的人格。預設為主要人格。`,
         format_description: `快照檔的輸出格式。`,
         text_option: `文字`,
@@ -97,6 +97,7 @@ export default {
         persona_not_found_description: `該人格已不存在於這個伺服器。請從清單中選擇。`,
         file_title: `提示詞快照`,
         file_description: `這是人格 **{persona_name}** 的提示詞快照（格式：{format}）。`,
+        file_scope_note: `這個檔案重建了目前的提示詞。在模型讀取之前，供應商可能會套用自己的格式或進行裁剪。`,
         file_txt_headers_note: `TXT 檔頂部的請求設定以及 \`=== 標題 (/指令) ===\` 與 \`== 副標題 ==\` 標頭是標註，用來顯示每個區段由哪個設定指令控制。它們**不是**實際送給 LLM 的提示詞內容。「未標註」代表該區段是由自訂 st-preset 重新排列，或屬於該預設集的一部分`,
         file_hint_try_json: `用 JSON 格式再執行一次指令，即可取得原始格式。選擇 \`JSON（含工具）\` 即可一併包含工具定義。`,
         file_hint_try_text: `用 \`format: Text\` 再執行一次指令，即可取得較容易閱讀的格式。`,

@@ -27,3 +27,5 @@ TomoriBot 会读取当前活跃频道的近期消息。短期记忆（STM）通�
 <!-- anchor: managing-short-term-memory -->
 
 你可以在 `/config` > `人格` > `记忆` 下查看或修正当前频道的摘要。服务器管理员可以在 `/config` > `行为` > `高级记忆` 下调整参数或禁用短期记忆，并在 `/memories` > `短期` 下查看或清除生效中的频道摘要。`/refresh` 会清除当前频道的记忆。
+
+在摘要或分类中使用 `{@userId}`，可在 TomoriBot 回忆该内容时插入对方当前的人格专属昵称。参见[提示词宏](/features/prompt-macros/#refer-to-a-specific-discord-user)。

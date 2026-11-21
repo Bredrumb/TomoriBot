@@ -34,24 +34,7 @@ sidebar:
 | Danbooru 投稿读取 | - | `danbooru_enabled` | 通过 ID 或链接读取单个 Danbooru 投稿的分组标签。 |
 | 生成语音消息 | `{voice_message_tool}` | ElevenLabs 密钥 + 人格语音 + `voice_message_enabled` | 发送 Discord 语音回复。 |
 
-:::note[提示词作者须知]
-自定义系统提示词或人格指令时，请通过上表中的**提示词宏**来引用工具，而不是硬编码工具名称，因为宏会在组装上下文时展开为正确的名称，并在工具不可用时平稳降级。`{pin_tool}` 和 `{timestamp_refresh_tool}` 仍可作为 `{manage_message_tool}` 和 `{message_metadata_tool}` 的兼容别名。下方的网络搜索和URL工具也有宏：`{web_search_tool}`、`{image_search_tool}`、`{video_search_tool}`、`{news_search_tool}`、`{url_fetch_tool}` 和 `{url_metadata_tool}`。这些宏会动态解析为最佳可用引擎，包括服务器 MCP 替代项。
-:::
-
 ### 条件提示词区块
+<!-- anchor: conditional-prompt-blocks -->
 
-支持上述工具宏的提示词文本也支持作用域条件：
-
-```text
-{{if capability:self_teaching}}
-Use {memory_tool} when a detail is worth remembering.
-{{else}}
-Do not promise to save long-term memories.
-{{/if}}
-```
-
-对于已启用的 TomoriBot 设置使用 `capability:<name>`；当且仅当活动提供方和模型支持该确切工具时才显示文本，则使用 `tool:<function_name>`。当自带的 URL 读取器或服务器 MCP 替代项可用时，使用 `tool_family:url_fetch`。在条件前加上 `!` 可将其取反。区块可以嵌套，并且可以包含一个 `{{else}}`；不支持通用的 `and`/`or` 表达式。
-
-支持的功能名称为 `tool_use`、`self_teaching`、`personal_memories`、`emoji_usage`、`sticker_usage`、`web_search`、`manage_message`、`thread_creation`、`image_generation`、`video_generation`、`voice_message`、`user_blocking`、`short_term_memory` 和 `time_awareness`。
-
-工具条件反映了提供方/模型支持、服务器配置、配置的后端、MCP 替代项以及当前的明确工具模式允许名单。它们不会绕过或预测工具执行时执行的 Discord 权限检查。未知的功能名称评估为 false 并记录日志；格式错误的区块会被忽略。原始聊天消息、模型输出和工具结果永远不会被当作条件模板处理。
+使用[工具宏](/features/prompt-macros/#tool-macros)在保存的指令中插入函数名称。使用[条件区块](/features/prompt-macros/#conditional-prompt-blocks)仅在工具或功能可用时才包含这些指令。

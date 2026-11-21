@@ -53,8 +53,8 @@ expressões regulares.
 
 Entradas Always On vão para a parte do sistema do prompt. Entradas ativadas por palavras-chave ou chance ficam logo acima dos quatro turnos de fala mais recentes, antes dos documentos recuperados. Cada grupo mantém o posicionamento antes/depois e a ordem de inserção. Todos os grupos compartilham um limite de 8.000 caracteres, com as entradas Always On consideradas primeiro; uma entrada que excederia o limite é ignorada para que entradas posteriores ainda possam caber.
 
-O conteúdo pode usar `{{user}}`, `{{char}}` e `{{bot}}`. O TomoriBot os substitui pelos nomes atuais.
-Outras macros `{{...}}` e blocos condicionais permanecem exatamente como escritos.
+As entradas suportam [macros de nome](/features/prompt-macros/#names), incluindo
+`{@123456789012345678}` para um usuário específico do Discord. Macros de ferramentas e blocos condicionais permanecem como escritos.
 
 ## Limites de canal
 

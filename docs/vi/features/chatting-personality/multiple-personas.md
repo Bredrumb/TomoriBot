@@ -47,10 +47,9 @@ mà những nhân vật khác sẽ nhận ra, chẳng hạn như ngoại hình h
 ### Mẫu hội thoại
 <!-- anchor: sample-dialogues -->
 
-Mở `/config` > `Persona` > `Danh tính & Tính cách` để dạy phong cách nói của cô ấy bằng cách sử dụng phần giữ chỗ `{user}` và `{bot}`:
-
-- `{user}`: được thay thế bằng tên hiển thị hoặc biệt hiệu của người dùng thực tế.
-- `{bot}`: được thay thế bằng tên persona hiện tại của cô ấy.
+Mở `/config` > `Persona` > `Danh tính & Tính cách` để dạy phong cách nói chuyện của cô ấy qua ví dụ.
+Dùng macro tên để gọi người đã kích hoạt phản hồi hoặc persona đang hoạt động.
+Xem [Macro prompt](/features/prompt-macros/#names).
 
 ```text
 {user}: What's your favorite hobby?

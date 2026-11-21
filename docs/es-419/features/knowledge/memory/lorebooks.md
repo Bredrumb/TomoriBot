@@ -38,7 +38,8 @@ La coincidencia de palabras clave es literal. Las claves con forma de expresione
 
 Las entradas Always On van en la parte del sistema del prompt. Las entradas activadas por palabras clave o por probabilidad van justo arriba de los cuatro turnos de diálogo más recientes, antes de los documentos recuperados. Cada grupo conserva la ubicación antes/después y el orden de inserción. Todos los grupos comparten un presupuesto de 8,000 caracteres, considerando primero las entradas Always On; una entrada que exceda el presupuesto se omite para que las entradas posteriores aún puedan caber.
 
-El contenido puede usar `{{user}}`, `{{char}}` y `{{bot}}`. TomoriBot los reemplaza por los nombres actuales. Otras macros `{{...}}` y bloques condicionales se mantienen tal como están escritos.
+Las entradas admiten [macros de nombres](/features/prompt-macros/#names), incluido
+`{@123456789012345678}` para un usuario específico de Discord. Las macros de herramientas y los bloques condicionales se mantienen tal como están escritos.
 
 ## Límites de canales
 

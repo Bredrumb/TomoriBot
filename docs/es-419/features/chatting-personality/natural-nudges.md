@@ -20,6 +20,10 @@ Las intervenciones están pensadas para sentirse como un amigo que pasa a saluda
 
 Natural Nudges solo funciona en servidores, nunca en mensajes directos (MD).
 
+Ambos tipos se pausan después de 14 días sin que nadie hable directamente con TomoriBot. Una mención,
+una palabra de activación de persona o una [respuesta que la active](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her)
+los reanuda.
+
 ## Intervenciones activas
 <!-- anchor: active-nudges -->
 

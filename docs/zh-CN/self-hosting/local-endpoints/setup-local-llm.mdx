@@ -94,7 +94,7 @@ ollama list
 保存连接之后，选中它，并从模型下拉菜单中选择`+ 添加新的文本模型`。填入：
 
 - **模型名称（确切的API ID）**：`gemma4:12b`，即`ollama list`中显示的确切标签。
-- **上下文窗口**：可选，仅适用于Ollama与KoboldCPP。设置该数值（例如`8192`、`16384`）可调高Ollama默认较小的`num_ctx`，否则可能会截断TomoriBot的长上下文。留空则使用服务器默认值。
+- **上下文窗口**：填入 TomoriBot 应为其预留预算的词元上限。如果不知道服务器的上限，请留空。对于 Ollama，请在 Ollama 中设置有效上下文大小，并在此处填入相同的数值。Ollama 的 OpenAI 兼容 API 通过包含 `PARAMETER num_ctx` 的 `Modelfile` 或通过 Ollama 自身的上下文设置来设定模型的上下文大小。回复后可运行 `ollama ps` 检查已加载模型的上下文。参见 [Ollama 上下文设置](https://docs.ollama.com/context-length)和 [OpenAI 兼容性](https://docs.ollama.com/api/openai-compatibility#setting-the-local-context-size)。
 - **各项开关**：若模型支持函数调用，请启用`工具调用`；仅视觉模型才启用`图像输入`；若模型能够良好处理JSON Schema，则启用`结构化输出`。在我们的示例中，Gemma 4全部支持，因此全部勾选即可。
 
 TomoriBot会在保存时验证连接。如果提示端点无法访问，常见原因是`localhost`与Docker网络不匹配，或者缺少/多写了`/v1`（参见[注意事项与踩坑点](#notes--gotchas)）。
@@ -125,7 +125,7 @@ TomoriBot支持任何兼容OpenAI的端点，但推荐使用以下服务器。�
 
 - 启动时启用内置的OpenAI兼容模式。默认：`http://127.0.0.1:5001/v1`。
 - API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:5001/v1`。
-- 与Ollama一样支持`上下文窗口`设置。
+- `上下文窗口`用于设定 TomoriBot 的上下文预算，且 KoboldCPP 会遵守该设置。
 - 若要在ComfyUI任务期间卸载模型，启动时还需添加`--admin`与`--admindir`（参见[与ComfyUI共享单张GPU](#4-optional-share-one-gpu-with-comfyui)）。
 - 支持加载GGUF模型；模型名称填写已加载模型报告的名称（通常为文件名主干），可查看KoboldCPP的`/v1/models`响应。
 
@@ -136,7 +136,7 @@ TomoriBot支持任何兼容OpenAI的端点，但推荐使用以下服务器。�
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API兼容性：`OpenAI 兼容`。`端点 URL`：`http://127.0.0.1:8080/v1`。
-- 启动时使用`-c`设置上下文窗口；弹窗中的`上下文窗口`仅适用于Ollama/KoboldCPP，在此处不起作用。
+- 启动服务器时使用 `-c` 设置上下文窗口，然后在`上下文窗口`中填入相同数值，以便 TomoriBot 据此预留预算。
 - 模型名称填写`/v1/models`报告的内容；可以使用`--alias my-model`指定一个整洁的别名。
 - 如果使用`--api-key`启动，请将该密钥填入`认证令牌`。
 

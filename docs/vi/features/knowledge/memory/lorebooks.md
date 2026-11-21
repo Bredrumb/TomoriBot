@@ -52,8 +52,7 @@ biểu thức chính quy.
 
 Các mục Luôn bật (Always On) được đưa vào phần hệ thống của prompt. Các mục được kích hoạt bởi từ khóa hoặc tỷ lệ phần trăm sẽ nằm ngay phía trên bốn lượt người nói mới nhất, trước các tài liệu được truy xuất. Mỗi nhóm giữ nguyên vị trí đặt trước/sau và thứ tự chèn. Tất cả các nhóm dùng chung ngân sách 8.000 ký tự, trong đó các mục Luôn bật được ưu tiên xét trước; mục nào vượt quá ngân sách sẽ bị bỏ qua để các mục sau vẫn có thể vừa vặn.
 
-Nội dung có thể sử dụng `{{user}}`, `{{char}}` và `{{bot}}`. TomoriBot thay thế chúng bằng các tên hiện tại.
-Các macro `{{...}}` khác và khối điều kiện được giữ nguyên như văn bản đã viết.
+Các mục hỗ trợ [macro tên](/features/prompt-macros/#names), bao gồm `{@123456789012345678}` cho một người dùng Discord cụ thể. Macro công cụ và khối điều kiện được giữ nguyên như văn bản đã viết.
 
 ## Giới hạn kênh
 

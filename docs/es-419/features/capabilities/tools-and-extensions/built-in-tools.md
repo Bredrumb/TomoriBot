@@ -34,25 +34,9 @@ Si una capacidad no parece estar disponible, pregúntale por qué. Puede informa
 | Lectura de publicaciones Danbooru | - | `danbooru_enabled` | Lee las etiquetas agrupadas de una publicación de Danbooru a partir de su ID o enlace. |
 | Generar mensaje de voz | `{voice_message_tool}` | clave de ElevenLabs + voz de persona + `voice_message_enabled` | Envía una respuesta de voz hablada en Discord. |
 
-:::note[Para creadores de prompts]
-Al personalizar su prompt del sistema o las instrucciones de persona, haz referencia a las herramientas mediante sus **macros de prompt** de la tabla anterior en lugar de escribir nombres fijos de herramientas, ya que las macros se expanden a los nombres correctos al ensamblar el contexto y se degradan de forma controlada cuando una herramienta no está disponible.
-`{pin_tool}` y `{timestamp_refresh_tool}` siguen funcionando como alias de compatibilidad para `{manage_message_tool}` y `{message_metadata_tool}`. Las herramientas de búsqueda web y URL también tienen macros: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`, `{news_search_tool}`, `{url_fetch_tool}` y `{url_metadata_tool}`. Estas se resuelven dinámicamente al mejor motor disponible, incluidos los reemplazos por MCP del servidor.
-:::
-
 ### Bloques de prompt condicionales
+<!-- anchor: conditional-prompt-blocks -->
 
-El texto de prompt que admite las macros de herramientas anteriores también admite condicionales con ámbito:
-
-```text
-{{if capability:self_teaching}}
-Usa {memory_tool} cuando valga la pena recordar un detalle.
-{{else}}
-No prometas guardar memorias a largo plazo.
-{{/if}}
-```
-
-Usa `capability:<nombre>` para una opción habilitada de TomoriBot, o `tool:<nombre_función>` cuando el texto deba aparecer solo si esa herramienta exacta está disponible para el proveedor y modelo activos. Usa `tool_family:url_fetch` cuando esté disponible el lector de URL integrado o un reemplazo por MCP del servidor. Antepón un signo `!` a una condición para invertirla. Los bloques se pueden anidar y pueden contener un `{{else}}`; las expresiones generales `and`/`or` no son compatibles.
-
-Los nombres de capacidad admitidos son `tool_use`, `self_teaching`, `personal_memories`, `emoji_usage`, `sticker_usage`, `web_search`, `manage_message`, `thread_creation`, `image_generation`, `video_generation`, `voice_message`, `user_blocking`, `short_term_memory` y `time_awareness`.
-
-Las condiciones de herramientas reflejan la compatibilidad de proveedor/modelo, la configuración del servidor, los backends configurados, los reemplazos MCP y la lista de permitidos actual del modo de herramientas deliberado. No omiten ni predicen las comprobaciones de permisos de Discord que se realizan al ejecutar una herramienta. Los nombres de capacidad desconocidos se evalúan como falsos y se registran; los bloques mal formados se omiten. Los mensajes de chat sin procesar, la salida del modelo y los resultados de herramientas nunca se tratan como plantillas condicionales.
+Usa [macros de herramientas](/features/prompt-macros/#tool-macros) para insertar nombres de funciones en
+las instrucciones guardadas. Usa [bloques condicionales](/features/prompt-macros/#conditional-prompt-blocks)
+para incluir esas instrucciones solo cuando una herramienta o capacidad esté disponible.

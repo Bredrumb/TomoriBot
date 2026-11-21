@@ -95,7 +95,7 @@ Tanto `Compatível com OpenAI` quanto `Ollama` aceitam a raiz simples e normaliz
 Depois de salvar a conexão, selecione-a e escolha `+ Adicionar Novo Modelo de Texto` no menu suspenso de modelos. Preencha:
 
 - **Nome do Modelo (ID exato da API):** `gemma4:12b`, a tag exata exibida em `ollama list`.
-- **Janela de Contexto**: opcional, apenas Ollama / KoboldCPP. Defina esse valor (ex.: `8192`, `16384`) para aumentar o `num_ctx` padrão do Ollama, que de outro modo é pequeno o bastante para truncar contextos longos do TomoriBot. Deixe em branco para usar o padrão do servidor.
+- **Janela de Contexto:** insira o limite de tokens para o qual o TomoriBot deve planejar o orçamento. Deixe em branco se o limite do servidor for desconhecido. Para o Ollama, defina o tamanho de contexto efetivo no Ollama e insira o mesmo valor aqui. A API compatível com OpenAI do Ollama define o tamanho de contexto do modelo por meio de um `Modelfile` com `PARAMETER num_ctx` ou por meio das próprias configurações de contexto do Ollama. Use `ollama ps` após uma resposta para verificar o contexto do modelo carregado. Veja [configurações de contexto do Ollama](https://docs.ollama.com/context-length) e [compatibilidade com OpenAI](https://docs.ollama.com/api/openai-compatibility#setting-the-local-context-size).
 - **Alternadores:** ative `Chamada de ferramentas` se o modelo suportar chamada de funções; ative `Entrada de imagem` apenas para um modelo de visão; ative `Saída estruturada` se o modelo lidar bem com esquemas JSON. No nosso exemplo, o Gemma 4 suporta todos esses recursos, então marque todos.
 
 O TomoriBot valida a conexão ao salvar. Se ele informar que o endpoint está inacessível, a causa comum é incompatibilidade entre `localhost`/Docker ou um `/v1` faltando/sobrando (veja [armadilhas](#notes--gotchas)).
@@ -127,7 +127,7 @@ O TomoriBot suporta qualquer endpoint compatível com OpenAI, mas os servidores 
 
 - Inicie com compatibilidade OpenAI ativada (integrada). Padrão: `http://127.0.0.1:5001/v1`.
 - Compatibilidade de API: `Compatível com OpenAI`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Respeita a `Janela de Contexto` assim como o Ollama.
+- `Janela de Contexto` define o orçamento de contexto do TomoriBot e é respeitada pelo KoboldCPP.
 - Para descarregar o modelo durante tarefas do ComfyUI, inicie também com `--admin` e `--admindir` (consulte [Compartilhe uma GPU com o ComfyUI](#4-optional-share-one-gpu-with-comfyui)).
 - Carrega modelos GGUF; o Nome do Modelo é o que o modelo carregado informa (frequentemente o nome base do arquivo), então confira a resposta de `/v1/models` do KoboldCPP.
 
@@ -138,7 +138,7 @@ O TomoriBot suporta qualquer endpoint compatível com OpenAI, mas os servidores 
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - Compatibilidade de API: `Compatível com OpenAI`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Defina a janela de contexto na inicialização com `-c`, pois o campo `Janela de Contexto` do modal se aplica apenas ao Ollama e ao KoboldCPP e não tem efeito aqui.
+- Defina a janela de contexto do servidor na inicialização com `-c`, depois insira o mesmo valor em `Janela de Contexto` para que o TomoriBot o considere no orçamento.
 - O Nome do Modelo é o que `/v1/models` informa; defina um nome limpo com `--alias my-model`.
 - Se você o iniciou com `--api-key`, informe essa chave em `auth_token`.
 

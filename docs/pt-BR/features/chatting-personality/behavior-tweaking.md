@@ -83,6 +83,9 @@ O prompt do sistema fica acima da persona e molda o `Comportamento Geral`:
 - `/config` > `Comportamento` > `Comportamento Geral`: escolha entre as predefinições de prompt do sistema. `Default + Image Generation Expert` adiciona orientações para tags de anime e trajes de personagens precisos ao prompt padrão (consulte [Busca de Tags](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Comportamento` > `Comportamento Geral`: redefinir para o padrão. A confirmação mostra o prompt anterior para que você possa restaurá-lo se for apagado acidentalmente.
 
+Use [macros de prompt](/features/prompt-macros/) para inserir nomes ou
+ferramentas disponíveis no prompt do sistema ou no preenchimento de resposta.
+
 Quando uma [predefinição do SillyTavern](/features/integrations/sillytavern-support/) está ativa, ela controla o prompt do sistema. Desative a predefinição para editar novamente o prompt salvo do servidor.
 
 ## Saída Sem Censura

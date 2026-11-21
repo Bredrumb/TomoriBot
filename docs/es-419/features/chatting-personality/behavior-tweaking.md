@@ -84,6 +84,9 @@ El mensaje del sistema se encuentra encima de la persona y da forma al `Comporta
 - `/config` > `Comportamiento` > `Comportamiento general`: elige entre los preajustes de instrucción del sistema. `Default + Image Generation Expert` agrega pautas para etiquetas de anime y atuendos de personajes precisos a la instrucción predeterminada (consulta [Búsqueda de etiquetas](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Comportamiento` > `Comportamiento general`: restablecer los valores predeterminados. La confirmación muestra el mensaje anterior para que pueda restaurarlo si se borra accidentalmente.
 
+Usa [macros de prompt](/features/prompt-macros/) para insertar nombres o
+herramientas disponibles en el prompt del sistema o en el prellenado de respuesta.
+
 Cuando un [preajuste de SillyTavern](/features/integrations/sillytavern-support/) está activo, este controla el prompt del sistema. Desactiva el preajuste para editar el prompt guardado del servidor de nuevo.
 
 ## Salida sin censura

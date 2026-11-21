@@ -83,6 +83,8 @@ sidebar:
 - `/config` > `行為` > `一般行為`：從系統提示詞預設集中選擇。`Default + Image Generation Expert` 會在預設提示詞基礎上增加關於準確動漫標籤與角色服裝的指引（請參閱 [標籤查詢](/features/capabilities/media-generation/image-generation/#tag-lookup)）。
 - `/config` > `行為` > `一般行為`：重設為預設值。確認會顯示先前的提示，因此如果意外清除，你可以恢復它。
 
+使用[提示詞巨集](/features/prompt-macros/)，在系統提示詞或回覆前綴中插入名稱或可用工具。
+
 當 [SillyTavern 預設集](/features/integrations/sillytavern-support/) 處於啟用狀態時，它會控制系統提示詞。關閉該預設集即可再次編輯已儲存的伺服器提示詞。
 
 ## 無審查輸出

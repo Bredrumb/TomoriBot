@@ -22,6 +22,8 @@ aiGenerated: false
 
 彼女に何かを保存してほしい場合は、覚えておくよう頼むか、自分で追加してください。サーバー管理者は `/config` > `権限` で自動保存を無効にできます。
 
+個人またはサーバーの記憶で `{@userId}` を使用すると、アクティブなペルソナがその人に使っているニックネームで参照できます。TomoriBotは記憶を思い出すときにその名前を埋めます。[プロンプトマクロ](/features/prompt-macros/#refer-to-a-specific-discord-user)を参照してください。
+
 ## 記憶の制限
 <!-- anchor: how-many-memories -->
 

@@ -30,6 +30,7 @@ export default {
     },
     docs: {
       open_button_label: `Saiba Mais`,
+      prompt_macros_link: `[Macros de prompt](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `agora`,

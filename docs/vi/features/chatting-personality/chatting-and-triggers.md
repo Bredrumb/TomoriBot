@@ -13,7 +13,7 @@ TomoriBot phản hồi khi được triệu tập. Trang này trình bày các c
 Theo mặc định, cô ấy sẽ trả lời khi bạn:
 
 - **Đề cập đến cô ấy**: `@TomoriBot`
-- **Trả lời** một trong các tin nhắn của cô ấy (bao gồm tin nhắn webhook của một cá nhân)
+- **Trả lời** với `@ ON` tới tin nhắn từ tài khoản bot, hoặc trả lời tin nhắn webhook của một persona
 - **Sử dụng từ kích hoạt**: mọi từ kích hoạt đã đăng ký ở bất kỳ đâu trong tin nhắn
 - **Sử dụng `/respond`**: yêu cầu phản hồi theo cách thủ công
 
@@ -71,7 +71,7 @@ Khi DTM hoạt động:
 
 - `@{trigger}` (từ kích hoạt có tiền tố `@`) kích hoạt phản hồi
 - Discord đề cập đến `@TomoriBot` vẫn kích hoạt phản hồi
-- Trả lời tin nhắn vẫn hoạt động
+- [Các lượt trả lời kích hoạt được cô ấy](#how-to-trigger-her) vẫn hoạt động
 - `/respond` vẫn hoạt động
 - Những từ kích hoạt đơn giản không có `@` không còn kích hoạt cô ấy nữa
 

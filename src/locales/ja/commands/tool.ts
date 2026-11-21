@@ -85,7 +85,7 @@ export default {
     prompt: {
       description: `TomoriBotがモデルに送信するプロンプトを検査します。`,
       snapshot: {
-        description: `デバッグ用に、ペルソナのLLMプロンプトをファイルに出力します。`,
+        description: `デバッグ用に、ペルソナの現在のプロンプトを再構成してファイルに出力します。`,
         persona_description: `スナップショットを取得するペルソナ。デフォルトはメインペルソナです。`,
         format_description: `スナップショットファイルの出力形式。`,
         text_option: `テキスト`,
@@ -97,6 +97,7 @@ export default {
         persona_not_found_description: `指定されたペルソナはこのサーバーに存在しません。リストから選択してください。`,
         file_title: `プロンプトスナップショット`,
         file_description: `ペルソナ **{persona_name}** のプロンプトスナップショットです（形式: {format}）。`,
+        file_scope_note: `このファイルは現在のプロンプトを再構成したものです。モデルが読み取る前に、プロバイダー側で独自の整形や切り詰めが行われる場合があります。`,
         file_txt_headers_note: `TXTファイルの先頭にあるリクエスト設定、および \`=== タイトル (/コマンド) ===\` と \`== サブタイトル ==\` のヘッダーは、各セクションを制御する設定コマンドを示す注釈です。LLMに実際に送信されるプロンプトの一部では**ありません**。「Untagged」は、再配置されたか、カスタムst-presetの一部であることを意味します。`,
         file_hint_try_json: `生の機械可読フォーマットが必要ですか？JSON形式を指定してコマンドを再実行してください。ツール定義も含めるには \`JSON（ツールあり）\` を選んでください。`,
         file_hint_try_text: `より人間に読みやすい形式が必要ですか？コマンドを再実行する際に \`format: Text\` を指定してください。`,

@@ -394,7 +394,7 @@ Ações utilitárias para contexto de conversa, prompts e diagnósticos.
 |---|---|
 | `/tool delete turn` | Excluir o turno da última persona do canal. |
 | `/tool estimate cost` | Estimar custos de API para provedores de IA pagos |
-| `/tool prompt snapshot` | Despeje o prompt exato do LLM para uma persona em um arquivo para depuração. |
+| `/tool prompt snapshot` | Reconstrua o prompt atual de uma persona e exporte-o para um arquivo para depuração. |
 
 ## `/troubleshoot`
 

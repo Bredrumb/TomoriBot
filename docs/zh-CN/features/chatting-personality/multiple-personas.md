@@ -52,10 +52,9 @@ TomoriBot的名称、头像、性格、说话风格与行为都保存在人格�
 ### 示例对话
 <!-- anchor: sample-dialogues -->
 
-打开`/config` > `人格` > 身份和个性，通过使用`{user}`和`{bot}`占位符的示例来教她的说话风格：
-
-- `{user}`：替换为实际用户的显示名称或昵称。
-- `{bot}`：替换为她当前的人格名称。
+打开 `/config` > `人格` > `身份与性格`，通过示例教她说话风格。
+使用名称宏来指代触发回复的人或当前生效的人格。
+参见[提示词宏](/features/prompt-macros/#names)。
 
 ```text
 {user}: What's your favorite hobby?

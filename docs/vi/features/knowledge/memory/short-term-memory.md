@@ -29,3 +29,5 @@ Các kênh giới hạn quyền xem qua quyền Discord sẽ tự động là ri
 Bạn có thể xem hoặc chỉnh sửa bản tóm tắt của kênh hiện tại trong `/config` > `Persona` > `Memories`.
 Quản lý máy chủ có thể điều chỉnh các tham số hoặc tắt bộ nhớ ngắn hạn trong `/config` > `Hành vi` > `Bộ nhớ nâng cao`, đồng thời xem lại hoặc xóa các bản tóm tắt kênh đang hoạt động trong `/memories` > `Ngắn hạn`.
 `/refresh` xóa bộ nhớ của kênh hiện tại.
+
+Dùng `{@userId}` trong bản tóm tắt hoặc danh mục để chèn biệt danh theo persona hiện tại của người đó khi TomoriBot gợi nhớ lại. Xem [Macro prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).

@@ -359,7 +359,7 @@ export default {
       change_trigger_behavior: {
         title: `調整觸發行為`,
         description:
-          "預設情況下，你喊我的名字、@標註我，或回覆我 時，我就會回應。你可以放寬、收窄，或 按頻道關閉這個行為。\n\n**我可以在哪裡說話**\n你可以讓我只在白名單頻道回覆。 在 {moderationWhitelist} 加入這些頻道。\n> 不在清單上的頻道會保持安靜。\n\n**主動開口**\n{configAutoTrigger} 讓我每隔幾則訊息，或隨機 自動送出一則訊息。\n\n**只接受標註觸發**\n明確觸發模式會阻止我因為單純喊名字就回應， 改成等待 @標註。請在 {configBehaviorTrigger} 開啟。",
+          "在伺服器中，預設情況下，你喊我的名字、@標註我，或回覆人格的網路鉤子訊息時，我就會回應。回覆我的 bot 帳號時，請保持回覆開關設為 `@ ON`。你可以按頻道調整我何時回應。\n\n**我可以在哪裡說話**\n你可以讓我只在白名單頻道回覆。在 {moderationWhitelist} 加入這些頻道。\n> 不在清單上的頻道會保持安靜。\n\n**主動開口**\n{configAutoTrigger} 讓我每隔幾則訊息，或隨機自動送出一則訊息。\n\n**只接受標註觸發**\n明確觸發模式會阻止我因為單純喊名字就回應，改成等待 @標註。請在 {configBehaviorTrigger} 開啟。",
       },
       create_first_persona: {
         title: `建立你的人格`,

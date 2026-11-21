@@ -82,45 +82,15 @@ SillyTavern提示管理器预设集控制发送给模型的提示词顺序和布
 
 当导入的预设集处于生效状态时，它将完全控制系统提示词。TomoriBot的内置提示词以及来自 `/config` > `行为` > `常规行为` 的自定义提示词均不会发送，该处的系统提示词按钮也会被锁定。你的自定义提示词仍会保留，当你在 `/config` > `插件` > `SillyTavern 预设集` 中关闭该预设集时，自定义提示词将恢复生效。
 
-### 条件语句指令
-
-使用Handlebars块在特定值存在时才包含相应指令：
-
-```text
-{{#if description}}Follow the character description.{{else}}Use a neutral voice.{{/if}}
-{{#unless {{getvar::compact}}}}Include scene details.{{/unless}}
-```
-
-像 `description` 这样的简写名称表示 `{{description}}`。你也可以直接在条件中放置取值宏，如 `{{#if {{input}}}}`。在修剪前后空格并忽略大小写后，空文本、`false` 和 `0` 均判定为假。条件中未知的宏视为空值。
-
-块支持嵌套，包括TomoriBot的 `{{if capability:web_search}}` 和 `{{if tool:web_search}}` 块。使用 `{{/if}}` 闭合 `#if`，使用 `{{/unless}}` 闭合 `#unless`。格式有误的块（例如出现第二个 `else` 或闭合标签不匹配）会被忽略。缺少闭合标签的Handlebars块会在其所在节点的末尾结束。多余孤立的 `else` 和闭合标签会被丢弃。超过32层的嵌套块会保持原始条件语法不予渲染。导入说明会报告这些问题。
-
-`{{setvar::key::value}}` 用于存储文本；`{{addvar::key::value}}` 用于追加文本。未执行的Handlebars分支中的声明不会产生效果。条件语句可以读取节点顺序中较早出现的声明，包括同一节点中前面部分的声明。纯文本中的 `{{getvar::key}}` 会在遍历完所有已启用的节点后读取最终值。工具和能力条件在其后运行，因此它们不控制变量赋值。
-
 ### 预设集宏
 <!-- anchor: preset-macros -->
 
-| 宏 | 取值 |
-|---|---|
-| `{{user}}` | 触发回复的成员 |
-| `{{char}}`, `{{bot}}` | 当前生效的人格名称 |
-| `{{personality}}` | 人格属性 |
-| `{{description}}` | 人格提示词 |
-| `{{scenario}}` | 为空：卡片中的情境设定已合并至人格属性中 |
-| `{{mesExamples}}` | 示例对话文本 |
-| `{{lastChatMessage}}`, `{{input}}` | 提供的对话中最近一条用户消息 |
-| `{{time}}` | 服务器时间，例如 `3:45 PM` |
-| `{{date}}` | 服务器日期，例如 `October 28, 2026` |
-| `{{weekday}}` | 英文星期名称，例如 `Wednesday` |
-| `{{isotime}}` | `HH:mm` 格式的服务器时间，例如 `15:45` |
-| `{{isodate}}` | `YYYY-MM-DD` 格式的服务器日期，例如 `2026-10-28` |
-| `{{model}}` | 配置的模型 ID；按轮次随机选取的模型与备用模型不会反映在此处 |
-| `{{provider}}` | 配置的提供方 ID：`google`、`openrouter`、`novelai` 或 `custom` |
-| `{{char_version}}` | 为空：角色卡版本不予存储 |
+使用[预设集宏](/features/prompt-macros/#sillytavern-preset-macros)在预设集节点中插入人格详情、最新用户消息或服务器时间。
 
-时间相关的宏在每次生成提示词时共用一次时钟读取，并使用服务器的数值型 UTC 偏移。夏令时遵循你所设置的偏移。成员的个人时区不会影响它们。当时间感知关闭时，所有5个时间宏均为空，测试它们的条件语句判定为假。请将时间宏放在靠后或深度注入的节点中：像 `{{time}}` 这样变化的值会使其之后的所有内容在提供方的提示词缓存中失效。
+### 条件语句指令
+<!-- anchor: conditional-instructions -->
 
-`{{random: A, B}}` 和 `{{random::A::B}}` 用于随机选取一项；`{{roll:2d6}}` 用于掷骰子。`{{// notes}}` 用于移除注释，`{{trim}}` 用于修剪节点前后的空白字符。这些宏和条件语句仅适用于预设集指令。世界书条目仅支持展开 `{{user}}`、`{{char}}` 和 `{{bot}}`。
+使用[预设集条件语句](/features/prompt-macros/#preset-conditionals)根据某个值（例如人格是否有描述）来选择指令。
 
 ### 兼容性说明
 

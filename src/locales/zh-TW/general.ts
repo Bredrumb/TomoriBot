@@ -30,6 +30,7 @@ export default {
     },
     docs: {
       open_button_label: `了解更多`,
+      prompt_macros_link: `[提示詞巨集](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `現在`,

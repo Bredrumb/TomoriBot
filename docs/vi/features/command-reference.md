@@ -394,7 +394,7 @@ Các thao tác tiện ích cho ngữ cảnh hội thoại, prompt và chẩn đo
 |---|---|
 | `/tool delete turn` | Xóa lượt trò chuyện gần nhất của persona khỏi kênh. |
 | `/tool estimate cost` | Ước tính chi phí API cho các nhà cung cấp AI trả phí |
-| `/tool prompt snapshot` | Xuất chính xác prompt LLM của một persona ra tệp để gỡ lỗi. |
+| `/tool prompt snapshot` | Tái dựng prompt hiện tại của một persona và xuất ra tệp để gỡ lỗi. |
 
 ## `/troubleshoot`
 

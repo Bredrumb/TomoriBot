@@ -81,45 +81,15 @@ SillyTavern提示管理器預設集控制傳送給模型的提示詞順序與版
 
 當匯入的預設集處於啟用狀態時，將完全由該預設集控制系統提示詞。TomoriBot的內建提示詞以及來自 `/config` > `行為` > `一般行為` 的任何自訂提示詞都不會傳送，且該處的系統提示詞按鈕將會鎖定。你的自訂提示詞仍會保留，當你在 `/config` > `外掛` > `SillyTavern 預設集` 中關閉預設集時，該提示詞將會恢復生效。
 
-### 條件式指令
-
-使用Handlebars區塊在特定值存在時才納入相應指令：
-
-```text
-{{#if description}}Follow the character description.{{else}}Use a neutral voice.{{/if}}
-{{#unless {{getvar::compact}}}}Include scene details.{{/unless}}
-```
-
-像 `description` 這樣的簡稱代表 `{{description}}`。你也可以直接在條件式中放置數值巨集，如 `{{#if {{input}}}}`。在修剪前後空格並忽略大小寫後，空文字、`false` 與 `0` 均判定為偽。條件式中未知的巨集視為空白。
-
-區塊支援巢狀結構，包含TomoriBot的 `{{if capability:web_search}}` 與 `{{if tool:web_search}}` 區塊。使用 `{{/if}}` 閉合 `#if`，使用 `{{/unless}}` 閉合 `#unless`。格式有誤的區塊（例如出現第二個 `else` 或不正確的閉合標籤）會被忽略。缺少閉合標籤的Handlebars區塊會在該節點末端結束。多餘孤立的 `else` 與閉合標籤會被捨棄。超過32層的巢狀區塊會保持未渲染的條件式語法。匯入提示會回報這些問題。
-
-`{{setvar::key::value}}` 用於儲存文字；`{{addvar::key::value}}` 用於附加文字。未執行的Handlebars分支中的宣告不會生效。條件式可以讀取節點順序中較早出現的宣告，包含同一節點中前面部分的宣告。純文字中的 `{{getvar::key}}` 會在走訪完所有已啟用的節點後取得最終值。工具與功能條件在其後執行，因此它們不控制變數賦值。
-
 ### 預設集巨集
 <!-- anchor: preset-macros -->
 
-| 巨集 | 數值 |
-|---|---|
-| `{{user}}` | 觸發回覆的成員 |
-| `{{char}}`, `{{bot}}` | 目前使用中的人格名稱 |
-| `{{personality}}` | 人格屬性 |
-| `{{description}}` | 人格提示詞 |
-| `{{scenario}}` | 空白：卡片中的情境已合併至人格屬性中 |
-| `{{mesExamples}}` | 範例對話文字 |
-| `{{lastChatMessage}}`, `{{input}}` | 提供的對話中最近一則使用者訊息 |
-| `{{time}}` | 伺服器時間，例如 `3:45 PM` |
-| `{{date}}` | 伺服器日期，例如 `October 28, 2026` |
-| `{{weekday}}` | 英文星期名稱，例如 `Wednesday` |
-| `{{isotime}}` | `HH:mm` 格式的伺服器時間，例如 `15:45` |
-| `{{isodate}}` | `YYYY-MM-DD` 格式的伺服器日期，例如 `2026-10-28` |
-| `{{model}}` | 設定的模型 ID；每輪隨機選取的模型與備用模型不會反映在此處 |
-| `{{provider}}` | 設定的供應商 ID：`google`、`openrouter`、`novelai` 或 `custom` |
-| `{{char_version}}` | 空白：角色卡版本不予儲存 |
+使用[預設集巨集](/features/prompt-macros/#sillytavern-preset-macros)在預設集節點中插入人格細節、最新使用者訊息或伺服器時間。
 
-時間相關的巨集在每次組裝提示詞時共用一次時鐘讀數，並使用伺服器的數值型 UTC 偏移。日光節約時間遵循你設定的偏移。成員的個人時區不會影響它們。當時間感知關閉時，所有5個時間巨集均為空白，測試它們的條件式判定為偽。請將時間巨集放在靠後或深度注入的節點中：像 `{{time}}` 這樣變動的值會使其之後的所有內容在供應商的提示詞快取中失效。
+### 條件式指令
+<!-- anchor: conditional-instructions -->
 
-`{{random: A, B}}` 與 `{{random::A::B}}` 用於隨機選取項目；`{{roll:2d6}}` 用於擲骰子。`{{// notes}}` 用於移除註解，`{{trim}}` 用於修剪節點周圍的空白字元。這些巨集與條件式僅適用於預設集指令。世界書條目僅支援展開 `{{user}}`、`{{char}}` 與 `{{bot}}`。
+使用[預設集條件式](/features/prompt-macros/#preset-conditionals)根據數值來選擇指示，例如人格是否具有描述。
 
 ### 相容性注意事項
 

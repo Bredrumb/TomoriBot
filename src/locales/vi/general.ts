@@ -30,6 +30,7 @@ export default {
     },
     docs: {
       open_button_label: `Tìm hiểu thêm`,
+      prompt_macros_link: `[Macro prompt](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `bây giờ`,

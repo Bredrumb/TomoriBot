@@ -85,7 +85,7 @@ export default {
     prompt: {
       description: `查看 TomoriBot 发给模型的提示词。`,
       snapshot: {
-        description: `把某个人格实际的 LLM 提示词导出成文件，用于调试。`,
+        description: `还原某个人格当前的提示词并导出成文件，用于调试。`,
         persona_description: `要生成快照的人格。默认使用主人格。`,
         format_description: `快照文件的输出格式。`,
         text_option: `文本`,
@@ -97,6 +97,7 @@ export default {
         persona_not_found_description: `该人格已不在这个服务器上。请从列表里重新选择。`,
         file_title: `提示词快照`,
         file_description: `这是人格 **{persona_name}** 的提示词快照（格式：{format}）。`,
+        file_scope_note: `此文件还原了当前的提示词。在模型读取之前，提供方可能会自行应用格式编排或裁剪。`,
         file_txt_headers_note: `TXT 文件顶部的请求配置以及 \`=== 标题 (/指令) ===\` 和 \`== 副标题 ==\` 标头是注释，用来说明每一段由哪条配置指令控制。它们**不是**实际发给 LLM 的提示词的一部分。「Untagged」表示这一段可能被自定义 st 预设集重排过，或者本身就是它的一部分`,
         file_hint_try_json: `用 JSON 格式再运行一次可以拿到原始格式。选 \`JSON（含工具）\` 可以连工具定义一起导出。`,
         file_hint_try_text: `用 \`format: Text\` 再运行一次可以拿到更好读的格式。`,
