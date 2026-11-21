@@ -37,7 +37,6 @@ Pages are bucketed into task-based sub-categories:
     - [`lorebooks.md`](./en/features/knowledge/memory/lorebooks/)
     - [`short-term-memory.md`](./en/features/knowledge/memory/short-term-memory/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
-  - [`prompt-macros.md`](./en/features/knowledge/prompt-macros/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
 - **Capabilities**:
@@ -54,6 +53,7 @@ Pages are bucketed into task-based sub-categories:
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
   - [`novelai.md`](./en/features/integrations/novelai/)
+- [`features/prompt-macros.md`](./en/features/prompt-macros/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)

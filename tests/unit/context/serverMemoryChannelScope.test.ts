@@ -3,6 +3,8 @@ import type { Client } from "discord.js";
 import type { ServerMemoryRow } from "@/types/db/schema";
 import { serverMemoryRepository } from "@/utils/db/repositories";
 import { buildServerMemoryContextItem } from "@/utils/text/context/memories";
+import { convertMentions } from "@/utils/text/context/mentionNormalizer";
+import type { RecallCandidate } from "@/utils/text/context/memoryRecall";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
@@ -36,7 +38,12 @@ function memoryRow(
   };
 }
 
-async function memoryItemIn(channelId: string, parentChannelId: string | null, channelMemoryEnabled = true) {
+async function memoryItemIn(
+  channelId: string,
+  parentChannelId: string | null,
+  channelMemoryEnabled = true,
+  overrides: Partial<Parameters<typeof buildServerMemoryContextItem>[0]> = {},
+) {
   return buildServerMemoryContextItem({
     tomoriState: createPersona({ server_memories: ["everywhere fact", "channel-only fact"] }),
     guildId: "guild-1",
@@ -49,6 +56,7 @@ async function memoryItemIn(channelId: string, parentChannelId: string | null, c
     channelMemoryEnabled,
     client: {} as Client,
     convertMentions: async (text) => text,
+    ...overrides,
   });
 }
 
@@ -72,6 +80,31 @@ describe("server memory channel scope", () => {
       memoryRow(3, "unresolved fact", [], { pending: true }),
     ]);
   }
+
+  it("resolves user references in both prompt projections and in memory recall lines", async () => {
+    const userId = "400000000000000001";
+    const macro = `{@${userId}}`;
+    loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([
+      memoryRow(1, `${macro} collects maps.`, []),
+      memoryRow(2, `${macro} keeps a journal.`, []),
+    ]);
+    const candidates: RecallCandidate[] = [];
+    const item = await memoryItemIn(SCOPED_CHANNEL, null, true, {
+      client: { users: { cache: new Map([[userId, { username: "navigator" }]]) } } as unknown as Client,
+      personalMemoriesEnabled: false,
+      convertMentions,
+      memoryRecall: {
+        include: async (candidate) => {
+          candidates.push(candidate);
+          return candidate.id === 1;
+        },
+      },
+    });
+    const part = item?.parts[0];
+    expect(part?.type === "text" && part.text).toContain(formatMemoryWithId(1, "navigator collects maps."));
+    expect(item?.memoryEntries).toContainEqual(expect.objectContaining({ text: "navigator collects maps." }));
+    expect(candidates.find(({ id }) => id === 2)?.line).toBe(formatMemoryWithId(2, "navigator keeps a journal."));
+  });
 
   it("sends plain server memory contents to every NovelAI profile while retaining tool IDs for other providers", async () => {
     const rows = [

@@ -62,11 +62,9 @@ characters would notice, such as appearance or mannerisms, as public.
 ### Sample Dialogues
 <!-- anchor: sample-dialogues -->
 
-Open `/config` > Persona > Identity & Personality to teach her speaking style by example
-using `{user}` and `{bot}` placeholders:
-
-- `{user}`: replaced with the actual user's display name or nickname.
-- `{bot}`: replaced with her current persona name.
+Open `/config` > Persona > Identity & Personality to teach her speaking style by example.
+Use name macros to refer to the person who triggered the reply or to the active persona.
+See [Prompt Macros](/features/prompt-macros/#names).
 
 ```text
 {user}: What's your favorite hobby?

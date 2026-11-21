@@ -461,6 +461,7 @@ export default defineConfig({
       [
         ["features/knowledge/lorebooks/", "features/knowledge/memory/lorebooks/"],
         ["features/knowledge/memory/", "features/knowledge/memory/long-term-memory/"],
+        ["features/knowledge/prompt-macros/", "features/prompt-macros/"],
         ["self-hosting/local-endpoints/setup-chatmock/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/"],
         ["self-hosting/local-endpoints/setup-cliproxyapi/", "self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi/"],
         ["self-hosting/local-endpoints/remote-access-cloudflare/", "self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/"],
@@ -470,6 +471,7 @@ export default defineConfig({
       ].flatMap(([from, to]) => sidebarLocales.map((locale) => [`/${locale.id}/${from}`, `/${locale.id}/${to}`])),
     ),
     "/features/knowledge/lorebooks/": "/en/features/knowledge/memory/lorebooks/",
+    "/features/knowledge/prompt-macros/": "/en/features/prompt-macros/",
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
     "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",

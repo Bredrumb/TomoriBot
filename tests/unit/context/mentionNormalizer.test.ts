@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, GuildMember } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache } from "@/utils/cache/userCache";
@@ -50,6 +50,43 @@ function stubUsers(blacklistedGuild?: string, privacyLevel = PrivacyLevel.MINIMA
 }
 
 describe("mention resolution isolation", () => {
+  it("resolves roles in the current guild and shares fetches and misses across conversions", async () => {
+    const cachedRoleId = "500000000000000001";
+    const fetchedRoleId = "500000000000000002";
+    const unknownRoleId = "500000000000000003";
+    const fetchRole = mock(async (id: string) => (id === fetchedRoleId ? { name: "Event Crew" } : null));
+    const guild = {
+      id: GUILD_A,
+      roles: {
+        cache: new Map([
+          [cachedRoleId, { name: "Raid Guides" }],
+          [GUILD_A, { name: "@everyone" }],
+        ]),
+        fetch: fetchRole,
+      },
+      members: { fetch: async () => null },
+    };
+    const client = {
+      guilds: { cache: new Map([[guild.id, guild]]) },
+      users: { cache: new Map(), fetch: async () => null },
+    } as unknown as Client;
+    const { load } = stubUsers();
+    load.mockResolvedValue(null);
+    const memo: MentionMemo = new Map();
+
+    const text = `<@&${cachedRoleId}> <@&${fetchedRoleId}> <@&${GUILD_A}> <@&${unknownRoleId}>`;
+    const expected = `@Raid Guides @Event Crew @everyone <@&${unknownRoleId}>`;
+    const convert = (input: string, mode: "template" | "preserve", guildId = GUILD_A) =>
+      convertMentions(input, client, guildId, "Mirri", "Tomori", true, undefined, mode, undefined, memo);
+    expect(await Promise.all([convert(`${text} ${text}`, "template"), convert(text, "preserve")])).toEqual([
+      `${expected} ${expected}`,
+      expected,
+    ]);
+    expect(await convert(`<@&${fetchedRoleId}>`, "template", GUILD_B)).toBe(`<@&${fetchedRoleId}>`);
+    expect(fetchRole.mock.calls).toEqual([[fetchedRoleId], [unknownRoleId]]);
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it.each(["personalization off", "blacklisted"])("isolates overlapping guild calls when %s", async (scenario) => {
     stubUsers(scenario === "blacklisted" ? GUILD_B : undefined);
     const client = createClient();

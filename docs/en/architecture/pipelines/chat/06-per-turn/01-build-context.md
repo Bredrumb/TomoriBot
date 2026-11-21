@@ -102,9 +102,10 @@ so older media never keeps a tool exposed. Each tool's own availability gate sti
   at most four seeds at once and assemble profiles and proxy namespace notes in seed order. Registration
   invalidates a cached missing user after the write succeeds. Cache failures use the existing restrictive
   blacklist and privacy defaults.
-- **Mention names**: each native build memoizes user-name promises by guild and user. Persona builds
-  share member fetches but resolve mention names independently because personalization can differ.
-  Callers outside native assembly can omit the memo and resolve names locally.
+- **Mention names**: each native build memoizes user and role lookups by guild and ID. A failed
+  lookup can retry on the next build. Persona builds share member fetches and resolve user names
+  independently because personalization can differ. Callers outside native assembly can omit the
+  memo and resolve names locally.
 - **Timing**: `context_built.participantMs` and the latency metric's `participant_ms` measure participant
   preparation; hydration remains inside the native-build duration. The
   [turn latency metric](/architecture/pipelines/chat/#turn-latency-metric) splits preparation into

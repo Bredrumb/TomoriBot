@@ -20,6 +20,7 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
 3. **Render modes**:
    - `crude_summary` (default): Emits the summary or category block followed by recent raw messages.
    - `supersede`: When a summary or category block exists, raw messages for that channel are omitted.
+   - Summaries and category text resolve `{@userId}` for the active persona. Raw messages preserve this token.
 4. **Unified cadence nudge (`nudgeItem`)**:
    - Emits a prompt hint instructing the model to invoke `{short_term_memory_tool}` after responding.
    - Gated by `turnsSinceRefresh >= refreshCadence` (default 5). The same counter and condition govern both initial creation and ongoing refresh.

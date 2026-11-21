@@ -120,9 +120,16 @@ function makeTomoriState(): TomoriState {
 
 async function buildHistoryText(
   msg: SimplifiedMessageForContext,
-  naming?: Pick<
-    Parameters<typeof appendDialogueHistoryContext>[0],
-    "historyUserLabels" | "historyPersonaMentionLabels"
+  overrides?: Partial<
+    Pick<
+      Parameters<typeof appendDialogueHistoryContext>[0],
+      | "historyUserLabels"
+      | "historyPersonaMentionLabels"
+      | "client"
+      | "tomoriState"
+      | "tomoriConfig"
+      | "channelContextNote"
+    >
   >,
 ): Promise<string> {
   const contextItems: Parameters<typeof appendDialogueHistoryContext>[0]["contextItems"] = [];
@@ -138,7 +145,7 @@ async function buildHistoryText(
     includeTimestamps: false,
     isUserImpersonation: false,
     triggererFormattedName: "Alice",
-    ...naming,
+    ...overrides,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions,
   });
@@ -188,6 +195,24 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
     const message = "what do {bot} and {@400000000000000001} mean in a prompt?";
     const text = await buildHistoryText(userMessage(message));
     expect(text).toBe(`Alice: ${message}`);
+  });
+
+  it.each(["global", "persona", "channel"])("resolves user references in the saved %s context note", async (scope) => {
+    const userId = "400000000000000001";
+    const macro = `{@${userId}}`;
+    const note = `Tell ${macro} that {bot} is ready.`;
+    const text = await buildHistoryText(userMessage(macro), {
+      client: { users: { cache: new Map([[userId, { username: "navigator" }]]) } } as unknown as Client,
+      tomoriState: createPersona({ ...makeTomoriState(), context_note: scope === "persona" ? note : null }),
+      tomoriConfig: {
+        ...makeConfig(),
+        personal_memories_enabled: false,
+        context_note: scope === "global" ? note : null,
+      },
+      channelContextNote: scope === "channel" ? { note, depth: 0 } : null,
+    });
+    expect(text).toContain("Tell navigator that {bot} is ready.");
+    expect(text).toContain(`Alice: ${macro}`);
   });
 
   it("still prefixes the resolved author label", async () => {

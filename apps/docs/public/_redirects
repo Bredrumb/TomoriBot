@@ -229,6 +229,23 @@
 /zh-TW/features/knowledge/memory /zh-TW/features/knowledge/memory/long-term-memory/ 301
 /zh-TW/features/knowledge/memory/ /zh-TW/features/knowledge/memory/long-term-memory/ 301
 
+/features/knowledge/prompt-macros /en/features/prompt-macros/ 301
+/features/knowledge/prompt-macros/ /en/features/prompt-macros/ 301
+/en/features/knowledge/prompt-macros /en/features/prompt-macros/ 301
+/en/features/knowledge/prompt-macros/ /en/features/prompt-macros/ 301
+/es-419/features/knowledge/prompt-macros /es-419/features/prompt-macros/ 301
+/es-419/features/knowledge/prompt-macros/ /es-419/features/prompt-macros/ 301
+/ja/features/knowledge/prompt-macros /ja/features/prompt-macros/ 301
+/ja/features/knowledge/prompt-macros/ /ja/features/prompt-macros/ 301
+/pt-BR/features/knowledge/prompt-macros /pt-BR/features/prompt-macros/ 301
+/pt-BR/features/knowledge/prompt-macros/ /pt-BR/features/prompt-macros/ 301
+/vi/features/knowledge/prompt-macros /vi/features/prompt-macros/ 301
+/vi/features/knowledge/prompt-macros/ /vi/features/prompt-macros/ 301
+/zh-CN/features/knowledge/prompt-macros /zh-CN/features/prompt-macros/ 301
+/zh-CN/features/knowledge/prompt-macros/ /zh-CN/features/prompt-macros/ 301
+/zh-TW/features/knowledge/prompt-macros /zh-TW/features/prompt-macros/ 301
+/zh-TW/features/knowledge/prompt-macros/ /zh-TW/features/prompt-macros/ 301
+
 /self-hosting/local-endpoints/setup-chatmock /en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/ 301
 /self-hosting/local-endpoints/setup-chatmock/ /en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/ 301
 /en/self-hosting/local-endpoints/setup-chatmock /en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock/ 301

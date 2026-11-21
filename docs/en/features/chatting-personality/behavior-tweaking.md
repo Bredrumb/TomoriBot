@@ -29,6 +29,9 @@ The system prompt sits above the persona and shapes overall behavior. Everything
   active, and tells you if the model, its Thinking level (use None or Minimal), or Tool Use stops
   it from being used.
 
+Use [prompt macros](/features/prompt-macros/) to insert names or
+available tools in the system prompt or response prefill.
+
 :::tip
 A note on a persona (under `/config` > `Persona` > `Advanced`) or on a channel (under
 `/config` > `Channels` > `Channel Overrides`) replaces the global `Context Note`. If both a persona

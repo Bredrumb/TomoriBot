@@ -20,9 +20,10 @@ const TEMPLATE_MENTION_PATTERN = new RegExp(`${MENTION_PATTERN.source}|${USER_RE
 
 // "resolve" is for bot-authored templates; "preserve" is for raw messages because expanding model lines collapses
 // both macros onto the persona name.
-export type IdentityMacroMode = "resolve" | "preserve" | "template";
+export type IdentityMacroMode = "resolve" | "preserve" | "template" | "user-reference";
 
 function needsConversion(text: string, identityMacroMode: IdentityMacroMode): boolean {
+  if (identityMacroMode === "user-reference") return text.search(USER_REFERENCE_MACRO_PATTERN) !== -1;
   return (
     /<[@#][!&]?\d{17,19}>/.test(text) ||
     DISCORD_CHANNEL_LINK_TEST_PATTERN.test(text) ||
@@ -109,7 +110,7 @@ export async function convertMentions(
   requestScope?: ParticipantRequestScope,
   personaLineageId: number | undefined = snapshot?.tomoriState?.persona_lineage_id,
 ): Promise<string> {
-  const normalizedText = normalizeDiscordChannelLinks(text);
+  const normalizedText = identityMacroMode === "user-reference" ? text : normalizeDiscordChannelLinks(text);
   if (!needsConversion(text, identityMacroMode)) {
     return normalizedText;
   }
@@ -120,9 +121,13 @@ export async function convertMentions(
     currentTomoriNickname = tomoriState?.persona_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
   }
 
-  const matches = Array.from(
-    normalizedText.matchAll(identityMacroMode === "template" ? TEMPLATE_MENTION_PATTERN : MENTION_PATTERN),
-  );
+  const mentionPattern =
+    identityMacroMode === "user-reference"
+      ? USER_REFERENCE_MACRO_PATTERN
+      : identityMacroMode === "template"
+        ? TEMPLATE_MENTION_PATTERN
+        : MENTION_PATTERN;
+  const matches = Array.from(normalizedText.matchAll(mentionPattern));
   let result = normalizedText;
 
   if (matches.length > 0) {
@@ -140,6 +145,31 @@ export async function convertMentions(
           let resolution = mentionMemo.get(key);
           if (!resolution) {
             resolution = resolveUserReference(id, client, serverId, personalMemoriesEnabled, personaLineageId);
+            mentionMemo.set(key, resolution);
+          }
+          return (await resolution) ?? match;
+        }
+
+        if (match.startsWith("<@&")) {
+          const key = `role:${serverId}:${id}`;
+          let resolution = mentionMemo.get(key);
+          if (!resolution) {
+            resolution = (async () => {
+              try {
+                const guild = client.guilds.cache.get(serverId);
+                const role = guild?.roles.cache.get(id) || (await guild?.roles.fetch(id).catch(() => null));
+                if (role) {
+                  return role.name.startsWith("@") ? role.name : `@${role.name}`;
+                }
+              } catch (error) {
+                log.error(`Error resolving role mention ${id} in convertMentions:`, error, {
+                  errorType: "MentionResolutionError",
+                  metadata: { roleIdToResolve: id, guildDiscordId: serverId },
+                });
+              }
+              log.warn(`Could not resolve role mention: ${match}`);
+              return null;
+            })();
             mentionMemo.set(key, resolution);
           }
           return (await resolution) ?? match;
@@ -217,22 +247,6 @@ export async function convertMentions(
           return match;
         }
 
-        if (match.startsWith("<@&")) {
-          try {
-            const guild = client.guilds.cache.get(serverId);
-            const role = guild?.roles.cache.get(id) || (await guild?.roles.fetch(id).catch(() => null));
-            if (role) {
-              return `@${role.name}`;
-            }
-          } catch (error) {
-            log.error(`Error resolving role mention ${id} in convertMentions:`, error, {
-              errorType: "MentionResolutionError",
-              metadata: { roleIdToResolve: id, guildDiscordId: serverId },
-            });
-          }
-          log.warn(`Could not resolve role mention: ${match}`);
-          return match;
-        }
         return match;
       }),
     );
@@ -253,7 +267,7 @@ export async function convertMentions(
     }
   }
 
-  if (identityMacroMode !== "preserve") {
+  if (identityMacroMode === "resolve" || identityMacroMode === "template") {
     result = replaceTemplateVariables(result, {
       bot: currentTomoriNickname,
       user: triggererName || "User",

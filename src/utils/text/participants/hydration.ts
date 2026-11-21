@@ -847,6 +847,8 @@ async function hydratePersonalMemoryEntries(
         displayName,
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
+        undefined,
+        "template",
       );
       const formattedText = formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []);
       if (

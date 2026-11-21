@@ -147,7 +147,7 @@ malformed blocks and inspect macros in both branches and conditions.
 `context/builder.ts` captures one clock reading per preset build and passes it with the configured
 model, provider, and server UTC offset. All five temporal macros use that reading and offset, and
 resolve empty when time awareness is off. They use English display formats; ISO forms use
-`YYYY-MM-DD` and `HH:mm`. The [macro catalog](/features/integrations/sillytavern-support/#preset-macros)
+`YYYY-MM-DD` and `HH:mm`. The [macro catalog](/features/prompt-macros/#sillytavern-preset-macros)
 lists the author-facing values and prompt-cache placement advice.
 
 `model` reports the configured codename, so randomizer picks and provider fallback models are not

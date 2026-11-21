@@ -116,8 +116,7 @@ export async function buildServerMemoryContextItem(params: {
     ? `\n## ${params.botName}'s Memories about this conversation with User\n`
     : `\n## ${params.botName}'s Memories about ${params.serverName}\n`;
 
-  let serverMemoryLines: string[] = [];
-  let memoryEntries: ContextMemoryEntry[] = [];
+  let activeMemories: Array<{ line: string; entry: ContextMemoryEntry }>;
   try {
     const serverId = params.tomoriState.server_id;
     const personaLineageId = params.tomoriState.persona_lineage_id;
@@ -131,42 +130,32 @@ export async function buildServerMemoryContextItem(params: {
       (row) => !params.channelMemoryEnabled || channelScopeAdmits(row.channel_disc_ids, channelCandidates),
     );
 
-    const admitted = await Promise.all(
-      filteredServerRows.map(
-        async (row) =>
-          !params.memoryRecall ||
-          (await params.memoryRecall.include({
-            kind: "server",
-            id: row.server_memory_id as number,
-            decayDays: row.decay_days,
-            line: await params.convertMentions(
-              formatMemoryWithId(row.server_memory_id as number, row.content),
-              params.client,
-              params.guildId,
-              "User",
-              params.botName,
-              params.personalMemoriesEnabled,
-            ),
-          })),
-      ),
+    const memories = await Promise.all(
+      filteredServerRows.map(async (row) => {
+        const id = row.server_memory_id as number;
+        const text = await params.convertMentions(
+          row.content,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.personalMemoriesEnabled,
+          undefined,
+          "template",
+        );
+        const line = formatMemoryWithId(id, text);
+        const include = await params.memoryRecall?.include({ kind: "server", id, decayDays: row.decay_days, line });
+        if (include === false) return null;
+        return { line, entry: { id: `server:${id}`, text, createdAt: row.created_at?.getTime() } };
+      }),
     );
-    const activeRows = filteredServerRows.filter((_row, index) => admitted[index]);
-
-    memoryEntries = activeRows.map((row) => ({
-      id: `server:${row.server_memory_id}`,
-      text: row.content,
-      createdAt: row.created_at?.getTime(),
-    }));
-    serverMemoryLines = activeRows.map((row) =>
-      // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
-      formatMemoryWithId(row.server_memory_id!, row.content),
-    );
+    activeMemories = memories.filter((memory) => memory !== null);
   } catch (error) {
     log.warn("Failed to build server memory context", error);
     return null;
   }
 
-  if (serverMemoryLines.length === 0) {
+  if (activeMemories.length === 0) {
     return null;
   }
 
@@ -175,30 +164,18 @@ export async function buildServerMemoryContextItem(params: {
     parts: [
       {
         type: "text",
-        text: await params.convertMentions(
-          `${memoryLabel}${serverMemoryLines.join("\n")}\n`,
+        text: `${await params.convertMentions(
+          memoryLabel,
           params.client,
           params.guildId,
           "User",
           params.botName,
           params.personalMemoriesEnabled,
-        ),
+        )}${activeMemories.map(({ line }) => line).join("\n")}\n`,
       },
     ],
     metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-    memoryEntries: await Promise.all(
-      memoryEntries.map(async (entry) => ({
-        ...entry,
-        text: await params.convertMentions(
-          entry.text,
-          params.client,
-          params.guildId,
-          "User",
-          params.botName,
-          params.personalMemoriesEnabled,
-        ),
-      })),
-    ),
+    memoryEntries: activeMemories.map(({ entry }) => entry),
   };
 }
 
@@ -228,6 +205,17 @@ export async function buildShortTermMemoryContext(params: {
 
   const expandPromptToolText = (macroText: string, fallbackText: string) =>
     params.toolPromptMacroResolver ? params.toolPromptMacroResolver.expand(macroText) : Promise.resolve(fallbackText);
+  const convertMemoryText = (text: string, mode: "resolve" | "template") =>
+    params.convertMentions(
+      text,
+      params.client,
+      params.currentServerId,
+      params.triggererName,
+      params.botName,
+      params.personalMemoriesEnabled,
+      undefined,
+      mode,
+    );
 
   try {
     const numericServerId = params.tomoriState?.server_id ?? null;
@@ -371,35 +359,14 @@ export async function buildShortTermMemoryContext(params: {
             ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
             : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
 
-        if (categoryContent) {
-          otherChannelText += `${memoryPrefix}${categoryContent}]\n\n`;
-
-          if (renderMode === "crude_summary" && memory.messages.length > 0) {
-            otherChannelText += `${crudeTurnPrefix}${renderCrudeTurns(
-              memory.messages,
-              crudeMessageCount,
-              isSameServerSharedMemory,
-              params,
-            )}]\n\n`;
-          }
-        } else if (memory.summary) {
-          otherChannelText += `${memoryPrefix}${memory.summary}]\n\n`;
-
-          if (renderMode === "crude_summary" && memory.messages.length > 0) {
-            otherChannelText += `${crudeTurnPrefix}${renderCrudeTurns(
-              memory.messages,
-              crudeMessageCount,
-              isSameServerSharedMemory,
-              params,
-            )}]\n\n`;
-          }
-        } else {
-          otherChannelText += `${memoryPrefix}${renderCrudeTurns(
-            memory.messages,
-            crudeMessageCount,
-            isSameServerSharedMemory,
-            params,
-          )}]\n\n`;
+        const savedContent = categoryContent || memory.summary;
+        if (savedContent) {
+          otherChannelText += `${await convertMemoryText(`${memoryPrefix}${savedContent}]`, "template")}\n\n`;
+        }
+        if (!savedContent || (renderMode === "crude_summary" && memory.messages.length > 0)) {
+          const prefix = savedContent ? crudeTurnPrefix : memoryPrefix;
+          const turns = renderCrudeTurns(memory.messages, crudeMessageCount, isSameServerSharedMemory, params);
+          otherChannelText += `${await convertMemoryText(`${prefix}${turns}]`, "resolve")}\n\n`;
         }
       }
 
@@ -410,14 +377,7 @@ export async function buildShortTermMemoryContext(params: {
           parts: [
             {
               type: "text",
-              text: await params.convertMentions(
-                otherChannelText.trim(),
-                params.client,
-                params.currentServerId,
-                params.triggererName,
-                params.botName,
-                params.personalMemoriesEnabled,
-              ),
+              text: otherChannelText.trim(),
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
@@ -481,14 +441,7 @@ export async function buildShortTermMemoryContext(params: {
           parts: [
             {
               type: "text",
-              text: await params.convertMentions(
-                summaryText,
-                params.client,
-                params.currentServerId,
-                params.triggererName,
-                params.botName,
-                params.personalMemoriesEnabled,
-              ),
+              text: await convertMemoryText(summaryText, "template"),
             },
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,

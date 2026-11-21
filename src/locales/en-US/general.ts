@@ -30,7 +30,7 @@ export default {
     },
     docs: {
       open_button_label: `Learn More`,
-      prompt_macros_link: `[Prompt macros](https://docs.tomoribot.app/en/features/knowledge/prompt-macros/)`,
+      prompt_macros_link: `[Prompt macros](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `now`,
