@@ -19,7 +19,6 @@ import * as authoringWebhook from "@/utils/discord/webhook/fallback";
 import * as messageDelivery from "@/utils/discord/webhook/singleAttemptMessage";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
-import { localizedCopy } from "../../helpers/localeCases";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(initializeLocalizer);
@@ -146,7 +145,7 @@ describe("Fast regeneration", () => {
     expect(row.toJSON().components).toMatchObject([
       {
         custom_id: "reply-controls:v1:continue:en-US",
-        label: localizedCopy("en-US", "general.reply_controls.continue"),
+        label: "→",
       },
     ]);
     expect(payload).not.toHaveProperty("content");
@@ -162,6 +161,12 @@ describe("Fast regeneration", () => {
   it("acknowledges routed clicks before running chat as the triggering member", async () => {
     const { context, result, trigger, reply, tail } = setupTurn();
     await offerFastRegeneration(context, result);
+    const row = tail.edit.mock.calls[0]?.[0]?.components?.[0];
+    if (!(row instanceof ActionRowBuilder)) throw new Error("Expected an action row");
+    expect(row.toJSON().components[0]).toMatchObject({
+      custom_id: "reply-controls:v1:retry:en-US",
+      label: "↻",
+    });
     const interaction = Object.assign(
       createRouteInteraction({
         customId: "reply-controls:v1:retry:en-US",

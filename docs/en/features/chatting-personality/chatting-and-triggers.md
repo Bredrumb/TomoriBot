@@ -32,9 +32,9 @@ Server managers can enable Retry and Continue in `/config` > `Behavior` > `Trigg
 `Reply Controls`. Only the member who prompted the reply can use its buttons. Use them within
 30 seconds, while the reply is still the latest and the channel is idle.
 
-- `Retry` deletes the whole reply before asking the same persona to answer again. The bot needs
+- `↻` retries the whole reply by deleting it and asking the same persona to answer again. The bot needs
   `Manage Messages` to delete replies sent under its own account.
-- `Continue` asks the same persona to continue in a new message.
+- `→` asks the same persona to continue in a new message.
 
 ### Managing Trigger Words
 <!-- anchor: managing-trigger-words -->

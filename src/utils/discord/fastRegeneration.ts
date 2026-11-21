@@ -20,7 +20,6 @@ import { buildInteractionRouteId } from "@/utils/discord/interactions/routeRegis
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
 import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
-import { localizer } from "@/utils/text/localizer";
 
 export const REPLY_CONTROLS_NAMESPACE = "reply-controls";
 export const REPLY_CONTROLS_VERSION = "v1";
@@ -107,9 +106,7 @@ async function publishControls(context: ChatTurnContext, entry: ReplyControls): 
     entry.actions.map((action) =>
       new ButtonBuilder()
         .setCustomId(buildInteractionRouteId(REPLY_CONTROLS_NAMESPACE, REPLY_CONTROLS_VERSION, action, locale))
-        .setLabel(
-          localizer(locale, action === "retry" ? "general.reply_controls.retry" : "general.reply_controls.continue"),
-        )
+        .setLabel(action === "retry" ? "↻" : "→")
         .setStyle(ButtonStyle.Secondary),
     ),
   );
