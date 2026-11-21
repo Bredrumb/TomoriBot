@@ -12,6 +12,7 @@ import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
 import {
   type ReminderOccurrence,
+  type ReminderRecurrenceOptions,
   type ReminderRepetition,
   toRepetitionColumns,
 } from "@/utils/text/processors/reminderRepetition";
@@ -51,6 +52,12 @@ export type ReminderSelectionRow = {
   reminder_time: Date;
   repetition_interval_hours: number | null;
   repetition_interval_months: number | null;
+  repetition_interval_minutes?: number | null;
+  repeat_remaining_count?: number | null;
+  repeat_until_time?: Date | null;
+  daily_window_start_minutes?: number | null;
+  daily_window_end_minutes?: number | null;
+  daily_window_timezone_offset?: number | null;
   self_reminder: boolean | null;
   channel_disc_id: string;
   created_by_user_id: number | null;
@@ -89,6 +96,45 @@ function keepAnchorDayOnSameLocalDate(newReminderTime: Date) {
   END`;
 }
 
+function reminderRecurrenceAssignments(
+  repetition: ReminderRepetition,
+  reminderTime: Date,
+  options?: ReminderRecurrenceOptions,
+) {
+  const repetitionColumns = toRepetitionColumns(repetition);
+  const { limit, window } = options ?? {};
+  return sql`
+    repetition_interval_hours = ${repetitionColumns.repetition_interval_hours},
+    repetition_interval_months = ${repetitionColumns.repetition_interval_months},
+    repetition_interval_minutes = ${repetitionColumns.repetition_interval_minutes},
+    repeat_remaining_count = CASE
+      WHEN ${!repetition} THEN NULL
+      WHEN ${limit !== undefined} THEN ${limit && "remaining" in limit ? limit.remaining : null}::integer
+      ELSE repeat_remaining_count
+    END,
+    repeat_until_time = CASE
+      WHEN ${!repetition} THEN NULL
+      WHEN ${limit !== undefined} THEN ${limit && "until" in limit ? limit.until : null}::timestamptz
+      ELSE repeat_until_time
+    END,
+    daily_window_start_minutes = CASE
+      WHEN ${!repetition} THEN NULL
+      WHEN ${window !== undefined} THEN ${window?.start ?? null}::smallint
+      ELSE daily_window_start_minutes
+    END,
+    daily_window_end_minutes = CASE
+      WHEN ${!repetition} THEN NULL
+      WHEN ${window !== undefined} THEN ${window?.end ?? null}::smallint
+      ELSE daily_window_end_minutes
+    END,
+    daily_window_timezone_offset = CASE
+      WHEN ${!repetition} THEN NULL
+      WHEN ${window !== undefined} THEN ${window?.timezoneOffset ?? null}::double precision
+      ELSE daily_window_timezone_offset
+    END,
+    repetition_anchor_day = ${keepAnchorDayOnSameLocalDate(reminderTime)}
+  `;
+}
 interface RandomTriggerData {
   serverId: number;
   channelDiscId: string;
@@ -144,6 +190,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition?: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
@@ -153,7 +200,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   async rescheduleReminder(
     reminderId: number,
-    nextOccurrence: ReminderOccurrence,
+    nextOccurrence: ReminderOccurrence & { consumeRepeatCount?: boolean },
     failedOccurrenceCount = 0,
   ): Promise<ReminderRow | null> {
     return this.sqlRescheduleReminder(reminderId, nextOccurrence, failedOccurrenceCount);
@@ -172,6 +219,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
@@ -187,6 +235,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     return this.sqlUpdateReminderCoreForRequester(reminderData);
@@ -489,6 +538,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             r.reminder_time,
             r.repetition_interval_hours,
             r.repetition_interval_months,
+            r.repetition_interval_minutes,
+            r.repeat_remaining_count,
+            r.repeat_until_time,
+            r.daily_window_start_minutes,
+            r.daily_window_end_minutes,
+            r.daily_window_timezone_offset,
             r.self_reminder,
             r.channel_disc_id,
             r.created_by_user_id,
@@ -513,6 +568,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           r.reminder_time,
           r.repetition_interval_hours,
           r.repetition_interval_months,
+          r.repetition_interval_minutes,
+          r.repeat_remaining_count,
+          r.repeat_until_time,
+          r.daily_window_start_minutes,
+          r.daily_window_end_minutes,
+          r.daily_window_timezone_offset,
           r.self_reminder,
           r.channel_disc_id,
           r.created_by_user_id,
@@ -541,11 +602,13 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition?: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
   }): Promise<ReminderRow | null> {
     const repetitionColumns = toRepetitionColumns(reminderData.repetition ?? null);
+    const { limit, window } = reminderData.recurrenceOptions ?? {};
     try {
       log.info(
         `Creating reminder for user ${reminderData.user_nickname} (${reminderData.user_discord_id}) ` +
@@ -569,6 +632,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             reminder_time,
             repetition_interval_hours,
             repetition_interval_months,
+            repetition_interval_minutes,
+            repeat_remaining_count,
+            repeat_until_time,
+            daily_window_start_minutes,
+            daily_window_end_minutes,
+            daily_window_timezone_offset,
             self_reminder,
             created_by_user_id,
             persona_id
@@ -581,6 +650,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             ${reminderData.reminder_time},
             ${repetitionColumns.repetition_interval_hours},
             ${repetitionColumns.repetition_interval_months},
+            ${repetitionColumns.repetition_interval_minutes},
+            ${limit && "remaining" in limit ? limit.remaining : null},
+            ${limit && "until" in limit ? limit.until : null},
+            ${window?.start ?? null},
+            ${window?.end ?? null},
+            ${window?.timezoneOffset ?? null},
             ${reminderData.self_reminder ?? false},
             ${reminderData.created_by_user_id},
             ${reminderData.persona_id ?? null}
@@ -642,7 +717,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlRescheduleReminder(
     reminderId: number,
-    nextOccurrence: ReminderOccurrence,
+    nextOccurrence: ReminderOccurrence & { consumeRepeatCount?: boolean },
     failedOccurrenceCount: number,
   ): Promise<ReminderRow | null> {
     const nextReminderTime = nextOccurrence.time;
@@ -651,6 +726,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         UPDATE reminders
         SET reminder_time = ${nextReminderTime},
             repetition_anchor_day = ${nextOccurrence.anchorDay},
+            repeat_remaining_count = repeat_remaining_count - ${nextOccurrence.consumeRepeatCount ? 1 : 0},
             next_attempt_at = NULL,
             delivery_retry_count = 0,
             failed_occurrence_count = ${failedOccurrenceCount},
@@ -757,13 +833,13 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
     server_id: number;
     owner_user_id?: number;
   }): Promise<ReminderRow | null> {
-    const repetitionColumns = toRepetitionColumns(reminderData.repetition);
     try {
       const baseUpdate = sql`
         UPDATE reminders
@@ -773,9 +849,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           next_attempt_at = NULL,
           delivery_retry_count = 0,
           failed_occurrence_count = 0,
-          repetition_interval_hours = ${repetitionColumns.repetition_interval_hours},
-          repetition_interval_months = ${repetitionColumns.repetition_interval_months},
-          repetition_anchor_day = ${keepAnchorDayOnSameLocalDate(reminderData.reminder_time)},
+          ${reminderRecurrenceAssignments(reminderData.repetition, reminderData.reminder_time, reminderData.recurrenceOptions)},
           self_reminder = ${reminderData.self_reminder},
           user_discord_id = ${reminderData.user_discord_id},
           user_nickname = ${reminderData.user_nickname},
@@ -851,12 +925,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     reminder_purpose: string;
     reminder_time: Date;
     repetition: ReminderRepetition;
+    recurrenceOptions?: ReminderRecurrenceOptions;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     const requesterUserId = reminderData.actor.requester_user_id ?? -1;
     const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
     const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
-    const repetitionColumns = toRepetitionColumns(reminderData.repetition);
 
     try {
       const [updatedReminder] = await sql`
@@ -867,9 +941,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           next_attempt_at = NULL,
           delivery_retry_count = 0,
           failed_occurrence_count = 0,
-          repetition_interval_hours = ${repetitionColumns.repetition_interval_hours},
-          repetition_interval_months = ${repetitionColumns.repetition_interval_months},
-          repetition_anchor_day = ${keepAnchorDayOnSameLocalDate(reminderData.reminder_time)},
+          ${reminderRecurrenceAssignments(reminderData.repetition, reminderData.reminder_time, reminderData.recurrenceOptions)},
           updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderData.reminder_id}
           AND server_id = ${reminderData.server_id}

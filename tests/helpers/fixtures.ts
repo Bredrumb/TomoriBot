@@ -91,6 +91,8 @@ const BASE_CONFIG: AssembledServerConfig = {
   always_reply_enabled: false,
   deliberate_trigger_mode: false,
   deliberate_tool_mode: false,
+  fast_regeneration_retry_enabled: false,
+  fast_regeneration_continue_enabled: false,
   deliberate_tool_context_turns: null,
   deliberate_tool_triggers: {},
   cooldown_type: 0,

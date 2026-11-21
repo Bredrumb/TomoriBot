@@ -15,6 +15,7 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
 import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
+import type { FastRegenerationRequest } from "@/utils/discord/fastRegeneration";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -130,6 +131,7 @@ export interface TomoriChatInput {
   // and access gates never apply to them.
   borrowsTriggerMessage?: boolean;
   suppressSelfReply?: boolean;
+  fastRegeneration?: FastRegenerationRequest;
   carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
@@ -174,6 +176,7 @@ export interface ChatIncoming {
   // Same borrowed-trigger bystander semantics: see `TomoriChatInput.borrowsTriggerMessage`.
   borrowsTriggerMessage?: boolean;
   suppressSelfReply?: boolean;
+  fastRegeneration?: FastRegenerationRequest;
   autochatCounterSnapshot?: { autoch_counter: number; autoch_next_target: number };
   carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;

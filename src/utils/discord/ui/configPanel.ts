@@ -2774,6 +2774,50 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       ],
     },
   );
+  components.push(
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.reply_controls_title")}**
+${localizer(locale, "commands.config.panel.reply_controls_description")}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({
+            action: "behavior-retry-set",
+            locale,
+            enabled: !view.fastRegenerationRetryEnabled,
+          }),
+          label: localizer(
+            locale,
+            view.fastRegenerationRetryEnabled
+              ? "commands.config.panel.disable_retry_reply_button"
+              : "commands.config.panel.enable_retry_reply_button",
+          ),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({
+            action: "behavior-continue-set",
+            locale,
+            enabled: !view.fastRegenerationContinueEnabled,
+          }),
+          label: localizer(
+            locale,
+            view.fastRegenerationContinueEnabled
+              ? "commands.config.panel.disable_continue_reply_button"
+              : "commands.config.panel.enable_continue_reply_button",
+          ),
+          disabled: writesDisabled,
+        },
+      ],
+    },
+  );
   return components;
 }
 

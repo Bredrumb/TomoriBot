@@ -119,6 +119,10 @@ function ownsMessage(message: Message): boolean {
   );
 }
 
+export function hasPendingChannelWork(entry: ChannelLockEntry): boolean {
+  return entry.isLocked || entry.messageQueue.length > 0 || Boolean(entry.pendingHistoryReplay);
+}
+
 export async function runWithChannelLock<T>(
   admission: RunnableChatAdmission,
   callback: (lockedTurn: LockedChatTurn, startTyping: () => Promise<void>) => Promise<T>,
@@ -159,6 +163,7 @@ export async function runWithChannelLock<T>(
 
   const serverDiscId = admission.serverDiscId ?? channelId;
   const lockEntry = getOrCreateChannelLockEntry(channelId, serverDiscId);
+  if (admission.incoming.fastRegeneration && hasPendingChannelWork(lockEntry)) return;
   releaseStaleChannelLockIfExpired(channelId, lockEntry);
 
   const userDiscId = admission.userDiscId ?? admission.message.author.id;

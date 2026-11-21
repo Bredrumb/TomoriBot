@@ -87,6 +87,8 @@ function makeState(): TomoriState {
       always_reply_enabled: false,
       cooldown_type: 0,
       cooldown_length: 5,
+      fast_regeneration_retry_enabled: false,
+      fast_regeneration_continue_enabled: false,
     },
   } as unknown as TomoriState;
 }
@@ -185,6 +187,8 @@ function makeHarness(inGuild = true): Harness {
           alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
           cooldownType: current.config.cooldown_type ?? 0,
           cooldownLength: current.config.cooldown_length ?? 5,
+          fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+          fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
         },
       }),
       loadPermissionsView: async () => ({
@@ -357,6 +361,8 @@ const D9_WIRE_CONTRACT: ReadonlyArray<readonly [string, Parameters<typeof buildC
   ],
   ["config:v2:beh-dtm-set:en-US:1", { action: "behavior-dtm-set", locale: "en-US", enabled: true }],
   ["config:v2:beh-always-set:en-US:0", { action: "behavior-always-set", locale: "en-US", enabled: false }],
+  ["config:v2:beh-retry-set:en-US:1", { action: "behavior-retry-set", locale: "en-US", enabled: true }],
+  ["config:v2:beh-continue-set:en-US:0", { action: "behavior-continue-set", locale: "en-US", enabled: false }],
   ["config:v2:beh-cooldown-open:en-US", { action: "behavior-cooldown-open", locale: "en-US" }],
   [
     "config:v2:beh-cooldown-sub:en-US:nonce1234567",
@@ -480,6 +486,8 @@ describe("config Behavior routes", () => {
       "behavior-limits-submit": { wireToken: "beh-limits-sub", fields: ["nonce"] },
       "behavior-dtm-set": { wireToken: "beh-dtm-set", fields: ["enabled"] },
       "behavior-always-set": { wireToken: "beh-always-set", fields: ["enabled"] },
+      "behavior-retry-set": { wireToken: "beh-retry-set", fields: ["enabled"] },
+      "behavior-continue-set": { wireToken: "beh-continue-set", fields: ["enabled"] },
       "behavior-cooldown-open": { wireToken: "beh-cooldown-open", fields: [] },
       "behavior-cooldown-submit": { wireToken: "beh-cooldown-sub", fields: ["nonce"] },
       "behavior-tool-mode-set": { wireToken: "beh-tool-mode-set", fields: ["enabled"] },
@@ -888,6 +896,31 @@ describe("config Behavior routes", () => {
     update.mockRestore();
   });
 
+  it("writes each reply reaction setting independently after acknowledging", async () => {
+    const harness = makeHarness(true);
+    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {});
+    const update = spyOn(configRepository, "updateTriggerBehaviorConfig").mockResolvedValue(true);
+    try {
+      for (const [action, column] of [
+        ["behavior-retry-set", "fast_regeneration_retry_enabled"],
+        ["behavior-continue-set", "fast_regeneration_continue_enabled"],
+      ] as const) {
+        const interaction = makeInteraction(harness, buildConfigRouteId({ action, locale: "en-US", enabled: true }));
+        update.mockImplementation(async (_serverId, patch) => {
+          expect(interaction.deferred || interaction.replied).toBe(true);
+          expect(patch).toEqual({ [column]: true });
+          return true;
+        });
+        await dispatch(harness, interaction);
+        expect(update).toHaveBeenLastCalledWith(9, { [column]: true });
+        expect(invalidate).toHaveBeenLastCalledWith(harness.scope.serverDiscId);
+      }
+    } finally {
+      update.mockRestore();
+      invalidate.mockRestore();
+    }
+  });
+
   it("acknowledges before writing Deliberate Tool Mode", async () => {
     const harness = makeHarness(true);
     const interaction = makeInteraction(
@@ -1220,6 +1253,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
     harness.dependencies.takeCheckboxValues = () => [];
@@ -1322,6 +1357,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
     await dispatch(
@@ -1361,6 +1398,8 @@ describe("config Behavior routes", () => {
           alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
           cooldownType: current.config.cooldown_type ?? 0,
           cooldownLength: current.config.cooldown_length ?? 5,
+          fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+          fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
         },
       });
       await dispatch(
@@ -1410,6 +1449,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
     await dispatch(
@@ -1449,6 +1490,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
     await dispatch(
@@ -1486,6 +1529,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
 
@@ -1533,6 +1578,8 @@ describe("config Behavior routes", () => {
         alwaysReplyEnabled: current.config.always_reply_enabled ?? false,
         cooldownType: current.config.cooldown_type ?? 0,
         cooldownLength: current.config.cooldown_length ?? 5,
+        fastRegenerationRetryEnabled: current.config.fast_regeneration_retry_enabled,
+        fastRegenerationContinueEnabled: current.config.fast_regeneration_continue_enabled,
       },
     });
 

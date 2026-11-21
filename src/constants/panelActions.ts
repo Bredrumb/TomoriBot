@@ -192,6 +192,8 @@ export const PANEL_ACTIONS = [
   "server-config.workspace.trigger-limits.set",
   "server-config.workspace.deliberate-trigger-mode.set",
   "server-config.workspace.always-reply.set",
+  "server-config.workspace.fast-regeneration-retry.set",
+  "server-config.workspace.fast-regeneration-continue.set",
   "server-config.workspace.cooldown.set",
   "server-config.workspace.random-trigger.add",
   "server-config.workspace.random-trigger.update",

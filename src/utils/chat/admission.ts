@@ -113,6 +113,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     nudgeSceneCatcherPersonaId: input.nudgeSceneCatcherPersonaId,
     borrowsTriggerMessage: input.borrowsTriggerMessage,
     suppressSelfReply: input.suppressSelfReply,
+    fastRegeneration: input.fastRegeneration,
     carriedExpressionDelivery: input.carriedExpressionDelivery,
     onGenerationResult: input.onGenerationResult,
     onQueueDiscard: input.onQueueDiscard,

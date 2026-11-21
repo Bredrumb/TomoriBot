@@ -49,6 +49,16 @@ When an admitted turn arrives:
   stream kill handle, clears queued messages, and resets the lock. Active operations using `runUnderWatchdog`
   (such as streaming chunks and tool calls) suppress stale-lock recovery because they enforce their own timeouts.
 
+### Reply controls
+
+After streaming, TomoriBot adds Retry and Continue to the final message. If its webhook cannot
+carry interactive components, the bot sends a separate button row as a reply to that message.
+The shard owner keeps one turn record per channel in memory. Message creation hides the row
+and deletion can restore it while that reply is still the newest persona turn. Same-turn
+delivery notices and the separate button row are excluded from the latest-message check.
+Both actions use normal chat admission and check live Discord history under the channel lock
+before claiming the row. Retry deletes the exact text message IDs recorded for that turn.
+
 ### Interruption and cancellation ownership
 
 Channel locks coordinate three forms of turn interruption:

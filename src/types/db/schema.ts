@@ -987,6 +987,8 @@ const serverTriggerBehaviorConfigSchema = z.object({
   server_id: z.number().int(),
   always_reply_enabled: z.boolean().default(false),
   deliberate_trigger_mode: z.boolean().default(false),
+  fast_regeneration_retry_enabled: z.boolean().default(false),
+  fast_regeneration_continue_enabled: z.boolean().default(false),
   deliberate_tool_mode: z.boolean().default(false),
   // Channel turns a successful tool stays unlocked (NULL uses the env default).
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null),
@@ -1470,6 +1472,12 @@ export const reminderSchema = z.object({
   failed_occurrence_count: z.number().int().nonnegative().default(0),
   repetition_interval_hours: z.number().int().nullable().optional(),
   repetition_interval_months: z.number().int().nullable().optional(),
+  repetition_interval_minutes: z.number().int().nullable().optional(),
+  repeat_remaining_count: z.number().int().nullable().optional(),
+  repeat_until_time: z.date().nullable().optional(),
+  daily_window_start_minutes: z.number().int().nullable().optional(),
+  daily_window_end_minutes: z.number().int().nullable().optional(),
+  daily_window_timezone_offset: z.number().nullable().optional(),
   // Target day of month preserved after a short-month clamp.
   repetition_anchor_day: z.number().int().nullable().optional(),
   self_reminder: z.boolean().nullable().optional(),

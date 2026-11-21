@@ -266,6 +266,8 @@ const serverTriggerBehaviorConfigExportSchema = z.object({
   deliberate_trigger_mode: z.boolean().optional(),
   deliberate_tool_mode: z.boolean().optional(),
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(),
+  fast_regeneration_retry_enabled: z.boolean().optional(),
+  fast_regeneration_continue_enabled: z.boolean().optional(),
   // .optional() stays outside z.preprocess because Zod rejects an absent key before running the pipe transform.
   deliberate_tool_triggers: z
     .preprocess(normalizeJsonColumn, z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)))

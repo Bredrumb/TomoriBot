@@ -23,6 +23,7 @@ interface ReminderOptionPartsInput {
   viewerUserId: number | undefined;
   repeatTextKey: string;
   repeatMonthsTextKey: string;
+  repeatMinutesTextKey: string;
   managerCreatedByKey: string;
 }
 
@@ -56,7 +57,9 @@ export function buildReminderOptionParts(input: ReminderOptionPartsInput): Remin
       ? ""
       : repetition.unit === "months"
         ? localizer(input.locale, input.repeatMonthsTextKey, { months: repetition.interval })
-        : localizer(input.locale, input.repeatTextKey, { hours: repetition.interval }),
+        : repetition.unit === "minutes"
+          ? localizer(input.locale, input.repeatMinutesTextKey, { minutes: repetition.interval })
+          : localizer(input.locale, input.repeatTextKey, { hours: repetition.interval }),
     manager_created_by_text:
       input.hasManagePermission && reminder.created_by_user_id !== input.viewerUserId
         ? localizer(input.locale, input.managerCreatedByKey, { creator_name: creatorName })

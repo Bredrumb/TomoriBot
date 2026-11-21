@@ -92,6 +92,46 @@ describe("update_task helpers", () => {
     ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
   });
 
+  it("parses minute intervals and validates the window and repeat limit independently", () => {
+    const task = { reminder_id: 4, reminder_purpose: "Check the queue." };
+    expect(
+      parseUpdateTaskArguments(
+        {
+          ...task,
+          repetition_interval_minutes: 15,
+          repeat_count: 3,
+          daily_window_start_time: "9AM",
+          daily_window_end_time: "17:30",
+        },
+        5.5,
+      ),
+    ).toMatchObject({
+      ok: true,
+      repetition: { unit: "minutes", interval: 15 },
+      recurrenceOptions: { limit: { remaining: 3 }, window: { start: 540, end: 1050, timezoneOffset: 5.5 } },
+    });
+
+    expect(parseUpdateTaskArguments({ ...task, clear_repeat_limit: true, clear_daily_window: true }, 0)).toMatchObject({
+      ok: true,
+      recurrenceOptions: { limit: null, window: null },
+    });
+
+    expect(parseUpdateTaskArguments({ ...task, repeat_until_time: "2099-01-01_13:00" }, 5.5)).toMatchObject({
+      ok: true,
+      recurrenceOptions: { limit: { until: new Date("2099-01-01T07:30:59.999Z") } },
+    });
+
+    for (const args of [
+      { repetition_interval_minutes: 5, repetition_interval_months: 1 },
+      { repeat_count: 3, repeat_until_time: "2099-01-01_13:00" },
+      { clear_repeat_limit: true, repeat_count: 12 },
+      { daily_window_start_time: "09:00" },
+      { daily_window_start_time: "18:00", daily_window_end_time: "08:00" },
+    ]) {
+      expect(parseUpdateTaskArguments({ ...task, ...args }, 0)).toMatchObject({ ok: false });
+    }
+  });
+
   it("rejects invalid IDs, intervals, and past absolute times", () => {
     expect(
       parseUpdateTaskArguments(
