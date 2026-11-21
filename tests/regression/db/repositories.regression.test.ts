@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";
 import { configRepository, llmModelRepo, userRepository } from "@/utils/db/repositories";
@@ -202,6 +202,38 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       await testSql`ALTER TABLE server_chat_configs DROP COLUMN IF EXISTS _rt_cached_plan_probe`;
       resetDatabaseConnection();
     }
+  });
+
+  describe("ConfigRepository auto-trigger writes", () => {
+    beforeEach(async () => {
+      await testSql`DELETE FROM server_auto_trigger_configs WHERE server_id = ${refs.serverId}`;
+    });
+
+    it("creates missing channel settings and preserves them when the threshold changes", async () => {
+      const channelId = "123456789012345678";
+      expect(
+        await configRepository.updateAutoTriggerConfig(refs.serverId, {
+          autoch_disc_ids: [channelId],
+          autoch_persona_overrides: [{ channel_disc_id: channelId, persona_id: refs.personaId }],
+        }),
+      ).toBe(true);
+      expect(await configRepository.setAutoChatThreshold(refs.serverId, refs.personaId, 6, 9, 8)).not.toBeNull();
+
+      const [config] = await testSql`SELECT * FROM server_auto_trigger_configs WHERE server_id = ${refs.serverId}`;
+      expect(config).toMatchObject({ autoch_disc_ids: [channelId], autoch_threshold: 6, autoch_threshold_max: 9 });
+      const [override] = await testSql`
+        SELECT persona_id FROM server_auto_trigger_persona_overrides
+        WHERE server_id = ${refs.serverId} AND channel_disc_id = ${channelId}
+      `;
+      expect(override?.persona_id).toBe(refs.personaId);
+    });
+
+    it("can set the threshold and initialize the runtime counter before any channels are configured", async () => {
+      const runtime = await configRepository.setAutoChatThreshold(refs.serverId, refs.personaId, 6, 9, 7);
+      expect(runtime).toMatchObject({ autoch_counter: 0, autoch_next_target: 7 });
+      const [config] = await testSql`SELECT * FROM server_auto_trigger_configs WHERE server_id = ${refs.serverId}`;
+      expect(config).toMatchObject({ autoch_disc_ids: [], autoch_threshold: 6, autoch_threshold_max: 9 });
+    });
   });
 
   describe("LlmRepository.getLlmsByIds", () => {
