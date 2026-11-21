@@ -11,6 +11,7 @@ import {
   isAutochatConfiguredChannel,
   isAutochatCounterHit,
   isAutochatQualifyingMessage,
+  isDirectReplyToBot,
   isMessageProxyMessage,
   isSelfTriggerMessage,
   isMatrixRelayMessage as isTrustedMatrixRelayMessage,
@@ -97,7 +98,7 @@ export function shouldBotReply(
   }
   const referenceMessage = options.referencedMessage;
   if (referenceMessage) {
-    if (referenceMessage.author.id === message.client.user?.id) {
+    if (isDirectReplyToBot(message, referenceMessage)) {
       isReplyToBot = true;
       isReplyToPersona = true;
       replyPersonaTarget = mainPersona ?? null;

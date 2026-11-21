@@ -2,7 +2,7 @@ import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Client, Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatIncoming } from "@/utils/chat/types";
-import { doesMessageMatchTrigger } from "@/utils/chat/triggerProcessor";
+import { doesMessageMatchTrigger, isDirectReplyToBot } from "@/utils/chat/triggerProcessor";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 
@@ -30,15 +30,15 @@ function hasPersonaTriggerMatch(message: Message, allPersonas: readonly TomoriSt
 }
 
 function isReplyToKnownPersona(
+  message: Message,
   referencedMessage: Message | null,
-  client: Client,
   allPersonas: readonly TomoriState[],
 ): boolean {
   if (!referencedMessage) {
     return false;
   }
 
-  if (referencedMessage.author.id === client.user?.id) {
+  if (isDirectReplyToBot(message, referencedMessage)) {
     return true;
   }
 
@@ -73,7 +73,7 @@ export function hasDirectChatSignal(args: {
     return true;
   }
 
-  if (args.isReplyToBotOrPersona || isReplyToKnownPersona(args.referencedMessage, args.client, args.allPersonas)) {
+  if (args.isReplyToBotOrPersona || isReplyToKnownPersona(args.message, args.referencedMessage, args.allPersonas)) {
     return true;
   }
 

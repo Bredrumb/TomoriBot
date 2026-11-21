@@ -2,7 +2,7 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
-import { isKnownMessageProxyMessage } from "@/utils/messageProxy/proxyExpectation";
+import { getMessageProxyMessageRecord, isKnownMessageProxyMessage } from "@/utils/messageProxy/proxyExpectation";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -231,6 +231,22 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
   );
 }
 
+export function isDirectReplyToBot(message: Message, referenceMessage: Message | null): boolean {
+  const botUserId = message.client.user?.id;
+  if (!botUserId || referenceMessage?.author.id !== botUserId) {
+    return false;
+  }
+  if (message.channel instanceof DMChannel) {
+    return true;
+  }
+
+  const proxyRecord = message.webhookId ? getMessageProxyMessageRecord(message.id) : null;
+  // A proxy service that verifies only the repost cannot report the original reply ping.
+  return (
+    proxyRecord?.originalMessage === null || (proxyRecord?.originalMessage ?? message).mentions.users.has(botUserId)
+  );
+}
+
 export function hasExplicitCrossPersonaTrigger(
   message: Message,
   allPersonas: TomoriState[],
@@ -248,8 +264,7 @@ export function hasExplicitCrossPersonaTrigger(
   const clientUserId = message.client.user?.id;
 
   const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
-  const isReplyToBot = refMessage ? refMessage.author.id === clientUserId : false;
-  if ((isBotMentioned || isReplyToBot) && mainPersona?.persona_id !== activePersonaId) {
+  if ((isBotMentioned || isDirectReplyToBot(message, refMessage)) && mainPersona?.persona_id !== activePersonaId) {
     return true;
   }
 
@@ -343,8 +358,8 @@ export function determineMatchingPersonas(
 
   let repliedToPersona: TomoriState | undefined;
   if (referenceMessage) {
-    if (referenceMessage.author.id === client.user?.id) {
-      repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
+    if (isReplyToBot && referenceMessage.author.id === client.user?.id) {
+      repliedToPersona = mainPersona;
     } else if (isManagedWebhookMessage(referenceMessage)) {
       const webhookName = referenceMessage.author.username;
       repliedToPersona =

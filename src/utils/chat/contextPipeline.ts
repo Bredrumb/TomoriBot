@@ -787,7 +787,8 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   loadedCustomExpressions: import("@/types/db/schema").CustomExpressionRow[] | null;
   isRpChannel: boolean;
 }> {
-  if (turn.isDMChannel || !turn.guild || !turn.persona.server_id) {
+  const guild = turn.guild;
+  if (turn.isDMChannel || !guild || !turn.persona.server_id) {
     return {
       emojiStrings: [],
       loadedEmojis: null,
@@ -803,12 +804,17 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
     (rpParentId !== null && turn.persona.config.rp_channel_ids.includes(rpParentId));
   const { emojis, stickers, customs } = await loadEmojiStickerCache(
     turn.persona.server_id,
-    turn.guild,
+    guild,
     isRpChannel ? false : turn.persona.config.emoji_usage_enabled,
     isRpChannel ? false : turn.persona.config.sticker_usage_enabled,
   );
   const emojiStrings =
-    emojis?.map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
+    emojis
+      ?.filter((row) => {
+        const emoji = guild.emojis?.cache.get(row.emoji_disc_id);
+        return emoji && emoji.available !== false;
+      })
+      .map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
   return {
     emojiStrings,
     loadedEmojis: emojis,

@@ -1,9 +1,10 @@
 import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { TextChannel, type Client, type Message } from "discord.js";
+import { MessageReferenceType, MessageType, TextChannel, type Client, type Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
+import { validateDirectChatTrigger } from "@/utils/chat/admissionGuards";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
   acquireChannelLockForTurn,
@@ -22,7 +23,11 @@ import { shouldBotReply } from "@/utils/chat/replyDecision";
 import type { ChatIncoming, ChatTurnContext } from "@/utils/chat/types";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 import { runToolLoop } from "@/utils/chat/toolLoop";
-import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
+import {
+  determineMatchingPersonas,
+  hasExplicitCrossPersonaTrigger,
+  isSelfTriggerMessage,
+} from "@/utils/chat/triggerProcessor";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import {
   clearMessageProxyExpectationStateForTests,
@@ -206,7 +211,7 @@ async function confirmProxyRepost(args: {
     originalMessageId: args.original.id,
     senderDiscId: args.hostDiscId,
     originalMessage: args.original,
-    originalReference: null,
+    originalReference: args.original.reference,
   });
   if (originalWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
   else process.env.MESSAGE_PROXY_WAIT_MS = originalWaitMs;
@@ -1353,29 +1358,86 @@ describe("chat regression harness", () => {
     }
   });
 
-  it("admits a reply to Tomori whose target is no longer in the message cache", async () => {
+  it.each([
+    { label: "ping on", mentionsBot: true, expected: "direct" },
+    { label: "ping off", expected: "ignored" },
+    {
+      label: "explicit mention",
+      content: `<@${botUserId}> what did you mean?`,
+      mentionsBot: true,
+      expected: "direct",
+    },
+    { label: "trigger word", content: "Tomori, what did you mean?", expected: "direct" },
+    { label: "always reply", alwaysReply: true, expected: "passive" },
+    { label: "proxied ping on", mentionsBot: true, proxied: true, expected: "direct" },
+    { label: "proxied ping off", proxied: true, expected: "ignored" },
+  ])("routes a native reply to an evicted bot message with $label", async (testCase) => {
     const client = makeClient();
     const fixture = conversations[0];
+    const content = testCase.content ?? "what did you mean?";
+    const expectsReply = testCase.expected !== "ignored";
+    const expectsDirectTrigger = testCase.expected === "direct";
     const stateFixture = {
       ...fixture,
       state: {
         ...fixture.state,
-        alwaysReplyEnabled: false,
+        alwaysReplyEnabled: testCase.alwaysReply ?? false,
         autochDiscIds: [],
         autochCounter: 0,
         autochNextTarget: 10,
       },
     };
-    const message = makeMessage(
+    const original = makeMessage(
       {
         ...stateFixture,
         id: "reply_to_evicted_tomori_message",
-        message: { ...fixture.message, content: "what did you mean by that?", mentionedUserIds: [] },
+        message: {
+          ...fixture.message,
+          content,
+          mentionedUserIds: testCase.mentionsBot ? [botUserId] : [],
+        },
       },
       client,
     );
-    const tomoriReply = { id: "evicted_tomori_reply", author: { id: botUserId }, webhookId: null } as Message;
-    Object.assign(message, { reference: { messageId: tomoriReply.id } });
+    const tomoriReply = makeMessage(
+      {
+        ...stateFixture,
+        id: "evicted_tomori_reply",
+        message: {
+          authorId: botUserId,
+          authorName: "Tomori",
+          authorBot: true,
+          content: "The library is open.",
+          mentionedUserIds: [],
+        },
+      },
+      client,
+    );
+    Object.assign(original, {
+      type: MessageType.Reply,
+      reference: { channelId, guildId, messageId: tomoriReply.id, type: MessageReferenceType.Default },
+    });
+    const message = testCase.proxied
+      ? makeMessage(
+          {
+            ...stateFixture,
+            id: "proxy_repost_reply_without_mention",
+            message: {
+              ...fixture.message,
+              authorId: "pk_webhook_author",
+              authorName: "Mirri",
+              authorBot: true,
+              content,
+              mentionedUserIds: [],
+              webhookId: "proxy-webhook",
+            },
+          },
+          client,
+        )
+      : original;
+    const messageProxyRecord = testCase.proxied
+      ? await confirmProxyRepost({ original, repost: message, hostDiscId: original.author.id })
+      : null;
     expect(message.channel.messages.cache.get(tomoriReply.id)).toBeUndefined();
 
     const earlyTomoriState = makeTomoriState(stateFixture, {
@@ -1385,29 +1447,60 @@ describe("chat regression harness", () => {
       triggers: ["tomori"],
     });
     earlyTomoriState.config.thought_log_channel_disc_id = null;
+    const personas = [earlyTomoriState, createPersona({ persona_id: 1002, is_alter: true, trigger_words: [] })];
+    const incoming = normalizeChatInvocation({ client, message, isFromQueue: false });
 
     const disposition = await evaluateAdmissionQueueAndTriggerGate({
-      incoming: {
-        client,
-        message,
-        isFromQueue: false,
-        retryCount: 0,
-        skipLock: false,
-        isPersonaJob: false,
-        isUserImpersonation: false,
-        textQuotaSource: "user",
-      },
+      incoming,
       channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
       earlyTomoriState,
-      earlyAllPersonas: [earlyTomoriState],
-      userDiscId: message.author.id,
-      cooldownUserDiscId: message.author.id,
+      earlyAllPersonas: personas,
+      userDiscId: original.author.id,
+      cooldownUserDiscId: original.author.id,
       isActiveNaturalStopMessage: false,
       isNaturalStopMessage: false,
       referencedMessage: tomoriReply,
+      messageProxyRecord,
     });
 
-    expect(disposition).toBeNull();
+    expect(disposition?.reason ?? null).toBe(expectsReply ? null : "non_trigger_pre_lock");
+    expect(shouldBotReply(message, earlyTomoriState, personas, { referencedMessage: tomoriReply })).toBe(expectsReply);
+    const directTrigger = await validateDirectChatTrigger({
+      client,
+      message,
+      referencedMessage: tomoriReply,
+      guild: message.guild,
+      allPersonas: personas,
+      tomoriState: earlyTomoriState,
+      isDMChannel: false,
+      userDiscId: original.author.id,
+      serverDiscId: guildId,
+      locale: "en-US",
+    });
+    expect(directTrigger.isReplyToBot).toBe(testCase.mentionsBot ?? false);
+    expect(hasExplicitCrossPersonaTrigger(message, personas, 1002, tomoriReply)).toBe(expectsDirectTrigger);
+    expect(
+      shouldSurfaceChatUserErrors({
+        incoming,
+        client,
+        message,
+        isDMChannel: false,
+        allPersonas: personas,
+        referencedMessage: tomoriReply,
+      }),
+    ).toBe(expectsDirectTrigger);
+    const matchingPersonas = determineMatchingPersonas(
+      message,
+      personas,
+      client,
+      tomoriReply,
+      directTrigger.isReplyToBot,
+      directTrigger.replyPersona,
+      directTrigger.isBotMentioned,
+      false,
+      testCase.alwaysReply,
+    );
+    expect(matchingPersonas.includes(earlyTomoriState)).toBe(expectsReply);
   });
 
   it("uses the attested original for a proxy repost trigger decision", async () => {

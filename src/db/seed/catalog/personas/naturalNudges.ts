@@ -149,6 +149,10 @@ export const PRESET_NATURAL_NUDGE_DEFAULTS: Readonly<Record<number, PresetNatura
       },
       { label: "cats", description: "Cats: pets, photos, and cat behavior." },
       { label: "documentaries", description: "Documentaries and deep dives into real-world subjects." },
+      {
+        label: "coding",
+        description: "Coding, programming, debugging, software development, and troubleshooting technical problems.",
+      },
     ],
   },
   3585: {

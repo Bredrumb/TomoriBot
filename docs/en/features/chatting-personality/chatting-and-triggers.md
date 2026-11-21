@@ -12,7 +12,7 @@ TomoriBot responds when summoned. This page covers how to trigger her in a serve
 By default, she replies when you:
 
 - **Mention her**: `@TomoriBot`
-- **Reply** to one of her messages (including a persona's webhook message)
+- **Reply** with `@ ON` to a message from the bot account, or reply to a persona's webhook message
 - **Use a trigger word**: any registered trigger word anywhere in a message
 - **Use `/respond`**: manually request a response
 
@@ -50,7 +50,7 @@ You can let TomoriBot join or start conversations without being directly mention
 
 If a persona's name comes up often in normal conversation, plain trigger words can activate her by accident. Deliberate Trigger Mode prevents accidental activation by ignoring plain trigger words unless prefixed with `@`:
 
-- `@{trigger}` (the trigger word prefixed with `@`), `@TomoriBot` mentions, message replies, and `/respond` still trigger a reply.
+- `@{trigger}` (the trigger word prefixed with `@`), `@TomoriBot` mentions, [replies that trigger her](#how-to-trigger-her), and `/respond` still work.
 - Plain trigger words without `@` are ignored.
 
 Server managers toggle the server default in `/config` > `Behavior` > `Trigger Behavior`, and individual members can override it for their own messages in `/personal config` (`off`, `follow`, or `on`).

@@ -9,8 +9,8 @@ Server emojis list the custom emojis available in the guild, augmented with opti
 
 The contributor `buildServerEmojiContextItem` in `src/utils/text/context/serverAssets.ts` emits a `system`-role context item tagged `KNOWLEDGE_SERVER_EMOJIS`:
 
-1. **Eligibility**: Returns `null` if the channel is a DM, `emoji_usage_enabled` is false, persona state is missing, or the guild's live emoji cache is empty.
-2. **Metadata merging**: Uses `preloadedEmojis` from turn asset loading, or queries `serverRepository.loadEmojis(serverId)`. When Discord emojis share the same name, it retains the entry with the richest metadata (emotion key or description), breaking ties by the most recent update timestamp.
+1. Omit the emoji list in DMs or when emoji usage is disabled, persona state is missing, or the guild has no usable cached emojis.
+2. Use `preloadedEmojis` from turn asset loading or query `serverRepository.loadEmojis(serverId)`. For shared names, choose the richest metadata from rows that Discord has not marked unavailable. Break ties by the most recent update timestamp.
 3. **Ordering and formatting**: Emojis are sorted by `createdTimestamp` ascending. Each entry formats as `:name:` or `:name: (Expresses <emotion>; <description>)`.
 4. **Usage instructions**: Appends guidance instructing the model to write `:name:` without numeric Discord IDs. In impersonation mode, the wording simplifies to generic instructions.
 
@@ -19,7 +19,7 @@ The assembled text passes through `convertMentions` before emission.
 ## Constraints and rationale
 
 - **Name deduplication**: Each emoji name appears at most once in the prompt so the LLM is not presented with duplicate choices.
-- **Raw name syntax**: The output cleaner resolves `:name:` to Discord emoji tags using the guild's emoji list. The model supplies names instead of guessing snowflake IDs.
+- Discord can mark an emoji unavailable after a server loses boosts. The prompt and shortcode resolver use availability flags from `GUILD_EMOJIS_UPDATE` and `GUILD_UPDATE`. `GUILD_CREATE` refreshes those flags when Discord sends guild state after an outage or reconnect. The emoji returns with its saved description when Discord makes it available again.
 - **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_EMOJIS`, which SillyTavern preset reassembly flushes at the first knowledge anchor.
 
 ## Source pointers

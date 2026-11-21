@@ -803,15 +803,6 @@ export async function resolveAdmissionChannelScope(
   if (!hasExplicitErrorVisibility && !shouldShowError && client.user && message.mentions.users.has(client.user.id)) {
     shouldShowError = true;
   }
-  if (!hasExplicitErrorVisibility && !shouldShowError && message.reference?.messageId) {
-    try {
-      const referenceMessage = await message.channel.messages.fetch(message.reference.messageId);
-      if (referenceMessage && referenceMessage.author.id === client.user?.id) {
-        shouldShowError = true;
-      }
-    } catch {}
-  }
-
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
     const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming), {
       color: ColorCode.ERROR,

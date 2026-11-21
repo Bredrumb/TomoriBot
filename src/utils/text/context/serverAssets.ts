@@ -41,15 +41,18 @@ export async function buildServerEmojiContextItem(params: {
     return null;
   }
 
-  const guildEmojisCache = params.client.guilds.cache.get(params.guildId)?.emojis.cache;
-  if (!guildEmojisCache || guildEmojisCache.size === 0) {
-    return null;
-  }
+  const guildEmojisCache = params.client.guilds.cache.get(params.guildId)?.emojis?.cache;
+  if (!guildEmojisCache?.size) return null;
 
   const emojiMetadata =
     params.preloadedEmojis && params.preloadedEmojis.length > 0
       ? params.preloadedEmojis
       : (await serverRepository.loadEmojis(params.tomoriState.server_id)) || [];
+
+  const sortedEmojis = Array.from(guildEmojisCache.values())
+    .filter((emoji) => emoji.available !== false && emoji.name)
+    .sort((a, b) => (a.createdTimestamp || 0) - (b.createdTimestamp || 0));
+  if (!sortedEmojis.length) return null;
 
   const emojiMetadataByName = new Map<string, EmojiMetadata>();
   const hasEmojiMetadata = (metadata: EmojiMetadata) =>
@@ -59,7 +62,7 @@ export async function buildServerEmojiContextItem(params: {
     Math.max(metadata.updated_at?.getTime() ?? 0, metadata.created_at?.getTime() ?? 0);
 
   for (const metadata of emojiMetadata) {
-    if (!metadata.emoji_name) continue;
+    if (!metadata.emoji_name || guildEmojisCache.get(metadata.emoji_disc_id)?.available === false) continue;
     const nameKey = metadata.emoji_name.toLowerCase();
     const existing = emojiMetadataByName.get(nameKey);
     if (
@@ -72,9 +75,6 @@ export async function buildServerEmojiContextItem(params: {
     }
   }
 
-  const sortedEmojis = Array.from(guildEmojisCache.values()).sort(
-    (a, b) => (a.createdTimestamp || 0) - (b.createdTimestamp || 0),
-  );
   const latestEmojiByName = new Map<string, (typeof sortedEmojis)[number]>();
   for (const emoji of sortedEmojis) {
     if (emoji.name) latestEmojiByName.set(emoji.name.toLowerCase(), emoji);

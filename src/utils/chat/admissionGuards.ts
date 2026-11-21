@@ -24,6 +24,7 @@ import {
   isAutochatCounterChannelActive,
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
+  isDirectReplyToBot,
   isMessageProxyMessage,
   isRealUserLikeMessage,
 } from "@/utils/chat/triggerProcessor";
@@ -492,7 +493,7 @@ export async function validateDirectChatTrigger(params: {
 
   const referenceMessage = params.referencedMessage;
   if (referenceMessage) {
-    if (referenceMessage.author.id === params.client.user?.id) {
+    if (isDirectReplyToBot(params.message, referenceMessage)) {
       isReplyToBot = true;
     } else if (referenceMessage.webhookId && !isMessageProxyMessage(referenceMessage)) {
       const webhookReplyTarget = resolveReferencedWebhookTarget(referenceMessage, personaByNickname, params.guild);

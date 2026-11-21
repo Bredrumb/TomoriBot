@@ -16,8 +16,9 @@ The pace follows your server's [Heat](#heat), with an optional saved adjustment.
 Servers with low effective heat get neither kind.
 DMs never get nudges (for now).
 
-Both kinds pause after 14 days without someone directly chatting with TomoriBot. Mention her,
-use a persona's trigger word, or reply to her message to resume them.
+Both kinds pause after 14 days without someone directly chatting with TomoriBot. A mention,
+a persona trigger word, or a [reply that triggers her](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her)
+resumes them.
 
 Outside Play Scenes, a nudge can invite another persona to answer by using `@` before their trigger
 word, including in Deliberate Trigger Mode. Replies follow your server's match and cascade limits
