@@ -157,8 +157,8 @@ the provider prompt cache for everything after it.
 
 `{{random: A, B}}` and `{{random::A::B}}` choose an item; `{{roll:2d6}}` rolls dice. `{{// notes}}`
 removes a comment and `{{trim}}` trims the node's surrounding whitespace. These macros and
-conditionals apply to preset instructions. Lorebook entries expand only `{{user}}`, `{{char}}`, and
-`{{bot}}`.
+conditionals apply to preset instructions. Preset instructions and lorebook entries both support
+[name macros](/features/knowledge/prompt-macros/#names).
 
 ### Compatibility Notes
 

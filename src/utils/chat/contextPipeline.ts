@@ -1631,6 +1631,7 @@ async function resolveTurnAssistantPrefill(turn: ChatTurn, persona: TomoriState)
     persona.persona_nickname,
     persona.config.personal_memories_enabled,
     { ...turn.requestSnapshot, tomoriState: persona },
+    selected.source === "server" ? "template" : "resolve",
   );
   return text.trim() ? { text: text.trim(), source: selected.source } : null;
 }

@@ -37,6 +37,7 @@ Pages are bucketed into task-based sub-categories:
     - [`lorebooks.md`](./en/features/knowledge/memory/lorebooks/)
     - [`short-term-memory.md`](./en/features/knowledge/memory/short-term-memory/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
+  - [`prompt-macros.md`](./en/features/knowledge/prompt-macros/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
 - **Capabilities**:

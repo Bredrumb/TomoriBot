@@ -8,6 +8,8 @@ aiGenerated: false
 TomoriBot groups instructions and memories above the conversation, then places changing information
 near the latest messages. [NovelAI](/features/integrations/novelai/) uses a separate layout, and
 [SillyTavern presets](/features/integrations/sillytavern-support/) can rearrange the earlier blocks.
+[Prompt macros](/features/knowledge/prompt-macros/) insert current names and tool references into
+saved instructions.
 
 | Position | What TomoriBot receives | Where to manage it |
 |---|---|---|

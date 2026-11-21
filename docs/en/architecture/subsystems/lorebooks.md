@@ -195,7 +195,7 @@ Each group can emit before and after blocks tagged `KNOWLEDGE_LOREBOOK_BEFORE` a
 `KNOWLEDGE_LOREBOOK_AFTER`. Always On blocks use the system role; keyword- or chance-activated blocks
 use the user role and the registry's [tail slot](/architecture/pipelines/context-build/).
 
-Content passes through `convertMentions`, so `{{user}}`, `{{char}}`, and `{{bot}}` resolve to current
+Content passes through `convertMentions` in template mode, so `{{user}}`, `{{char}}`, `{{bot}}`, and `{@id}` resolve to current
 names. Other macros and conditional blocks stay literal; random-choice resolution skips lore blocks.
 Channel scope follows `channel_memory_enabled`; while enabled, Always On entries still require an
 admitted channel or parent channel.

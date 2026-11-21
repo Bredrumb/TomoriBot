@@ -87,6 +87,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     messageIdMap,
   } = params;
 
+  const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const mentionMemo: MentionMemo = new Map();
   const convertMentions: MentionConverter = (
     text,
@@ -113,6 +114,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       },
       mentionMemo,
       preparedParticipantContext.requestScope,
+      personaLineageId ?? tomoriState?.persona_lineage_id,
     );
 
   const contextItems: StructuredContextItem[] = [];
@@ -136,7 +138,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
-  const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const memoryDemand = Promise.withResolvers<boolean>();
   const retrieval = startQueryRetrieval(
     { tomoriState, simplifiedMessageHistory, triggererUserId },

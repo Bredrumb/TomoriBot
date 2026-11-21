@@ -185,8 +185,9 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
   });
 
   it("keeps macros literal in a human-typed message", async () => {
-    const text = await buildHistoryText(userMessage("what does {bot} mean in a memory?"));
-    expect(text).toBe("Alice: what does {bot} mean in a memory?");
+    const message = "what do {bot} and {@400000000000000001} mean in a prompt?";
+    const text = await buildHistoryText(userMessage(message));
+    expect(text).toBe(`Alice: ${message}`);
   });
 
   it("still prefixes the resolved author label", async () => {

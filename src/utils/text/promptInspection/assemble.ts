@@ -64,7 +64,7 @@ import {
   providerUsesApiFamily,
 } from "@/utils/provider/providerInfoRegistry";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
-import { buildContext } from "@/utils/text/contextBuilder";
+import { buildContext, convertMentions } from "@/utils/text/contextBuilder";
 import { type ContextTruncationReport, truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -819,12 +819,25 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   if (providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && !inspectionApiKey) {
     throw new NovelAIPreparationError("subscription_unavailable");
   }
+  const serverPrefill = answeringState.config.response_prefill?.trim();
   const novelaiPrefill = providerUsesApiFamily(answeringState.llm.llm_provider, "novelai")
     ? await applyAssistantPrefill({
         contextItems: resolvedContextItems,
         tomoriState: answeringState,
-        prefill: answeringState.config.response_prefill?.trim()
-          ? { text: answeringState.config.response_prefill, source: "server" }
+        prefill: serverPrefill
+          ? {
+              source: "server",
+              text: await convertMentions(
+                serverPrefill,
+                client,
+                guild.id,
+                snapshotNaming.nickname,
+                answeringState.persona_nickname,
+                answeringState.config.personal_memories_enabled,
+                { tomoriState: answeringState, triggererUserRow: userData, isTriggererBlacklisted },
+                "template",
+              ),
+            }
           : null,
       })
     : undefined;

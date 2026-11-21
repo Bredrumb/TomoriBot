@@ -18,6 +18,7 @@ const SERVER_ID = 1;
 const LINEAGE_ID = 100;
 const SERVER_DISC_ID = "111111111111111111";
 const CHANNEL_ID = "444444444444444444";
+const USER_ID = "400000000000000001";
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/text/context/rag": realRag,
@@ -84,7 +85,7 @@ function toRow(entry: LorebookEntryInput, overrides: Partial<LorebookEntryRow> =
 
 const fakeClient = {
   guilds: { cache: new Map() },
-  users: { cache: new Map() },
+  users: { cache: new Map([[USER_ID, { username: "mirri_username" }]]) },
 } as unknown as Client;
 
 const preparedParticipantContext = {
@@ -134,7 +135,7 @@ describe("native lorebook placement", () => {
       toRow(
         input({
           title: "Curfew",
-          content: "The town keeps a curfew.",
+          content: `{@${USER_ID}} enforces the town curfew.`,
           constant: true,
           keys: [],
           placement: 1,
@@ -145,10 +146,10 @@ describe("native lorebook placement", () => {
     const persona = createPersona({
       server_id: SERVER_ID,
       persona_lineage_id: LINEAGE_ID,
-      persona_prompt: "Persona prompt.",
+      persona_prompt: `Greet {@${USER_ID}} at the gate.`,
       reward_conditioning_enabled: false,
       punish_conditioning_enabled: false,
-      config: { channel_memory_enabled: true },
+      config: { channel_memory_enabled: true, personal_memories_enabled: false },
     });
 
     const result = await buildContextNative({
@@ -167,6 +168,7 @@ describe("native lorebook placement", () => {
       tomoriNickname: "Mirri",
       tomoriAttributes: [],
       tomoriConfig: persona.config,
+      personaPrompt: persona.persona_prompt,
       personaLineageId: LINEAGE_ID,
       snapshot: { tomoriState: persona },
     });
@@ -186,6 +188,10 @@ describe("native lorebook placement", () => {
     expect(result.contextItems[beforeIndex].role).toBe("user");
     expect(result.contextItems[afterIndex].role).toBe("system");
     expect(documentsIndex).toBeGreaterThan(tags.indexOf(ContextItemTag.SYSTEM_PERSONA_PROMPT));
+    expect(
+      result.contextItems.find((item) => item.metadataTag === ContextItemTag.SYSTEM_PERSONA_PROMPT)?.parts,
+    ).toContainEqual({ type: "text", text: "Greet mirri_username at the gate." });
+    expect(result.contextItems[afterIndex].memoryEntries?.[0]?.text).toBe("mirri_username enforces the town curfew.");
   });
 });
 

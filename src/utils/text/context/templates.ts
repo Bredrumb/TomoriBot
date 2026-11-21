@@ -152,6 +152,7 @@ export async function buildPromptContextItems(params: {
           params.botName,
           params.tomoriConfig.personal_memories_enabled,
           params.snapshot,
+          "template",
         );
         contextItems.push({
           role: "system",
@@ -172,6 +173,7 @@ export async function buildPromptContextItems(params: {
           params.botName,
           params.tomoriConfig.personal_memories_enabled,
           params.snapshot,
+          "template",
         );
         contextItems.push({
           role: "system",
@@ -198,6 +200,7 @@ export async function buildPromptContextItems(params: {
               params.botName,
               params.tomoriConfig.personal_memories_enabled,
               params.snapshot,
+              "template",
             ),
           },
         ],
@@ -224,6 +227,7 @@ export async function buildPromptContextItems(params: {
               params.botName,
               params.tomoriConfig.personal_memories_enabled,
               params.snapshot,
+              "template",
             ),
           },
         ],
@@ -248,6 +252,7 @@ export async function buildPromptContextItems(params: {
               params.botName,
               params.tomoriConfig.personal_memories_enabled,
               params.snapshot,
+              "template",
             ),
           },
         ],
@@ -300,6 +305,8 @@ export async function buildSampleDialogueContextItems(params: {
                 params.triggererName,
                 params.botName,
                 params.tomoriConfig.personal_memories_enabled,
+                undefined,
+                "template",
               ),
               params.uncensorInputOptions,
             ),
@@ -327,6 +334,8 @@ export async function buildSampleDialogueContextItems(params: {
               params.triggererName,
               params.botName,
               params.tomoriConfig.personal_memories_enabled,
+              undefined,
+              "template",
             ),
             params.uncensorInputOptions,
           ),

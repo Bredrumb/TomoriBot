@@ -1300,7 +1300,7 @@ ${localizer(locale, "commands.config.panel.advanced_description")}`,
   const baseAllowance = getBasePageTextAllowance(input, true);
   const promptHeader =
     promptState !== "omitted"
-      ? `**${localizer(locale, "commands.config.panel.persona_prompt_title")}**\n${localizer(locale, "commands.config.panel.persona_prompt_description")}\n`
+      ? `**${localizer(locale, "commands.config.panel.persona_prompt_title")}**\n${localizer(locale, "commands.config.panel.persona_prompt_description")}\n-# ${localizer(locale, "general.docs.prompt_macros_link")}\n`
       : "";
   const contextHeader =
     contextState !== "omitted"
@@ -1355,9 +1355,7 @@ ${localizer(locale, "commands.config.panel.advanced_description")}`,
     components.push(
       {
         type: ComponentType.TextDisplay,
-        content: `**${localizer(locale, "commands.config.panel.persona_prompt_title")}**
-${localizer(locale, "commands.config.panel.persona_prompt_description")}
-${renderedPrompt}`,
+        content: `${promptHeader}${renderedPrompt}`,
       },
       {
         type: ComponentType.ActionRow,
@@ -2286,7 +2284,7 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   const promptHeader = `**${localizer(locale, "commands.config.panel.system_prompt_title")}**\n${localizer(
     locale,
     "commands.config.panel.system_prompt_description",
-  )}\n`;
+  )}\n-# ${localizer(locale, "general.docs.prompt_macros_link")}\n`;
   const contextHeader = `**${localizer(locale, "commands.config.panel.context_note_title")}**\n${localizer(
     locale,
     "commands.config.panel.global_context_note_description",
@@ -2354,10 +2352,7 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   components.push(
     {
       type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.system_prompt_title")}**\n${localizer(
-        locale,
-        "commands.config.panel.system_prompt_description",
-      )}\n${renderedPrompt}`,
+      content: `${promptHeader}${renderedPrompt}`,
     },
     {
       type: ComponentType.TextDisplay,
@@ -3983,7 +3978,8 @@ ${localizer(locale, "commands.config.panel.channels_overrides_description")}${wh
   const hasContextContent = Boolean(contextNote?.note);
 
   const promptTitleDesc = `**${localizer(locale, "commands.config.panel.channels_overrides_prompt_title")}**
-${localizer(locale, "commands.config.panel.channels_overrides_prompt_description")}`;
+${localizer(locale, "commands.config.panel.channels_overrides_prompt_description")}
+-# ${localizer(locale, "general.docs.prompt_macros_link")}`;
   const contextTitleDesc = `**${localizer(locale, "commands.config.panel.channels_overrides_context_note_title")}**
 ${localizer(locale, "commands.config.panel.channels_overrides_context_note_description")}`;
   const textModelTitleDesc = `**${localizer(locale, "commands.config.panel.channels_overrides_text_model_title")}**

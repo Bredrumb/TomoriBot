@@ -262,6 +262,7 @@ export function buildStPresetsPanelComponents(input: StPresetsPanelRenderInput):
       if (targetPreset.description && targetPreset.description.trim().length > 0) {
         bodyLines.push(`> ${renderStPresetText(locale, targetPreset.description)}`);
       }
+      bodyLines.push(`-# ${localizer(locale, "general.docs.prompt_macros_link")}`);
 
       components.push(
         {

@@ -7,6 +7,7 @@ import { convertMentions } from "./contextBuilder";
 import { log } from "@/utils/misc/logger";
 import type { Client } from "discord.js";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { type MentionMemo, USER_REFERENCE_MACRO_PATTERN } from "@/utils/text/context/mentionNormalizer";
 
 interface PresetMacroParams {
   triggererName: string;
@@ -30,6 +31,7 @@ interface MentionParams {
   triggererAddressTerm: string;
   botName: string;
   personalMemoriesEnabled: boolean;
+  personaLineageId?: number;
   toolPromptMacroResolver?: ToolPromptMacroResolver;
 }
 
@@ -229,6 +231,37 @@ export async function reassembleWithPreset(
   const { nodes } = presetData;
 
   const macroContext = buildMacroContext(macroParams);
+  const literalUserReferences = new Map<string, string>();
+  // Keep user references copied from live chat literal when a preset inserts the message into its template.
+  macroContext.lastChatMessage = macroContext.lastChatMessage.replace(USER_REFERENCE_MACRO_PATTERN, (macro) => {
+    const token = `{@${crypto.randomUUID()}}`;
+    literalUserReferences.set(token, macro);
+    return token;
+  });
+  const mentionMemo: MentionMemo = new Map();
+  const resolveNodeText = async (text: string): Promise<string> => {
+    const expanded = await (mentionParams.toolPromptMacroResolver?.expand(text) ?? text);
+    if (!expanded.trim()) return "";
+    let resolved = await convertMentions(
+      expanded,
+      mentionParams.client,
+      mentionParams.guildId,
+      mentionParams.triggererName,
+      mentionParams.botName,
+      mentionParams.personalMemoriesEnabled,
+      undefined,
+      "template",
+      {
+        userFormatted: mentionParams.triggererFormattedName,
+        userTerm: mentionParams.triggererAddressTerm,
+      },
+      mentionMemo,
+      undefined,
+      mentionParams.personaLineageId,
+    );
+    for (const [token, macro] of literalUserReferences) resolved = resolved.replaceAll(token, macro);
+    return resolved;
+  };
   const { resolved, expandedContentMacros } = resolvePresetMacros(nodes, macroContext);
 
   const tailSlotItems = nativeOutput.contextItems.filter(isPromptTailSlotItem);
@@ -347,24 +380,8 @@ export async function reassembleWithPreset(
         flushKnowledgeBlocks();
       }
     } else if (node.content.length > 0) {
-      const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(node.content) ??
-        Promise.resolve(node.content));
-      if (!toolMacroExpandedContent.trim()) continue;
-      const resolvedContent = await convertMentions(
-        toolMacroExpandedContent,
-        mentionParams.client,
-        mentionParams.guildId,
-        // Pass triggererName so preset custom nodes resolve {{user}} to the actual triggerer.
-        mentionParams.triggererName,
-        mentionParams.botName,
-        mentionParams.personalMemoriesEnabled,
-        undefined,
-        "resolve",
-        {
-          userFormatted: mentionParams.triggererFormattedName,
-          userTerm: mentionParams.triggererAddressTerm,
-        },
-      );
+      const resolvedContent = await resolveNodeText(node.content);
+      if (!resolvedContent) continue;
 
       contextItems.push({
         role: node.role,
@@ -393,23 +410,8 @@ export async function reassembleWithPreset(
   for (const depthNode of depthNodes) {
     if (depthNode.content.length === 0) continue;
 
-    const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(depthNode.content) ??
-      Promise.resolve(depthNode.content));
-    if (!toolMacroExpandedContent.trim()) continue;
-    const resolvedContent = await convertMentions(
-      toolMacroExpandedContent,
-      mentionParams.client,
-      mentionParams.guildId,
-      mentionParams.triggererName,
-      mentionParams.botName,
-      mentionParams.personalMemoriesEnabled,
-      undefined,
-      "resolve",
-      {
-        userFormatted: mentionParams.triggererFormattedName,
-        userTerm: mentionParams.triggererAddressTerm,
-      },
-    );
+    const resolvedContent = await resolveNodeText(depthNode.content);
+    if (!resolvedContent) continue;
 
     resolvedInjections.push({
       depth: depthNode.injection_depth,
