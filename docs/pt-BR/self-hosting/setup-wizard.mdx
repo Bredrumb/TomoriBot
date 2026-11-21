@@ -1,0 +1,137 @@
+---
+title: "Assistente de Configuração"
+aiGenerated: false
+sidebar:
+  label: "Assistente de Configuração"
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+:::note
+Usuários que desejam usar o Docker Compose devem pular este assistente; consulte [Docker Compose](/self-hosting/docker-compose/) para o caminho de instalação em contêiner.
+:::
+
+`bun run setup` é o caminho recomendado de hospedagem própria para instalações locais baseadas em Bun. O comando instala as dependências a partir do `bun.lock` antes de carregar o assistente, inclusive em um clone novo. O assistente cria seu `.env`, gera uma `CRYPTO_SECRET`, solicita seu token de bot do Discord, pergunta se deve [permitir redes privadas](#private-networks) e configura o PostgreSQL. É seguro executá-lo novamente; os valores existentes no `.env` são mantidos a menos que você escolha reconfigurá-los.
+
+## O que ter em mãos
+
+Antes de começar, certifique-se de ter:
+
+- **Um token de bot do Discord** com as intents privilegiadas `GuildMembers`, `MessageContent` e `GuildPresences` ativadas.
+- **Bun** para executar o bot e o próprio assistente.
+- **PostgreSQL instalado**, ou **[Docker](https://www.docker.com/)** se você quiser que o assistente execute um contêiner PostgreSQL para você. O TomoriBot armazena tudo no PostgreSQL e inicializa automaticamente seu esquema, seeds, migrações, `pgcrypto` e esquema de RAG na primeira inicialização.
+- **Node.js v20+ (opcional)** se você planeja usar servidores MCP iniciados com `npx`.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Instale o [Bun](https://bun.sh/) no PowerShell caso ele ainda não esteja instalado:
+
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+Para o PostgreSQL, instale o [PostgreSQL para Windows](https://www.postgresql.org/download/windows/) (incluindo `psql` e `pg_dump` no `PATH`) ou o [Docker Desktop](https://www.docker.com/products/docker-desktop/). O Docker Desktop é a forma mais simples de obter `pgvector` e `pg_cron` no Windows sem compilar extensões a partir do código-fonte.
+
+</TabItem>
+<TabItem label="Linux">
+
+Instale o [Bun](https://bun.sh/) caso ele ainda não esteja instalado:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Instale o PostgreSQL e suas ferramentas de cliente (`psql` e `pg_dump`), ou instale o Docker Engine com o plugin Compose v2 (`docker compose`). No Debian ou Ubuntu:
+
+```bash
+sudo apt-get update && sudo apt-get install -y postgresql postgresql-client
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Instale o [Bun](https://bun.sh/) com o instalador oficial ou via Homebrew:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+Instale o PostgreSQL via Homebrew (ou [Docker Desktop](https://www.docker.com/products/docker-desktop/)):
+
+```bash
+brew install postgresql@17
+brew services start postgresql@17
+```
+
+</TabItem>
+</Tabs>
+
+## Obtenha o código
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
+## Execute o assistente
+
+Execute o assistente de configuração usando:
+
+```bash
+bun run setup
+```
+
+Ao executar o comando, você escolherá um de dois caminhos:
+
+| Caminho | Quando usar | O que ele faz |
+|---|---|---|
+| Instalação Completa | Você quer a configuração recomendada com extras leves. | Executa a Instalação Base e depois tenta instalar os extras abaixo. |
+| Instalação Base | Você quer apenas o bot mínimo funcionando. | Cria/configura `.env`, token do Discord, PostgreSQL e dependências. |
+
+### Redes privadas
+{/* anchor: private-networks */}
+
+O assistente pergunta se o TomoriBot pode alcançar `localhost` e sua LAN, e salva a resposta como `ALLOW_PRIVATE_NETWORK` no `.env`. Fora do ambiente de produção, o TomoriBot não iniciará até que isso esteja definido, portanto uma configuração feita manualmente também precisa dessa linha. Qualquer membro que possa adicionar um endpoint personalizado ou servidor MCP consegue alcançar o que você permitir aqui, então escolha de acordo com quem usa o bot:
+
+| Valor | Escolha quando |
+|---|---|
+| `true` | Apenas você ou uma comunidade confiável no Discord usa o bot. Modelos locais e servidores MCP em `localhost` ou na sua LAN funcionam, inclusive via HTTP simples. |
+| Uma lista `host:port`, como `localhost:5001,localhost:8188` | Você compartilha servidores locais, como KoboldCPP ou ComfyUI, com membros em quem não confia totalmente. Apenas os servidores listados funcionam, impedindo que os endpoints deles alcancem qualquer outra coisa na sua rede. |
+| `false` | Membros não confiáveis usam o bot e você não compartilha nenhum servidor local. |
+
+Endpoints HTTPS públicos, como APIs hospedadas compatíveis com OpenAI, funcionam com qualquer valor. Para um modelo em outra máquina, use uma [conexão remota autenticada](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Um túnel fornece conectividade e precisa de controles de acesso separados. A produção recusa endpoints privados independentemente de `ALLOW_PRIVATE_NETWORK`.
+
+Uma lista corresponde exatamente ao endereço como um endpoint é registrado, portanto `localhost:5001` não cobre `127.0.0.1:5001`; liste cada grafia que você usar. Um servidor listado continua aberto para todos os membros, em qualquer caminho, portanto mantenha seus próprios recursos de administração protegidos por senha (para o KoboldCPP, `--adminpassword`).
+
+Endereços do Tailscale e nomes `*.ts.net` contam como privados, então exigem `true` ou uma lista; com `false`, apenas o Tailscale Funnel funciona.
+
+Imagens, arquivos e pré-visualizações de links que os membros enviam nunca alcançam endereços privados, qualquer que seja sua escolha. A ferramenta `fetch_url` tem sua própria configuração, `FETCH_URL_ALLOW_PRIVATE_NETWORK` (desativada por padrão).
+
+### Extras da Instalação Completa
+
+A Instalação Completa executa primeiro a Instalação Base e depois tenta instalar os extras abaixo. Se algum falhar, ela exibe o comando ou guia para concluir manualmente e continua:
+
+| Extra | Finalidade |
+|---|---|
+| `pgvector` | Busca vetorial para memória de documentos/RAG. |
+| `pg_cron` | Limpeza agendada opcional de linhas de recarga/lembrete. |
+| Recursos de tokenizadores | Arquivos locais de tokenizadores para geração de texto do NovelAI e logit bias ciente de modelo. |
+
+Para instalar qualquer um deles manualmente, consulte os [extras da Configuração Manual](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).
+
+## Após a configuração
+
+```bash
+bun run dev                          # apenas o bot
+bun run launch --searxng --crawl4ai  # bot + servidores locais (veja bun run launch --help)
+```
+
+Quando o bot estiver online, execute `/setup` no Discord. Ele orientará você na conexão com um provedor de IA ou com seu endpoint personalizado.
+
+## Atualização
+
+Use o comando atualizador que faz backup primeiro: `bun run update`
+
+Ele executa `bun run backup`, depois `git pull --rebase --autostash` e então `bun install --frozen-lockfile`. Adicione `--build` se você executar a partir de `dist/`, ou `--docker` para uma implantação com Compose. Detalhes completos na página [Manutenção e Backups](/self-hosting/maintenance/).

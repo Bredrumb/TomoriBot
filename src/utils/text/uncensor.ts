@@ -5,7 +5,7 @@
 
 import profaneWords from "profane-words";
 
-export const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank
+const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank
 const OBFUSCATION_DOT = "·"; // U+00B7 middle dot
 
 const DEFAULT_SENSITIVE_WORDS = [
@@ -151,7 +151,6 @@ function obfuscateWord(word: string): string {
   return result;
 }
 
-// Legacy code to use if aggressive middle dot deletion does not work
 /*
 function deobfuscateSensitiveWords(text: string, wordSet: Set<string>): string {
 	const dotPattern = escapeRegExp(OBFUSCATION_DOT);

@@ -220,7 +220,7 @@ function normalizeComfyUiInpaintPreset(preset: string | null | undefined): strin
   return null;
 }
 
-export function isComfyUiEyeMaskPrompt(maskPrompt: string | null | undefined): boolean {
+function isComfyUiEyeMaskPrompt(maskPrompt: string | null | undefined): boolean {
   return /\b(?:eye|eyes|iris|irises|pupil|pupils)\b/i.test(maskPrompt ?? "");
 }
 
@@ -230,7 +230,7 @@ export function isComfyUiHairMaskPrompt(maskPrompt: string | null | undefined): 
   );
 }
 
-export function isComfyUiClothingMaskPrompt(maskPrompt: string | null | undefined): boolean {
+function isComfyUiClothingMaskPrompt(maskPrompt: string | null | undefined): boolean {
   return /\b(?:shirt|top|blouse|camisole|tank\s*top|hoodie|cardigan|sweater|jacket|coat|dress|skirt|pants|trousers|jeans|leggings|shorts|uniform|outfit|clothes|clothing|garment|apparel|fabric|hat|cap|helmet|glasses|sunglasses|belt|bag|purse|backpack|scarf|shawl|shoe|shoes|boot|boots|sneaker|sneakers|sock|socks|stocking|stockings|tights|glove|gloves|earring|earrings|jewelry|jewellery|necklace|choker|bracelet|ring|rings|bow|ribbon|hairpin|accessory|accessories)\b/i.test(
     maskPrompt ?? "",
   );
@@ -305,7 +305,7 @@ export function inferComfyUiInpaintPreset(options: ComfyUiInpaintOptions): strin
   return "broad_recolor";
 }
 
-export function normalizeComfyUiClothingSegmentCategory(
+function normalizeComfyUiClothingSegmentCategory(
   category: string | null | undefined,
 ): ComfyUiClothingSegmentCategory | null {
   const normalized =
@@ -362,7 +362,7 @@ export function normalizeComfyUiClothingSegmentCategory(
   return categoryMap[normalized] ?? null;
 }
 
-export function hasExplicitComfyUiClothingSegmentCategories(options: ComfyUiInpaintOptions): boolean {
+function hasExplicitComfyUiClothingSegmentCategories(options: ComfyUiInpaintOptions): boolean {
   return (options.clothingSegmentCategories ?? []).some(
     (category) => normalizeComfyUiClothingSegmentCategory(category) !== null,
   );
@@ -479,7 +479,7 @@ export function resolveComfyUiClothingSegmentCategories(
   return [...categories];
 }
 
-export function normalizeComfyUiTargetMaskPrompt(maskPrompt: string): string {
+function normalizeComfyUiTargetMaskPrompt(maskPrompt: string): string {
   const normalized = maskPrompt.trim();
   if (isComfyUiHairMaskPrompt(normalized)) {
     return "hair";
@@ -490,7 +490,7 @@ export function normalizeComfyUiTargetMaskPrompt(maskPrompt: string): string {
   return normalized;
 }
 
-export function isComfyUiBackgroundMaskPrompt(maskPrompt: string): boolean {
+function isComfyUiBackgroundMaskPrompt(maskPrompt: string): boolean {
   return /\b(?:background|backdrop|surroundings|environment|scene|setting)\b/i.test(maskPrompt);
 }
 

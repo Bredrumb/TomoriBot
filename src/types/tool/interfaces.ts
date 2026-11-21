@@ -1,9 +1,11 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Generic tool interface for provider-agnostic function calling
  * This abstracts tools away from specific LLM provider formats
  */
 
-import type { LlmRow, TomoriState } from "../db/schema";
+import type { LlmRow, TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type {
   BaseGuildTextChannel,
@@ -16,7 +18,6 @@ import type {
   AnyThreadChannel,
   Webhook,
 } from "discord.js";
-import type { MCPServerResponse, EnhancedMCPServerConfig, TypedMCPToolResult, MCPExecutionContext } from "./mcpTypes";
 import type { FunctionResponseImageMetadata } from "../provider/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 
@@ -36,20 +37,20 @@ export interface ToolStringParameterSchema extends ToolParameterSchemaBase {
   type: "string";
 }
 
-export interface ToolNumberParameterSchema extends ToolParameterSchemaBase {
+interface ToolNumberParameterSchema extends ToolParameterSchemaBase {
   type: "number";
 }
 
-export interface ToolBooleanParameterSchema extends ToolParameterSchemaBase {
+interface ToolBooleanParameterSchema extends ToolParameterSchemaBase {
   type: "boolean";
 }
 
-export interface ToolArrayParameterSchema extends ToolParameterSchemaBase {
+interface ToolArrayParameterSchema extends ToolParameterSchemaBase {
   type: "array";
   items: ToolParameterPropertySchema;
 }
 
-export interface ToolObjectParameterSchema extends ToolParameterSchemaBase {
+interface ToolObjectParameterSchema extends ToolParameterSchemaBase {
   type: "object";
   properties: Record<string, ToolParameterPropertySchema>;
   required?: string[];
@@ -69,13 +70,35 @@ export interface ToolParameterSchema extends ToolObjectParameterSchema {
 }
 
 /**
+ * A single Discord message the streaming layer has already committed to the channel.
+ * Collected into {@link StreamingContext.deliveredMessageRefs}.
+ */
+export interface DeliveredStreamMessage {
+  /** Discord snowflake ID of the delivered message. */
+  messageId: string;
+  /** Channel (or thread) ID the message was delivered to. */
+  channelId: string;
+  webhookId: string | null;
+}
+
+/**
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  personaSprites?: StructuredContextItem["personaSprites"];
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
+  imageModelSelection?: GenerationModelSelection;
+  /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
+  mentionableUserIds?: readonly string[];
+  usageContext?: ProviderUsageContext;
+  speechToolState?: { userId?: number; selection?: string };
   disableYouTubeProcessing: boolean; // Flag to temporarily disable YouTube function during enhanced context restart
   disableProfilePictureProcessing?: boolean; // Flag to temporarily disable profile picture processing during enhanced context restart
   disableGifProcessing?: boolean; // Flag to temporarily disable GIF processing during enhanced context restart
   disableShortTermMemoryUpdate?: boolean; // Flag to prevent update_short_term_memory from being called more than once per turn
+  disableConditioningInteraction?: boolean;
   disableCrossChannelMessage?: boolean; // Flag to prevent nested cross-channel dispatch during tool-driven cross-channel turns
   explicitLongTermMemoryIntent?: boolean; // Flag to suppress STM tool nudges when the current user message explicitly asks for persistent memory
   disableMessageMetadataContext?: boolean; // Flag to prevent reveal_message_metadata from being called more than once per turn
@@ -83,27 +106,57 @@ export interface StreamingContext {
   forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
   isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
   suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
+  /**
+   * Whose credentials answered this turn's text request. Error recovery tips must name the
+   * commands that can actually repair the failing configuration, and scope cannot be inferred
+   * from the provider or model name because both scopes can run the same provider. Optional
+   * only for non-chat provider calls that have no user-scoped routing decision to report.
+   */
+  textCredentialSource?: "server" | "personal";
   forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
+  /**
+   * Timeout notice an attempt held back because a model fallback might still answer. The
+   * generation-turn loop sends it when no later attempt materialized, and each attempt clears it.
+   */
+  deferredTimeoutNotice?: { providerName: string; sawStreamProgress: boolean };
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
+  /** The generation turn will retry an interrupted stream on the same key, so its error stays unsurfaced. */
+  retryStreamInterruption?: boolean;
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
   deliberateToolAllowedNames?: string[]; // Optional per-turn allowlist when deliberate tool mode detects scoped intent
   disableReminderTool?: boolean; // Flag to prevent create_task from being called during a reminder-triggered turn
-  outputPrefill?: string; // Optional prefill to output before streaming (hybrid prefix)
-  outputPrefillState?: { sent: boolean }; // Tracks if prefill was already output (avoid duplicates on retry)
+  /** Set per attempt by `applyAssistantPrefill`; the stream strips an echo of it and never displays it. */
+  outputPrefill?: string;
+  triggerMessageId?: string;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
+  /**
+   * True once the turn has logged its generation failure. One failed turn reaches the emitter
+   * twice (the stream result carries the error, and the turn's catch block reports it again), and
+   * a second row for the same message id reads as a second failure.
+   */
+  generationErrorReported?: boolean;
   forcedMentions?: Array<{
     handle: string;
     userId: string;
   }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
-  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode — keeps model state coherent but hides repeated text)
-  /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
-  naiContinuationPrefill?: string;
+  /**
+   * The speaker label the user-impersonation prompt tells the model to open with. It can differ from
+   * the webhook display name (the Discord name), so the output cleaner must strip both.
+   */
+  impersonatedSpeakerLabel?: string;
+  holdResponseText?: boolean;
+  pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
+  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
   /** AbortSignal to cancel the underlying HTTP request when the SDK call timeout fires */
   abortSignal?: AbortSignal;
+  /**
+   * Empty-response retry count of the current chat turn (incoming.retryCount). The stream
+   * segment processor's opening-label leak guard uses it to decide between discard-and-retry
+   * (budget remaining) and strip-and-deliver (budget exhausted).
+   */
+  emptyResponseRetryCount?: number;
   /** Called when streaming makes visible or provider-side progress, so outer watchdogs can refresh their timers. */
   onStreamProgress?: () => void;
-  /** Records final visible Tomori output messages for short-lived regenerate reactions. */
-  recordTurnOutputMessage?: (message: Message, personaId?: number) => void;
   /**
    * Tool names that should return `endTurn: true` on success.
    * Used by hidden agent turns (e.g., the hidden image agent) to terminate the streaming
@@ -112,8 +165,27 @@ export interface StreamingContext {
    */
   endTurnAfterTools?: string[];
 
-  // Opaque message ID map — threaded from tomoriChat through to StreamContext and ToolContext
   messageIdMap?: MessageIdMap;
+
+  /**
+   * Internal `users` FK of whoever triggered this turn, carried so the streaming layer can scope
+   * telemetry without a DB lookup on a hot path. Absent for turns with no resolved triggerer
+   * (scheduler-driven jobs, some manual flows), which simply record nothing.
+   */
+  triggererUserId?: number;
+
+  /** Discord ID of the same triggerer; only they may open the raw error of their own personal key. */
+  triggererDiscId?: string;
+
+  /**
+   * Shared, mutable sink of messages the streaming layer has committed to Discord this turn.
+   * The orchestrator pushes one entry per successful send (see uiUpdater's `recordSuccessfulSend`);
+   * because it is a reference threaded through {@link buildStreamContext} onto the per-attempt
+   * StreamContext, entries survive even when a timed-out `streamToDiscord` promise is abandoned by
+   * the SDK-call-timeout race. Failed attempts keep their messages, so it spans every attempt, and
+   * expression delivery reads it to tell whether this turn has already posted text.
+   */
+  deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 
 /**
@@ -121,71 +193,82 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
-  // Discord context
+  memoryEmbeddingResolved?: boolean;
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
   message?: Message;
 
-  // Tomori context
   tomoriState: TomoriState;
   locale: string;
 
-  // Provider context
   provider: string;
 
-  // Optional additional context
   emojiStrings?: string[];
   userId?: string;
   internalUserId?: number;
+  /** The turn's trigger message is a bystander's anchor, so `userId` names no requester and `internalUserId` is who pays. */
+  borrowsTriggerMessage?: boolean;
   guildId?: string;
   streamContext?: StreamingContext; // Optional streaming context for enhanced functionality
 
-  // Optional persona webhook context (for alter persona embeds/tools)
   webhook?: Webhook;
   personaUsername?: string;
   personaAvatarUrl?: string; // URL or data URI for the active persona/user identity
   activePersonaId?: number; // Active responding persona for tool-driven follow-up turns
   isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
   impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
-  suppressProgressNotices?: boolean; // Skip public "working..." embeds for fire-and-forget flows
-  showKillHint?: boolean; // When true, tool notice footers include the /bot kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
+  suppressProgressNotices?: boolean;
+  mirrorSuppressedProgressNotices?: boolean;
+  suppressFailureNotices?: boolean;
+  /** Shared across search-engine attempts, so fallback notices are deduplicated without hiding error embeds. */
+  progressNoticeState?: { attempted: boolean };
+  showKillHint?: boolean; // When true, tool notice footers include the /kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
   contextItems?: StructuredContextItem[]; // Current LLM context for tools that need hidden resolution metadata
 
-  // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
 
-  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
+  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /kill. */
   abortSignal?: AbortSignal;
+  /** Review fixes normalization before dispatch; internal calls retain ordinary normalization. */
+  preparedToolRequest?: { name: string; args: Record<string, unknown> };
+  /** Rechecked after asynchronous routing and immediately before invoking a transport. */
+  isExecutionCancelled?: () => boolean;
 }
 
-/**
- * Result returned by tool execution
- */
+export interface ToolFailure {
+  code: string;
+  reason: string;
+  suggestedActions: string[];
+}
+
 export interface ToolResult {
   success: boolean;
+  failure?: ToolFailure;
+  /** A resolved expression the tool loop sends before building history. Never shown to the model. */
+  stickerSelection?: StickerSelection;
   data?: unknown;
+  /**
+   * Returned to the model as context. Keep provider response text out of it and log that text
+   * instead: an endpoint can echo the request credential in its error body.
+   */
   error?: string;
   message?: string;
   imageMetadata?: FunctionResponseImageMetadata;
+  /** True when the tool successfully delivered the persona's response directly to the user. */
+  responseDelivered?: boolean;
   /** When true, the streaming loop should end the LLM's turn immediately after processing
    *  this tool result. Used by tools that trigger async follow-up work (e.g., boomerang). */
   endTurn?: boolean;
 }
 
-/**
- * Tool category classification
- */
 export type ToolCategory = "discord" | "search" | "memory" | "utility" | "mcp";
 
 /**
  * Model capability flags that tools may require to be exposed.
  */
-export type ToolModelCapabilityKey =
-  | "has_tools"
-  | "sees_images"
-  | "sees_videos"
-  | "sees_youtube"
-  | "supports_structoutput";
+type ToolModelCapabilityKey = "has_tools" | "sees_images" | "sees_videos" | "sees_youtube" | "supports_structoutput";
 
 export type ToolModelCapabilityRequirements = Partial<Pick<LlmRow, ToolModelCapabilityKey>>;
 
@@ -196,18 +279,21 @@ export type ToolAvailabilityLlmState = Pick<LlmRow, "llm_codename" | ToolModelCa
  * provider-specific adapters serialize it.
  */
 export interface ToolAssemblyState {
+  speechToolState?: { userId?: number; selection?: string };
   server_id: string;
   /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
   activePersonaHasElevenlabsVoice: boolean;
   /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
   activePersonaVoiceDesignPrompt?: string | null;
-  /** Display/name marker for the active speech voice selection. */
-  activePersonaVoiceName?: string | null;
+  activePersonaVoiceSampleId?: number | null;
+  activePersonaVoiceId?: string | null;
+  activePersonaVoiceSourcePriority?: "design" | "clone";
   llm: ToolAvailabilityLlmState;
   diffusion_model_id?: number | null;
   nai_diffusion_model_id?: number | null;
   video_model_id?: number | null;
   config: {
+    emoji_usage_enabled: boolean;
     sticker_usage_enabled: boolean;
     web_search_enabled: boolean;
     self_teaching_enabled: boolean;
@@ -216,13 +302,22 @@ export interface ToolAssemblyState {
     videogen_enabled: boolean;
     voice_message_enabled: boolean;
     user_blocking_enabled: boolean;
+    // Required, not optional: every construction site copies these fields by hand, and an
+    // optional flag here silently reads as enabled through the mapper's fallback, leaving
+    // the capability toggle with no effect and no compile error.
+    user_info_updates_enabled: boolean;
     thread_creation_enabled: boolean;
+    conditioning_interactions_enabled: boolean;
+    dice_rolling_enabled: boolean;
+    danbooru_enabled: boolean;
   };
 }
 
 export interface ToolAssemblyContext {
   provider: string;
   state: ToolAssemblyState;
+  /** Names admitted before context-specific schema variants are assembled. */
+  availableToolNames?: ReadonlySet<string>;
 }
 
 /**
@@ -230,24 +325,27 @@ export interface ToolAssemblyContext {
  * All tools must implement this interface regardless of provider
  */
 export interface Tool {
-  // Metadata
   name: string;
   description: string;
   category: ToolCategory;
+  supportsSpriteSelection?: boolean;
 
-  // Provider-agnostic parameter schema
   parameters: ToolParameterSchema;
 
-  // Execution method
   execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 
-  // Provider compatibility check
   isAvailableFor(provider: string): boolean;
 
-  // Optional LLM-visible schema assembly hook
+  /**
+   * Availability that depends on live turn state (per-turn dedup flags, active
+   * model capabilities, configured server slots). A `false` here means "not
+   * right now", never "this provider cannot", so callers must report the two
+   * rejections differently to the model.
+   */
+  isAvailableForContext?(provider: string, context: ToolContext): boolean;
+
   assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
 
-  // Optional tool configuration
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
   requiresPermissions?: string[];
   requiresFeatureFlag?: string;
@@ -264,12 +362,10 @@ export abstract class BaseTool implements Tool {
   abstract parameters: ToolParameterSchema;
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
 
-  // Default implementation - available for all providers
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  // Abstract execution method to be implemented by each tool
   abstract execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 
   /**
@@ -285,14 +381,12 @@ export abstract class BaseTool implements Tool {
     const missingParams: string[] = [];
     const errors: string[] = [];
 
-    // Check required parameters
     for (const requiredParam of this.parameters.required) {
       if (!(requiredParam in args) || args[requiredParam] === undefined || args[requiredParam] === null) {
         missingParams.push(requiredParam);
       }
     }
 
-    // Check parameter types
     for (const [paramName, paramValue] of Object.entries(args)) {
       if (paramValue === undefined || paramValue === null) continue;
 
@@ -363,7 +457,6 @@ export abstract class BaseTool implements Tool {
    * @returns True if the tool should be available
    */
   protected isEnabled(_context: ToolContext): boolean {
-    // Subclasses should override this method to check specific feature flags
     return true;
   }
 }
@@ -371,200 +464,37 @@ export abstract class BaseTool implements Tool {
 /**
  * Tool adapter interface for converting between generic tools and provider-specific formats
  */
-export interface ToolAdapter {
+interface ToolAdapter {
   /**
    * Convert a generic tool to provider-specific format
-   * @param tool - The generic tool to convert
-   * @returns Provider-specific tool definition
    */
   convertTool(tool: Tool): Record<string, unknown>;
 
   /**
    * Convert tool result back to provider-specific format
-   * @param result - The generic tool result
-   * @returns Provider-specific result format
    */
   convertResult(result: ToolResult): Record<string, unknown>;
 
-  /**
-   * Get the provider name this adapter supports
-   * @returns Provider identifier
-   */
   getProviderName(): string;
 }
 
 /**
- * Enhanced tool adapter interface that includes MCP capabilities
- * Provides provider-agnostic access to both built-in and MCP tools
+ * Tool adapter that also declares the server's guild MCP tools
+ * Provides provider-agnostic access to both built-in and guild MCP tools
  */
 export interface MCPCapableToolAdapter extends ToolAdapter {
   /**
    * Get all available tools (built-in + MCP) in provider-specific format
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined provider-specific tool configuration
    */
   getAllToolsInProviderFormat(
     builtInTools: Tool[],
     serverId?: number,
     allowedMCPFunctions?: string[],
   ): Promise<Array<Record<string, unknown>>>;
-
-  /**
-   * Check if a function name belongs to an MCP tool
-   * @param functionName - Name of the function to check
-   * @returns Promise<boolean> - True if this is an MCP tool function
-   */
-  isMCPFunction(functionName: string): Promise<boolean>;
-
-  /**
-   * Execute an MCP tool function
-   * @param functionName - Name of the MCP function to execute
-   * @param args - Arguments for the function
-   * @param context - Tool execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Enhanced typed tool result
-   */
-  executeMCPFunction(
-    functionName: string,
-    args: Record<string, unknown>,
-    context?: ToolContext,
-  ): Promise<TypedMCPToolResult>;
 }
 
-/**
- * MCP tool execution context
- * Additional context specific to MCP tool execution
- */
-export interface MCPToolContext extends ToolContext {
-  // MCP-specific context
-  mcpServerName?: string;
-  mcpFunctionName: string;
-
-  // Provider-specific MCP data
-  providerMcpData?: Record<string, unknown>;
-}
-
-/**
- * MCP tool result with additional metadata
- * Extends ToolResult with MCP-specific information
- * @deprecated Use TypedMCPToolResult from mcpTypes.ts for better type safety
- */
-export interface MCPToolResult extends ToolResult {
-  // MCP source information
-  source: "mcp";
-  functionName: string;
-  serverName?: string;
-
-  // Raw MCP result for debugging/logging
-  rawResult?: MCPServerResponse;
-
-  // Execution metadata
-  executionTime?: number;
-  providerFormat?: Record<string, unknown>;
-}
-
-/**
- * MCP server configuration interface
- * Provider-agnostic configuration for MCP servers
- * @deprecated Use EnhancedMCPServerConfig from mcpTypes.ts for better type safety
- */
-export interface MCPServerConfig {
-  name: string;
-  displayName: string;
-  command: string;
-  args: string[];
-  env?: Record<string, string>;
-  requiresApiKey?: boolean;
-  apiKeyEnvVar?: string;
-  timeout?: number;
-}
-
-/**
- * MCP manager interface for provider-agnostic MCP management
- * Defines the contract for managing MCP servers regardless of LLM provider
- */
-export interface MCPManagerInterface {
-  /**
-   * Initialize all available MCP servers during application startup
-   * @returns Promise<void>
-   */
-  initializeMCPServers(): Promise<void>;
-
-  /**
-   * Check if MCP manager is ready (initialization completed)
-   * @returns boolean
-   */
-  isReady(): boolean;
-
-  /**
-   * Get count of connected MCP servers
-   * @returns number
-   */
-  getConnectedServerCount(): number;
-
-  /**
-   * Get connection status for all MCP servers
-   * @returns Record<string, boolean>
-   */
-  getConnectionStatus(): Record<string, boolean>;
-
-  /**
-   * Get MCP tools available for a specific provider
-   * @param provider - Provider name (google, openai, anthropic, etc.)
-   * @returns Promise<unknown[]> - Provider-specific MCP tools
-   */
-  getMCPToolsForProvider(provider: string): Promise<unknown[]>;
-
-  /**
-   * Execute an MCP function with provider-agnostic result
-   * @param functionName - Name of the function to execute
-   * @param args - Function arguments
-   * @param context - Optional execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Enhanced typed result
-   */
-  executeMCPFunction(
-    functionName: string,
-    args: Record<string, unknown>,
-    context?: MCPExecutionContext,
-  ): Promise<TypedMCPToolResult>;
-
-  /**
-   * Get available MCP function names across all connected servers
-   * @returns Promise<string[]>
-   */
-  getAvailableMCPFunctions(): Promise<string[]>;
-
-  /**
-   * Get MCP server configurations
-   * @returns Promise<EnhancedMCPServerConfig[]>
-   */
-  getServerConfigurations(): Promise<EnhancedMCPServerConfig[]>;
-
-  /**
-   * Check if a specific MCP function is available
-   * @param functionName - Name of the function to check
-   * @returns Promise<boolean>
-   */
-  isFunctionAvailable(functionName: string): Promise<boolean>;
-
-  /**
-   * Get the server name that provides a specific function
-   * @param functionName - Name of the function
-   * @returns Promise<string | null>
-   */
-  getServerForFunction(functionName: string): Promise<string | null>;
-
-  /**
-   * Cleanup all MCP connections (for graceful shutdown)
-   * @returns Promise<void>
-   */
-  cleanup(): Promise<void>;
-}
-
-/**
- * Tool execution event for monitoring and debugging
- */
 export interface ToolExecutionEvent {
   toolName: string;
   provider: string;
@@ -576,43 +506,27 @@ export interface ToolExecutionEvent {
   timestamp: Date;
 }
 
-/**
- * Tool registry interface for managing all available tools
- */
 export interface ToolRegistryInterface {
-  /**
-   * Register a new tool
-   * @param tool - The tool to register
-   */
   registerTool(tool: Tool): void;
 
   /**
-   * Get a tool by name
-   * @param name - Tool name
    * @returns The tool instance or undefined if not found
    */
   getTool(name: string): Tool | undefined;
 
   /**
-   * Get all tools available for a specific provider
-   * @param provider - Provider name
    * @param context - Tool context for feature flag checking
-   * @returns Array of available tools
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[];
 
   /**
    * Get all registered tools
-   * @returns Array of all tools
    */
   getAllTools(): Tool[];
 
   /**
-   * Execute a tool by name
-   * @param toolName - Name of the tool to execute
    * @param args - Arguments for the tool
-   * @param context - Execution context
-   * @returns Tool execution result
    */
   executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 }
+import type { StickerSelection } from "@/types/discord/stickerSelection";

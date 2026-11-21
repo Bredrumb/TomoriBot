@@ -25,7 +25,6 @@ export function splitSqlStatements(sql: string): string[] {
   while (i < len) {
     const ch = sql[i];
 
-    // 1. Line comment: consume from -- through the end of the line
     if (ch === "-" && sql[i + 1] === "-") {
       const newline = sql.indexOf("\n", i + 2);
       if (newline === -1) {
@@ -38,7 +37,6 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // 2. Block comment: consume from /* through the closing */
     if (ch === "/" && sql[i + 1] === "*") {
       const end = sql.indexOf("*/", i + 2);
       if (end === -1) {
@@ -51,12 +49,11 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // 3. Single-quoted string: '' is an escaped literal quote, not a terminator
     if (ch === "'") {
       let j = i + 1;
       while (j < len) {
         if (sql[j] === "'" && sql[j + 1] === "'") {
-          j += 2; // escaped quote — skip both characters
+          j += 2; // escaped quote: skip both characters
         } else if (sql[j] === "'") {
           j++; // closing quote
           break;
@@ -69,7 +66,7 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // 4. Dollar-quoted block: $tag$...$tag$ where tag matches [A-Za-z0-9_]*
+    // Dollar-quoted block: $tag$...$tag$ where tag matches [A-Za-z0-9_]*
     //    Captures the full opening tag then scans for the identical closing tag,
     //    consuming all semicolons inside the block as part of the statement body.
     if (ch === "$") {
@@ -90,10 +87,9 @@ export function splitSqlStatements(sql: string): string[] {
         continue;
       }
       // Not a dollar-quote (e.g. a bare $1 positional param already inside a
-      // dollar-quoted block we consumed earlier) — fall through to normal char.
+      // dollar-quoted block we consumed earlier): fall through to normal char.
     }
 
-    // 5. Statement terminator
     if (ch === ";") {
       current += ";";
       const trimmed = current.trim();

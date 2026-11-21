@@ -1,0 +1,42 @@
+---
+title: "Chuyển lời nói thành văn bản (Engine cục bộ)"
+sidebar:
+  label: "Tổng quan"
+  groupLabel: "Chuyển lời nói thành văn bản"
+  order: 7
+aiGenerated: true
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Phiên âm cục bộ tin nhắn thoại và tệp đính kèm âm thanh để TomoriBot có thể hiểu âm thanh giọng nói trong cuộc trò chuyện mà không cần gửi bản ghi tới API đám mây của bên thứ ba.
+
+TomoriBot coi tính năng chuyển giọng nói thành văn bản là khả năng điểm cuối tùy chỉnh của `transcription`. Tệp đính kèm âm thanh được phiên âm ở chế độ nền và được thêm vào ngữ cảnh cuộc trò chuyện khi tồn tại điểm cuối phiên âm đang hoạt động.
+
+Đăng bảng điểm có thể nhìn thấy là riêng biệt. `/config` > Công cụ > Thông báo chỉ kiểm soát xem bản ghi tin nhắn thoại có được đăng trong cuộc trò chuyện hay không; nó không bật hoặc tắt STT nền.
+
+## Động cơ có sẵn
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/vi/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="Phiên âm cục bộ thân thiện với người mới bắt đầu bằng cách sử dụng máy chủ WhisperX tham chiếu trong máy chủ/stt." />
+  <LinkCard title="thì thầm.cpp" href="/vi/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="Sử dụng máy chủ HTTP thì thầm nhẹ khi nó hiển thị điểm cuối phiên âm tương thích với OpenAI." />
+  <LinkCard title="KoboldCPP" href="/vi/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="Sử dụng STT dựa trên KoboldCPP STT dựa trên Whisper khi bản dựng của bạn hiển thị bản ghi âm tương thích với OpenAI." />
+</CardGrid>
+
+## Luồng thiết lập
+
+1. Khởi động một máy chủ STT từ hướng dẫn công cụ ở trên.
+2. Trong `/providers`, chọn `+ Thêm endpoint tùy chỉnh mới` (hoặc `Add New Custom Endpoint`) và chọn `openai-compatible-transcription` (Phiên âm tương thích OpenAI).
+3. Chọn điểm cuối đã lưu và sử dụng model thả xuống của nó để thêm mã model được máy chủ báo cáo.
+4. Mở `/config` > `Model` > Chuyển model để chọn và kích hoạt điểm cuối đã đăng ký.
+
+## Luồng bảng điểm
+
+Khi điểm cuối phiên âm đang hoạt động, TomoriBot sẽ đọc các tệp đính kèm âm thanh được hỗ trợ ở chế độ nền và thêm bản ghi vào ngữ cảnh trò chuyện. Không cần phân công cá nhân.
+
+Chỉ sử dụng `/config` > Engine > Thông báo nếu bạn cũng muốn những bản ghi đó được đăng rõ ràng trong cuộc trò chuyện.
+
+Người dùng ElevenLabs nên chọn `Thêm nhà cung cấp mới` và `ElevenLabs` trong `/providers`; nó đăng ký phiên âm cùng với lời nói.

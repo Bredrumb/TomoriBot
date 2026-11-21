@@ -1,7 +1,17 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { AssembledServerConfig, PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schema";
+import { userRepository } from "@/utils/db/repositories";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
+import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+
+/**
+ * Expanded on its own, apart from the block lines, because those carry user-controlled names and
+ * reasons that must never be parsed as conditionals or macros.
+ */
+const UNBLOCK_AFFORDANCE_TEMPLATE =
+  "{{if tool:unblock_user}}Use {unblock_user_tool} to lift a block early if needed.{{/if}}";
 
 export async function buildPersonaUserBlocksContextItem(params: {
   client: Client;
@@ -9,6 +19,7 @@ export async function buildPersonaUserBlocksContextItem(params: {
   botName: string;
   tomoriConfig: AssembledServerConfig;
   personaUserBlocks?: PersonaUserBlockRow[];
+  toolPromptMacroResolver: ToolPromptMacroResolver;
 }): Promise<StructuredContextItem | null> {
   const activeBlocks = params.personaUserBlocks ?? [];
   if (activeBlocks.length === 0) {
@@ -35,6 +46,8 @@ export async function buildPersonaUserBlocksContextItem(params: {
     );
   }
 
+  const unblockAffordance = await params.toolPromptMacroResolver.expand(UNBLOCK_AFFORDANCE_TEMPLATE);
+  if (unblockAffordance) lines.push("", unblockAffordance);
   lines.push("]");
 
   return {
@@ -45,6 +58,9 @@ export async function buildPersonaUserBlocksContextItem(params: {
 }
 
 async function resolveBlockedUserDisplayName(client: Client, guildId: string, userDiscId: string): Promise<string> {
+  if (isExternalUserId(userDiscId)) {
+    return (await userRepository.loadByDiscordId(userDiscId))?.user_nickname ?? userDiscId;
+  }
   const guild = client.guilds.cache.get(guildId) ?? (await client.guilds.fetch(guildId).catch(() => null));
   const member = guild ? await guild.members.fetch(userDiscId).catch(() => null) : null;
   const user = member?.user ?? (await client.users.fetch(userDiscId).catch(() => null));

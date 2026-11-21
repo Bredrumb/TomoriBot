@@ -1,6 +1,9 @@
+import type { ConditioningActionKey } from "@/utils/conditioning/conditioning";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
-import type { ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
+import type { ConditioningType, ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/context";
 import type {
   FunctionCall,
@@ -11,10 +14,13 @@ import type {
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
-import type { FastRegenerationRecorder } from "@/utils/discord/fastRegeneration";
+import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
+import type { FastRegenerationRequest } from "@/utils/discord/fastRegeneration";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
+import type { TurnPrefill } from "@/utils/chat/assistantPrefill";
+import type { ExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
 export type TextQuotaSource = "user" | "system";
 
@@ -22,7 +28,21 @@ export interface ChatReminderData {
   reminder_purpose: string;
   reminder_lateness?: string | null;
   self_reminder?: boolean;
+  /** Routes the turn's personal key, because the borrowed trigger message's author is a bystander. */
+  created_by_user_id?: number | null;
 }
+
+export type QueuedMessageDiscardReason =
+  | "admission_rejected"
+  | "channel_queue_cleared"
+  | "queued_processing_failed"
+  | "stale_lock_release"
+  | "superseded_follow_up"
+  | "self_reply_work_cleared"
+  | "scene_interrupted";
+
+export type ChatGenerationResultHandler = (result: GenerationTurnResult) => void | Promise<void>;
+export type QueuedMessageDiscardHandler = (reason: QueuedMessageDiscardReason) => void | Promise<void>;
 
 export interface ManualTriggerInvoker {
   userDiscId: string;
@@ -31,25 +51,54 @@ export interface ManualTriggerInvoker {
   member?: GuildMember | null;
 }
 
+export interface SystemTriggerIdentity {
+  serverDiscId: string;
+  userDiscId: string;
+}
+
 export interface SceneTurnSpeaker {
   personaId: number;
   personaName: string;
 }
 
 export interface SceneTurnMetadata {
+  modelSelection?: GenerationModelSelection;
   commandId: string;
   sequence: SceneTurnSpeaker[];
   turnIndex: number;
   totalTurns: number;
   additionalInstructions?: string;
+  /**
+   * Context for each queued turn by index, given instead of turn 0's injected items so one speaker
+   * never sees another's private goal. Turn 0 takes its context from the invocation.
+   */
+  turnContextItems?: StructuredContextItem[][];
 }
 
-/** Public input to tomoriChat() — optional fields apply defaults in normalizeChatInvocation. */
+/**
+ * A persona turn's expression allowance handed to its own empty-response retry, so the retry
+ * cannot send a second expression after one is already visible. Keyed by persona because one
+ * invocation can plan turns for several personas, each with its own allowance.
+ */
+interface CarriedExpressionDelivery {
+  personaId: number;
+  state: ExpressionDeliveryState;
+}
+
+/** Public input to tomoriChat(): optional fields apply defaults in normalizeChatInvocation. */
+export interface NaturalNudgeTurn {
+  /** Idle nudge tools that Deliberate Tool Mode admits, since no human message carries their trigger words. */
+  toolNames: readonly string[];
+  /** The one user a Ping User may ping; `{user}` and the triggerer name resolve to them. */
+  targetUserDiscId?: string;
+}
+
 export interface TomoriChatInput {
   client: Client;
   message: Message;
   isFromQueue: boolean;
   isManuallyTriggered?: boolean;
+  isDirectChat?: boolean;
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -68,14 +117,29 @@ export interface TomoriChatInput {
   textQuotaUserDiscId?: string;
   manualSystemPrompt?: string;
   manualPrefill?: string;
-  naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
   shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
+  naturalNudge?: NaturalNudgeTurn;
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
+  /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
+  nudgeSceneCatcherPersonaId?: number;
+  /**
+   * System turn that borrows the channel's latest message as its trigger, so that message's author is
+   * a bystander: not their personal key, reunion clock, or access gates.
+   */
+  borrowsTriggerMessage?: boolean;
+  suppressSelfReply?: boolean;
+  fastRegeneration?: FastRegenerationRequest;
+  carriedExpressionDelivery?: CarriedExpressionDelivery;
+  onGenerationResult?: ChatGenerationResultHandler;
+  onQueueDiscard?: QueuedMessageDiscardHandler;
 }
 
 export interface ChatIncoming {
@@ -83,6 +147,7 @@ export interface ChatIncoming {
   message: Message;
   isFromQueue: boolean;
   isManuallyTriggered?: boolean;
+  isDirectChat?: boolean;
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -101,19 +166,35 @@ export interface ChatIncoming {
   textQuotaUserDiscId?: string;
   manualSystemPrompt?: string;
   manualPrefill?: string;
-  naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
   shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
+  naturalNudge?: NaturalNudgeTurn;
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType; action: ConditioningActionKey };
+  /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
+  nudgeSceneCatcherPersonaId?: number;
+  /**
+   * System turn that borrows the channel's latest message as its trigger, so that message's author is
+   * a bystander: not their personal key, reunion clock, or access gates.
+   */
+  borrowsTriggerMessage?: boolean;
+  suppressSelfReply?: boolean;
+  fastRegeneration?: FastRegenerationRequest;
+  autochatCounterSnapshot?: { autoch_counter: number; autoch_next_target: number };
+  carriedExpressionDelivery?: CarriedExpressionDelivery;
+  onGenerationResult?: ChatGenerationResultHandler;
+  onQueueDiscard?: QueuedMessageDiscardHandler;
 }
 
 export type ChatAdmissionDisposition = "run" | "ignore" | "queued" | "blocked" | "error";
 
-export interface ChatAdmissionBase {
+interface ChatAdmissionBase {
   incoming: ChatIncoming;
   disposition: ChatAdmissionDisposition;
   locale: string;
@@ -136,6 +217,7 @@ export interface RunnableChatAdmission extends ChatAdmissionBase {
   allPersonas?: TomoriState[];
   userRow?: UserRow | null;
   requestSnapshot?: RequestSnapshot;
+  referencedMessage: Message | null;
 }
 
 export interface NonRunnableChatAdmission extends ChatAdmissionBase {
@@ -176,6 +258,8 @@ export interface ChatTurn {
   userDiscId: string;
   cooldownUserDiscId: string;
   triggererName: string;
+  triggererFormattedName: string;
+  triggererAddressTerm: string;
   channelName: string;
   channelDescription: string | null;
   serverName: string;
@@ -194,6 +278,11 @@ export interface ChatTurn {
 }
 
 export interface ChatTurnContext {
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
+  usageContext?: ProviderUsageContext;
+  responseReview?: import("@/utils/chat/responseReview").ResponseReviewState;
+  /** Successful tool calls by request identity, kept across key rotation and model fallback. */
+  completedToolCalls?: Map<string, ToolHistoryEntry>;
   turn: ChatTurn;
   client: Client;
   message: Message;
@@ -202,6 +291,8 @@ export interface ChatTurnContext {
   locale: string;
   serverDiscId: string;
   userDiscId: string;
+  /** Internal users FK of the triggerer, resolved once at turn planning (no per-turn lookup). */
+  triggererUserId: number | undefined;
   isDMChannel: boolean;
   isFromQueue: boolean;
   isStopResponse: boolean;
@@ -210,11 +301,23 @@ export interface ChatTurnContext {
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
   allPersonas: TomoriState[];
+  /**
+   * Direct-triggerer presence and any one-shot claim awaiting the post-turn
+   * success decision. Both phases live in `@/utils/chat/reunionPresence`.
+   */
+  reunionPresence: ReunionPresenceScope | null;
   currentPersona: TomoriState;
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
+  nativeContextItems?: StructuredContextItem[];
+  /** Kept out of `contextItems` because each attempt decides how its own model takes it. */
+  assistantPrefill: TurnPrefill | null;
+  /** Shared by every attempt of this persona turn; see {@link ExpressionDeliveryState}. */
+  expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
+  /** History messages carrying reaction counts, whose reactors `reveal_message_metadata` fetches on demand. */
+  reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
   emojiStrings: string[];
@@ -225,6 +328,8 @@ export interface ChatTurnContext {
   serverName: string;
   serverDescription: string | null;
   triggererName: string;
+  triggererFormattedName: string;
+  triggererAddressTerm: string;
   textCredentialSource: "server" | "personal";
   personalRoutingUserId: number | null;
   personalTextProvider: string | null;
@@ -239,11 +344,10 @@ export interface ChatTurnContext {
   deliberateToolContextTurns: number;
   /** Map of tool name -> the trigger match that admitted it (used for hidden-notice routing). */
   deliberateToolTriggerMatchByToolName: Map<string, DeliberateToolIntentMatch>;
-  /** Short-lived reaction recorder for retry/continue actions on the final visible output message. */
-  fastRegenerationRecorder?: FastRegenerationRecorder;
 }
 
 export interface ChatResponseTarget {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   webhook?: Webhook;
   temporaryWebhook?: Webhook;
   personaUsername?: string;
@@ -257,9 +361,14 @@ export interface ChatResponseSink {
   emitStreamResult(result: StreamResult): Promise<void>;
   emitError(error: unknown): Promise<void>;
   finalize(result: GenerationTurnResult): Promise<void>;
+  /**
+   * Releases per-turn resources (currently the temporary impersonation webhook) on every exit
+   * path, including the throws that bypass {@link ChatResponseSink.finalize}. Must be idempotent.
+   */
+  cleanup?(): Promise<void>;
 }
 
-export interface ChatPersonaResponse {
+interface ChatPersonaResponse {
   text: string;
   personaName: string;
   personaId?: number;
@@ -276,7 +385,12 @@ export interface ToolHistoryEntry {
 export interface GenerationTurnResult {
   status: StreamResult["status"] | "skipped";
   streamResults: StreamResult[];
+  usageEntries?: import("@/utils/chat/responseReview").TurnUsageEntry[];
   personaResponses: ChatPersonaResponse[];
+  /** A tool delivered the response directly even though no streamed text was captured. */
+  toolResponseDelivered?: boolean;
+  /** Discord ID of the turn's first delivered text message, the anchor for message-keyed rows. */
+  firstDeliveredMessageId?: string;
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
 }

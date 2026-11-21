@@ -13,7 +13,6 @@
  * Currently handles the Matrix @localpart:homeserver format.
  * Extend this function to support additional bridge ID formats as needed.
  *
- * @param id - The string to test (e.g., "@alice:matrix.org" or "123456789012345678")
  * @returns true if the string is a recognised bridge user ID
  */
 export function isBridgeUserId(id: string): boolean {
@@ -34,12 +33,10 @@ export function stripBridgePrefix(username: string): string {
   if (!username.startsWith("[")) return username;
   const bracketEnd = username.indexOf("]");
   if (bracketEnd === -1) return username;
-  // Skip the closing bracket and the space after it ("] ")
   return username.slice(bracketEnd + 2);
 }
 
 /**
- * Extracts the bridge user ID from a bridge webhook username.
  * Bridge webhook usernames follow the format: "[BridgeName|userId] DisplayName"
  * This function returns the userId portion from inside the brackets.
  *
@@ -49,7 +46,6 @@ export function stripBridgePrefix(username: string): string {
  * @returns The bridge user ID (e.g., "@alice:matrix.org"), or null if not a bridge webhook username
  */
 export function extractBridgeUserId(username: string): string | null {
-  // Matches "[BridgeName|userId] ..." and captures the userId portion
   const match = username.match(/^\[[^|]+\|([^\]]+)\]/);
   return match ? match[1] : null;
 }

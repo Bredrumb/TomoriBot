@@ -1,0 +1,118 @@
+---
+title: "怎么使用 TomoriBot？"
+# Keyword-rich <title> targeting "add AI bot to Discord server" queries;
+# replaces Starlight's default for this page only. H1 and sidebar keep the
+# plain title.
+head:
+  - tag: title
+    content: "TomoriBot | 把一个 AI bot 加进你的 Discord 服务器"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "自己部署一套实例，或者把已部署好的版本邀请进你的 Discord 服务器，接入 AI API 密钥，然后开始聊天。"
+aiGenerated: false
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+这份指南带你从零走到和TomoriBot说上第一句话。你可以邀请现成的公开实例，也可以自己部署一套，然后在Discord内完成设置。
+
+## 1. 将TomoriBot添加到Discord
+
+### 方式A：邀请托管bot
+
+为方便使用，你可以点击下方按钮邀请公开实例，然后选择想让她加入的服务器。（也可以直接私信她）
+添加bot需要`管理服务器`权限。
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    邀请 TomoriBot
+  </LinkButton>
+</div>
+
+### 方式B：自部署你自己的实例
+
+如果你希望完全掌控自己的隐私与数据，可以在自己的硬件上运行自己的TomoriBot实例：
+
+- **方式1：安装向导（推荐）**：需要[Bun](https://bun.sh/) v1.3.2+、[PostgreSQL](https://www.postgresql.org/)或[Docker](https://www.docker.com/)，以及已启用`Presence Intent`、`Server Members Intent`和`Message Content Intent`的[Discord Bot Token](https://discord.com/developers/applications)：
+  ```sh
+  git clone https://github.com/Bredrumb/TomoriBot.git
+  cd TomoriBot
+  bun run setup # installs dependencies, configures .env, and sets up PostgreSQL
+  bun run dev # starts the bot and runs DB migrations automatically
+  ```
+- **方式2：Docker Compose**：需要[Docker](https://www.docker.com/)和Docker Compose v2+，以及已启用上述三项Intent的[Discord Bot Token](https://discord.com/developers/applications)（有关所需的`.env`变量与Linux目录权限，请参阅[Docker Compose指南](/self-hosting/docker-compose/)）：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+Copy-Item .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+cp .env.example .env
+# Set DISCORD_TOKEN, CRYPTO_SECRET, POSTGRES_PASSWORD, and ALLOW_PRIVATE_NETWORK in .env
+docker compose up
+```
+
+</TabItem>
+</Tabs>
+
+完成后，将她邀请到任何你拥有`管理服务器`权限的服务器，或直接私信她。
+
+<div class="button-row">
+  <LinkButton href="/self-hosting/" variant="secondary">
+    完整自部署指南
+  </LinkButton>
+</div>
+
+## 2. 运行`/setup`
+
+运行`/setup`，完成所有项目后点击`完成设置`：
+
+- **AI 提供方**：选择`AI 提供方（推荐）`，挑选你的提供方并粘贴密钥。自部署用户可以选择`自定义端点`来注册端点连接和文本模型。在服务器中，`用户 BYOK`可以让每位成员使用自己的个人提供方。
+- **初始设置**：选择初始人格、回复风格、时区、默认系统提示词和可选功能。所有九项可选功能默认全部勾选；取消勾选你不想要的项目。你之后随时可以在`/config`中调整这些设置。
+
+操作过程中不会保存任何内容：面板只是草稿，`完成设置`才会加密密钥、为服务器初始化她的配置并让她准备好回复。`取消`会丢弃草稿，长时间未操作的面板也会自行过期。每个服务器保留各自独立的配置。
+
+建议后续运行`/expressions initialize`，这样她才能准确使用你服务器的自定义表情与贴纸。
+
+## 3. 开始聊天
+
+在频道中提及她或回复她的一条消息（也可以直接私信她打招呼）：
+
+```text
+@TomoriBot yo, what's up?
+```
+
+### 基础指令与后续步骤
+
+- `/setup`：为你的服务器进行初始bot设置。
+- `/config`与`/personal config`：在当前Discord服务器中或为你个人调整TomoriBot。
+- `/providers`与`/personal providers`：添加更多模型端点或云端提供方。
+- `/persona`：为她赋予性格或添加新角色。参见[多个人格](/features/chatting-personality/multiple-personas/)。
+- `/memories`：跨对话教导她记住事实。参见[记忆](/features/knowledge/memory/long-term-memory/)。
+
+更多自定义选项请浏览[指令参考](/features/command-reference/)或[功能导览](/features/)。

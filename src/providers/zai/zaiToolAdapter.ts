@@ -21,7 +21,6 @@ export class ZaiToolAdapter extends OpenAICompatibleToolAdapter {
 
 /**
  * Get the singleton Z.ai tool adapter instance
- * @returns The Z.ai tool adapter
  */
 export function getZaiToolAdapter(): ZaiToolAdapter {
   return ZaiToolAdapter.getInstance();

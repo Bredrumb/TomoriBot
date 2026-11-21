@@ -1,0 +1,1 @@
+-- Migrated selections cannot be distinguished from later choices, so rollback preserves the supported model.

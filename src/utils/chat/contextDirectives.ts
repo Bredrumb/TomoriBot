@@ -1,5 +1,6 @@
 import type { Message } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
+import type { ChatIncoming } from "@/utils/chat/types";
 import { stripBridgePrefix } from "@/utils/bridges";
 
 const QUEUED_REPLY_DIRECTIVE_MAX_CONTENT_LENGTH = 280;
@@ -7,6 +8,7 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",
   "video/mov",
+  "video/quicktime",
   "video/avi",
   "video/x-flv",
   "video/mpg",
@@ -78,11 +80,41 @@ function buildQueuedReplyAttachmentSummary(message: Message): string | null {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+/**
+ * Whether a queued turn is answering its trigger message, which earns it the reply directive
+ * and a native Discord reply to that message.
+ *
+ * Scene turns all share one trigger message, so pointing each of them at it would make every
+ * persona answer the same unrelated line. System triggers (welcome, random trigger, reminder,
+ * cross-channel task, boomerang) anchor on whatever the channel's latest message happened to be,
+ * so answering it would make the model address that author: a queued welcome once pinged the
+ * newcomer while replying to someone else's message. The stop response is also system-sourced
+ * but genuinely answers the stop message.
+ */
+export function answersQueuedTriggerMessage(
+  incoming: Pick<ChatIncoming, "isFromQueue" | "isStopResponse" | "sceneTurn" | "textQuotaSource">,
+): boolean {
+  if (!incoming.isFromQueue || incoming.sceneTurn) return false;
+  return incoming.isStopResponse === true || incoming.textQuotaSource !== "system";
+}
+
+/**
+ * Builds the system directive injected on queued turns, telling the model which earlier
+ * message it is now answering and how to open its reply.
+ *
+ * @param message - The queued message being answered
+ * @param replyTargetName - Display name of whoever sent that message
+ * @param activePersonaName - Nickname of the persona answering
+ * @param idMap - Optional opaque message-ID map for LLM-visible references
+ * @param allowSpriteLabel - True when the persona-sprite prompt was injected for this same
+ *   turn, in which case the directive must also permit the sprite opening form
+ */
 export function buildQueuedReplyDirective(
   message: Message,
   replyTargetName: string,
   activePersonaName: string | null | undefined,
   idMap?: MessageIdMap,
+  allowSpriteLabel = false,
 ): string {
   const normalizedTargetName = compactWhitespace(stripBridgePrefix(replyTargetName)) || "User";
   const normalizedPersonaName =
@@ -103,5 +135,14 @@ export function buildQueuedReplyDirective(
     directive += ` saying: "${normalizedPreview}"`;
   }
 
-  return `${directive}. Start your next reply with "${normalizedPersonaLabel}:"`;
+  // The persona-sprite prompt teaches `Name (sprite):` as the opening line format. Anchoring
+  // the reply to a bare `Name:` here contradicts it on precisely the turns this directive
+  // fires on (queued ones), and models resolve the conflict by dropping the sprite tag :
+  // which is why sprites silently stopped working mid-chain. Offer both forms whenever the
+  // sprite prompt is present, so neither instruction has to be violated to satisfy the other.
+  const openingInstruction = allowSpriteLabel
+    ? `Start your next reply with "${normalizedPersonaLabel}:", or with "${normalizedPersonaLabel} ({sprite label}):" if you are using a sprite`
+    : `Start your next reply with "${normalizedPersonaLabel}:"`;
+
+  return `${directive}. ${openingInstruction}`;
 }

@@ -3,10 +3,9 @@ import { log } from "@/utils/misc/logger";
 
 /**
  * Registry for caching Discord command IDs and generating command references.
- * Provides plain text command references (e.g., `/help setup`) that work reliably
- * in all contexts, including embed footers where Discord mentions often fail.
+ * Callers opt into Discord's clickable mention syntax when their context supports it.
  */
-class CommandRegistry {
+export class CommandRegistry {
   /** Map of command names to their IDs (format: "commandName" or "commandName:subcommand") */
   private commandIds: Map<string, string> = new Map();
 
@@ -16,7 +15,6 @@ class CommandRegistry {
   /**
    * Initialize the command registry by fetching all registered commands from Discord.
    * This should be called once during bot startup after commands are registered.
-   * @param client - The Discord client instance
    */
   async initialize(client: Client): Promise<void> {
     if (this.initialized) {
@@ -25,7 +23,7 @@ class CommandRegistry {
     }
 
     try {
-      // 1. Fetch application commands (global commands)
+      // Fetch application commands (global commands)
       const commands = await client.application?.commands.fetch();
 
       if (!commands) {
@@ -33,12 +31,12 @@ class CommandRegistry {
         return;
       }
 
-      // 2. Cache command IDs with their names
+      // Cache command IDs with their names
       for (const [id, command] of commands) {
         // Store base command
         this.commandIds.set(command.name, id);
 
-        // 3. If command has subcommands, store them with format "command:subcommand"
+        // If command has subcommands, store them with format "command:subcommand"
         if (command.options && command.options.length > 0) {
           for (const option of command.options) {
             if (option.type === 1) {
@@ -69,25 +67,21 @@ class CommandRegistry {
   }
 
   /**
-   * Get a plain text command reference that works reliably in all contexts.
-   * Returns the command formatted as inline code (e.g., `/help setup`).
-   * This approach is more reliable than Discord mentions, which:
-   * - Don't render properly in embed footers
-   * - Break when commands are re-registered
-   * - May not work for users who haven't cached command IDs
+   * Get a command reference using the registered command ID when clickable formatting is requested.
+   * Unknown or uninitialized commands use an inline-code fallback.
    * @param commandName - The base command name (e.g., "help")
    * @param subcommandOrGroup - Optional subcommand or subcommand group name (e.g., "setup" or "memory")
    * @param subcommand - Optional subcommand when using a group (e.g., "personal" for "/teach memory personal")
-   * @returns A plain text command reference like "`/help setup`"
+   * @param clickable - Whether to use Discord's clickable mention syntax when an ID is registered
+   * @returns A clickable Discord mention or an inline-code command reference
    * @example
-   * // Returns: "`/help setup`"
-   * getCommandMention("help", "setup");
+   * // Returns: "`/setup`"
+   * getCommandMention("setup");
    *
    * // Returns: "`/teach memory personal`"
    * getCommandMention("teach", "memory", "personal");
    */
-  getCommandMention(commandName: string, subcommandOrGroup?: string, subcommand?: string): string {
-    // Build the command string based on parameters
+  getCommandMention(commandName: string, subcommandOrGroup?: string, subcommand?: string, clickable = false): string {
     let commandString: string;
 
     if (subcommandOrGroup && subcommand) {
@@ -101,8 +95,14 @@ class CommandRegistry {
       commandString = `/${commandName}`;
     }
 
-    // Return as inline code for clear formatting
-    return `\`${commandString}\``;
+    const commandKey = subcommand
+      ? `${commandName}:${subcommandOrGroup}:${subcommand}`
+      : subcommandOrGroup
+        ? `${commandName}:${subcommandOrGroup}`
+        : commandName;
+    const commandId = this.commandIds.get(commandKey);
+
+    return clickable && commandId ? `</${commandString.slice(1)}:${commandId}>` : `\`${commandString}\``;
   }
 
   /**
@@ -115,7 +115,6 @@ class CommandRegistry {
 
   /**
    * Get all registered command names (for debugging).
-   * @returns Array of all command keys in the registry
    */
   getRegisteredCommands(): string[] {
     return Array.from(this.commandIds.keys());

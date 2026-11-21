@@ -6,6 +6,8 @@ import type {
 import { log } from "@/utils/misc/logger";
 import { pollForCompletion } from "@/utils/async/pollForCompletion";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { PROVIDER_VIDEO_DOWNLOAD_MAX_MB } from "@/providers/utils/providerVideoDownload";
+import { readProviderErrorBody, redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
 /** Z.ai video generation API endpoint */
 const ZAI_VIDEO_GENERATIONS_URL = "https://api.z.ai/api/paas/v4/videos/generations";
@@ -18,11 +20,6 @@ const POLL_INTERVAL_MS = 10_000;
 
 /** Maximum poll attempts before timeout (~5 minutes at 10s intervals) */
 const MAX_POLL_ATTEMPTS = 30;
-
-const PROVIDER_VIDEO_DOWNLOAD_MAX_MB = Math.max(
-  1,
-  Number.parseInt(process.env.PROVIDER_VIDEO_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
-);
 
 function selectClosestSupportedDuration(
   requestedDuration: number | undefined,
@@ -140,7 +137,6 @@ export async function generateZaiNativeVideo(
     request.resolution,
   );
 
-  // 1. Build request body
   const body: Record<string, unknown> = {
     model: request.model,
     prompt: request.prompt,
@@ -151,13 +147,11 @@ export async function generateZaiNativeVideo(
     duration: normalizedOptions.duration,
   };
 
-  // 2. Add reference image for image-to-video if provided
   if (request.referenceImages && request.referenceImages.length > 0) {
     const ref = request.referenceImages[0];
     body.image_url = [`data:${ref.mimeType};base64,${ref.data}`];
   }
 
-  // 3. Submit generation request
   log.info(
     `Z.ai video generation: submitting request (model: ${request.model}, size: ${normalizedOptions.size}, durationSeconds: ${normalizedOptions.duration}, resolution: ${normalizedOptions.resolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
@@ -172,12 +166,16 @@ export async function generateZaiNativeVideo(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    log.error(
-      `Z.ai video generation request failed (model: ${request.model}, status: ${response.status})`,
-      new Error(errorBody),
+    const errorBody = await readProviderErrorBody(response, request.apiKey);
+    throw Object.assign(
+      new Error(
+        redactProviderDetail(
+          `Z.ai video generation failed (model: ${request.model}, HTTP ${response.status} ${response.statusText}): ${errorBody}`,
+          request.apiKey,
+        ),
+      ),
+      { status: response.status },
     );
-    throw new Error(`Z.ai video generation failed: ${response.status} ${response.statusText}`);
   }
 
   const submitResult = (await response.json()) as ZaiVideoResponse;
@@ -190,7 +188,6 @@ export async function generateZaiNativeVideo(
 
   log.info(`Z.ai video generation: task submitted, polling for completion (taskId: ${taskId})`);
 
-  // 4. Poll for completion
   const completedResult = await pollForCompletion<ZaiVideoResponse>({
     pollFn: async () => {
       const pollResponse = await fetch(`${ZAI_ASYNC_RESULT_URL}/${taskId}`, {
@@ -214,22 +211,20 @@ export async function generateZaiNativeVideo(
       if (pollResult.task_status === "FAIL") {
         return { done: true, error: "Z.ai video generation task failed" };
       }
-      // Still PROCESSING
       return { done: false };
     },
     intervalMs: POLL_INTERVAL_MS,
     maxAttempts: MAX_POLL_ATTEMPTS,
     logLabel: "ZaiVideoGeneration",
+    abortSignal: request.abortSignal,
   });
 
-  // 5. Extract video URL from result
   const videoUrl = completedResult.video_result?.[0]?.url;
   if (!videoUrl) {
     log.warn(`Z.ai video generation completed but returned no video URL (taskId: ${taskId})`);
     return { videoData: null, mimeType: null };
   }
 
-  // 6. Download the video
   log.info(`Z.ai video generation: downloading video (taskId: ${taskId}, url: ${videoUrl.slice(0, 80)})`);
   const videoResponse = await safeDownload(videoUrl, {
     maxSizeMB: PROVIDER_VIDEO_DOWNLOAD_MAX_MB,

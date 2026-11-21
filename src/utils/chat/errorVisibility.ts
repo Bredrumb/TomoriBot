@@ -1,11 +1,12 @@
+import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Client, Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatIncoming } from "@/utils/chat/types";
 import { doesMessageMatchTrigger } from "@/utils/chat/triggerProcessor";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 
-const BASE_TRIGGER_WORDS = process.env.BASE_TRIGGER_WORDS?.split(",")
+export const BASE_TRIGGER_WORDS: readonly string[] = process.env.BASE_TRIGGER_WORDS?.split(",")
   .map((word) => word.trim())
   .filter((word) => word.length > 0) || ["tomori", "tomo", "トモリ", "ともり"];
 
@@ -15,7 +16,7 @@ export function isBaseTriggerWordMatch(content: string): boolean {
       if (content.includes(baseWord)) {
         return true;
       }
-    } else if (new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i").test(content)) {
+    } else if (new RegExp(wrapWithWordBoundary(escapeRegExp(baseWord)), "iu").test(content)) {
       return true;
     }
   }
@@ -28,12 +29,11 @@ function hasPersonaTriggerMatch(message: Message, allPersonas: readonly TomoriSt
   );
 }
 
-function isCachedReplyToKnownPersona(message: Message, client: Client, allPersonas: readonly TomoriState[]): boolean {
-  if (!message.reference?.messageId || !("messages" in message.channel)) {
-    return false;
-  }
-
-  const referencedMessage = message.channel.messages.cache.get(message.reference.messageId);
+function isReplyToKnownPersona(
+  referencedMessage: Message | null,
+  client: Client,
+  allPersonas: readonly TomoriState[],
+): boolean {
   if (!referencedMessage) {
     return false;
   }
@@ -42,7 +42,7 @@ function isCachedReplyToKnownPersona(message: Message, client: Client, allPerson
     return true;
   }
 
-  if (!referencedMessage.webhookId) {
+  if (!isManagedWebhookMessage(referencedMessage)) {
     return false;
   }
 
@@ -65,6 +65,7 @@ export function hasDirectChatSignal(args: {
   client: Client;
   message: Message;
   allPersonas: readonly TomoriState[];
+  referencedMessage: Message | null;
   isReplyToBotOrPersona?: boolean;
   isBotMentioned?: boolean;
 }): boolean {
@@ -72,7 +73,7 @@ export function hasDirectChatSignal(args: {
     return true;
   }
 
-  if (args.isReplyToBotOrPersona || isCachedReplyToKnownPersona(args.message, args.client, args.allPersonas)) {
+  if (args.isReplyToBotOrPersona || isReplyToKnownPersona(args.referencedMessage, args.client, args.allPersonas)) {
     return true;
   }
 
@@ -89,6 +90,7 @@ export function shouldSurfaceChatUserErrors(args: {
   message: Message;
   isDMChannel: boolean;
   allPersonas: readonly TomoriState[];
+  referencedMessage: Message | null;
   isReplyToBotOrPersona?: boolean;
   isBotMentioned?: boolean;
 }): boolean {

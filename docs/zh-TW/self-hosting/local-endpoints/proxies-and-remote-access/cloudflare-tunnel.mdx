@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+為你的本機引擎提供公開HTTPS網址，以便儲存在TomoriBot中。在你的電腦上執行引擎與`cloudflared`；託管的bot會直接透過通道連線。
+
+Cloudflare Tunnel可在[免費方案使用](https://developers.cloudflare.com/tunnel/)。你需要一個已在Cloudflare上啟用的網域；網域註冊與你引擎的上游服務可能會另有費用。
+
+## 1.安裝cloudflared
+
+依照你的引擎設定指南啟動它，並讓它維持繫結於`127.0.0.1`。在同一台電腦上安裝`cloudflared`：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+在Debian/Ubuntu上，請設定Cloudflare已簽署的[APT存放庫](https://pkg.cloudflare.com/index.html)：
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+其他發行版請從官方下載頁面選取對應的套件或架構。
+
+</TabItem>
+<TabItem label="Mac">
+
+若已安裝[Homebrew](https://brew.sh/)：
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2.建立通道
+
+在你的Cloudflare網域下選擇一個主機名稱，例如`engine.example.com`。整篇指南中請將它替換為你自己的主機名稱。
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+第一個指令會開啟瀏覽器以授權你的網域。第二個指令會印出通道UUID並建立其憑證JSON檔案。請將該檔案與帳號憑證保持私密。
+
+## 3.設定通道
+{/* anchor: configure-the-tunnel */}
+
+在你的`.cloudflared`資料夾中建立`config.yml`：
+
+| 作業系統 | 資料夾 | 憑證檔案範例 |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudared/TUNNEL_UUID.json` |
+
+貼上這份CLIProxyAPI範例。替換UUID、絕對JSON路徑與主機名稱。請保留憑證路徑周圍的單引號，讓Windows反斜線維持字面意義。
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+若是其他引擎，請使用對應的分頁只替換`path`與`service`。路徑規則只公開TomoriBot的API路由；不符合的路徑會回傳404。
+
+<Tabs>
+<TabItem label="文字引擎">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+請填入實際連接埠：CLIProxyAPI預設為8317，ChatMock為8000，KoboldCPP為5001。此設定檔也支援其他OpenAI相容文字引擎。它排除了管理API與卸載模型操作。
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+TomoriBot會輪詢工作紀錄，因此不需要WebSocket路由或瀏覽器介面。
+
+</TabItem>
+<TabItem label="TTS伺服器">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+請將8015替換為你的[TTS包裝器連接埠](/self-hosting/local-endpoints/text-to-speech/#network-access)。此設定檔涵蓋語音複製與語音設計，而非OpenAI語音或轉錄API。
+
+</TabItem>
+</Tabs>
+
+若要公開多個引擎，請在最後的404規則之前為每個引擎新增主機名稱規則。為每個引擎指定各自的主機名稱與回環連接埠。單一通道即可服務所有引擎。
+
+## 4.啟動通道
+
+在包含`config.yml`的資料夾中開啟終端機並驗證設定：
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+接著發布DNS並執行通道：
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+若有多個主機名稱，請針對每個主機名稱執行一次`route dns`。讓引擎與連接器維持執行；不需要路由器連接埠轉發或連入防火牆例外規則。測試完成後，可依照Cloudflare的[服務說明](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/)設定自動啟動，並為服務帳號指定明確的設定檔與憑證路徑。
+
+## 5.連線TomoriBot
+{/* anchor: validate-each-authentication-check */}
+
+開啟`/providers`以在該伺服器共用連線，或開啟`/personal providers`以使用你自己的連線：
+
+| 引擎 | API相容性 | 端點URL |
+|---|---|---|
+| CLIProxyAPI、ChatMock、KoboldCPP、其他文字引擎 | `OpenAI 相容` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| 本機TTS包裝器 | `tts-clone` | `https://engine.example.com` |
+
+如果引擎有強制驗證，請將引擎的用戶端金鑰作為驗證權杖填入；否則請留空。CLIProxyAPI使用`access.api-keys`底下的金鑰。KoboldCPP的文字API使用其設定的密碼。僅在TomoriBot中輸入任意權杖並不會在引擎端啟用驗證。
+
+在已儲存的連線下新增模型，為對應功能選取它，並測試一則簡短請求。若是ComfyUI，也請測試參考圖片上傳、輸出下載與取消工作。若是TTS，請確認可播放的音訊。請在引擎上保持停用管理功能。
+
+如果引擎強制驗證，請確認受保護的請求會拒絕缺少或錯誤的金鑰。如果沒有驗證，請閱讀下方「已知風險」說明的剩餘暴露風險。若有需要，可選用[Access與Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)提供額外保護。
+
+## 疑難排解
+
+| 症狀 | 檢查項目 |
+|---|---|
+| 502 | 引擎是否正在執行、回環連接埠是否正確、連接器是否在同一台電腦上 |
+| 1033或通道中斷 | 連接器程序、對外連接埠7844、網路連線與電腦休眠狀態 |
+| 401 | 引擎的用戶端金鑰或密碼是否與TomoriBot的驗證權杖相符 |
+| 403或HTML登入頁面 | 現有的Access應用程式可能會阻擋直接的API呼叫；若有使用，請參閱[選用Access設定](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) |
+| 404 | 引擎設定檔與URL是否正確；文字端點應剛好只有一個`/v1` |
+| 串流中斷或524 | 引擎與上游健康狀況、電腦休眠與[Cloudflare逾時限制](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| 大型上傳失敗 | [Cloudflare上傳限制](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/)與bot及引擎限制；base64會增加酬載大小 |
+
+請透過API以位元組回傳生成的媒體。託管的bot無法讀取你電腦的本機檔案路徑或回環下載URL。生產環境端點需要公開HTTPS與公開DNS回應；請維持啟用TLS驗證與SSRF檢查。
+
+## 已知風險
+{/* anchor: known-risks */}
+
+當你使用TomoriBot的供應商面板時，TomoriBot已經緩解了以下風險：
+
+| 風險 | 現有緩解措施 |
+|---|---|
+| 一般成員在面板中讀取已儲存的端點 | 面板為臨時訊息。伺服器供應商設定需要`管理伺服器`權限；個人設定僅載入執行指令使用者自己的設定。 |
+| 供應商錯誤在聊天中暴露其URL或金鑰 | 公開錯誤使用在地化說明。原始文字錯誤詳情僅限伺服器管理員檢視（伺服器憑證）或擁有者檢視（個人憑證）。媒體工具失敗只會回傳分類訊息。 |
+| ComfyUI輸出連結洩漏引擎URL | TomoriBot會下載輸出並上傳到Discord。 |
+| 開啟連接埠直接暴露電腦 | 引擎維持在回環位址，並由`cloudflared`對外建立連線；不需要公開的連入引擎連接埠。 |
+
+:::danger[僅與信任的伺服器管理員共用]
+請只在你信任其管理員的Discord伺服器中透過`/providers`註冊端點：他們可以看到確切的URL，但面板會隱藏你儲存的驗證權杖。若要避免伺服器管理員看到URL，請改用`/personal providers`。
+
+若沒有引擎驗證，任何取得URL的人都能直接使用其API。請在支援時使用引擎金鑰，或新增[選用的Access與Caddy強化防護](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/)。
+:::

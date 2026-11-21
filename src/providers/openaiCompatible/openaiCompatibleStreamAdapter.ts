@@ -3,6 +3,7 @@ import {
   logSanitizedOpenAICompatibleRequest,
 } from "@/providers/openaiCompatible/openaiCompatibleMessageBuilder";
 import {
+  classifyOpenAICompatibleStatus,
   createOpenAICompatibleErrorDescription,
   createOpenAICompatibleHttpError,
   normalizeOpenAICompatibleProviderError,
@@ -15,7 +16,20 @@ import type {
   OpenAICompatibleStreamConfig,
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import {
+  areDegradationBodiesEqual,
+  createDegradationQueue,
+  buildImageStripAttempt,
+  buildTargetedAttempt,
+  extractRejectedParams,
+  isMultimodalRejectionError,
+  MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  planDegradationRetry,
+  stripImageBlocksWithNotice,
+  type DegradableErrorInput,
+} from "@/providers/utils/paramDegradation";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import {
   applyAssistantPrefixCompletion,
   CONVERSATION_START_USER_TEXT,
@@ -26,6 +40,7 @@ import {
   providerRequiresPrefixCompletion,
 } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
+import { parseAccumulatedToolArguments } from "@/providers/utils/toolCallArguments";
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import type {
   ProcessedChunk,
@@ -37,16 +52,23 @@ import type {
 import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
+import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import {
   collectRenderModifierSourceNames,
   isAllowedRenderModifierSpeakerLabel,
 } from "@/utils/discord/renderModifierParser";
 import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
+
+/** A pre-commitment SSE error event, in the shape the shared degradation classifier accepts. */
+interface OpenAICompatibleMidStreamError extends DegradableErrorInput {
+  /** Provider-declared error type (e.g. `internal_server_error`), when the event carried one. */
+  type?: string;
+}
 
 export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
@@ -85,10 +107,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
-    //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
-    //    (half/full-width colon). Required at a line boundary to keep false positives low —
-    //    mid-sentence mentions like "as Nerine would" won't trigger.
+    // Fallback `</think>` closer. Requiring a line boundary keeps false positives out,
+    //    because a mid-sentence mention of the persona ("as Nerine would") never closes
+    //    the think block, while a real speaker label starts its own line.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
       ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")
@@ -106,7 +127,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
-      collectPersonaNameAliases(context.tomoriState, botName),
+      collectPersonaNameAliases(context.tomoriState, botName, context.impersonatedSpeakerLabel),
     );
 
     // Determine whether the resolved endpoint accepts system-role messages.
@@ -121,6 +142,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       currentTurnModelParts: context.currentTurnModelParts,
       functionInteractionHistory: context.functionInteractionHistory,
       seesImages: openAICompatibleConfig.seesImages ?? false,
+      requiresReasoningContentReplay: this.options.requiresReasoningContentReplay,
       supportsSystemRole,
     });
 
@@ -150,7 +172,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       log.info(`${this.options.adapterName}: Tools:\n${JSON.stringify(config.tools, null, 2)}`);
     }
 
-    logSanitizedOpenAICompatibleRequest(this.options.adapterName, messages);
+    if (!context.holdResponseText) logSanitizedOpenAICompatibleRequest(this.options.adapterName, messages);
 
     try {
       const disabledParams = config.disabledParams ?? [];
@@ -158,6 +180,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         model: config.model,
         messages,
         stream: true,
+        stream_options: { include_usage: true },
       };
       if (!isParamDisabled(disabledParams, "temperature")) {
         requestBody.temperature = config.temperature;
@@ -225,7 +248,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         providerRequiresPrefixCompletion(this.options.providerName) ||
         (context.tomoriState.llm?.supports_prefix_completion ?? false);
       if (enablePrefixCompletion) {
-        applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
+        applyAssistantPrefixCompletion(
+          requestBody,
+          context.outputPrefill?.trim(),
+          this.options.requiresReasoningContentReplay,
+        );
       }
 
       const headers: Record<string, string> = {
@@ -242,125 +269,284 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         context,
       });
 
-      const effectiveTemperatureLabel = "temperature" in requestBody ? String(config.temperature) : "omitted";
-      const effectiveTopPLabel =
-        openAICompatibleConfig.topP !== undefined && "top_p" in requestBody
-          ? String(openAICompatibleConfig.topP)
-          : "omitted";
-      const effectiveTopKLabel =
-        openAICompatibleConfig.topK !== undefined && "top_k" in requestBody
-          ? String(openAICompatibleConfig.topK)
-          : "omitted";
+      const effectiveTemperatureLabel = "temperature" in requestBody ? String(requestBody.temperature) : "omitted";
+      const effectiveTopPLabel = "top_p" in requestBody ? String(requestBody.top_p) : "omitted";
+      const effectiveTopKLabel = "top_k" in requestBody ? String(requestBody.top_k) : "omitted";
       const effectiveFrequencyPenaltyLabel =
-        openAICompatibleConfig.frequencyPenalty !== undefined && "frequency_penalty" in requestBody
-          ? String(openAICompatibleConfig.frequencyPenalty)
-          : "omitted";
+        "frequency_penalty" in requestBody ? String(requestBody.frequency_penalty) : "omitted";
       const effectivePresencePenaltyLabel =
-        openAICompatibleConfig.presencePenalty !== undefined && "presence_penalty" in requestBody
-          ? String(openAICompatibleConfig.presencePenalty)
-          : "omitted";
-      const effectiveMinPLabel =
-        openAICompatibleConfig.minP !== undefined && "min_p" in requestBody
-          ? String(openAICompatibleConfig.minP)
-          : "omitted";
+        "presence_penalty" in requestBody ? String(requestBody.presence_penalty) : "omitted";
+      const effectiveMinPLabel = "min_p" in requestBody ? String(requestBody.min_p) : "omitted";
       log.info(
         `${this.options.adapterName}: Sampling params - temp: ${effectiveTemperatureLabel}, top_p: ${effectiveTopPLabel}, top_k: ${effectiveTopKLabel}, freq_penalty: ${effectiveFrequencyPenaltyLabel}, pres_penalty: ${effectivePresencePenaltyLabel}, rep_penalty: ${openAICompatibleConfig.repetitionPenalty ?? "default"}, min_p: ${effectiveMinPLabel}, logit_bias: ${Object.keys(openAICompatibleConfig.logitBias ?? {}).length}`,
       );
 
-      // Create AbortController and link to external abort signal (SDK call timeout)
-      const controller = new AbortController();
-      if (context.abortSignal) {
-        if (context.abortSignal.aborted) {
-          controller.abort();
-        } else {
-          context.abortSignal.addEventListener("abort", () => controller.abort(), { once: true });
-        }
-      }
-
-      const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
-
-      let response = await fetchImpl(apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
+      const fetchImpl =
+        this.options.providerName === "custom"
+          ? (input: string, init: RequestInit) => fetchUserRemoteUrl(input, init, getEndpointRemotePolicy())
+          : fetch;
+      const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
+        mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
+        stripImages: (attemptMessages) =>
+          Array.isArray(attemptMessages)
+            ? stripImageBlocksWithNotice(attemptMessages as Array<Record<string, unknown>>)
+            : attemptMessages,
+        priorityKeys: this.options.degradationPriorityKeys,
       });
+      const attemptedBodies: Record<string, unknown>[] = [];
+      let targetedAttemptCount = 0;
+      const queueTargetedAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (targetedAttemptCount >= MAX_TARGETED_DEGRADATION_ATTEMPTS) {
+          return false;
+        }
 
-      let responseErrorText: string | null = null;
-      if (!response.ok) {
-        responseErrorText = await response.text();
+        const rejectedParams = extractRejectedParams(errorMessage, currentBody);
+        if (rejectedParams.length === 0) return false;
 
-        if (requestBody.stop && this.options.shouldRetryWithoutStop?.(response.status, responseErrorText)) {
-          log.warn(`${this.options.adapterName}: Endpoint rejected stop parameter; retrying request without stop`);
+        const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, targetedAttempt.body))) return false;
 
-          const retryBody = { ...requestBody };
-          delete retryBody.stop;
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, targetedAttempt.body),
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, targetedAttempt);
+        targetedAttemptCount += 1;
+        return true;
+      };
+      // A multimodal rejection (e.g. vLLM without --enable-multimodal returns a
+      // 500) means every payload that still carries image blocks will fail the
+      // same way, so jump straight to the image-strip attempt instead of walking
+      // the sampler-probe rungs first. The strip injects a text notice per
+      // message so the model stays aware images were attached.
+      let imageStripAttemptQueued = false;
+      const queueImageStripAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (imageStripAttemptQueued || !isMultimodalRejectionError(errorMessage)) {
+          return false;
+        }
 
-          response = await fetchImpl(apiUrl, {
+        const imageStripAttempt = buildImageStripAttempt(currentBody);
+        if (!imageStripAttempt) return false;
+
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, imageStripAttempt.body))) return false;
+
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, imageStripAttempt.body),
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, imageStripAttempt);
+        imageStripAttemptQueued = true;
+        return true;
+      };
+      let completedAttempt = false;
+      attemptLoop: for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        const isRetry = i > 0;
+        attemptedBodies.push(attempt.body);
+
+        if (isRetry) {
+          log.warn(
+            `${this.options.adapterName}: Request retry with degraded payload: ${attempt.label} (${config.model})`,
+          );
+        }
+
+        const extraClassifiers = [
+          ({ statusCode, message }: DegradableErrorInput) =>
+            "stream_options" in attempt.body &&
+            (statusCode === 400 || statusCode === 422) &&
+            message.toLowerCase().includes("stream_options"),
+          // A strict validator (vLLM's pydantic `literal_error`) names the key it rejects without
+          // the "unsupported parameter" wording the shared classifier looks for.
+          ({ statusCode, message }: DegradableErrorInput) =>
+            (statusCode === 400 || statusCode === 422) &&
+            (this.options.degradationPriorityKeys ?? []).some(
+              (key) => key in attempt.body && new RegExp(`\\b${key}\\b`).test(message),
+            ),
+          ...(this.options.shouldRetryWithoutStop && "stop" in attempt.body
+            ? [
+                ({ statusCode, message }: DegradableErrorInput) =>
+                  statusCode !== null && this.options.shouldRetryWithoutStop?.(statusCode, message) === true,
+              ]
+            : []),
+        ];
+        const currentController = new AbortController();
+        const externalAbortListener = () => currentController.abort();
+        if (context.abortSignal?.aborted) {
+          currentController.abort();
+        } else {
+          context.abortSignal?.addEventListener("abort", externalAbortListener, { once: true });
+        }
+
+        try {
+          const response = await fetchImpl(apiUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(retryBody),
-            signal: controller.signal,
+            body: JSON.stringify(attempt.body),
+            signal: currentController.signal,
           });
 
-          responseErrorText = response.ok ? null : await response.text();
-        }
-      }
-
-      if (!response.ok) {
-        throw createOpenAICompatibleHttpError(response.status, response.statusText, responseErrorText ?? "");
-      }
-
-      for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
-        const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
-        const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
-        const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
-
-        for (const chunkToEmit of chunksToEmit) {
-          const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
-          const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
-
-          if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
-            yield this.wrapChunk(
-              {
-                choices: [
-                  {
-                    index: 0,
-                    delta: {
-                      content: this.speakerGuardPendingTail,
-                    },
-                  },
-                ],
+          if (!response.ok) {
+            const responseErrorText = await response.text();
+            // `degradeOn502` stays off: a direct provider's 502 is an outage, not a parameter
+            // incompatibility, and should fail fast into key/model fallback.
+            const retryPlan = planDegradationRetry({
+              prepareAttempts,
+              attempts,
+              attemptIndex: i,
+              body: attempt.body,
+              statusCode: response.status,
+              message: responseErrorText,
+              classifyOptions: {
+                extraClassifiers,
+                degradeOnOpaque5xx: this.options.degradeOnOpaque5xx,
               },
-              config.model,
-            );
-            this.speakerGuardPendingTail = "";
-          }
-
-          const hasMeaningfulData = Boolean(
-            guardResult.chunk.error ||
-              guardResult.chunk.usage ||
-              (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
-          );
-          if (!hasMeaningfulData) {
-            if (guardResult.stopTriggered) {
+              queueTargetedAttempt,
+              queueImageStripAttempt,
+            });
+            if (retryPlan) {
               log.warn(
-                `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                `${this.options.adapterName}: Endpoint returned ${retryPlan.trigger} on attempt '${attempt.label}', trying fallback payload`,
+                { model: config.model, errorMessage: responseErrorText },
               );
-              return;
+              continue;
             }
-            continue;
-          }
 
-          yield this.wrapChunk(guardResult.chunk, config.model);
-
-          if (guardResult.stopTriggered) {
+            // createOpenAICompatibleHttpError collapses the payload to `message`, dropping any
+            // sibling fields the endpoint used to name the real cause. Log the raw body here so a
+            // terminal failure leaves the same evidence a retried one does.
             log.warn(
-              `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+              `${this.options.adapterName}: Endpoint returned HTTP ${response.status} on attempt '${attempt.label}' with no remaining fallback payload`,
+              { model: config.model, statusText: response.statusText, responseErrorText },
             );
-            return;
+            throw createOpenAICompatibleHttpError(response.status, response.statusText, responseErrorText);
           }
+
+          let committedToAttempt = false;
+          let recoveryLogged = false;
+          const logRecovery = () => {
+            if (!isRetry || recoveryLogged) return;
+            recoveryLogged = true;
+            log.warn(`${this.options.adapterName}: Request recovered after retry: ${attempt.label} (${config.model})`);
+          };
+
+          for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
+            const midStreamError = this.getMidStreamError(chunk);
+            if (midStreamError && !committedToAttempt) {
+              // An opaque mid-SSE error is the only evidence the endpoint gives, and everything
+              // downstream narrows it: the classifier keeps status + message, the ProviderError
+              // keeps message + type. Log the raw event so a future bisect starts from the wire.
+              log.warn(`${this.options.adapterName}: Raw SSE error event before stream commitment`, {
+                model: config.model,
+                attemptLabel: attempt.label,
+                statusCode: midStreamError.statusCode,
+                errorType: midStreamError.type,
+                errorMessage: midStreamError.message,
+                rawError: chunk.error,
+              });
+              const retryPlan = planDegradationRetry({
+                prepareAttempts,
+                attempts,
+                attemptIndex: i,
+                body: attempt.body,
+                statusCode: midStreamError.statusCode,
+                message: midStreamError.message,
+                classifyOptions: {
+                  extraClassifiers,
+                  degradeOnOpaque5xx: this.options.degradeOnOpaque5xx,
+                },
+                queueTargetedAttempt,
+                queueImageStripAttempt,
+              });
+              if (retryPlan) {
+                log.warn(
+                  `${this.options.adapterName}: Received ${retryPlan.trigger} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                  { model: config.model, errorMessage: midStreamError.message },
+                );
+                currentController.abort();
+                this.resetPerAttemptState(personaSpeakerLabelRegex);
+                continue attemptLoop;
+              }
+            }
+
+            const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
+            const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
+            const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
+
+            for (const chunkToEmit of chunksToEmit) {
+              const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
+              const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
+              if (this.isMeaningfulCommitmentChunk(guardResult.chunk) && !committedToAttempt) {
+                committedToAttempt = true;
+                logRecovery();
+              }
+
+              if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
+                yield this.wrapChunk(
+                  {
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {
+                          content: this.speakerGuardPendingTail,
+                        },
+                      },
+                    ],
+                  },
+                  config.model,
+                );
+                this.speakerGuardPendingTail = "";
+              }
+
+              const hasMeaningfulData = Boolean(
+                guardResult.chunk.error ||
+                  guardResult.chunk.usage ||
+                  (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
+              );
+              if (!hasMeaningfulData) {
+                if (guardResult.stopTriggered) {
+                  log.warn(
+                    `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                  );
+                  return;
+                }
+                continue;
+              }
+
+              yield this.wrapChunk(guardResult.chunk, config.model);
+
+              if (guardResult.stopTriggered) {
+                log.warn(
+                  `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                );
+                return;
+              }
+            }
+          }
+
+          logRecovery();
+          completedAttempt = true;
+          break;
+        } finally {
+          context.abortSignal?.removeEventListener("abort", externalAbortListener);
         }
+      }
+
+      if (!completedAttempt) {
+        throw new Error(`${this.options.adapterName}: Request failed before completing a response stream`);
       }
 
       const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
@@ -417,7 +603,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         yield flushedThinkChunk;
       }
 
-      yield this.createProviderErrorChunk(error);
+      yield this.createProviderErrorChunk(error, context);
     }
   }
 
@@ -425,13 +611,36 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
 
     if ("error" in openAIChunk && openAIChunk.error) {
+      const rawMessage = openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`;
+      const rawCode = openAIChunk.error.code;
+      const rawType = openAIChunk.error.type;
+      const isModelError = isProviderModelErrorMessage(rawMessage);
+
+      // An SSE error event carries the same status semantics as a failed fetch, so route it
+      // through the shared classifier. Hardcoding a non-retryable api_error here is what made a
+      // transient mid-stream 500 read to the user as a permanent request error.
+      const numericCode = typeof rawCode === "number" ? rawCode : Number(rawCode);
+      const classification = classifyOpenAICompatibleStatus(
+        Number.isFinite(numericCode) ? numericCode : null,
+        rawMessage,
+      );
+
+      // An opaque message is the common case for this path, so surface the provider's own error
+      // type alongside it: the details block otherwise shows nothing actionable at all.
+      const message =
+        rawType && !rawMessage.toLowerCase().includes(rawType.toLowerCase())
+          ? `${rawMessage} (${rawType})`
+          : rawMessage;
+      const resolvedCode =
+        classification.code !== "unknown" ? classification.code : rawCode !== undefined ? String(rawCode) : "unknown";
+
       return this.attachPendingThoughts({
         type: "error",
         error: {
-          type: "api_error",
-          message: openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`,
-          code: openAIChunk.error.code !== undefined ? String(openAIChunk.error.code) : "unknown",
-          retryable: false,
+          type: isModelError ? "model_error" : classification.type,
+          message,
+          code: isModelError ? (rawCode !== undefined ? `${String(rawCode)}_model` : "model_error") : resolvedCode,
+          retryable: isModelError ? false : classification.retryable,
           originalError: openAIChunk.error,
         },
       });
@@ -439,9 +648,18 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
     const choice = openAIChunk.choices?.[0];
     if (!choice) {
+      // With `stream_options.include_usage`, the API emits a final chunk that has
+      // empty `choices` but carries `usage`. Surface that usage (the orchestrator
+      // captures it from any chunk's metadata) instead of dropping it here.
+      const trailingMetadata: Record<string, unknown> = {};
+      if (openAIChunk.usage) {
+        trailingMetadata.usage = openAIChunk.usage;
+        log.info(`${this.options.adapterName}: Usage ${openAIChunk.usage.total_tokens ?? "unknown"} total tokens`);
+      }
       return this.attachPendingThoughts({
         type: "text",
         content: "",
+        metadata: Object.keys(trailingMetadata).length > 0 ? trailingMetadata : undefined,
       });
     }
 
@@ -479,22 +697,20 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         });
       }
 
-      let parsedArgs: Record<string, unknown> = {};
-      if (accumulated.functionArguments) {
-        try {
-          parsedArgs = JSON.parse(accumulated.functionArguments);
-        } catch (parseError) {
-          log.error(
-            `${this.options.adapterName}: Failed to parse tool arguments "${accumulated.functionArguments}"`,
-            parseError as Error,
-          );
-        }
-      }
+      const { args: parsedArgs, truncated: argumentsTruncated } = parseAccumulatedToolArguments({
+        adapterName: this.options.adapterName,
+        toolName: accumulated.functionName,
+        rawArguments: accumulated.functionArguments,
+      });
 
       const functionCall: FunctionCall = {
+        id: typeof accumulated.id === "string" ? accumulated.id : undefined,
         name: accumulated.functionName,
         args: parsedArgs,
       };
+      if (argumentsTruncated) {
+        functionCall.argumentsTruncated = true;
+      }
       if (this.options.preserveReasoningContent && this.accumulatedReasoningContent.length > 0) {
         functionCall.deepseekReasoningContent = this.accumulatedReasoningContent;
         log.info(
@@ -564,26 +780,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
-    const choice = openAIChunk.choices?.[0];
-    if (!choice?.delta?.tool_calls || choice.delta.tool_calls.length === 0) {
-      return null;
-    }
-
-    const toolCall = choice.delta.tool_calls[0];
-    if (!toolCall.function) {
-      return null;
-    }
-
-    return {
-      name: toolCall.function.name || "",
-      args: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-    };
-  }
-
   handleProviderError(error: unknown): ProviderError {
-    log.error(`${this.options.adapterName}: Provider error`, error as Error);
     return normalizeOpenAICompatibleProviderError(error, {
       errorMessagePrefix: this.options.errorMessagePrefix,
     });
@@ -593,12 +790,45 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     return createOpenAICompatibleErrorDescription(error, locale, {
       localeNamespace: this.options.localeNamespace,
       fallbackMessage: localizer(locale, `${this.options.localeNamespace}.unknown_default_message`),
-      connectionRefusedMessage: localizer(locale, `${this.options.localeNamespace}.connection_refused`),
+      connectionRefusedMessage: localizer(locale, "genai.stream.connection_refused_description"),
     });
   }
 
   private wrapChunk(chunk: OpenAICompatibleStreamChunk, model: string): RawStreamChunk {
     return this.createRawChunk(chunk, { model });
+  }
+
+  /** Reset every mutable field that can be touched before an SSE attempt commits. */
+  private resetPerAttemptState(personaSpeakerLabelRegex: RegExp | null): void {
+    this.toolCallAccumulator.clear();
+    this.speakerGuardPendingTail = "";
+    this.streamedTextTail = "";
+    this.accumulatedReasoningContent = "";
+    this.pendingThinkBlockThoughtText = "";
+    this.reasoningContentSpillGuard.reset();
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
+  }
+
+  private getMidStreamError(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleMidStreamError | null {
+    if (!chunk.error) return null;
+    const numericCode = typeof chunk.error.code === "number" ? chunk.error.code : Number(chunk.error.code);
+    return {
+      statusCode: Number.isFinite(numericCode) ? numericCode : null,
+      message: chunk.error.message || `${this.options.errorMessagePrefix}: provider API error`,
+      type: chunk.error.type,
+    };
+  }
+
+  /** Text, reasoning, tool-call deltas, and usage are the stream commitment point. */
+  private isMeaningfulCommitmentChunk(chunk: OpenAICompatibleStreamChunk): boolean {
+    if (chunk.usage || this.pendingThinkBlockThoughtText.length > 0) return true;
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) return false;
+    return Boolean(
+      (typeof delta.content === "string" && delta.content.length > 0) ||
+        (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) ||
+        (delta.tool_calls && delta.tool_calls.length > 0),
+    );
   }
 
   private stripThinkBlocksFromChunkContent(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {

@@ -1,6 +1,12 @@
 import { sql } from "@/utils/db/client";
-import { initializeDatabase } from "@/utils/db/initializeDatabase";
+import { initializeDatabase, invalidatePresetPointerStateCaches } from "@/utils/db/initializeDatabase";
+import { probeRagUsable } from "@/utils/db/ragAvailability";
+import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
+import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
+import { seedPersonaCharacterReferencesFromCatalog } from "@/db/seed/catalog/presetCharacterReferenceSeed";
+import { withPresetAssetLock } from "@/db/seed/catalog/presetAssetLock";
 import { log } from "@/utils/misc/logger";
+import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import type { AppEnvironment } from "@/types/config";
 
 /**
@@ -9,7 +15,6 @@ import type { AppEnvironment } from "@/types/config";
  *
  * Exits the process on critical DB initialization failure.
  *
- * @param environment - Resolved runtime environment
  */
 export async function initDatabase(environment: AppEnvironment): Promise<void> {
   log.section("Initializing Database...");
@@ -19,8 +24,17 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  const managesSchema = isDatabaseSchemaManagementEnabled();
+
   try {
-    await initializeDatabase();
+    if (managesSchema) {
+      await initializeDatabase();
+    } else {
+      await sql`SELECT 1`;
+      log.success("PostgreSQL runtime connection verified (schema management disabled)");
+      // The extension alone is not enough: this runtime may boot before the schema manager has created document_chunks.
+      await probeRagUsable();
+    }
   } catch {
     process.exit(1);
   }
@@ -36,10 +50,13 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     }
   } catch (error) {
     log.warn("Error during startup cooldowns cleanup:", error);
-    // Non-critical — continue startup
+    // Non-critical, so continue startup
   }
 
-  // Attempt to set up pg_cron for recurring cooldown cleanup (non-critical)
+  if (!managesSchema) {
+    return;
+  }
+
   try {
     const host = process.env.POSTGRES_HOST || "localhost";
     const port = Number.parseInt(process.env.POSTGRES_PORT || "5432", 10);
@@ -49,7 +66,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 1. Check if the pg_cron extension is available
     const [extensionCheck] = await sql`
       SELECT EXISTS (
         SELECT 1 FROM pg_available_extensions
@@ -62,16 +78,14 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 2. Enable pg_cron extension
     await sql`CREATE EXTENSION IF NOT EXISTS pg_cron;`;
 
-    // 3. Delete any existing job with the same name (idempotent across pg_cron versions)
+    // Delete any existing job with the same name (idempotent across pg_cron versions)
     await sql`
       DELETE FROM cron.job
       WHERE jobname = 'tomoribot_cooldown_cleanup'
     `;
 
-    // 4. Insert the new/updated job
     await sql`
       INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
       VALUES (
@@ -88,5 +102,72 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
   } catch (err) {
     log.info(`pg_cron setup failed (non-critical): ${err instanceof Error ? err.message : err}`);
     log.info("Cooldown cleanup will be handled by startup method instead");
+  }
+}
+
+export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCHEMA_MANAGEMENT_ENABLED): boolean {
+  if (raw === undefined) return true;
+  return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+type PresetArtPhase = "total" | "sprites" | "avatars" | "characterReferences" | "fanout";
+type PresetArtPhaseStatus = "started" | "completed" | "failed";
+
+function recordPresetArtPhase(phase: PresetArtPhase, status: PresetArtPhaseStatus, durationMs?: number): void {
+  if (process.env.RUN_ENV !== "production") return;
+  const memory = collectProcessMemorySnapshot();
+  log.metric("preset_art_phase", {
+    phase,
+    status,
+    ...(durationMs === undefined ? {} : { duration_ms: durationMs }),
+    rss_mb: memory.rssMb,
+    heap_used_mb: memory.heapUsedMb,
+    external_mb: memory.externalMb,
+    array_buffers_mb: memory.arrayBuffersMb,
+  });
+}
+
+/** Production hides success logs, so phase markers remain in JSONL if memory pressure ends a run. */
+export async function measurePresetArtPhase<T>(phase: PresetArtPhase, action: () => Promise<T>): Promise<T> {
+  const startedAt = performance.now();
+  recordPresetArtPhase(phase, "started");
+
+  let status: PresetArtPhaseStatus = "failed";
+  try {
+    const result = await action();
+    status = "completed";
+    return result;
+  } finally {
+    recordPresetArtPhase(phase, status, Math.round(performance.now() - startedAt));
+  }
+}
+
+/** Seeds catalog art after gateway readiness, when the bot has storage credentials. */
+export async function seedStorageBackedCatalogs(): Promise<void> {
+  try {
+    const { spriteSeed, avatarSeed, characterReferenceSeed } = await measurePresetArtPhase("total", () =>
+      withPresetAssetLock(sql, async (client) => {
+        const spriteSeed = await measurePresetArtPhase("sprites", () => seedPersonaSpritesFromCatalog(client));
+        const avatarSeed = await measurePresetArtPhase("avatars", () => seedPersonaAvatarsFromCatalog(client));
+        const characterReferenceSeed = await measurePresetArtPhase("characterReferences", () =>
+          seedPersonaCharacterReferencesFromCatalog(client),
+        );
+        return { spriteSeed, avatarSeed, characterReferenceSeed };
+      }),
+    );
+    log.success(
+      `PostgreSQL preset sprite catalog seeded (${spriteSeed.seeded}/${spriteSeed.declarations} declarations seeded, ` +
+        `${spriteSeed.failed} failed, ${spriteSeed.removed} removed, ${spriteSeed.presets} preset variants)`,
+    );
+    log.success(
+      `PostgreSQL preset avatar catalog seeded (${avatarSeed.seeded}/${avatarSeed.declarations} declarations seeded, ` +
+        `${avatarSeed.failed} failed)`,
+    );
+    log.success(
+      `PostgreSQL preset character reference catalog seeded (${characterReferenceSeed.seeded}/` +
+        `${characterReferenceSeed.declarations} declarations seeded, ${characterReferenceSeed.failed} failed)`,
+    );
+  } finally {
+    await invalidatePresetPointerStateCaches(sql);
   }
 }

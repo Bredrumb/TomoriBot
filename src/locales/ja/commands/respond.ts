@@ -1,0 +1,20 @@
+export default {
+  respond: {
+    description: `このチャンネルの最新メッセージに手動で応答をトリガーします。`,
+    persona_description: `応答に使用するペルソナ。自動で選択する場合は空欄のままにしてください。`,
+    reasoning_description: `このプロバイダーの推論モデルを最大推論バジェットで使用します。`,
+    prompt_description: `コンテキスト末尾に追加する任意のシステムプロンプト。`,
+    prefill_description: `私に続きを書いてほしい、アシスタントの返答の書き出し（任意）。`,
+    prefill_instruction_notice: `このモデルはプリフィルの続きを生成できないため、代わりに指示として渡しました。`,
+    success_title: `手動応答がトリガーされました`,
+    success_description: `このチャンネルの最新メッセージに応答しています...`,
+    invalid_persona_description: `オートコンプリートから利用可能なペルソナを選択するか、正式名を入力してください。`,
+    no_smart_model_title: `推論モデルが見つかりません`,
+    no_smart_model_description: `現在のAIプロバイダーに推論モデルが見つかりませんでした。\`/config\` > モデル > モデルの切り替えを使用して、推論モデルをサポートするプロバイダーに切り替えてください。`,
+    no_messages_title: `メッセージが見つかりません`,
+    no_messages_description: `このチャンネルにメッセージが見つかりません。 \`/respond\` を使う前に、少なくとも1件メッセージを送信してください。`,
+    cooldown_active: `このサーバーの管理者がクールダウンを設定しています。\`/respond\` を再度使用するまで、あと **{seconds}** 秒お待ちください。このクールダウンはメッセージトリガーと共有されています。`,
+    channel_not_whitelisted: `このサーバーではホワイトリスト制限が有効です。\`/respond\` はホワイトリスト登録チャンネル内で、かつホワイトリスト登録ロールを持つメンバーのみ使用でき、このチャンネルで許可されたペルソナだけを使えます。`,
+    persona_access_blocked: `現在のホワイトリスト権限と個人スポットライト設定では、このチャンネルで \`/respond\` に使えるペルソナがありません。`,
+  },
+};

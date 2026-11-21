@@ -11,6 +11,7 @@ import type {
   ProviderCompactSummaryRequest as CompactSummaryRequest,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import type { CompactRoleplaySummary } from "@/types/misc/compact";
 export type {
@@ -44,9 +45,6 @@ async function buildUserParts(userPrompt: string, images?: Array<{ url: string; 
 }
 
 /**
- * Generate a conversation summary using Google Gemini.
- *
- * @param request - Summary generation request
  * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
  */
 export async function generateConversationSummaryGoogle(
@@ -64,10 +62,10 @@ export async function generateConversationSummaryGoogle(
     const parts = await buildUserParts(prompt, request.images);
     const contents: Content = { role: "user", parts };
 
-    const generationConfig: GenerateContentConfig = {
+    const generationConfig: GenerateContentConfig = omitGeminiSampling(request.model, {
       temperature: request.temperature ?? 0.7,
       maxOutputTokens: 4096,
-    };
+    });
 
     const result = await genAI.models.generateContent({
       model: request.model,
@@ -126,7 +124,6 @@ function buildRoleplaySchema() {
 /**
  * Generate a roleplay summary using Google Gemini with structured output.
  *
- * @param request - Summary generation request
  * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
  */
 export async function generateRoleplaySummaryGoogle(
@@ -144,12 +141,12 @@ export async function generateRoleplaySummaryGoogle(
     const parts = await buildUserParts(prompt, request.images);
     const contents: Content = { role: "user", parts };
 
-    const generationConfig: GenerateContentConfig = {
+    const generationConfig: GenerateContentConfig = omitGeminiSampling(request.model, {
       temperature: request.temperature ?? 0.7,
       maxOutputTokens: 4096,
       responseMimeType: "application/json",
       responseJsonSchema: buildRoleplaySchema(),
-    };
+    });
 
     const result = await genAI.models.generateContent({
       model: request.model,

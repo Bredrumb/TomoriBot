@@ -1,0 +1,607 @@
+import type { ChatInputCommandInteraction } from "discord.js";
+import type { FallbackModelRef, TomoriState, UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
+import type { PanelReadStatus } from "@/types/discord/panel";
+import type { UserPersonaNamingPreference } from "@/types/personaNaming";
+import { getShortTermMemoriesForUser, preWarmUserStmEntries } from "@/utils/cache/shortTermMemoryCache";
+import { getCachedUserRow } from "@/utils/cache/userCache";
+import {
+  llmModelRepo,
+  llmProviderRepo,
+  personaRepository,
+  personalMemoryRepository,
+  serverRepository,
+  userNamingRepository,
+  userRepository,
+} from "@/utils/db/repositories";
+import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
+import type { PersonalConfigManagedCapability } from "@/utils/discord/personalConfigPanelCatalog";
+import type {
+  PersonalConfigFallbackDisplaySlot,
+  PersonalConfigModelDisplayInfo,
+  PersonalConfigRoutingRow,
+} from "@/utils/discord/ui/personalConfigPanel";
+import { log } from "@/utils/misc/logger";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import {
+  getActivePersonalProviderForCapability,
+  getStoredPersonalProviderForCapability,
+} from "@/utils/provider/personalProviderHelpers";
+import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import {
+  describeProviderOptionModelChoices,
+  findProviderOption,
+  providerOptionCapabilityForPersonal,
+  providerOptionOffersPersonalCapability,
+} from "@/utils/provider/providerOptionRegistry";
+import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
+import { freeModelPriceLabel, resolveRowPricing } from "@/utils/provider/modelPricing";
+import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
+import { modelOptionDetail, type ModelSelectChoice } from "@/utils/discord/ui/modelSelectOption";
+import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
+
+export interface PersonalConfigScope {
+  identityId?: number;
+  identityAvatarUrl?: string | null;
+  identityLabel?: string;
+  userId: number;
+  userDiscId: string;
+  guildId: string | null;
+  workspaceId: string;
+  internalServerId: number | null;
+  user: UserRow;
+  resolvedNickname: string;
+  personas: TomoriState[];
+  readStatus: PanelReadStatus;
+}
+
+export async function resolveIdentityConfigScope(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+  identityId: number,
+): Promise<PersonalConfigScope | null> {
+  const managed = await messageProxyRepository.getManagedIdentity(interaction.user.id, identityId);
+  if (!managed) return null;
+  const [hostScope, identityUser] = await Promise.all([
+    resolveScope(interaction),
+    userRepository.loadByDiscordId(managed.userDiscId),
+  ]);
+  if (!hostScope || !identityUser?.user_id) return null;
+  return {
+    ...hostScope,
+    identityId,
+    identityAvatarUrl: managed.avatarUrl,
+    identityLabel: formatManagedIdentityLabel(managed, interaction.locale),
+    userId: identityUser.user_id,
+    userDiscId: managed.userDiscId,
+    user: identityUser,
+    resolvedNickname: managed.displayName,
+  };
+}
+
+export async function resolveScope(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+  _forceRefresh = false,
+): Promise<PersonalConfigScope | null> {
+  const userDiscId = interaction.user.id;
+  try {
+    const userRow = await getCachedUserRow(userDiscId);
+    const registeredUser = userRow ?? (await userRepository.register(userDiscId, interaction.user.username));
+    if (!registeredUser?.user_id) return null;
+
+    const workspaceId = interaction.guildId ?? interaction.user.id;
+    const internalServerId = await serverRepository.loadServerIdByDiscId(workspaceId);
+
+    let personas: TomoriState[] = [];
+    try {
+      const allPersonas = await personaRepository.loadAllForServer(workspaceId);
+      personas = allPersonas.filter(
+        (p) => p.persona_lineage_id !== undefined && p.persona_lineage_id !== null && p.persona_lineage_id !== 0,
+      );
+    } catch (error) {
+      log.warn("Failed to load personas for personal config scope", { workspaceId, error });
+    }
+
+    const memberDisplayName =
+      interaction.member && "displayName" in interaction.member && typeof interaction.member.displayName === "string"
+        ? interaction.member.displayName
+        : undefined;
+    const liveDisplayName = memberDisplayName ?? interaction.user.displayName ?? interaction.user.username;
+    const resolvedNickname = registeredUser.user_nickname ?? liveDisplayName;
+
+    return {
+      userId: registeredUser.user_id,
+      userDiscId,
+      guildId: interaction.guildId ?? null,
+      workspaceId,
+      internalServerId: internalServerId ?? null,
+      user: registeredUser,
+      resolvedNickname,
+      personas,
+      readStatus: "fresh",
+    };
+  } catch (error) {
+    log.error("Failed to resolve scope for personal config", error);
+    return null;
+  }
+}
+
+export async function loadPersonaNamingPreference(
+  userId: number,
+  lineageId: number,
+): Promise<UserPersonaNamingPreference | null> {
+  const prefs = await userNamingRepository.loadPreferences([{ userId, personaLineageId: lineageId }]);
+  return prefs.get(`${userId}:${lineageId}`) ?? null;
+}
+
+export async function getMemoryCount(userId: number): Promise<number> {
+  return personalMemoryRepository.countAllForUser(userId);
+}
+
+export async function getStmCount(userDiscId: string): Promise<number> {
+  await preWarmUserStmEntries(userDiscId);
+  return getShortTermMemoriesForUser(userDiscId).length;
+}
+
+export async function loadUserSavedProviders(userId: number): Promise<UserSavedProviderConfigRow[]> {
+  return llmProviderRepo.loadUserSavedProviderConfigs(userId);
+}
+
+export async function loadAvailableModelsForCapability(
+  userId: number,
+  provider: string,
+  capability: PersonalConfigManagedCapability,
+  locale = "en-US",
+): Promise<ModelSelectChoice[]> {
+  const option = findProviderOption(provider);
+  if (option) {
+    if (!providerOptionOffersPersonalCapability(option, capability)) return [];
+    if (!(await option.availability({ kind: "personal", ownerId: userId })).eligible) return [];
+  }
+  const choices = await loadPersonalCatalogModels(userId, option?.catalogProvider ?? provider, capability, locale);
+  return describeProviderOptionModelChoices(provider, {
+    scope: { kind: "personal", ownerId: userId },
+    capability: providerOptionCapabilityForPersonal(capability),
+    locale,
+    choices,
+  });
+}
+
+async function loadPersonalCatalogModels(
+  userId: number,
+  provider: string,
+  capability: PersonalConfigManagedCapability,
+  locale: string,
+): Promise<ModelSelectChoice[]> {
+  try {
+    if (capability === "transcription") {
+      const models = await llmModelRepo.loadAvailableTranscriptionModels(provider, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return models.map((model) => ({
+        id: model.transcription_model_id,
+        name: model.codename,
+        description: resolveDescription(model.descriptions, locale) ?? undefined,
+        isDefault: model.is_default,
+      }));
+    }
+    if (capability === "speech_design" || capability === "speech_clone") {
+      const models = await llmModelRepo.loadAvailableSpeechModels(provider, { kind: "personal", ownerId: userId });
+      const mode = capability === "speech_design" ? "design" : "clone";
+      return models
+        .filter((model) => model.voice_mode === mode || model.voice_mode === "auto")
+        .map((model) => ({
+          id: model.speech_model_id,
+          name: model.codename,
+          description: resolveDescription(model.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "speech", model.codename),
+          isDefault: model.is_default,
+        }));
+    }
+    if (capability === "text") {
+      const models = await llmModelRepo.loadAvailableModelsForProvider(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.llm_id === "number")
+        .map((m) => {
+          const pricing = resolveRowPricing(m);
+          return {
+            id: m.llm_id as number,
+            name: m.llm_codename,
+            description: resolveDescription(m.descriptions, locale) ?? undefined,
+            pricing,
+            priceLabel: freeModelPriceLabel(locale, provider, m.is_free, pricing),
+            isDefault: m.is_default,
+          };
+        });
+    }
+    if (capability === "vision") {
+      const models = await llmModelRepo.loadAvailableModelsForProvider(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.llm_id === "number" && m.sees_images)
+        .map((m) => {
+          const pricing = resolveRowPricing(m);
+          return {
+            id: m.llm_id as number,
+            name: m.llm_codename,
+            description: resolveDescription(m.descriptions, locale) ?? undefined,
+            pricing,
+            priceLabel: freeModelPriceLabel(locale, provider, m.is_free, pricing),
+            isDefault: m.is_default,
+          };
+        });
+    }
+    if (capability === "embedding") {
+      const models = await llmModelRepo.loadAvailableEmbeddingModels(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.embedding_model_id === "number")
+        .map((m) => ({
+          id: m.embedding_model_id as number,
+          name: m.codename,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
+          isDefault: m.is_default,
+        }));
+    }
+    if (capability === "image") {
+      const models = await llmModelRepo.loadAvailableDiffusionModels(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.diffusion_model_id === "number" && m.provider !== "novelai")
+        .map((m) => ({
+          id: m.diffusion_model_id as number,
+          name: m.codename,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "image", m.codename),
+          isDefault: m.is_default,
+        }));
+    }
+    if (capability === "image_nai") {
+      const models = await llmModelRepo.loadAvailableDiffusionModels(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.diffusion_model_id === "number" && m.provider === "novelai")
+        .map((m) => ({
+          id: m.diffusion_model_id as number,
+          name: m.codename,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
+          isDefault: m.is_default,
+        }));
+    }
+    if (capability === "video") {
+      const models = await llmModelRepo.loadAvailableVideoGenerationModels(provider, false, {
+        kind: "personal",
+        ownerId: userId,
+      });
+      return (models ?? [])
+        .filter((m) => typeof m.video_model_id === "number")
+        .map((m) => ({
+          id: m.video_model_id as number,
+          name: m.codename,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
+          pricing: openRouterMediaRates(provider, "video", m.codename),
+          isDefault: m.is_default,
+        }));
+    }
+  } catch (error) {
+    log.warn("Failed to load available models for capability", { provider, capability, error });
+  }
+  return [];
+}
+
+export async function loadFallbackSelectionOptions(
+  userId: number,
+  provider: string,
+  locale = "en-US",
+): Promise<Array<{ refKey: string; label: string; description?: string }>> {
+  const customProvider = parseCustomProvider(provider);
+  if (customProvider) {
+    const endpoints = await llmProviderRepo.loadCustomEndpointsForUser(userId);
+    return endpoints
+      .filter(
+        (endpoint) =>
+          endpoint.connection_id === customProvider.connectionId &&
+          endpoint.capability === "text" &&
+          typeof endpoint.custom_endpoint_id === "number",
+      )
+      .map((endpoint) => ({
+        refKey: `custom_endpoint:${endpoint.custom_endpoint_id}`,
+        label: endpoint.model_name ?? endpoint.label,
+      }));
+  }
+
+  const models = await loadPersonalCatalogModels(
+    userId,
+    findProviderOption(provider)?.catalogProvider ?? provider,
+    "text",
+    locale,
+  );
+  const choices = await describeProviderOptionModelChoices(provider, {
+    scope: { kind: "personal", ownerId: userId },
+    capability: "text",
+    locale,
+    choices: models.filter((model) => model.name !== "other-model"),
+  });
+  return choices.map((choice) => ({
+    refKey: `llm:${choice.id}`,
+    label: choice.name,
+    description: modelOptionDetail(locale, provider, choice),
+  }));
+}
+
+export async function loadPersonalFallbackDisplaySlots(
+  refs: readonly FallbackModelRef[],
+  locale: string,
+): Promise<PersonalConfigFallbackDisplaySlot[]> {
+  return Promise.all(
+    Array.from({ length: 5 }, async (_, index) => {
+      const ref = refs[index];
+      let modelName: string | null = null;
+      if (ref) {
+        try {
+          if (ref.type === "llm") {
+            const model = await llmModelRepo.loadById(ref.id);
+            const owner = getProviderOptionFallbackRefOwner(ref);
+            modelName = model
+              ? `${model.llm_codename}${owner || model.llm_provider === "openrouter" ? ` (${getProviderDisplayName(owner ?? model.llm_provider, locale)})` : ""}`
+              : null;
+          } else {
+            const endpoints = await llmProviderRepo.loadCustomEndpointsByIds([ref.id]);
+            modelName = endpoints[0]?.model_name ?? endpoints[0]?.label ?? null;
+          }
+        } catch {
+          modelName = null;
+        }
+        modelName ??= `${localizer(locale, "general.unknown")} (#${ref.id})`;
+      }
+      return { slot: index + 1, modelName };
+    }),
+  );
+}
+
+export async function loadPersonalModelDisplayInfo(
+  userId: number,
+  savedProviders: UserSavedProviderConfigRow[],
+  _selectedCap: PersonalConfigManagedCapability = "text",
+  selectedParamsProvider?: string,
+  selectedFallbacksProvider?: string,
+  locale = "en-US",
+): Promise<PersonalConfigModelDisplayInfo> {
+  const resolveCapName = async (
+    row: UserSavedProviderConfigRow | null | undefined,
+    cap: PersonalConfigManagedCapability,
+  ): Promise<string | null> => {
+    if (!row) return null;
+    let modelName: string | null = null;
+    try {
+      if (cap === "speech_design" || cap === "speech_clone") {
+        const id = cap === "speech_design" ? row.speech_design_model_id : row.speech_clone_model_id;
+        const models = await llmModelRepo.loadAvailableSpeechModels(
+          findProviderOption(row.provider)?.catalogProvider ?? row.provider,
+          {
+            kind: "personal",
+            ownerId: userId,
+          },
+        );
+        modelName = models.find((model) => model.speech_model_id === id)?.codename ?? null;
+      } else if (cap === "transcription" && row.transcription_model_id) {
+        const m = await llmModelRepo.loadTranscriptionModelById(row.transcription_model_id);
+        modelName = m?.codename ?? null;
+      } else if (cap === "text" && row.llm_id) {
+        const m = await llmModelRepo.loadById(row.llm_id);
+        modelName = m?.llm_codename ?? null;
+      } else if (cap === "vision" && row.vision_llm_id) {
+        const m = await llmModelRepo.loadById(row.vision_llm_id);
+        modelName = m?.llm_codename ?? null;
+      } else if (cap === "embedding" && row.embedding_model_id) {
+        const m = await llmModelRepo.loadEmbeddingModelById(row.embedding_model_id);
+        modelName = m?.codename ?? null;
+      } else if (cap === "image" && row.diffusion_model_id) {
+        const m = await llmModelRepo.loadDiffusionModelById(row.diffusion_model_id);
+        modelName = m?.codename ?? null;
+      } else if (cap === "image_nai" && row.nai_diffusion_model_id) {
+        const m = await llmModelRepo.loadDiffusionModelById(row.nai_diffusion_model_id);
+        modelName = m?.codename ?? null;
+      } else if (cap === "video" && row.video_model_id) {
+        const m = await llmModelRepo.loadVideoGenerationModelById(row.video_model_id);
+        modelName = m?.codename ?? null;
+      }
+    } catch {
+      modelName = null;
+    }
+    return modelName;
+  };
+
+  const textActive = getActivePersonalProviderForCapability(savedProviders, "text");
+  const visionActive = getActivePersonalProviderForCapability(savedProviders, "vision");
+  const embeddingActive = getActivePersonalProviderForCapability(savedProviders, "embedding");
+  const imageActive = getActivePersonalProviderForCapability(savedProviders, "image");
+  const imageNaiActive = getActivePersonalProviderForCapability(savedProviders, "image_nai");
+  const videoActive = getActivePersonalProviderForCapability(savedProviders, "video");
+
+  const textStored = getStoredPersonalProviderForCapability(savedProviders, "text");
+  const visionStored = getStoredPersonalProviderForCapability(savedProviders, "vision");
+  const embeddingStored = getStoredPersonalProviderForCapability(savedProviders, "embedding");
+  const imageStored = getStoredPersonalProviderForCapability(savedProviders, "image");
+  const imageNaiStored = getStoredPersonalProviderForCapability(savedProviders, "image_nai");
+  const videoStored = getStoredPersonalProviderForCapability(savedProviders, "video");
+
+  const [
+    activeTextName,
+    activeVisionName,
+    activeEmbeddingName,
+    activeImageName,
+    activeImageNaiName,
+    activeVideoName,
+    storedTextName,
+    storedVisionName,
+    storedEmbeddingName,
+    storedImageName,
+    storedImageNaiName,
+    storedVideoName,
+  ] = await Promise.all([
+    resolveCapName(textActive, "text"),
+    resolveCapName(visionActive, "vision"),
+    resolveCapName(embeddingActive, "embedding"),
+    resolveCapName(imageActive, "image"),
+    resolveCapName(imageNaiActive, "image_nai"),
+    resolveCapName(videoActive, "video"),
+    resolveCapName(textStored, "text"),
+    resolveCapName(visionStored, "vision"),
+    resolveCapName(embeddingStored, "embedding"),
+    resolveCapName(imageStored, "image"),
+    resolveCapName(imageNaiStored, "image_nai"),
+    resolveCapName(videoStored, "video"),
+  ]);
+
+  const routingRows: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
+    transcription: {
+      capability: "transcription",
+      activeModelName: await resolveCapName(
+        getActivePersonalProviderForCapability(savedProviders, "transcription"),
+        "transcription",
+      ),
+      storedProvider: getStoredPersonalProviderForCapability(savedProviders, "transcription")?.provider ?? null,
+      storedModelName: await resolveCapName(
+        getStoredPersonalProviderForCapability(savedProviders, "transcription"),
+        "transcription",
+      ),
+    },
+    speech_design: {
+      capability: "speech_design",
+      activeModelName: await resolveCapName(
+        getActivePersonalProviderForCapability(savedProviders, "speech_design"),
+        "speech_design",
+      ),
+      storedProvider: getStoredPersonalProviderForCapability(savedProviders, "speech_design")?.provider ?? null,
+      storedModelName: await resolveCapName(
+        getStoredPersonalProviderForCapability(savedProviders, "speech_design"),
+        "speech_design",
+      ),
+    },
+    speech_clone: {
+      capability: "speech_clone",
+      activeModelName: await resolveCapName(
+        getActivePersonalProviderForCapability(savedProviders, "speech_clone"),
+        "speech_clone",
+      ),
+      storedProvider: getStoredPersonalProviderForCapability(savedProviders, "speech_clone")?.provider ?? null,
+      storedModelName: await resolveCapName(
+        getStoredPersonalProviderForCapability(savedProviders, "speech_clone"),
+        "speech_clone",
+      ),
+    },
+    text: {
+      capability: "text",
+      activeModelName: activeTextName,
+      storedProvider: textStored?.provider ?? null,
+      storedModelName: storedTextName,
+    },
+    vision: {
+      capability: "vision",
+      activeModelName: activeVisionName,
+      storedProvider: visionStored?.provider ?? null,
+      storedModelName: storedVisionName,
+    },
+    embedding: {
+      capability: "embedding",
+      activeModelName: activeEmbeddingName,
+      storedProvider: embeddingStored?.provider ?? null,
+      storedModelName: storedEmbeddingName,
+    },
+    image: {
+      capability: "image",
+      activeModelName: activeImageName,
+      storedProvider: imageStored?.provider ?? null,
+      storedModelName: storedImageName,
+    },
+    image_nai: {
+      capability: "image_nai",
+      activeModelName: activeImageNaiName,
+      storedProvider: imageNaiStored?.provider ?? null,
+      storedModelName: storedImageNaiName,
+    },
+    video: {
+      capability: "video",
+      activeModelName: activeVideoName,
+      storedProvider: videoStored?.provider ?? null,
+      storedModelName: storedVideoName,
+    },
+  };
+
+  const [textProviders, visionProviders, embeddingProviders, imageProviders, videoProviders] = await Promise.all([
+    loadUserSavedProvidersForCapability(userId, "text"),
+    loadUserSavedProvidersForCapability(userId, "vision"),
+    loadUserSavedProvidersForCapability(userId, "embedding"),
+    loadUserSavedProvidersForCapability(userId, "image"),
+    loadUserSavedProvidersForCapability(userId, "video"),
+  ]);
+
+  const eligibleProvidersForCapability: Record<PersonalConfigManagedCapability, string[]> = {
+    speech_design: (await loadUserSavedProvidersForCapability(userId, "speech_design")).map((row) => row.provider),
+    speech_clone: (await loadUserSavedProvidersForCapability(userId, "speech_clone")).map((row) => row.provider),
+    transcription: (await loadUserSavedProvidersForCapability(userId, "transcription")).map((row) => row.provider),
+    text: textProviders.map((p) => p.provider),
+    vision: visionProviders.map((p) => p.provider),
+    embedding: embeddingProviders.map((p) => p.provider),
+    image: imageProviders.map((p) => p.provider),
+    image_nai: imageProviders.map((p) => p.provider),
+    video: videoProviders.map((p) => p.provider),
+  };
+
+  const textProviderRows = savedProviders.filter(
+    (p) => textProviders.some((tp) => tp.provider === p.provider) || p.llm_id !== null,
+  );
+  const textProviderNames = textProviderRows.map((p) => p.provider);
+
+  const activeParamsProvider =
+    selectedParamsProvider ?? textActive?.provider ?? textStored?.provider ?? textProviderNames[0];
+  const selectedParametersConfig = savedProviders.find(
+    (p) => p.provider.toLowerCase() === activeParamsProvider?.toLowerCase(),
+  );
+
+  const fallbacksProvider =
+    selectedFallbacksProvider ?? textActive?.provider ?? textStored?.provider ?? textProviderNames[0] ?? null;
+
+  const { fallback_model_refs: fallbackRefs, model_randomizer_enabled: randomizerEnabled } =
+    await llmProviderRepo.loadPersonalFallbackSettings(userId);
+  const fallbackSlots = await loadPersonalFallbackDisplaySlots(fallbackRefs, locale);
+
+  const canEnableRandomizer = fallbackRefs.length > 0;
+
+  return {
+    routingRows,
+    availableCapabilities: [
+      "text",
+      "vision",
+      "embedding",
+      "image",
+      "image_nai",
+      "video",
+      "speech_design",
+      "speech_clone",
+      "transcription",
+    ],
+    eligibleProvidersForCapability,
+    parametersProviders: textProviderNames,
+    selectedParametersConfig,
+    fallbacksProviders: textProviderNames,
+    fallbacksProvider,
+    fallbackSlots,
+    randomizerEnabled,
+    canEnableRandomizer,
+  };
+}

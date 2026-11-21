@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
+  ButtonStyle,
   ComponentType,
   EmbedBuilder,
   type ButtonInteraction,
@@ -12,13 +13,17 @@ import {
   type BaseGuildTextChannel,
   type BaseGuildVoiceChannel,
   type AnyThreadChannel,
-  type Webhook,
 } from "discord.js";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
-import { sendWebhookMessageWithIdentity } from "./webhookManager";
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import { type PersonaPostContext, recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
+import { attachTextDisplayModalCollector, buildTextDisplayModalRow } from "./textDisplayModal";
+import { withStatusCircle } from "./ui/statusTitle";
+import { resolveFooterLines } from "./ui/noticeFooter";
 import type { StandardEmbedOptions, SummaryEmbedOptions, TranslationEmbedOptions } from "../../types/discord/embed";
-import { TRANSLATOR_COLORS, TRANSLATOR_STYLES, TranslationProvider } from "../../types/discord/embed";
+import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embed";
 
 type Provider = keyof typeof TRANSLATOR_COLORS;
 
@@ -27,27 +32,40 @@ type Provider = keyof typeof TRANSLATOR_COLORS;
  */
 const MAX_FIELD_VALUE_LENGTH = 1024;
 
-export type WebhookEmbedContext = {
-  webhook?: Webhook;
-  personaUsername?: string;
-  personaAvatarUrl?: string;
-};
+/**
+ * Discord's maximum embed description length.
+ */
+const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 
-function canUseWebhookForChannel(
-  channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
-  webhook: Webhook,
-): boolean {
-  if ("isThread" in channel && typeof channel.isThread === "function" && channel.isThread()) {
-    return channel.parentId === webhook.channelId;
+/**
+ * Tip-item locale key for the Official Support Server link, appended to every rendered tip modal.
+ */
+const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
+const TIP_DETAILS_BUTTON_ID = "error_tip_details";
+const ERROR_DETAIL_BUTTON_ID = "error_full_detail";
+const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
+
+/**
+ * Truncates text so it fits within Discord's embed description limit, optionally reserving
+ * space for other content that shares the same description (e.g. a headline above the detail).
+ * @returns The value, truncated with a trailing ellipsis when it would otherwise overflow.
+ */
+export function truncateForEmbedDescription(value: string, reservedChars = 0): string {
+  const available = Math.max(0, MAX_EMBED_DESCRIPTION_LENGTH - reservedChars);
+  if (value.length <= available) {
+    return value;
   }
-
-  return webhook.channelId === channel.id;
+  // Reserve 3 characters for the ellipsis; if there is not even room for that, hard-cut.
+  return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
+
+export type WebhookEmbedContext = Omit<PersonaPostContext, "channel" | "persona"> & {
+  persona?: PersonaPostContext["persona"];
+};
 
 /**
  * Truncates a field value to Discord's maximum allowed length.
  * Adds ellipsis if truncation occurs.
- * @param value - The field value to truncate
  * @returns Truncated value that fits within Discord's limits
  */
 function truncateFieldValue(value: string): string {
@@ -62,8 +80,6 @@ function truncateFieldValue(value: string): string {
  * Creates a standard info embed for non-interaction contexts.
  * This is a low-level utility - prefer using sendStandardEmbed for consistency.
  * @param locale - The locale to use for strings
- * @param options - Configuration for the embed
- * @returns EmbedBuilder instance
  */
 export function createStandardEmbed(locale: string, options: StandardEmbedOptions): EmbedBuilder {
   const {
@@ -75,8 +91,14 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     color = ColorCode.INFO,
     footerKey,
     footerVars = {},
+    configHint,
     thumbnailUrl,
+    minimal,
   } = options;
+
+  if (minimal) {
+    return new EmbedBuilder().setColor(color).setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color));
+  }
 
   // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description
@@ -87,12 +109,13 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(localizer(locale, titleKey, titleVars))
+    .setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color))
     .setDescription(descriptionText);
 
-  if (footerKey) {
+  const footerLines = resolveFooterLines(locale, footerKey, footerVars, configHint);
+  if (footerLines.length > 0) {
     embed.setFooter({
-      text: localizer(locale, footerKey, footerVars),
+      text: footerLines.join("\n"),
     });
   }
 
@@ -101,6 +124,30 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
   }
 
   return embed;
+}
+
+/** Builds the localized markdown shown by a "What You Can Do" text modal. */
+function createTipText(
+  locale: string,
+  tipKeys: string[],
+  tipVars: Record<string, string | number | boolean> = {},
+): string | null {
+  // Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
+  const items = tipKeys
+    .filter((key) => key !== SUPPORT_SERVER_TIP_KEY)
+    .map((key) => localizer(locale, key, tipVars).trim())
+    .filter((text) => text.length > 0);
+  if (items.length === 0) {
+    return null;
+  }
+
+  // The support link gives every recovery modal an escape hatch without burdening each caller.
+  const supportItem = localizer(locale, SUPPORT_SERVER_TIP_KEY, tipVars).trim();
+  if (supportItem.length > 0) {
+    items.push(supportItem);
+  }
+
+  return items.map((item) => `- ${item}`).join("\n");
 }
 
 export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions): EmbedBuilder {
@@ -127,27 +174,26 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(localizer(locale, titleKey, titleVars))
+    .setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color))
     .setDescription(descriptionText)
     .addFields(
-      // 1. Map over the fields provided in options
+      // Map over the fields provided in options
       fields.map(
-        // 2. Define the transformation for each field
+        // Define the transformation for each field
         (field): APIEmbedField => {
-          // 3. Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
+          // Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
           const name = field.nameKey
             ? localizer(locale, field.nameKey, field.nameVars) // Use nameVars for name
             : (field.name ?? "");
 
-          // 4. Determine the field value: Use localized valueKey if present, otherwise use direct value
+          // Determine the field value: Use localized valueKey if present, otherwise use direct value
           const rawValue = field.valueKey
             ? localizer(locale, field.valueKey, field.valueVars) // Localize valueKey using valueVars
             : (field.value ?? ""); // Otherwise, use the value directly
 
-          // 5. Truncate value to Discord's maximum field value length (1024 chars)
+          // Truncate value to Discord's maximum field value length (1024 chars)
           const value = truncateFieldValue(rawValue);
 
-          // 6. Return the structured APIEmbedField object
           return {
             name,
             value,
@@ -177,10 +223,7 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
 /**
  * Shows a standard embed in a text channel. This follows the pattern of interactionHelpers
  * by handling the sending of the embed directly.
- * @param channel - The channel to send the embed to
  * @param locale - The locale to use for strings
- * @param options - Configuration for the embed
- * @returns Promise<void>
  */
 export async function sendStandardEmbed(
   channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
@@ -189,72 +232,162 @@ export async function sendStandardEmbed(
   webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
   const embed = createStandardEmbed(locale, options);
-  if (
-    webhookContext?.webhook &&
-    webhookContext.personaUsername &&
-    canUseWebhookForChannel(channel, webhookContext.webhook)
-  ) {
-    const threadId =
+  const modalButtons = prepareEmbedModalButtons(locale, options, "Error");
+  const { disabledRow: disabledModalRow, components } = modalButtons;
+  let sentMessage: Message | undefined;
+  let sentViaWebhook = false;
+  let threadId: string | undefined;
+
+  if (webhookContext?.persona) {
+    threadId =
       "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
-    try {
-      await sendWebhookMessageWithIdentity(
-        webhookContext.webhook,
-        {
-          embeds: [embed],
-          ...(threadId ? { threadId } : {}),
-        },
-        {
-          username: webhookContext.personaUsername,
-          avatarUrl: webhookContext.personaAvatarUrl,
-          avatarDataUri: webhookContext.personaAvatarUrl?.startsWith("data:image/")
-            ? webhookContext.personaAvatarUrl
-            : undefined,
-        },
-      );
+    const outcome = await sendPersonaPost(
+      {
+        channel: channel as unknown as SendableChannel,
+        persona: webhookContext.persona,
+        deliveryMode: webhookContext.deliveryMode,
+        webhook: webhookContext.webhook,
+        impersonatedIdentity: webhookContext.impersonatedIdentity,
+        abortSignal: webhookContext.abortSignal,
+        isExecutionCancelled: webhookContext.isExecutionCancelled,
+        deliveryReceipts: webhookContext.deliveryReceipts,
+        deliveryState: webhookContext.deliveryState,
+        holdResponseText: webhookContext.holdResponseText,
+      },
+      { embeds: [embed], components },
+    );
+    if (outcome.status !== "sent") {
+      log.warn("Failed to send embed through persona delivery", outcome.error, {
+        metadata: { outcome: outcome.status, channelId: channel.id },
+      });
       return;
-    } catch (error) {
-      log.warn("Failed to send embed via webhook, falling back to bot message", error as Error);
     }
+    sentMessage = outcome.message;
+    sentViaWebhook = outcome.receipt.route === "webhook";
+  } else {
+    sentMessage = await channel.send({ embeds: [embed], components });
+    recordPersonaDelivery({
+      messageId: sentMessage.id,
+      channelId: sentMessage.channelId,
+      route: "bot",
+      webhookId: null,
+      identity: {
+        username: sentMessage.member?.displayName ?? sentMessage.author?.username,
+        avatarUrl: sentMessage.member?.displayAvatarURL?.() ?? sentMessage.author?.displayAvatarURL?.(),
+      },
+      speaker: null,
+    });
   }
 
-  await channel.send({ embeds: [embed] });
+  if (!sentMessage) return;
+  const deliveredMessage = sentMessage;
+
+  if (!disabledModalRow) return;
+
+  const disableButtons = async (): Promise<void> => {
+    if (sentViaWebhook) {
+      const author = await resolveAuthoringWebhook(channel, deliveredMessage.webhookId, webhookContext?.webhook);
+      if (!author) throw new Error("Authoring webhook unavailable for embed button edit");
+      await author.editMessage(deliveredMessage.id, {
+        embeds: [embed],
+        components: [disabledModalRow],
+        ...(threadId ? { threadId } : {}),
+      });
+      return;
+    }
+    await deliveredMessage.edit({ embeds: [embed], components: [disabledModalRow] });
+  };
+
+  modalButtons.attach(deliveredMessage, disableButtons);
+}
+
+/**
+ * Builds the tip and full-error buttons an embed offers, plus the collectors that open them once the
+ * message is sent.
+ * @param logLabel - Prefix for the collectors' failure logs.
+ */
+export function prepareEmbedModalButtons(
+  locale: string,
+  options: Pick<StandardEmbedOptions, "tipKeys" | "tipVars" | "restrictedDetail">,
+  logLabel: string,
+): {
+  components: ActionRowBuilder<ButtonBuilder>[];
+  disabledRow?: ActionRowBuilder<ButtonBuilder>;
+  attach(message: Message, disableButtons: () => Promise<void>): void;
+} {
+  const tipText = options.tipKeys?.length ? createTipText(locale, options.tipKeys, options.tipVars) : null;
+  const { restrictedDetail } = options;
+  const buttons = [
+    ...(tipText ? [{ customId: TIP_DETAILS_BUTTON_ID, label: localizer(locale, "genai.tips.button") }] : []),
+    ...(restrictedDetail
+      ? [{ customId: ERROR_DETAIL_BUTTON_ID, label: localizer(locale, "genai.error_detail.button") }]
+      : []),
+  ];
+  if (buttons.length === 0) return { components: [], attach: () => undefined };
+  return {
+    components: [buildTextDisplayModalRow(buttons)],
+    disabledRow: buildTextDisplayModalRow(buttons, true),
+    attach(message, disableButtons) {
+      if (tipText) {
+        attachTextDisplayModalCollector({
+          message,
+          customId: TIP_DETAILS_BUTTON_ID,
+          render: (viewerLocale) => ({
+            title: localizer(viewerLocale, "genai.tips.title"),
+            content: createTipText(viewerLocale, options.tipKeys ?? [], options.tipVars) ?? tipText,
+          }),
+          timeoutMs: TIP_BUTTON_TIMEOUT_MS,
+          logLabel: `${logLabel} tips`,
+          onExpire: disableButtons,
+        });
+      }
+      if (restrictedDetail) {
+        // Both collectors share one timeout, so only one of them disables the shared row.
+        attachTextDisplayModalCollector({
+          message,
+          customId: ERROR_DETAIL_BUTTON_ID,
+          render: (viewerLocale) => ({
+            title: localizer(viewerLocale, "genai.error_detail.title"),
+            content: restrictedDetail.content,
+          }),
+          timeoutMs: TIP_BUTTON_TIMEOUT_MS,
+          logLabel: `${logLabel} detail`,
+          access: restrictedDetail.access,
+          onExpire: tipText ? undefined : disableButtons,
+        });
+      }
+    },
+  };
 }
 
 const TRANSLATION_TIMEOUT = 90000;
 /**
  * Creates an embed with translation buttons that cycle between different translations.
  * Returns a promise that resolves when the buttons are disabled (timeout or all providers shown).
- * @param message - The message to reply to
- * @param options - Configuration for the translation embed
- * @returns Promise<void>
  */
 export async function sendTranslationEmbed(message: Message, options: TranslationEmbedOptions): Promise<void> {
   const { translations, initialProvider = TranslationProvider.GOOGLE, timeout = TRANSLATION_TIMEOUT } = options;
 
-  // Create buttons for each provider with their brand colors
   const createButtons = (activeProvider: Provider) => {
     const buttons = Object.values(TranslationProvider).map((provider) => {
       return new ButtonBuilder()
         .setLabel(provider.charAt(0).toUpperCase() + provider.slice(1))
-        .setStyle(TRANSLATOR_STYLES[provider])
+        .setStyle(ButtonStyle.Secondary)
         .setCustomId(`${provider}-trans`)
         .setDisabled(provider === activeProvider);
     });
     return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   };
 
-  // Create embed with initial translation
   const embed = new EmbedBuilder()
     .setColor(TRANSLATOR_COLORS[initialProvider])
     .setDescription(translations[initialProvider]);
 
-  // Send initial message
   const sentMessage = await message.reply({
     embeds: [embed],
     components: [createButtons(initialProvider)],
   });
 
-  // Set up collector
   const collector = sentMessage.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: timeout,

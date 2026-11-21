@@ -1,18 +1,23 @@
 import type { Client } from "discord.js";
+import { getShardTopology, type ShardTopology } from "@/utils/discord/shardOwnership";
+import { getOwnerWorkSignal, hasShardLeaseOwnership } from "@/utils/cluster/shardLeases";
+import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import { log } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import { RandomTriggerProcessor } from "./randomTriggerProcessor";
 import { ReminderProcessor } from "./reminderProcessor";
-import {
-  clearScheduledWorkNudgeHandler,
-  emitScheduledWorkNudge,
-  registerScheduledWorkNudgeHandler,
-} from "./scheduledWorkSignals";
+import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processor";
+import { clearScheduledWorkNudgeHandler, registerScheduledWorkNudgeHandler } from "./scheduledWorkSignals";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
-const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
+const SCHEDULED_WORK_RECONCILE_INTERVAL_MS = 60_000;
 
-export type ScheduledWorkStatus = {
+export interface ScheduledWorkOwner {
+  hasOwnership: () => boolean;
+  getWorkSignal: () => AbortSignal | undefined;
+}
+
+type ScheduledWorkStatus = {
   isRunning: boolean;
   isProcessing: boolean;
   reconcileIntervalMs: number;
@@ -20,15 +25,10 @@ export type ScheduledWorkStatus = {
   lastRunAt: Date | null;
 };
 
-function parseReconcileIntervalMs(): number {
-  const rawValue = process.env.SCHEDULED_WORK_RECONCILE_INTERVAL_MS;
-  const parsedValue = Number.parseInt(rawValue || `${DEFAULT_RECONCILE_INTERVAL_MS}`, 10);
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : DEFAULT_RECONCILE_INTERVAL_MS;
-}
-
 export class ScheduledWorkCoordinator {
   private readonly reminderProcessor: ReminderProcessor;
   private readonly randomTriggerProcessor: RandomTriggerProcessor;
+  private readonly naturalNudgeProcessor: NaturalNudgeProcessor;
   private readonly reconcileIntervalMs: number;
   private wakeTimeout: NodeJS.Timeout | null = null;
   private reconcileInterval: NodeJS.Timeout | null = null;
@@ -37,11 +37,21 @@ export class ScheduledWorkCoordinator {
   private rerunRequested = false;
   private nextWakeAt: Date | null = null;
   private lastRunAt: Date | null = null;
+  private lifetime = new AbortController();
 
-  constructor(client: Client, reconcileIntervalMs = parseReconcileIntervalMs()) {
+  constructor(
+    client: Client,
+    reconcileIntervalMs = SCHEDULED_WORK_RECONCILE_INTERVAL_MS,
+    private readonly topology: ShardTopology = getShardTopology(),
+    private readonly owner: ScheduledWorkOwner = {
+      hasOwnership: hasShardLeaseOwnership,
+      getWorkSignal: () => (topology.ownsAllShards() ? undefined : getOwnerWorkSignal()),
+    },
+  ) {
     this.reconcileIntervalMs = reconcileIntervalMs;
-    this.reminderProcessor = new ReminderProcessor(client);
-    this.randomTriggerProcessor = new RandomTriggerProcessor(client);
+    this.reminderProcessor = new ReminderProcessor(client, topology);
+    this.randomTriggerProcessor = new RandomTriggerProcessor(client, topology);
+    this.naturalNudgeProcessor = new NaturalNudgeProcessor(client, topology);
   }
 
   public start(): void {
@@ -51,6 +61,7 @@ export class ScheduledWorkCoordinator {
     }
 
     this.isRunning = true;
+    this.lifetime = new AbortController();
     registerScheduledWorkNudgeHandler((reason) => {
       this.requestImmediateRun(reason ? `nudge:${reason}` : "nudge");
     });
@@ -71,6 +82,7 @@ export class ScheduledWorkCoordinator {
     }
 
     this.isRunning = false;
+    this.lifetime.abort();
     this.rerunRequested = false;
     clearScheduledWorkNudgeHandler();
     this.clearWakeTimeout();
@@ -140,16 +152,28 @@ export class ScheduledWorkCoordinator {
 
     this.clearWakeTimeout();
     this.nextWakeAt = null;
+    const ownerSignal = this.owner.getWorkSignal();
+    const work: ScheduledWorkContext = {
+      signal: ownerSignal ? AbortSignal.any([this.lifetime.signal, ownerSignal]) : this.lifetime.signal,
+      ownerSignal: ownerSignal ?? new AbortController().signal,
+      hasOwnership: this.owner.hasOwnership,
+    };
     this.isProcessing = true;
 
     try {
       do {
         this.rerunRequested = false;
+        if (!canRunScheduledWork(work)) return;
         if (reason !== "reconcile") {
           log.info(`Running scheduled work cycle (${reason})`);
         }
-        await this.reminderProcessor.processDueReminders();
-        await this.randomTriggerProcessor.processDueRandomTriggers();
+        await this.reminderProcessor.processDueReminders(work);
+        if (!canRunScheduledWork(work)) return;
+        await this.randomTriggerProcessor.processDueRandomTriggers(work);
+        if (!canRunScheduledWork(work)) return;
+        // Natural Nudges has no due-time column to wake on, so the 60 s reconcile is its only clock.
+        await this.naturalNudgeProcessor.processDueIdleNudges(work);
+        if (!canRunScheduledWork(work)) return;
         this.lastRunAt = new Date();
         reason = "rerun";
       } while (this.rerunRequested && this.isRunning);
@@ -157,18 +181,19 @@ export class ScheduledWorkCoordinator {
       this.isProcessing = false;
     }
 
-    await this.scheduleNextWake();
+    await this.scheduleNextWake(work);
   }
 
-  private async scheduleNextWake(): Promise<void> {
-    if (!this.isRunning) {
+  private async scheduleNextWake(work: ScheduledWorkContext): Promise<void> {
+    if (!canRunScheduledWork(work)) {
       return;
     }
 
     this.clearWakeTimeout();
 
-    const nextReminderTime = await serverScheduleRepository.getNextReminderTime();
-    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime();
+    const nextReminderTime = await serverScheduleRepository.getNextReminderTime(this.topology);
+    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime(this.topology);
+    if (!canRunScheduledWork(work)) return;
     const nextDueTime = this.getEarliestDate(nextReminderTime, nextRandomTriggerTime);
 
     if (!nextDueTime) {
@@ -224,18 +249,10 @@ export function stopScheduledWorkCoordinator(): void {
   scheduledWorkCoordinatorInstance = null;
 }
 
-export function getScheduledWorkStatus(): ScheduledWorkStatus | null {
-  return scheduledWorkCoordinatorInstance?.getStatus() ?? null;
-}
-
 export async function runScheduledWorkNow(reason?: string): Promise<void> {
   if (!scheduledWorkCoordinatorInstance) {
     throw new Error("Scheduled work coordinator not initialized");
   }
 
   await scheduledWorkCoordinatorInstance.runNow(reason);
-}
-
-export function nudgeScheduledWork(reason?: string): void {
-  emitScheduledWorkNudge(reason);
 }

@@ -1,0 +1,57 @@
+---
+title: "图像生成"
+sidebar:
+  order: 1
+aiGenerated: true
+---
+
+TomoriBot 可以根据描述生成图像，或编辑参考图像。在聊天中向她提出请求，或使用 `/generate image`。如需手动使用 [NovelAI](/features/integrations/novelai/#image-generation) 生成，请使用 `/novelai generate image`。
+
+:::tip
+如果聊天请求没有生成图像，请尝试 `/generate image`。即使聊天模型无法使用工具，它也会直接调用图像模型。
+:::
+
+## 她能做什么
+
+- **文本到图像**：根据描述生成图像。
+- **图像到图像**：编辑或重新设计现有图像。
+- **修复**：重画特定区域，同时保留其余区域。
+- **外画**：将画布延伸到原始框架之外。
+- **可定制的宽高比**。
+- **参考图像**：从消息附件、贴纸、表情符号或用户和人格头像中提取。提及用户或人格以将其头像作为参考。
+
+可选的 `model` 参数可为当前图像选择模型，而不会更改你的默认设置。自动补全选项包含来自服务器已保存提供方和你的个人提供方中的兼容模型；个人条目会显示 `（通过个人提供方）`。留空则使用常用模型。在自动模式下，这会选择图像模型，而规划提示词的模型保持不变。
+
+在任一模式下，将 `nsfw` 设置为 `true` 即可将生成的图像隐藏在 Discord 防剧透遮罩后。这只会更改 Discord 显示图像的方式；不会更改生成内容或提供方的内容过滤器。
+
+可用的编辑模式取决于活动后端。文本到图像和图像到图像在云提供商（Google、Vertex、OpenRouter）上工作。本地 [ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/) 自定义端点支持修复和修复，并且取决于该端点声明的功能。你的设置不支持的模式会自动从模型中隐藏。
+
+当她生成图像时，她会将你的人格的外观标签与服务器范围的正面和负面标签（如果支持）结合起来。结果以Discord媒体库的形式出现，其中包含生成详细信息，包括任何引用的用户或人格。
+
+## 标签自定义
+<!-- anchor: tag-customization -->
+
+每个标签源都可以使用预填充模式进行就地编辑：
+
+- **`/config` > `人格` > `图像生成细节`**：所选人格的`外貌`标签（她的外观）。需要管理服务器权限。
+- **`/personal config`**：你自己的外观标签，每当图像生成引用你时就会应用。跟随你穿越每台服务器（请参阅[个性化](/zh-CN/features/knowledge/personalization/)）。
+- **`/config` > `模型` > `图像生成默认值`**：使用`编辑正向`和`编辑负向`设置添加到每一代或远离每一代的默认标签。负标签仅在后端支持负提示时适用。提交空框将重置为内置默认值。
+
+## 标签查询
+<!-- anchor: tag-lookup -->
+
+开启 **Danbooru 搜索** 后（`/config` > `插件` > `可用工具`），她可以在作画前查询角色的准确标签与服装，比如「我的 OC 穿着莱莎的衣服」就能让你的 OC 穿上莱莎的服装。参见 [Danbooru 标签查询](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup)。
+
+使用 `Default + Image Generation Expert` 系统提示词预设集（`/config` > `行为` > `常规行为`）时，她查询标签会更加稳定，该预设集还会指导她如何排列动漫标签以及何时改用自然语言描述。在 Auto 模式下运行 `/generate image` 同样支持查询标签。
+
+## 设置
+
+1. 通过`/config` > `模型` > `切换模型`配置图像模型。
+2. 在`/config` > `权限` (`imagegen_enabled`) 中启用图像生成。
+3. 在聊天中询问她，或者运行`/generate image`。
+
+## 提供方支持
+
+本机图像生成可在Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIM和NovelAI（动漫风格）上使用。有关完整的提供商矩阵，请参阅[提供商和模型](/zh-CN/features/setup-administration/providers-and-models/#supported-providers)。
+
+对于通过ComfyUI在你自己的硬件上进行本地生成，请参阅[设置：ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/)。

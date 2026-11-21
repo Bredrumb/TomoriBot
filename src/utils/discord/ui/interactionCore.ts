@@ -6,26 +6,34 @@ import {
   ComponentType,
   EmbedBuilder,
   MessageFlags,
-  ModalBuilder,
-  TextInputBuilder,
   TextInputStyle,
   InteractionResponseType,
+  type Client,
+  type Interaction,
 } from "discord.js";
 import type {
   ActionRowData,
   ButtonInteraction,
   ButtonComponentData,
+  ChannelSelectMenuInteraction,
   ChatInputCommandInteraction,
   ComponentInContainerData,
-  ContainerComponentData,
   Message,
   MessageActionRowComponentBuilder,
   ModalSubmitInteraction,
+  InteractionEditReplyOptions,
   InteractionReplyOptions,
+  InteractionUpdateOptions,
+  MessagePayload,
+  MentionableSelectMenuInteraction,
+  RoleSelectMenuInteraction,
   APIAttachment,
+  StringSelectMenuInteraction,
   TopLevelComponentData,
+  UserSelectMenuInteraction,
 } from "discord.js";
 import { localizer } from "../../text/localizer";
+import { isDraining } from "@/utils/misc/shutdownState";
 import { log, ColorCode } from "../../misc/logger";
 import type {
   RawDiscordComponent,
@@ -34,12 +42,21 @@ import type {
   GlobalDiscordState,
 } from "@/types/discord/rawApiTypes";
 import type { TomoriState } from "@/types/db/schema";
-import {
-  resolvePersonaAvatarPublicUrl,
-  isLocalPersonaAvatarPath,
-  loadStoredPersonaAvatarBuffer,
-} from "@/utils/storage/avatarStorage";
+import type { PanelReceipt } from "@/types/discord/panel";
+import { resolveAlterPersonaAvatarAsset, type PersonaAvatarAsset } from "@/utils/discord/personaPanelAvatar";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
+import {
+  clampRawModalText,
+  ComponentsV2LimitError,
+  DISCORD_BUTTON_LABEL_MAX,
+  truncateDiscordText,
+  validateComponentsV2MessageLimits,
+  type ComponentsV2MessagePayload,
+} from "./componentsV2Limits";
+export { ComponentsV2LimitError, validateComponentsV2MessageLimits, type ComponentsV2MessagePayload };
+import { buildPanelContainer, resolveAccentColor, type AccentColorInput } from "./panel";
+import { withStatusCircle } from "./statusTitle";
+import { resolveFooterLines } from "./noticeFooter";
 
 // Clean storage for select values (Discord.js will strip them, so we preserve them)
 const modalSelectValues = new Map<string, Record<string, string>>();
@@ -50,6 +67,12 @@ const modalFileUploadValues = new Map<string, Record<string, string[]>>();
 // Storage for checkbox group selected values keyed by modal component custom ID
 const modalCheckboxGroupValues = new Map<string, Record<string, string[]>>();
 
+// Separate from the scalar store because a channel select submits several IDs and `[]` must stay distinct from a missing entry.
+const modalChannelSelectValues = new Map<string, Record<string, string[]>>();
+
+// Every value of a string select, for multi-pick fields; the scalar store keeps only the first.
+const modalStringSelectValues = new Map<string, Record<string, string[]>>();
+
 // Storage for resolved attachments from modal file uploads (Discord.js doesn't expose these)
 const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>();
 
@@ -57,7 +80,109 @@ const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>(
  * Tracks interactions that were acknowledged via raw Discord REST API
  * Used to prevent "already acknowledged" errors when Discord.js state is out of sync
  */
-const rawModalAcknowledged = new WeakMap<ChatInputCommandInteraction | ButtonInteraction, boolean>();
+const rawModalAcknowledged = new WeakMap<Interaction, boolean>();
+
+const shutdownAcknowledged = new WeakSet<Interaction>();
+const shutdownAdmissionClients = new WeakSet<Client>();
+
+export async function rejectInteractionDuringShutdown(interaction: Interaction): Promise<boolean> {
+  if (!isDraining()) return false;
+  if (shutdownAcknowledged.has(interaction)) return true;
+  shutdownAcknowledged.add(interaction);
+  try {
+    if (interaction.isAutocomplete()) {
+      if (!interaction.responded) await interaction.respond([]);
+    } else if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+      if (!rawModalAcknowledged.has(interaction)) {
+        await interaction.reply({
+          embeds: [
+            createStandardEmbed(interaction.locale, {
+              titleKey: "general.restarting_title",
+              descriptionKey: "general.restarting",
+              color: ColorCode.WARN,
+            }),
+          ],
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
+  } catch (error) {
+    log.warn("Failed to acknowledge an interaction during shutdown", error);
+  }
+  return true;
+}
+
+export function initializeShutdownInteractionAdmission(client: Client): void {
+  if (shutdownAdmissionClients.has(client)) return;
+  shutdownAdmissionClients.add(client);
+  const emit = client.emit;
+  client.emit = (event: string | symbol, ...args: unknown[]): boolean => {
+    // Suppress the event before EventEmitter fans out to command handlers and independent collectors.
+    if (event === "interactionCreate" && isDraining()) {
+      void rejectInteractionDuringShutdown(args[0] as Interaction);
+      return false;
+    }
+    // A login completing during drain must not start deferred scheduled dispatch or eager connections.
+    if (event === "clientReady" && isDraining()) return false;
+    return Reflect.apply(emit, client, [event, ...args]) as boolean;
+  };
+}
+
+/**
+ * Reports whether a command, button, or select menu interaction was acknowledged through the
+ * raw REST modal path. Discord.js does not update `replied`/`deferred` for that
+ * response, so workflow code must consult this state explicitly.
+ */
+export function hasRawModalAcknowledgement(
+  interaction:
+    | ChatInputCommandInteraction
+    | ButtonInteraction
+    | StringSelectMenuInteraction
+    | ChannelSelectMenuInteraction
+    | UserSelectMenuInteraction
+    | RoleSelectMenuInteraction
+    | MentionableSelectMenuInteraction,
+): boolean {
+  return rawModalAcknowledged.get(interaction) === true;
+}
+
+/**
+ * Tracks interactions whose reply message has been rendered as a Components V2
+ * payload. Discord permanently stamps `IsComponentsV2` on such a message, and that
+ * flag can never be removed by a later edit, so nor can a V2 message carry legacy
+ * `embeds`/`content`. So once a selector (or any V2 writer) renders onto an
+ * interaction's reply, a subsequent legacy `editReply({ embeds })` on the SAME
+ * interaction would be rejected by Discord.
+ *
+ * The shared legacy sinks below ({@link replyInfoEmbed}, {@link replySummaryEmbed})
+ * consult this set and emit a V2-safe notice instead. Mirrors the {@link rawModalAcknowledged}
+ * `WeakMap` pattern in this file: interaction-keyed state that avoids an extra Discord fetch to
+ * read live flags.
+ */
+const componentsV2Reply = new WeakSet<ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction>();
+
+/**
+ * Marks an interaction's reply message as carrying `IsComponentsV2`. Callers that
+ * write a Components V2 payload onto an interaction's own reply must call this so the
+ * legacy sinks stay V2-safe if they later target the same interaction.
+ *
+ */
+export function markComponentsV2Reply(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+): void {
+  componentsV2Reply.add(interaction);
+}
+
+/**
+ * Reports whether {@link markComponentsV2Reply} previously flagged this interaction's
+ * reply as a Components V2 message.
+ *
+ */
+export function hasComponentsV2Reply(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+): boolean {
+  return componentsV2Reply.has(interaction);
+}
 
 /**
  * Transform Component Type 18 modal submission to standard ActionRow format
@@ -69,42 +194,46 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
   // Transform each Component Type 18 to standard ActionRow format with all data preserved
   packet.d.data.components = packet.d.data.components.map((comp) => {
     if (comp.type === 18 && comp.component) {
-      // Extract the nested component with all its properties
       const nestedComponent = comp.component;
 
-      // Create a clean ActionRow that Discord.js can process normally
       return {
         type: 1, // ActionRow
         components: [
           {
             type: nestedComponent.type,
             custom_id: nestedComponent.custom_id,
-            // Preserve all component data based on type
             ...(nestedComponent.type === 3 && {
               // STRING_SELECT
               values: nestedComponent.values,
             }),
             ...(nestedComponent.type === 4 && {
-              // TEXT_INPUT
               value: nestedComponent.value,
             }),
+            ...(nestedComponent.type === 5 && {
+              values: nestedComponent.values,
+            }),
+            ...(nestedComponent.type === 6 && {
+              values: nestedComponent.values,
+            }),
+            ...(nestedComponent.type === 8 && {
+              // CHANNEL_SELECT
+              channel_types: nestedComponent.channel_types,
+              values: nestedComponent.values,
+            }),
             ...(nestedComponent.type === 19 && {
-              // FILE_UPLOAD
               values: nestedComponent.values, // Array of attachment IDs
             }),
             ...(nestedComponent.type === 21 && {
-              // RADIO_GROUP — value is the selected option string (or null)
+              // RADIO_GROUP: value is the selected option string (or null)
               value: nestedComponent.value,
             }),
             ...(nestedComponent.type === 22 && {
-              // CHECKBOX_GROUP — values is an array of selected option strings
+              // CHECKBOX_GROUP: values is an array of selected option strings
               values: nestedComponent.values,
             }),
             ...(nestedComponent.type === 23 && {
-              // CHECKBOX — value is a boolean
               value: nestedComponent.value,
             }),
-            // Include any other properties
             ...Object.fromEntries(
               Object.entries(nestedComponent).filter(
                 ([key]) => !["type", "custom_id", "values", "value"].includes(key),
@@ -125,7 +254,7 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
 
 type InterceptableDiscordClient = {
   ws?: {
-    handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => unknown;
+    handlePacket?: (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => unknown;
   };
 };
 
@@ -138,10 +267,9 @@ function setupWebSocketInterception(client: unknown) {
     if (wsManager?.handlePacket) {
       const originalHandlePacket = wsManager.handlePacket.bind(wsManager);
 
-      wsManager.handlePacket = (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => {
+      wsManager.handlePacket = (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => {
         // Intercept INTERACTION_CREATE packets for modal submissions
-        if (packet.t === "INTERACTION_CREATE" && packet.d?.type === 5 && packet.d?.data?.components) {
-          // Check if we have Component Type 18 that needs transformation
+        if (packet?.t === "INTERACTION_CREATE" && packet.d?.type === 5 && packet.d?.data?.components) {
           const hasComponentType18 = packet.d.data.components.some((comp: RawDiscordComponent) => comp.type === 18);
 
           if (hasComponentType18) {
@@ -149,10 +277,11 @@ function setupWebSocketInterception(client: unknown) {
 
             const interactionId = packet.d.id;
             if (interactionId) {
-              // Store component values before Discord.js strips them
               const selectValues: Record<string, string> = {};
               const fileUploadValues: Record<string, string[]> = {};
               const checkboxGroupValues: Record<string, string[]> = {};
+              const channelSelectValues: Record<string, string[]> = {};
+              const stringSelectValues: Record<string, string[]> = {};
 
               for (const comp of packet.d.data.components) {
                 if (comp.type !== 18 || !comp.component?.custom_id) continue;
@@ -160,27 +289,35 @@ function setupWebSocketInterception(client: unknown) {
                 // Narrowed above: custom_id is guaranteed to be a non-empty string
                 const customId = inner.custom_id as string;
 
-                // 1. String Select (type 3) — store first selected value
-                if (inner.type === 3 && inner.values?.[0]) {
+                // String, user, and role selects share the scalar store because their routed fields accept one value each.
+                if ((inner.type === 3 || inner.type === 5 || inner.type === 6) && inner.values?.[0]) {
                   selectValues[customId] = inner.values[0];
                 }
 
-                // 2. File Upload (type 19) — store all attachment IDs
+                // A submitted select left empty may arrive without `values`, so it records as `[]`; only an uncaptured submission reads as missing.
+                if (inner.type === 8) {
+                  channelSelectValues[customId] = Array.isArray(inner.values) ? inner.values : [];
+                }
+
+                if (inner.type === 3) {
+                  stringSelectValues[customId] = Array.isArray(inner.values) ? inner.values : [];
+                }
+
+                // File Upload (type 19): store all attachment IDs
                 if (inner.type === 19 && Array.isArray(inner.values)) {
                   fileUploadValues[customId] = inner.values;
                 }
 
-                // 3. Radio Group (type 21) — store selected value string (null → empty string)
+                // Radio Group (type 21): store selected value string (null → empty string)
                 if (inner.type === 21) {
                   selectValues[customId] = typeof inner.value === "string" ? inner.value : "";
                 }
 
-                // 4. Checkbox Group (type 22) — store array of selected values
-                if (inner.type === 22 && Array.isArray(inner.values)) {
-                  checkboxGroupValues[customId] = inner.values;
+                // Checkbox Group (type 22): store array of selected values
+                if (inner.type === 22) {
+                  checkboxGroupValues[customId] = Array.isArray(inner.values) ? inner.values : [];
                 }
 
-                // 5. Checkbox (type 23) — store boolean as "true"/"false" string
                 if (inner.type === 23) {
                   selectValues[customId] = inner.value === true ? "true" : "false";
                 }
@@ -203,6 +340,17 @@ function setupWebSocketInterception(client: unknown) {
                 );
               }
 
+              if (Object.keys(stringSelectValues).length > 0) {
+                modalStringSelectValues.set(interactionId, stringSelectValues);
+              }
+
+              if (Object.keys(channelSelectValues).length > 0) {
+                modalChannelSelectValues.set(interactionId, channelSelectValues);
+                log.info(
+                  `Stored ${Object.keys(channelSelectValues).length} channel select value set(s) for interaction`,
+                );
+              }
+
               // Store resolved attachments before Discord.js processes them
               if (packet.d.data.resolved?.attachments) {
                 const resolvedAttachments = packet.d.data.resolved.attachments as Record<string, APIAttachment>;
@@ -213,12 +361,10 @@ function setupWebSocketInterception(client: unknown) {
               }
             }
 
-            // Transform the entire packet to standard format
             transformModalSubmissionPacket(packet);
           }
         }
 
-        // Call the original handler with (potentially) transformed packet
         return originalHandlePacket(packet, shard);
       };
 
@@ -232,6 +378,10 @@ function setupWebSocketInterception(client: unknown) {
   }
 }
 
+export function initializeRawModalInterception(client: unknown): void {
+  setupWebSocketInterception(client);
+}
+
 import type {
   ConfirmationOptions,
   ConfirmationResult,
@@ -241,12 +391,15 @@ import type {
   SummaryEmbedOptions,
 } from "../../../types/discord/embed";
 import type {
+  ModalComponent,
   ModalOptions,
   ModalResult,
-  ModalSelectField,
   ModalRadioGroupField,
   ModalCheckboxGroupField,
   ModalCheckboxField,
+  ModalUserSelectField,
+  ModalRoleSelectField,
+  ModalChannelSelectField,
 } from "../../../types/discord/modal";
 import {
   isModalInputField,
@@ -255,8 +408,12 @@ import {
   isModalRadioGroupField,
   isModalCheckboxGroupField,
   isModalCheckboxField,
+  isModalUserSelectField,
+  isModalRoleSelectField,
+  isModalChannelSelectField,
 } from "../../../types/discord/modal";
-import { createStandardEmbed, createSummaryEmbed } from "../embedHelper";
+import { createStandardEmbed, createSummaryEmbed, prepareEmbedModalButtons } from "../embedHelper";
+import { buildDocsLinkRow } from "@/utils/discord/docsLinks";
 
 const PROMPT_TIMEOUT = 60000; // 60 seconds
 const MODAL_DESCRIPTION_MAX_LENGTH = 99; // Discord modal description limit
@@ -268,14 +425,224 @@ const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving room for title/buttons in the 4000-char total component limit
 
 /**
+ * @description Detects a discord.js collector expiry across every awaiting surface
+ * (`awaitMessageComponent`, `awaitModalSubmit`, and raw component collectors).
+ * discord.js is inconsistent about the rejection shape, so both are handled:
+ *   - Raw collectors reject with the bare end-reason string (`"time"` / `"idle"`).
+ *   - `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
+ *      `InteractionCollectorError` whose message embeds the end reason, e.g.
+ *      "Collector received no interactions before ending with reason: time".
+ * Only `time`/`idle` count as expiry: `limit`, `messageDelete`, and channel/guild
+ * deletions are genuine failures the caller must surface as errors.
+ */
+export function isCollectorTimeoutError(error: unknown): boolean {
+  if (error === "time" || error === "idle") return true;
+  if (!error || typeof error !== "object") return false;
+
+  // InteractionCollectorError form: identify by code/name, then read the reason.
+  const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
+  const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
+  const message = typeof candidate.message === "string" ? candidate.message.toLowerCase() : "";
+  const isInteractionCollectorError =
+    code === "interactioncollectorerror" ||
+    name === "interactioncollectorerror" ||
+    message.includes("collector received");
+
+  return isInteractionCollectorError && (message.includes("reason: time") || message.includes("reason: idle"));
+}
+
+function createRawModalRestError(response: Response, responseBody: string): Error {
+  let rawError: unknown;
+  try {
+    rawError = JSON.parse(responseBody);
+  } catch {
+    rawError = responseBody;
+  }
+
+  const rawErrorRecord = rawError && typeof rawError === "object" ? (rawError as Record<string, unknown>) : undefined;
+  const discordMessage = typeof rawErrorRecord?.message === "string" ? rawErrorRecord.message : response.statusText;
+  const error = new Error(`Discord API error: ${response.status} ${discordMessage}`) as Error & {
+    code?: unknown;
+    rawError: unknown;
+    status: number;
+  };
+  error.code = rawErrorRecord?.code;
+  error.rawError = rawError;
+  error.status = response.status;
+  return error;
+}
+
+export async function showRoutedRawModal(
+  interaction:
+    | ChatInputCommandInteraction
+    | ButtonInteraction
+    | StringSelectMenuInteraction
+    | ChannelSelectMenuInteraction
+    | UserSelectMenuInteraction
+    | RoleSelectMenuInteraction
+    | MentionableSelectMenuInteraction,
+  data: { custom_id: string; title: string; components: RawDiscordComponent[] },
+): Promise<void> {
+  if (await rejectInteractionDuringShutdown(interaction)) return;
+  setupWebSocketInterception(interaction.client);
+  // Discord rejects the whole modal when one string is over its cap, and a translation can grow
+  // past a limit the English copy fits, so every routed modal is clamped here rather than per builder.
+  const { payload, truncatedPaths } = clampRawModalText(data);
+  if (truncatedPaths.length > 0) {
+    log.warn("Raw modal text truncated to Discord limits", { customId: data.custom_id, truncatedPaths });
+  }
+  const restEndpoint = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`;
+  const requestStartedAt = Date.now();
+  const response = await fetch(restEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: InteractionResponseType.Modal, data: payload }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    log.error(
+      `Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`,
+      undefined,
+      {
+        metadata: {
+          customId: data.custom_id,
+          interactionId: interaction.id,
+          interactionAgeAtRequestMs: requestStartedAt - interaction.createdTimestamp,
+          requestDurationMs: Date.now() - requestStartedAt,
+        },
+      },
+    );
+    throw createRawModalRestError(response, errorText);
+  }
+  rawModalAcknowledged.set(interaction, true);
+  log.info(`Marked interaction ${interaction.id} as raw-modal-acknowledged`);
+}
+
+export function takeRawModalSelectValue(interactionId: string, customId: string): string | undefined {
+  consumeStoredValue(modalStringSelectValues, interactionId, customId);
+  const storedValues = modalSelectValues.get(interactionId);
+  if (!storedValues) return undefined;
+  const val = storedValues[customId];
+  delete storedValues[customId];
+  if (Object.keys(storedValues).length === 0) {
+    modalSelectValues.delete(interactionId);
+  }
+  return val;
+}
+
+function consumeStoredValue<T>(
+  store: Map<string, Record<string, T>>,
+  interactionId: string,
+  customId: string,
+): T | undefined {
+  const storedValues = store.get(interactionId);
+  if (!storedValues) return undefined;
+  const val = storedValues[customId];
+  delete storedValues[customId];
+  if (Object.keys(storedValues).length === 0) store.delete(interactionId);
+  return val;
+}
+
+/**
+ * Consumes every value submitted for one String Select.
+ * @returns `undefined` when the submission is missing or already consumed; `[]` when submitted empty.
+ */
+export function takeRawModalStringSelectValues(interactionId: string, customId: string): string[] | undefined {
+  consumeStoredValue(modalSelectValues, interactionId, customId);
+  return consumeStoredValue(modalStringSelectValues, interactionId, customId);
+}
+
+export function takeRawModalUserSelectValue(interactionId: string, customId: string): string | undefined {
+  return takeRawModalSelectValue(interactionId, customId);
+}
+
+export function takeRawModalRoleSelectValue(interactionId: string, customId: string): string | undefined {
+  return takeRawModalSelectValue(interactionId, customId);
+}
+
+/**
+ * Consumes the channel IDs submitted for one Channel Select.
+ * @returns `undefined` when the submission is missing or already consumed; `[]` when submitted empty.
+ */
+export function takeRawModalChannelSelectValues(interactionId: string, customId: string): string[] | undefined {
+  const storedValues = modalChannelSelectValues.get(interactionId);
+  if (!storedValues) return undefined;
+  const val = storedValues[customId];
+  delete storedValues[customId];
+  if (Object.keys(storedValues).length === 0) {
+    modalChannelSelectValues.delete(interactionId);
+  }
+  return val;
+}
+
+export function takeRawModalCheckboxGroupValues(interactionId: string, customId: string): string[] | undefined {
+  const storedValues = modalCheckboxGroupValues.get(interactionId);
+  if (!storedValues) return undefined;
+  const val = storedValues[customId];
+  delete storedValues[customId];
+  if (Object.keys(storedValues).length === 0) {
+    modalCheckboxGroupValues.delete(interactionId);
+  }
+  return val;
+}
+
+export function takeRawModalFileUpload(interactionId: string, customId: string): APIAttachment | undefined {
+  const storedAttachments = modalResolvedAttachments.get(interactionId);
+  const storedFileUploadValues = modalFileUploadValues.get(interactionId);
+  if (!storedAttachments) return undefined;
+
+  let attachment: APIAttachment | undefined;
+  const attachmentIds = storedFileUploadValues?.[customId];
+  if (attachmentIds && attachmentIds.length > 0) {
+    const attachmentId = attachmentIds[0];
+    attachment = storedAttachments[attachmentId];
+    if (attachment) {
+      delete storedAttachments[attachmentId];
+    }
+  } else if (!storedFileUploadValues || Object.keys(storedFileUploadValues).length <= 1) {
+    const [firstId, firstAttachment] = Object.entries(storedAttachments)[0] ?? [];
+    if (firstAttachment) {
+      attachment = firstAttachment;
+      delete storedAttachments[firstId];
+    }
+  }
+
+  if (storedFileUploadValues) {
+    delete storedFileUploadValues[customId];
+    if (Object.keys(storedFileUploadValues).length === 0) {
+      modalFileUploadValues.delete(interactionId);
+    }
+  }
+
+  if (Object.keys(storedAttachments).length === 0) {
+    modalResolvedAttachments.delete(interactionId);
+  }
+
+  return attachment;
+}
+
+export function takeRawModalFileUploads(interactionId: string, customId: string): APIAttachment[] {
+  const storedAttachments = modalResolvedAttachments.get(interactionId);
+  const storedValues = modalFileUploadValues.get(interactionId);
+  const ids = storedValues?.[customId] ?? [];
+  const files = ids.map((id) => storedAttachments?.[id]);
+  if (storedValues) {
+    delete storedValues[customId];
+    if (!Object.keys(storedValues).length) modalFileUploadValues.delete(interactionId);
+  }
+  for (const id of ids) if (storedAttachments) delete storedAttachments[id];
+  if (storedAttachments && !Object.keys(storedAttachments).length) modalResolvedAttachments.delete(interactionId);
+  if (files.some((file) => !file)) throw new Error("Modal upload attachment was not resolved");
+  return files.filter((file): file is APIAttachment => !!file);
+}
+
+/**
  * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
- * @param locale The locale for localization
- * @param key The localization key
  * @param vars Variables for localization (optional)
  * @param maxLength Maximum allowed length (defaults to modal description limit)
- * @returns Localized and potentially truncated string
  */
-function safeModalLocalizer(
+export function safeModalLocalizer(
   locale: string,
   key: string,
   vars?: Record<string, string | number>,
@@ -322,32 +689,23 @@ function localizeConfirmationDescription(
 }
 
 /**
- * Safely truncates text for select option labels and values with "..." suffix
- * @param text The text to truncate
+ * Safely truncates text for select option labels and values with "..." suffix,
+ * delegating to the Unicode-safe truncation primitive.
  * @param maxLength Maximum allowed length (100 for select options)
- * @returns Truncated text with "..." if needed
  */
 export function safeSelectOptionText(text: string, maxLength = 100): string {
-  if (text.length > maxLength) {
-    return `${text.substring(0, maxLength - 3)}...`;
-  }
-  return text;
+  return truncateDiscordText(text, maxLength, "...");
 }
 
 /**
  * @description Prompts the user with an embed and Continue/Cancel buttons, awaiting their response.
  * Handles interaction replies, button filtering, and timeouts.
- * @param interaction The interaction to reply to
- * @param locale The locale for localization
- * @param options Configuration for the embed and buttons
- * @returns Promise resolving to a ConfirmationResult
  */
 export async function promptWithConfirmation(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
   options: ConfirmationOptions,
 ): Promise<ConfirmationResult> {
-  // 1. Destructure options with defaults
   const {
     embedTitleKey,
     embedDescriptionKey,
@@ -358,30 +716,28 @@ export async function promptWithConfirmation(
     continueCustomId,
     cancelCustomId,
     timeout = PROMPT_TIMEOUT, // Default 15 seconds
+    continueStyle = ButtonStyle.Secondary,
+    cancelStyle = ButtonStyle.Secondary,
   } = options;
   const localizedDescription = localizeConfirmationDescription(locale, embedDescriptionKey, embedDescriptionVars);
 
-  // 2. Create Embed
   const embed = new EmbedBuilder()
     .setColor(embedColor)
     .setTitle(localizer(locale, embedTitleKey))
     .setDescription(localizedDescription);
 
-  // 3. Create Buttons
   const continueButton = new ButtonBuilder()
     .setCustomId(continueCustomId)
-    .setLabel(localizer(locale, continueLabelKey))
-    .setStyle(ButtonStyle.Success);
+    .setLabel(safeSelectOptionText(localizer(locale, continueLabelKey), DISCORD_BUTTON_LABEL_MAX))
+    .setStyle(continueStyle);
 
   const cancelButton = new ButtonBuilder()
     .setCustomId(cancelCustomId)
-    .setLabel(localizer(locale, cancelLabelKey))
-    .setStyle(ButtonStyle.Danger);
+    .setLabel(safeSelectOptionText(localizer(locale, cancelLabelKey), DISCORD_BUTTON_LABEL_MAX))
+    .setStyle(cancelStyle);
 
-  // 4. Create Action Row
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton, cancelButton);
 
-  // 5. Send/Edit the Reply
   let message: Message;
   try {
     // First, check if this interaction has already been responded to
@@ -391,7 +747,6 @@ export async function promptWithConfirmation(
         components: [buttonRow],
       });
     } else {
-      // If not, reply first then fetch the created message
       await interaction.reply({
         embeds: [embed],
         components: [buttonRow],
@@ -414,13 +769,12 @@ export async function promptWithConfirmation(
     }
   }
 
-  // 6. Create Button Collector Filter
   const buttonCollectorFilter = (i: ButtonInteraction) => {
     i.deferUpdate().catch((e) => log.warn("Failed to defer update on button filter:", e));
     return i.user.id === interaction.user.id;
   };
 
-  // 7. Await Component Interaction
+  // Await Component Interaction
   try {
     const buttonInteraction = await message.awaitMessageComponent({
       filter: buttonCollectorFilter,
@@ -428,25 +782,22 @@ export async function promptWithConfirmation(
       time: timeout,
     });
 
-    // 8. Handle Button Click
     if (buttonInteraction.customId === continueCustomId) {
       return { outcome: "continue", interaction: buttonInteraction };
     }
 
-    // User clicked Cancel
     const cancelEmbed = new EmbedBuilder()
       .setColor(ColorCode.ERROR)
-      .setTitle(localizer(locale, "general.interaction.cancel_title"))
+      .setTitle(withStatusCircle(localizer(locale, "general.interaction.cancel_title"), ColorCode.ERROR))
       .setDescription(localizer(locale, "general.interaction.cancel_description"));
 
     await interaction.editReply({ embeds: [cancelEmbed], components: [] });
     return { outcome: "cancel" };
   } catch (_timeoutError) {
-    // 9. Handle Timeout
     log.warn(`Confirmation prompt timed out for user ${interaction.user.id}`);
     const timeoutEmbed = new EmbedBuilder()
       .setColor(ColorCode.ERROR)
-      .setTitle(localizer(locale, "general.interaction.timeout_title"))
+      .setTitle(withStatusCircle(localizer(locale, "general.interaction.timeout_title"), ColorCode.ERROR))
       .setDescription(localizer(locale, "general.interaction.timeout_description"));
     await interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     return { outcome: "timeout" };
@@ -457,10 +808,6 @@ export async function promptWithConfirmation(
  * @description Prompts the user with a confirmation embed and buttons without
  * pre-acknowledging the selected button interaction, so the caller can still
  * open a modal from the returned ButtonInteraction.
- * @param interaction The interaction to show the confirmation for
- * @param locale The locale for localization
- * @param options Configuration for the embed and buttons
- * @returns Promise resolving to a ConfirmationResult
  */
 export async function promptWithUnacknowledgedConfirmation(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -478,6 +825,8 @@ export async function promptWithUnacknowledgedConfirmation(
     continueCustomId,
     cancelCustomId,
     timeout = PROMPT_TIMEOUT,
+    continueStyle = ButtonStyle.Secondary,
+    cancelStyle = ButtonStyle.Secondary,
   } = options;
   const localizedDescription = localizeConfirmationDescription(locale, embedDescriptionKey, embedDescriptionVars);
 
@@ -489,13 +838,13 @@ export async function promptWithUnacknowledgedConfirmation(
 
   const continueButton = new ButtonBuilder()
     .setCustomId(continueCustomId)
-    .setLabel(localizer(locale, continueLabelKey))
-    .setStyle(ButtonStyle.Success);
+    .setLabel(safeSelectOptionText(localizer(locale, continueLabelKey), DISCORD_BUTTON_LABEL_MAX))
+    .setStyle(continueStyle);
 
   const cancelButton = new ButtonBuilder()
     .setCustomId(cancelCustomId)
-    .setLabel(localizer(locale, cancelLabelKey))
-    .setStyle(ButtonStyle.Danger);
+    .setLabel(safeSelectOptionText(localizer(locale, cancelLabelKey), DISCORD_BUTTON_LABEL_MAX))
+    .setStyle(cancelStyle);
 
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton, cancelButton);
   const v2Components = useComponentsV2
@@ -508,6 +857,8 @@ export async function promptWithUnacknowledgedConfirmation(
         cancelLabelKey,
         continueCustomId,
         cancelCustomId,
+        continueStyle,
+        cancelStyle,
       )
     : null;
 
@@ -627,131 +978,72 @@ export async function promptWithUnacknowledgedConfirmation(
 }
 
 /**
- * @description Prompts the user with a modal form and awaits their response.
- * Discord handles modal timeouts naturally (~15 minutes), so no artificial timeout is applied.
- * @param interaction The interaction to show the modal for
- * @param locale The locale for localization
- * @param options Configuration for the modal and its input fields
- * @returns Promise resolving to a ModalResult
+ * Maps the title/description/footer of a legacy embed-style options object onto the
+ * {@link NoticeContainerOptions} shape used by {@link buildNoticeContainer}. Used by
+ * the V2-collision fallback in the legacy sinks so a marked interaction still receives
+ * the same copy, rendered as a Components V2 notice rather than an embed.
+ *
+ * @param descriptionOverride - Optional pre-composed body (e.g. summary fields flattened).
  */
-export async function promptWithModal(
-  interaction: ChatInputCommandInteraction | ButtonInteraction,
+function standardOptionsToNotice(
   locale: string,
-  options: ModalOptions,
-): Promise<ModalResult> {
-  const { modalTitleKey, modalCustomId, components } = options;
+  options: StandardEmbedOptions,
+  descriptionOverride?: string,
+): NoticeContainerOptions {
+  return {
+    locale,
+    // ColorResolvable is a superset of AccentColorInput; resolveAccentColor tolerates
+    // any string/number and falls back to INFO, so the cast is safe at runtime.
+    color: options.color as AccentColorInput | undefined,
+    titleKey: options.titleKey,
+    titleVars: options.titleVars,
+    descriptionKey: descriptionOverride ? undefined : options.descriptionKey,
+    description: descriptionOverride ?? options.description,
+    descriptionVars: descriptionOverride ? undefined : options.descriptionVars,
+    footerKey: options.footerKey,
+    footerVars: options.footerVars,
+  };
+}
 
-  // 1. Create Modal
-  const modal = new ModalBuilder().setCustomId(modalCustomId).setTitle(localizer(locale, modalTitleKey));
+/**
+ * Delivers a {@link buildNoticeContainer} payload to an interaction whose reply message
+ * already carries `IsComponentsV2`. Mirrors the three delivery situations of the legacy
+ * embed sinks: `editReply` when acknowledged, `webhook.send` after a raw modal, `reply`
+ * otherwise, so but never emits legacy `embeds`, which Discord rejects on a V2 message.
+ *
+ * A marked interaction is, by construction, an ephemeral private workflow message, so
+ * the fresh-response paths stay ephemeral.
+ *
+ */
+async function replyNoticeContainerV2(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  notice: NoticeContainerOptions,
+): Promise<void> {
+  const components = buildNoticeContainer(notice);
+  const wasRawModalSent = rawModalAcknowledged.get(interaction as ChatInputCommandInteraction | ButtonInteraction);
 
-  // 2. Create Modal Components (Text Inputs Only - String Selects Not Yet Supported)
-  const rows = components.map((component) => {
-    if (isModalInputField(component)) {
-      // Create text input component
-      const textInput = new TextInputBuilder()
-        .setCustomId(component.customId)
-        .setLabel(localizer(locale, component.labelKey))
-        .setStyle(component.style || TextInputStyle.Short)
-        .setRequired(component.required !== false)
-        .setMaxLength(component.maxLength || 256); // Discord API limit
-
-      // Add description if provided (not yet supported by Discord.js)
-      if (component.descriptionKey) {
-        // Note: Discord.js does not support descriptions on TextInputs yet
-        // For now, we can add the description to the placeholder or label
-        const description = localizer(locale, component.descriptionKey);
-        if (!component.placeholder) {
-          textInput.setPlaceholder(description.substring(0, 100)); // Discord limit
-        }
-      }
-
-      if (component.placeholder) {
-        // If placeholder is provided, use it as localized placeholder
-        const placeholder =
-          typeof component.placeholder === "string" && component.placeholder.startsWith("commands.")
-            ? localizer(locale, component.placeholder)
-            : component.placeholder;
-        textInput.setPlaceholder(placeholder);
-      }
-      if (component.minLength) textInput.setMinLength(component.minLength);
-      if (component.value) textInput.setValue(component.value);
-
-      return new ActionRowBuilder<TextInputBuilder>().addComponents(textInput);
-    } else if (isModalSelectField(component)) {
-      // String selects in modals are not yet supported by Discord.js
-      // Convert to a text input with localized placeholder
-      const fallbackInput = new TextInputBuilder()
-        .setCustomId(component.customId)
-        .setLabel(localizer(locale, component.labelKey))
-        .setStyle(TextInputStyle.Short)
-        .setRequired(component.required !== false)
-        .setMaxLength(256); // Discord API limit
-
-      // Use localized placeholder if provided, otherwise show options
-      if (component.placeholder) {
-        const placeholder =
-          typeof component.placeholder === "string" && component.placeholder.startsWith("commands.")
-            ? localizer(locale, component.placeholder)
-            : component.placeholder;
-        fallbackInput.setPlaceholder(placeholder);
-      } else {
-        // Fallback to showing available options
-        const optionsText = component.options.map((opt) => opt.label).join(", ");
-        fallbackInput.setPlaceholder(`Options: ${optionsText.substring(0, 95)}...`);
-      }
-
-      return new ActionRowBuilder<TextInputBuilder>().addComponents(fallbackInput);
-    }
-
-    throw new Error(`Unsupported modal component type: ${component}`);
-  });
-
-  modal.addComponents(...rows);
-
-  // 3. Show Modal
   try {
-    await interaction.showModal(modal);
-  } catch (error) {
-    log.error("Failed to show modal:", error);
-    return { outcome: "timeout" };
-  }
-
-  // 4. Wait for submission (use Discord's natural timeout duration ~15 minutes)
-  try {
-    const submitted = await interaction.awaitModalSubmit({
-      time: 600000, // 10 minutes - matches Discord's natural modal timeout
-      filter: (i) => i.customId === modalCustomId && i.user.id === interaction.user.id,
-    });
-
-    // 5. Collect field values
-    const values: Record<string, string> = {};
-    for (const component of components) {
-      if (isModalInputField(component)) {
-        values[component.customId] = submitted.fields.getTextInputValue(component.customId);
-      } else if (isModalSelectField(component)) {
-        // Get selected values from string select
-        const field = submitted.fields.getField(component.customId);
-        if (field && "value" in field) {
-          values[component.customId] = field.value;
-        }
-      }
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ components, flags: MessageFlags.IsComponentsV2 });
+    } else if (wasRawModalSent) {
+      await interaction.webhook.send({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+    } else {
+      await interaction.reply({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
     }
-
-    return { outcome: "submit", values, interaction: submitted };
   } catch (error) {
-    // This will only catch actual errors, not artificial timeouts
-    // Discord's natural timeout or user cancellation will be handled by command timeout
-    log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
-    return { outcome: "timeout" };
+    // Last-resort: try webhook.send so a state-desync still surfaces the notice.
+    log.warn("Failed to deliver V2 notice fallback via primary method:", error);
+    try {
+      await interaction.webhook.send({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+    } catch (fallbackError) {
+      log.error("All methods failed for V2 notice fallback:", fallbackError);
+    }
   }
 }
 
 /**
  * @description Shows a simple info/status embed without any interactive components.
  * Handles interaction state management defensively to prevent acknowledgment conflicts.
- * @param interaction The interaction to show the embed for
- * @param locale The locale for localization
- * @param options Configuration for the embed
  */
 export async function replyInfoEmbed(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -763,7 +1055,7 @@ export async function replyInfoEmbed(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
-  // 1. Check if "not setup" is actually a transient DB error (e.g. during deployment).
+  // Check if "not setup" is actually a transient DB error (e.g. during deployment).
   //    If the DB was recently unreachable, show a yellow "Currently Updating..." embed
   //    instead of the misleading red "Initial Setup Required" error.
   const isDMContext = !interaction.guild;
@@ -776,7 +1068,6 @@ export async function replyInfoEmbed(
     finalOptions.color = ColorCode.WARN;
   }
 
-  // 2. Add DM footer automatically for tomori_not_setup errors in DM context
   if (
     isDMContext &&
     (finalOptions.titleKey === "general.errors.tomori_not_setup_title" ||
@@ -785,10 +1076,29 @@ export async function replyInfoEmbed(
     finalOptions.footerKey = "general.errors.tomori_not_setup_dm_footer";
   }
 
-  // 3. Build the embed using the shared helper for consistency
-  const embed = createStandardEmbed(locale, finalOptions);
+  // Components V2 collision guard. If this interaction's reply already carries
+  //      IsComponentsV2 (e.g. a range selector rendered onto it), a legacy
+  //      `editReply({ embeds })` would be rejected by Discord. Render the same
+  //      title/description/footer as a V2 notice container instead. Tip buttons are
+  //      dropped here, so they are rare on the error/info paths that hit this guard.
+  if (hasComponentsV2Reply(interaction)) {
+    await replyNoticeContainerV2(interaction, standardOptionsToNotice(locale, finalOptions));
+    return;
+  }
 
-  // 4. Defensive interaction state checking
+  const embed = createStandardEmbed(locale, finalOptions);
+  const modalButtons = prepareEmbedModalButtons(locale, finalOptions, "Interaction error");
+  const { components } = modalButtons;
+  const embeds = [embed];
+
+  const attachModalCollectors = (message: Message): void => {
+    const { disabledRow } = modalButtons;
+    if (!disabledRow) return;
+    modalButtons.attach(message, async () => {
+      await interaction.webhook.editMessage(message.id, { embeds, components: [disabledRow] });
+    });
+  };
+
   const interactionState = {
     deferred: interaction.deferred,
     replied: interaction.replied,
@@ -797,7 +1107,7 @@ export async function replyInfoEmbed(
 
   log.info(`replyInfoEmbed interaction state: ${JSON.stringify(interactionState)}`);
 
-  // 5. Check if interaction was acknowledged via raw REST API (e.g., modal shown)
+  // Check if interaction was acknowledged via raw REST API (e.g., modal shown)
   // Discord.js state may be out of sync in this case
   const wasRawModalSent = rawModalAcknowledged.get(interaction as ChatInputCommandInteraction | ButtonInteraction);
 
@@ -805,65 +1115,70 @@ export async function replyInfoEmbed(
     // State desync detected: raw REST modal acknowledged the interaction on Discord's
     // side, but Discord.js still thinks replied=false / deferred=false.
     // interaction.followUp() would throw INTERACTION_NOT_REPLIED because of a
-    // Discord.js internal guard — bypass it by calling webhook.send() directly.
+    // Discord.js internal guard, so bypass it by calling webhook.send() directly.
     log.info(`Raw modal state desync detected for interaction ${interaction.id}, using webhook.send directly`);
     try {
-      await interaction.webhook.send({
-        embeds: [embed],
-        components: [],
+      const message = await interaction.webhook.send({
+        embeds,
+        components,
+        files: finalOptions.files,
         flags: flags || MessageFlags.Ephemeral,
       });
+      attachModalCollectors(message);
       return;
     } catch (webhookError) {
       log.error("webhook.send failed for raw-modal-acknowledged interaction:", webhookError);
-      // Fall through to standard error handling
     }
   }
 
   try {
     if (interaction.deferred || interaction.replied) {
-      // Interaction has already been acknowledged, use editReply
-      await interaction.editReply({ embeds: [embed], components: [] });
+      const message = await interaction.editReply({ embeds, components, files: finalOptions.files });
+      attachModalCollectors(message);
     } else {
-      // Interaction hasn't been acknowledged, use reply
-      await interaction.reply({ embeds: [embed], components: [], flags });
+      await interaction.reply({ embeds, components, files: finalOptions.files, flags });
+      attachModalCollectors(await interaction.fetchReply());
     }
   } catch (error) {
     log.warn("Failed to show info embed via primary method:", error);
 
-    // Enhanced fallback logic with more specific error handling
     try {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (errorMessage.includes("has already been acknowledged")) {
         // Interaction was acknowledged via raw REST (e.g. modal shown) but
         // Discord.js state is out of sync. followUp() would hit the same
-        // INTERACTION_NOT_REPLIED guard — use webhook.send() instead.
+        // INTERACTION_NOT_REPLIED guard, so use webhook.send() instead.
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
-        await interaction.webhook.send({
-          embeds: [embed],
-          components: [],
+        const message = await interaction.webhook.send({
+          embeds,
+          components,
+          files: finalOptions.files,
           flags: flags || MessageFlags.Ephemeral,
         });
+        attachModalCollectors(message);
       } else if (errorMessage.includes("not been sent or deferred")) {
         // Interaction wasn't properly acknowledged - try reply without flags first
         log.info("Attempting basic reply due to no prior acknowledgment");
         await interaction.reply({
-          embeds: [embed],
-          components: [],
+          embeds,
+          components,
+          files: finalOptions.files,
           flags: MessageFlags.Ephemeral,
         });
+        attachModalCollectors(await interaction.fetchReply());
       } else {
         // Other error - try webhook.send as last resort (avoids followUp guard)
         log.info("Attempting webhook.send as last resort fallback");
-        await interaction.webhook.send({
-          embeds: [embed],
-          components: [],
+        const message = await interaction.webhook.send({
+          embeds,
+          components,
+          files: finalOptions.files,
           flags: flags || MessageFlags.Ephemeral,
         });
+        attachModalCollectors(message);
       }
     } catch (fallbackError) {
-      // All methods failed - log comprehensive error details
       await log.error("All interaction methods failed for replyInfoEmbed:", error, {
         errorType: "InteractionReplyFailure",
         metadata: {
@@ -885,9 +1200,6 @@ export async function replyInfoEmbed(
  * @description Shows a summary embed with multiple fields, organized and localized.
  * Useful for displaying configuration summaries, help information, etc.
  * Handles interaction state management defensively to prevent acknowledgment conflicts.
- * @param interaction The interaction to show the embed for
- * @param locale The locale for localization
- * @param options Configuration for the summary embed and its fields
  */
 export async function replySummaryEmbed(
   interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -899,9 +1211,28 @@ export async function replySummaryEmbed(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
-  const embed = createSummaryEmbed(locale, options);
+  // Components V2 collision guard (see replyInfoEmbed). A summary embed cannot
+  // be edited onto a V2 message, so flatten the title/description plus each field into a
+  // single notice container. Docs link and appended embeds are dropped, so this path is a
+  // rare defensive fallback for a marked interaction.
+  if (hasComponentsV2Reply(interaction)) {
+    const fieldLines = options.fields.map((field) => {
+      const name = field.nameKey ? localizer(locale, field.nameKey, field.nameVars) : (field.name ?? "");
+      const value = field.valueKey ? localizer(locale, field.valueKey, field.valueVars) : (field.value ?? "");
+      return name ? `**${name}**\n${value}` : value;
+    });
+    const baseDescription =
+      options.description ??
+      (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
+    const composedDescription = [baseDescription, ...fieldLines].filter((line) => line.length > 0).join("\n\n");
+    await replyNoticeContainerV2(interaction, standardOptionsToNotice(locale, options, composedDescription));
+    return;
+  }
 
-  // Defensive interaction state checking
+  const embed = createSummaryEmbed(locale, options);
+  const embeds = options.appendEmbeds?.length ? [embed, ...options.appendEmbeds] : [embed];
+  const components = options.docsPath ? [buildDocsLinkRow(locale, options.docsPath, options.docsLabelKey)] : [];
+
   const interactionState = {
     deferred: interaction.deferred,
     replied: interaction.replied,
@@ -910,7 +1241,6 @@ export async function replySummaryEmbed(
 
   log.info(`replySummaryEmbed interaction state: ${JSON.stringify(interactionState)}`);
 
-  // Check if interaction was acknowledged via raw REST API (e.g., modal shown)
   const wasRawModalSent = rawModalAcknowledged.get(interaction as ChatInputCommandInteraction | ButtonInteraction);
 
   if (wasRawModalSent && !interaction.deferred && !interaction.replied) {
@@ -920,49 +1250,47 @@ export async function replySummaryEmbed(
     log.info(`Raw modal state desync detected for interaction ${interaction.id}, using webhook.send directly`);
     try {
       await interaction.webhook.send({
-        embeds: [embed],
-        components: [],
+        embeds,
+        components,
         flags: flags || MessageFlags.Ephemeral,
       });
       return;
     } catch (webhookError) {
       log.error("webhook.send failed for raw-modal-acknowledged interaction:", webhookError);
-      // Fall through to standard error handling
     }
   }
 
   try {
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ embeds: [embed], components: [] });
+      await interaction.editReply({ embeds, components });
     } else {
-      await interaction.reply({ embeds: [embed], components: [], flags });
+      await interaction.reply({ embeds, components, flags });
     }
   } catch (error) {
     log.warn("Failed to show summary embed via primary method:", error);
 
-    // Enhanced fallback logic matching replyInfoEmbed
     try {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (errorMessage.includes("has already been acknowledged")) {
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
         await interaction.webhook.send({
-          embeds: [embed],
-          components: [],
+          embeds,
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else if (errorMessage.includes("not been sent or deferred")) {
         log.info("Attempting basic reply due to no prior acknowledgment");
         await interaction.reply({
-          embeds: [embed],
-          components: [],
+          embeds,
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else {
         log.info("Attempting webhook.send as last resort fallback");
         await interaction.webhook.send({
-          embeds: [embed],
-          components: [],
+          embeds,
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       }
@@ -1005,30 +1333,8 @@ interface PersonaPaginatedChoiceOptions {
   onSelect?: (index: number) => Promise<void>;
   onCancel?: () => Promise<void>;
   preserveSelectedInteraction?: boolean;
-  /** Persistent avatar cache to share across multiple picker calls in an outer retry loop. */
+  /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
-}
-
-type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
-
-function resolveAccentColor(color?: AccentColorInput): number {
-  if (typeof color === "number") {
-    return color;
-  }
-
-  if (typeof color === "string") {
-    const normalized = color.trim().replace("#", "");
-    if (/^[0-9a-fA-F]{6}$/.test(normalized)) {
-      return Number.parseInt(normalized, 16);
-    }
-  }
-
-  if (Array.isArray(color) && color.length === 3) {
-    const [red, green, blue] = color;
-    return (red << 16) + (green << 8) + blue;
-  }
-
-  return Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
 }
 
 /**
@@ -1037,7 +1343,6 @@ function resolveAccentColor(color?: AccentColorInput): number {
  * (status, confirmation, persona picker, persona results all share this).
  *
  * @param text - The already-localized title text.
- * @returns The title prefixed as a Markdown H3 heading.
  */
 function formatContainerTitle(text: string): string {
   return `### ${text}`;
@@ -1052,13 +1357,12 @@ function buildV2StatusComponents(
   secondaryDescriptionKey?: string,
   secondaryDescriptionVars?: Record<string, string | number | boolean>,
 ): TopLevelComponentData[] {
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(color),
-    components: [
+  const accentColor = resolveAccentColor(color);
+  const container = buildPanelContainer(
+    [
       {
         type: ComponentType.TextDisplay,
-        content: formatContainerTitle(localizer(locale, titleKey)),
+        content: formatContainerTitle(withStatusCircle(localizer(locale, titleKey), accentColor)),
       },
       {
         type: ComponentType.TextDisplay,
@@ -1073,7 +1377,8 @@ function buildV2StatusComponents(
           ]
         : []),
     ],
-  };
+    accentColor,
+  );
 
   return [container];
 }
@@ -1087,29 +1392,29 @@ function buildV2ConfirmationComponents(
   cancelLabelKey: string,
   continueCustomId: string,
   cancelCustomId: string,
+  continueStyle: ButtonStyle.Secondary | ButtonStyle.Danger = ButtonStyle.Secondary,
+  cancelStyle: ButtonStyle.Secondary | ButtonStyle.Danger = ButtonStyle.Secondary,
 ): TopLevelComponentData[] {
   const actionRow: ActionRowData<ButtonComponentData> = {
     type: ComponentType.ActionRow,
     components: [
       {
         type: ComponentType.Button,
-        style: ButtonStyle.Success,
+        style: continueStyle,
         customId: continueCustomId,
-        label: localizer(locale, continueLabelKey),
+        label: safeSelectOptionText(localizer(locale, continueLabelKey), DISCORD_BUTTON_LABEL_MAX),
       },
       {
         type: ComponentType.Button,
-        style: ButtonStyle.Danger,
+        style: cancelStyle,
         customId: cancelCustomId,
-        label: localizer(locale, cancelLabelKey),
+        label: safeSelectOptionText(localizer(locale, cancelLabelKey), DISCORD_BUTTON_LABEL_MAX),
       },
     ],
   };
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(color),
-    components: [
+  const container = buildPanelContainer(
+    [
       {
         type: ComponentType.TextDisplay,
         content: formatContainerTitle(title),
@@ -1120,7 +1425,8 @@ function buildV2ConfirmationComponents(
       },
       actionRow,
     ],
-  };
+    resolveAccentColor(color),
+  );
 
   return [container];
 }
@@ -1135,8 +1441,8 @@ export interface NoticeContainerButtonOptions {
   customId: string;
   /** Locale key for the button label. */
   labelKey: string;
-  /** Button style (defaults to {@link ButtonStyle.Secondary}); excludes Link/Premium. */
-  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Success | ButtonStyle.Danger;
+  /** Button style (defaults to {@link ButtonStyle.Secondary}); Success, Link, and Premium are excluded. */
+  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Danger;
   /** Whether the button is disabled after its collector expires. */
   disabled?: boolean;
 }
@@ -1149,7 +1455,7 @@ export interface NoticeContainerOptions {
   locale: string;
   /** Accent color of the container's left bar (maps to the old embed color). */
   color?: AccentColorInput;
-  /** Locale key for the H2 title line. */
+  /** Locale key for the H3 title line. */
   titleKey: string;
   /** Variables for the title. */
   titleVars?: Record<string, string | number | boolean>;
@@ -1163,8 +1469,12 @@ export interface NoticeContainerOptions {
   footerKey?: string;
   /** Variables for the footer. */
   footerVars?: Record<string, string | number | boolean>;
+  /** Adds the shared `/config` > Behavior > Notices line below the footer. */
+  configHint?: boolean;
   /** Optional action button placed inside the container. */
   button?: NoticeContainerButtonOptions;
+  /** Renders only the emoji-free title; body, footer, config hint, and button are dropped. */
+  minimal?: boolean;
 }
 
 /**
@@ -1172,23 +1482,31 @@ export interface NoticeContainerOptions {
  * title/description/footer shape of a standard embed while allowing an action
  * button to live inside the same card.
  *
- * @param options - {@link NoticeContainerOptions} content and action inputs.
- * @returns A single-container `TopLevelComponentData[]` ready for `IsComponentsV2` sends.
  */
 export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
+  const accentColor = resolveAccentColor(options.color);
+  if (options.minimal) {
+    const title: ComponentInContainerData = {
+      type: ComponentType.TextDisplay,
+      content: formatContainerTitle(
+        withStatusCircle(localizer(locale, options.titleKey, options.titleVars), accentColor),
+      ),
+    };
+    return [buildPanelContainer([title], accentColor, { formatProse: false })];
+  }
   const components: ComponentInContainerData[] = [];
   const descriptionText =
     options.description ??
     (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
-    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+    content: formatContainerTitle(
+      withStatusCircle(localizer(locale, options.titleKey, options.titleVars), accentColor),
+    ),
   });
 
-  // 2. Body description. Some notices use raw text; others use localized keys.
   if (descriptionText) {
     components.push({
       type: ComponentType.TextDisplay,
@@ -1196,22 +1514,21 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     });
   }
 
-  // 3. Optional embed-style footer, preserved as muted Discord subtext.
-  if (options.footerKey) {
+  const footerLines = resolveFooterLines(locale, options.footerKey, options.footerVars, options.configHint);
+  if (footerLines.length > 0) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
       type: ComponentType.TextDisplay,
-      content: `-# ${localizer(locale, options.footerKey, options.footerVars)}`,
+      content: footerLines.map((line) => `-# ${line}`).join("\n"),
     });
   }
 
-  // 4. Optional utility action, rendered inside the card rather than below it.
   if (options.button) {
     const button: ButtonComponentData = {
       type: ComponentType.Button,
       style: options.button.style ?? ButtonStyle.Secondary,
       customId: options.button.customId,
-      label: localizer(locale, options.button.labelKey),
+      label: safeSelectOptionText(localizer(locale, options.button.labelKey), DISCORD_BUTTON_LABEL_MAX),
       disabled: options.button.disabled ?? false,
     };
 
@@ -1221,13 +1538,122 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     } satisfies ActionRowData<ButtonComponentData>);
   }
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components,
-  };
+  const container = buildPanelContainer(components, accentColor, { formatProse: false });
 
   return [container];
+}
+
+/** A Components V2 edit/send payload: a component tree flagged `IsComponentsV2`. */
+export interface ComponentsV2Payload {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+}
+
+/**
+ * How many option ranges (`1-25`, `26-50`, …) a single selector page shows before
+ * paginating with Previous/Next. Shared with `personaWorkflow.ts` so both consumers
+ * of {@link buildRangeSelectorPayload} agree on the page depth.
+ */
+export const RANGES_PER_SELECTOR_PAGE = 20;
+
+/** How many range buttons fit per Discord action row (max 5 components per row). */
+const RANGE_BUTTONS_PER_ROW = 5;
+
+/**
+ * Builds the Components V2 range-selector container shown when a modal's select has
+ * more than {@link MODAL_OPTIONS_PER_PAGE} options. Each range button opens a modal
+ * scoped to its 25-option slice; a Previous/Cancel/Next nav row paginates the ranges.
+ *
+ * This is the single source of the `>25` selector shell. Both the persona anchor
+ * workflow (`personaWorkflow.ts`) and the legacy `promptWithPaginatedModal`
+ * `componentsV2` branch render it, replacing the two divergent renderers that used to
+ * read the same two `general.pagination.*` locale keys.
+ *
+ * @param locale - Locale for the selector's localized strings.
+ * @param customIdPrefix - Per-session prefix scoping every button custom id
+ *   (`${prefix}_range_${index}`, `${prefix}_previous`, `${prefix}_cancel`, `${prefix}_next`).
+ * @param optionCount - Total number of options across all ranges.
+ * @param rangePage - Zero-based selector page currently shown.
+ * @param pageSize - How many options each range covers. Defaults to
+ *   {@link MODAL_OPTIONS_PER_PAGE}. Callers that reserve select entries for their own
+ *   fixed choices (e.g. `/model fallback` prepends a "None" option to every page, so only
+ *   24 models fit) pass the smaller number here, keeping the button labels honest about
+ *   what the modal will actually show.
+ */
+export function buildRangeSelectorPayload(
+  locale: string,
+  customIdPrefix: string,
+  optionCount: number,
+  rangePage: number,
+  pageSize: number = MODAL_OPTIONS_PER_PAGE,
+  titleKey: string = "general.pagination.select_page_title",
+  descriptionKey: string = "general.pagination.select_page_description",
+): ComponentsV2Payload {
+  const totalRanges = Math.ceil(optionCount / pageSize);
+  const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
+  const firstRange = rangePage * RANGES_PER_SELECTOR_PAGE;
+  const lastRange = Math.min(firstRange + RANGES_PER_SELECTOR_PAGE, totalRanges);
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, titleKey)}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, descriptionKey, {
+        totalItems: optionCount,
+        totalPages: totalRanges,
+      }),
+    },
+  ];
+
+  const rangeButtons: ButtonComponentData[] = [];
+  for (let rangeIndex = firstRange; rangeIndex < lastRange; rangeIndex += 1) {
+    const start = rangeIndex * pageSize + 1;
+    const end = Math.min(start + pageSize - 1, optionCount);
+    rangeButtons.push({
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_range_${rangeIndex}`,
+      label: `${start}-${end}`,
+    });
+  }
+  for (let offset = 0; offset < rangeButtons.length; offset += RANGE_BUTTONS_PER_ROW) {
+    components.push({
+      type: ComponentType.ActionRow,
+      components: rangeButtons.slice(offset, offset + RANGE_BUTTONS_PER_ROW),
+    } satisfies ActionRowData<ButtonComponentData>);
+  }
+
+  const navigation: ButtonComponentData[] = [
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_previous`,
+      label: localizer(locale, "general.pagination.previous"),
+      disabled: rangePage === 0,
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_cancel`,
+      label: localizer(locale, "general.pagination.cancel"),
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_next`,
+      label: localizer(locale, "general.pagination.next"),
+      disabled: rangePage >= totalRangePages - 1,
+    },
+  ];
+  components.push({
+    type: ComponentType.ActionRow,
+    components: navigation,
+  } satisfies ActionRowData<ButtonComponentData>);
+
+  const container = buildPanelContainer(components, Number.parseInt(ColorCode.INFO.replace("#", ""), 16));
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
 /**
@@ -1240,8 +1666,8 @@ export interface PersonaResultButtonOptions {
   customId: string;
   /** Locale key for the button label. */
   labelKey: string;
-  /** Button style (defaults to {@link ButtonStyle.Success}); excludes Link/Premium. */
-  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Success | ButtonStyle.Danger;
+  /** Button style (defaults to {@link ButtonStyle.Secondary}); Success, Link, and Premium are excluded. */
+  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Danger;
   /** Whether the button is disabled (e.g. after a successful import). */
   disabled?: boolean;
   /** Optional unicode emoji shown on the button. */
@@ -1287,7 +1713,7 @@ export interface PersonaResultContainerOptions {
    * Image arrangement. "image-top" (default) shows the attachment as a full-width
    * MediaGallery under the title. "thumbnail-section" instead pins it as a
    * right-aligned Thumbnail accessory on the final section, with the button
-   * directly beneath it — mirroring the persona picker's avatar-above-button look.
+   * directly beneath it, so mirroring the persona picker's avatar-above-button look.
    */
   layout?: "image-top" | "thumbnail-section";
   /** Optional content blocks (e.g. sample dialogue, next steps), each after a divider. */
@@ -1315,17 +1741,16 @@ export interface PersonaResultContainerOptions {
 }
 
 /**
- * Builds a Components V2 container that mirrors a classic "result" embed — title,
- * hero image, description, optional next-steps block, optional footer — but can
+ * Builds a Components V2 container that mirrors a classic "result" embed: title,
+ * hero image, description, optional next-steps block, optional footer; but can
  * also host an action button inside the same card. Used by `/persona generate`
  * and `/persona create` success messages so the "Import Now" button sits within
  * the result rather than dangling beneath a separate embed.
  *
- * @param options - {@link PersonaResultContainerOptions} layout/content inputs.
- * @returns A single-container `TopLevelComponentData[]` ready for `IsComponentsV2` sends.
  */
 export function buildPersonaResultContainer(options: PersonaResultContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
+  const accentColor = resolveAccentColor(options.color);
   const components: ComponentInContainerData[] = [];
   const sections = options.sections ?? [];
 
@@ -1334,13 +1759,14 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
   const useThumbnailLayout =
     options.layout === "thumbnail-section" && Boolean(options.imageAttachmentName) && sections.length > 0;
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
-    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+    content: formatContainerTitle(
+      withStatusCircle(localizer(locale, options.titleKey, options.titleVars), accentColor),
+    ),
   });
 
-  // 2. Hero image directly under the title (CV2 has no embed image slot, so the
+  // Hero image directly under the title (CV2 has no embed image slot, so the
   //    attachment is surfaced through a single-item MediaGallery). Skipped in the
   //    thumbnail layout, which shows the avatar beside the final section instead.
   if (options.imageAttachmentName && !useThumbnailLayout) {
@@ -1350,15 +1776,11 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  // 3. Body description.
   components.push({
     type: ComponentType.TextDisplay,
     content: localizer(locale, options.descriptionKey, options.descriptionVars),
   });
 
-  // 4. Optional content sections (e.g. sample dialogue, next steps), each grouped
-  //    under its own divider. In the thumbnail layout, the final section carries
-  //    the avatar as a right-aligned Thumbnail accessory.
   sections.forEach((section, index) => {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     const heading = section.titleKey ? `**${localizer(locale, section.titleKey, section.titleVars)}**\n` : "";
@@ -1382,7 +1804,6 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     }
   });
 
-  // 5. Optional footer note (e.g. the DM avatar-skipped warning), muted via italics.
   if (options.footerKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
@@ -1391,15 +1812,15 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  // 6. Optional action button. Left alignment uses a standard ActionRow; right
+  // Optional action button. Left alignment uses a standard ActionRow; right
   //    alignment uses a Section with the button as an accessory (CV2's only way
   //    to right-align a button), mirroring the persona picker's "select" button.
   if (options.button) {
     const button: ButtonComponentData = {
       type: ComponentType.Button,
-      style: options.button.style ?? ButtonStyle.Success,
+      style: options.button.style ?? ButtonStyle.Secondary,
       customId: options.button.customId,
-      label: localizer(locale, options.button.labelKey),
+      label: safeSelectOptionText(localizer(locale, options.button.labelKey), DISCORD_BUTTON_LABEL_MAX),
       disabled: options.button.disabled ?? false,
       ...(options.button.emoji ? { emoji: { name: options.button.emoji } } : {}),
     };
@@ -1420,7 +1841,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     }
   }
 
-  // 7. Optional closing note after the button, on its own divided row. Keeps the
+  // Optional closing note after the button, on its own divided row. Keeps the
   //    button tight under the avatar while the note sits below it.
   if (options.trailingNoteKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
@@ -1430,11 +1851,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components,
-  };
+  const container = buildPanelContainer(components, accentColor);
 
   return [container];
 }
@@ -1467,7 +1884,6 @@ export async function replyComponentsV2Status(
         flags: MessageFlags.IsComponentsV2,
       });
     } else if (wasRawModalSent) {
-      // Raw REST modal consumed the initial response — use webhook.send() directly.
       await interaction.webhook.send({
         components,
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
@@ -1478,38 +1894,11 @@ export async function replyComponentsV2Status(
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
       });
     }
+    // The interaction's reply message now carries IsComponentsV2. Flag it so a later
+    // legacy embed sink on the same interaction renders a V2 notice instead of throwing.
+    markComponentsV2Reply(interaction);
   } catch (error) {
     log.warn("Failed to update Components V2 status reply:", error);
-  }
-}
-
-export async function updateButtonComponentsV2Status(
-  interaction: ButtonInteraction,
-  locale: string,
-  titleKey: string,
-  descriptionKey: string,
-  color: string | number,
-  descriptionVars?: Record<string, string | number | boolean>,
-  secondaryDescriptionKey?: string,
-  secondaryDescriptionVars?: Record<string, string | number | boolean>,
-): Promise<void> {
-  const components = buildV2StatusComponents(
-    locale,
-    titleKey,
-    descriptionKey,
-    color,
-    descriptionVars,
-    secondaryDescriptionKey,
-    secondaryDescriptionVars,
-  );
-
-  try {
-    await interaction.update({
-      components,
-      flags: MessageFlags.IsComponentsV2,
-    });
-  } catch (error) {
-    log.warn("Failed to update button interaction with Components V2 status:", error);
   }
 }
 
@@ -1523,18 +1912,334 @@ export async function acknowledgeModalSubmitForRefresh(interaction: ModalSubmitI
   }
 }
 
+export interface GuardedPanelWorkflowController {
+  replace(payload: unknown): Promise<unknown>;
+  replaceFrom?(source: unknown, payload: unknown): Promise<unknown>;
+}
+
+export type GuardedPanelDeliveryTarget =
+  | ChatInputCommandInteraction
+  | ButtonInteraction
+  | StringSelectMenuInteraction
+  | ChannelSelectMenuInteraction
+  | RoleSelectMenuInteraction
+  | UserSelectMenuInteraction
+  | MentionableSelectMenuInteraction
+  | ModalSubmitInteraction
+  | GuardedPanelWorkflowController
+  | {
+      editReply?: (payload: InteractionEditReplyOptions | MessagePayload | string) => Promise<unknown>;
+      update?: (payload: InteractionUpdateOptions | MessagePayload | string) => Promise<unknown>;
+      reply?: (payload: InteractionReplyOptions | MessagePayload | string) => Promise<unknown>;
+      replace?: (payload: unknown) => Promise<unknown>;
+      replaceFrom?: (source: unknown, payload: unknown) => Promise<unknown>;
+      deferred?: boolean;
+      replied?: boolean;
+    };
+
+export type GuardedPanelDeliveryMethod = "editReply" | "update" | "reply" | "replace" | "replaceFrom";
+
+export interface GuardedPanelDeliveryOptions {
+  /** Delivery transport to invoke on the target. Defaults to editReply, falling back to available methods. */
+  method?: GuardedPanelDeliveryMethod;
+  /** Locale used to localize the minimal fallback payload if the provided payload is invalid. */
+  locale?: string;
+  /** Source interaction when method is "replace" and target provides replaceFrom. */
+  sourceInteraction?: unknown;
+  /** Flags override, e.g. Ephemeral | IsComponentsV2 for initial reply. */
+  flags?: MessageFlags | number;
+  /**
+   * The receipt this payload repaints with, when it carries one.
+   *
+   * Threaded through delivery rather than read back off the payload so the failure signal cannot
+   * cost the payload any of its Discord text budget or interfere with runtime panel formatting.
+   */
+  receipt?: PanelReceipt;
+  /**
+   * The panel this payload renders, logged on a limit violation because the interaction's custom ID
+   * names the pressed control (a page selector names the page being left, not the page that failed).
+   */
+  panel?: string;
+}
+
+/**
+ * Resolves whether the current environment should enforce production behavior for panel delivery.
+ * Reads dynamically from environment variables with fallback so runtime mode switches are detected immediately.
+ */
+export function isProductionEnvironment(): boolean {
+  const env = process.env.RUN_ENV || process.env.NODE_ENV || "development";
+  return env.toLowerCase() === "production";
+}
+
+/**
+ * Builds the minimal fallback Components V2 container payload for panel delivery.
+ * Contains only a localized error title and description in a single container.
+ * Guaranteed to satisfy validateComponentsV2MessageLimits.
+ */
+export function buildPanelFallbackPayload(locale = "en-US"): ComponentsV2MessagePayload {
+  const container = buildPanelContainer([
+    {
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "general.errors.unknown_error_description"),
+    },
+  ]);
+
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  };
+}
+
+/**
+ * Validates a Components V2 payload before it reaches a delivery transport.
+ *
+ * Invalid payloads throw outside production so tests and development expose the exact violation.
+ * Production logs only structured limit metadata and returns the minimal fallback while retaining
+ * attachment fields as empty arrays when the original payload included them.
+ */
+export function validateAndFallbackPanelPayload<T>(payload: T, locale = "en-US", panel?: string): T {
+  const validation = validateComponentsV2MessageLimits(payload as ComponentsV2MessagePayload);
+  if (validation.valid) return payload;
+
+  if (!isProductionEnvironment()) {
+    const summary = validation.violations
+      .map((v) => `${v.path}: [${v.code}] observed ${v.observed} (limit ${v.limit})`)
+      .join("; ");
+    throw new ComponentsV2LimitError(
+      `Components V2 panel payload exceeded Discord limits: ${summary}`,
+      validation.violations,
+    );
+  }
+
+  const sanitizedViolations = validation.violations.map((v) => ({
+    path: v.path,
+    componentType: v.componentType,
+    observed: v.observed,
+    limit: v.limit,
+    code: v.code,
+  }));
+
+  void log.error("Components V2 panel payload exceeded Discord limits", undefined, {
+    metadata: {
+      ...(panel ? { panel } : {}),
+      violations: sanitizedViolations,
+    },
+  });
+
+  const fallback = buildPanelFallbackPayload(locale);
+  const original = payload as Record<string, unknown>;
+  return {
+    ...fallback,
+    ...(payload && typeof payload === "object" && "attachments" in original ? { attachments: [] } : {}),
+    ...(payload && typeof payload === "object" && "files" in original ? { files: [] } : {}),
+  } as T;
+}
+
+/**
+ * Sink for the `panel_failure` series, injected so this module stays usable without a pool.
+ *
+ * Deliberately not a top-level import of the repository singleton. `interactionCore` is pulled in
+ * by nearly every Discord surface, and a static import would drag the database client into every
+ * one of them, including tests that only want to deliver a panel. The default resolves lazily and
+ * only when a failure actually happens.
+ */
+export interface PanelFailureSampleSink {
+  recordSample(metricName: string, fields: Record<string, number | string>): Promise<void>;
+}
+
+let panelFailureSampleSink: PanelFailureSampleSink | null = null;
+
+/**
+ * Overrides the sample sink, returning the previous one for the caller to restore.
+ *
+ * Mirrors the dependency-object shape `recordPanelActionStat` takes, in the form a module-private
+ * reporter can use: tests install a spy, and production never calls it.
+ */
+export function setPanelFailureSampleSink(sink: PanelFailureSampleSink | null): PanelFailureSampleSink | null {
+  const previous = panelFailureSampleSink;
+  panelFailureSampleSink = sink;
+  return previous;
+}
+
+/** Discards the sample, for a context that must not reach a real database. */
+const inertPanelFailureSampleSink: PanelFailureSampleSink = { recordSample: async () => {} };
+
+async function resolvePanelFailureSampleSink(): Promise<PanelFailureSampleSink> {
+  if (panelFailureSampleSink) return panelFailureSampleSink;
+  // Under `bun test` the default would resolve the real repository and insert against whatever
+  // database the environment points at, so a suite that merely renders failure panels writes
+  // hundreds of rows of test data into a live `metric_samples`. A test that means to assert on the
+  // sink installs its own through `setPanelFailureSampleSink`, which is checked above.
+  if (process.env.NODE_ENV === "test") return inertPanelFailureSampleSink;
+  const { metricSampleRepository } = await import("@/utils/db/repositories/MetricSampleRepository");
+  return metricSampleRepository;
+}
+
+/**
+ * Writes the failure to Postgres alongside the log stream, without awaiting it.
+ *
+ * `recordSample` already never throws and never rejects, so a failing pool cannot break delivery.
+ * It is still fire-and-forget rather than awaited because it performs an INSERT and can ride a
+ * prune on the write path, and this call happens before the Discord request. Awaiting it would put
+ * a database round trip in front of every failure repaint, which is the one thing the chokepoint's
+ * contract forbids.
+ *
+ * The fields are passed as an object, never a `JSON.stringify` result: under Bun's driver a
+ * stringified value binds as text and `::jsonb` turns it into a scalar string, which makes every
+ * `fields->>'...'` read in Grafana return null. See migration 064 and `recordSample`'s own note.
+ */
+function recordPanelFailureSample(fields: Record<string, number | string>): void {
+  void (async () => {
+    try {
+      const sink = await resolvePanelFailureSampleSink();
+      await sink.recordSample("panel_failure", fields);
+    } catch {
+      // A sink that cannot be resolved or reached is already reported by the repository's own
+      // once-per-outage warning; repeating it here would add a line per failure.
+    }
+  })();
+}
+
+/**
+ * Single reporting point for every panel that repaints itself as a failed or warning receipt.
+ *
+ * Route code reports an expected refusal by returning a status object rather than throwing, so the
+ * router's exception handler never sees it and the user's red receipt leaves no trace anywhere.
+ * Every panel transport already funnels through {@link deliverGuardedPanel}, which makes it the one
+ * place a receipt can be observed without an opt-in line in each of the roughly sixteen `repaint`
+ * helpers.
+ *
+ * Emitted as a metric rather than an error record, because `error_logs` is reserved for incidents.
+ * Most of these receipts are expected outcomes the actor can correct (bad input, stale panel,
+ * unavailable read), and writing every one of them at error level is the storm the repository's
+ * circuit breaker exists to absorb. The genuinely broken paths log at error level where their cause
+ * is still in scope, and a site with free-text cause detail writes it to `log.warn`.
+ *
+ * Both sinks carry the same fields, so `stat_counters.panel_action` (successes) and
+ * `metric_samples.panel_failure` (failures) join on `metric_key` / `fields->>'reason'` and answer
+ * which controls fail and how often relative to succeeding, in one query.
+ */
+function reportPanelFailure(
+  target: GuardedPanelDeliveryTarget | ((payload: unknown) => Promise<unknown>),
+  options?: GuardedPanelDeliveryOptions,
+): void {
+  const receipt = options?.receipt;
+  if (!receipt || (receipt.tone !== "error" && receipt.tone !== "warning")) return;
+
+  try {
+    const customId =
+      typeof target === "object" && target !== null && "customId" in target ? target.customId : undefined;
+    // A function target and a slash-command interaction carry no route id, so the namespace falls
+    // back rather than guessing. Queries should still group on namespace + tone, and a call site
+    // that knows its cause sets `receipt.reason` for an exact key.
+    const namespace = typeof customId === "string" ? (customId.split(":")[0] ?? "unknown") : "unknown";
+    const fields = {
+      locale: options?.locale ?? "en-US",
+      tone: receipt.tone,
+      // The heading is left out entirely: it is localized free text, so it files the same defect
+      // under a different value per locale and cannot be grouped.
+      reason: receipt.reason ?? `${namespace}_${receipt.tone}`,
+      namespace,
+      // Omitted rather than defaulted when the site does not know its action: the field shares the
+      // `stat_counters.panel_action` key space, and a placeholder would join to nothing while
+      // looking like it had.
+      ...(receipt.action ? { action: receipt.action } : {}),
+    };
+    log.metric("panel_failure", fields);
+    recordPanelFailureSample(fields);
+  } catch {
+    // Diagnostics must never be able to break the delivery they describe.
+  }
+}
+
+/**
+ * Universal guarded delivery helper used across all panel transports (initial reply,
+ * editReply, component update, anchor replacement, and avatar-bearing paths).
+ *
+ * In tests and development, surfaces exact limit violations loudly.
+ * In production, logs a redacted structured diagnostic and delivers the minimal fallback
+ * payload so committed operations always leave an acknowledged interaction repainted.
+ */
+export async function deliverGuardedPanel<T = unknown>(
+  target: GuardedPanelDeliveryTarget | ((payload: unknown) => Promise<T>),
+  payload: unknown,
+  options?: GuardedPanelDeliveryOptions,
+): Promise<T> {
+  const locale = options?.locale ?? "en-US";
+  let deliveryPayload = validateAndFallbackPanelPayload(payload, locale, options?.panel) as Record<string, unknown>;
+
+  reportPanelFailure(target, options);
+
+  if (options?.method === "reply" && options?.flags !== undefined) {
+    deliveryPayload = {
+      ...deliveryPayload,
+      flags: options.flags,
+    };
+  }
+
+  let result: T;
+  if (typeof target === "function") {
+    result = (await target(deliveryPayload)) as T;
+  } else {
+    const candidate = target as Record<string, unknown>;
+    if (options?.method === "update") {
+      if (typeof candidate.update !== "function") {
+        throw new TypeError("Target does not support update delivery");
+      }
+      result = (await (candidate.update as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+    } else if (options?.method === "reply") {
+      if (typeof candidate.reply !== "function") {
+        throw new TypeError("Target does not support reply delivery");
+      }
+      result = (await (candidate.reply as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+    } else if (options?.method === "replace" || options?.method === "replaceFrom") {
+      if (options?.sourceInteraction && typeof candidate.replaceFrom === "function") {
+        result = (await (candidate.replaceFrom as (source: unknown, payload: unknown) => Promise<unknown>)(
+          options.sourceInteraction,
+          deliveryPayload,
+        )) as T;
+      } else if (typeof candidate.replace === "function") {
+        result = (await (candidate.replace as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+      } else {
+        throw new TypeError("Target does not support replace delivery");
+      }
+    } else {
+      if (typeof candidate.editReply === "function") {
+        result = (await (candidate.editReply as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+      } else if (typeof candidate.update === "function") {
+        result = (await (candidate.update as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+      } else if (typeof candidate.replace === "function") {
+        result = (await (candidate.replace as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+      } else if (typeof candidate.reply === "function") {
+        result = (await (candidate.reply as (payload: unknown) => Promise<unknown>)(deliveryPayload)) as T;
+      } else {
+        throw new TypeError("Target does not provide a known delivery method");
+      }
+    }
+  }
+
+  if (typeof target === "object" && target !== null) {
+    try {
+      markComponentsV2Reply(target as unknown as ChatInputCommandInteraction);
+    } catch {
+      // Best-effort tracking
+    }
+  }
+
+  return result;
+}
+
 /**
  * Resolved avatar data for a single persona, cached across page renders within a picker session.
- * - `url`: a public HTTP(S) URL or the bot fallback — no file attachment needed.
+ * - `url`: a public HTTP(S) URL or the bot fallback, so no file attachment needed.
  * - `buffer`: raw image bytes for a local-disk avatar that must be attached to the Discord message.
  */
-export type AvatarCacheEntry = { type: "url"; url: string } | { type: "buffer"; buffer: Buffer };
+export type AvatarCacheEntry = PersonaAvatarAsset;
 
 /**
  * Session-scoped avatar cache keyed by absolute persona index (not page-local).
  * Populated lazily on first page visit; reused on re-navigation to the same page.
- * Pass into {@link PersonaPaginatedChoiceOptions.avatarSessionCache} to persist the cache
- * across multiple picker invocations in an outer retry loop.
+ * The persona workflow owns this map and passes it through internal picker retries.
  */
 export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
 
@@ -1545,16 +2250,13 @@ export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
  * Resolution order per alter persona (only runs on first visit per persona):
  * 1. Public HTTP(S) URL (always works in production, and in dev when
  *    AVATAR_PUBLIC_BASE_URL is configured)
- * 2. Discord file attachment — used in non-production when the avatar is stored
+ * 2. Discord file attachment: used in non-production when the avatar is stored
  *    as a local path and AVATAR_PUBLIC_BASE_URL is not set. The buffer is loaded
  *    from disk and returned as an AttachmentBuilder so the caller can include it
  *    in the reply. The media URL is set to `attachment://avatar_{idx}.png` which
  *    Discord resolves against the message's attachments.
  * 3. Fallback URL (bot server avatar) when no avatar is available.
  *
- * @param pagePersonas - The personas visible on the current page
- * @param pageStartIdx - Absolute index of the first persona on this page (for cache keying)
- * @param fallbackAvatarUrl - URL to use when no avatar can be resolved
  * @param sessionCache - Mutable cache shared across all page renders in one picker session
  */
 async function resolvePersonaPageAvatarData(
@@ -1570,7 +2272,7 @@ async function resolvePersonaPageAvatarData(
     pagePersonas.map(async (persona, idx) => {
       const absoluteIdx = pageStartIdx + idx;
 
-      // 1. Return cached result immediately — skip all I/O on repeated page visits.
+      // Return cached result immediately, so skip all I/O on repeated page visits.
       const cached = sessionCache.get(absoluteIdx);
       if (cached) {
         if (cached.type === "url") {
@@ -1589,28 +2291,21 @@ async function resolvePersonaPageAvatarData(
         return;
       }
 
-      // 2. Try public URL resolution first (http/https refs or configured base URL)
-      const publicUrl = resolvePersonaAvatarPublicUrl(persona.webhook_avatar_url);
-      if (publicUrl) {
-        sessionCache.set(absoluteIdx, { type: "url", url: publicUrl });
-        avatarUrls.set(idx, publicUrl);
+      const asset = await resolveAlterPersonaAvatarAsset(persona);
+      if (asset?.type === "url") {
+        sessionCache.set(absoluteIdx, asset);
+        avatarUrls.set(idx, asset.url);
+        return;
+      }
+      if (asset?.type === "buffer") {
+        sessionCache.set(absoluteIdx, asset);
+        const attachmentName = `avatar_${idx}.png`;
+        files.push(new AttachmentBuilder(asset.buffer, { name: attachmentName }));
+        avatarUrls.set(idx, `attachment://${attachmentName}`);
         return;
       }
 
-      // 3. For local paths with no public URL, load the buffer and attach directly
-      const avatarRef = persona.webhook_avatar_url;
-      if (avatarRef && isLocalPersonaAvatarPath(avatarRef)) {
-        const buffer = await loadStoredPersonaAvatarBuffer(avatarRef);
-        if (buffer) {
-          sessionCache.set(absoluteIdx, { type: "buffer", buffer });
-          const attachmentName = `avatar_${idx}.png`;
-          files.push(new AttachmentBuilder(buffer, { name: attachmentName }));
-          avatarUrls.set(idx, `attachment://${attachmentName}`);
-          return;
-        }
-      }
-
-      // 4. Nothing resolved — use fallback
+      // Nothing resolved, so use fallback
       sessionCache.set(absoluteIdx, { type: "url", url: fallbackAvatarUrl });
       avatarUrls.set(idx, fallbackAvatarUrl);
     }),
@@ -1656,12 +2351,19 @@ function buildPersonaPageComponents(
       ],
       accessory: {
         type: ComponentType.Button,
-        style: ButtonStyle.Danger,
+        style: ButtonStyle.Secondary,
         customId: PERSONA_CANCEL_CUSTOM_ID,
         emoji: { name: "✖️" },
       },
     },
   ];
+
+  if (options.descriptionKey) {
+    containerComponents.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, options.descriptionKey),
+    });
+  }
 
   pagePersonas.forEach((persona, idx) => {
     const personaPrompt = persona.persona_prompt?.trim();
@@ -1707,7 +2409,7 @@ function buildPersonaPageComponents(
       ],
       accessory: {
         type: ComponentType.Button,
-        style: ButtonStyle.Primary,
+        style: ButtonStyle.Secondary,
         customId: `${PERSONA_SELECT_CUSTOM_ID_PREFIX}${idx}`,
         label: localizer(locale, "general.pagination.persona_select_button"),
       },
@@ -1748,20 +2450,13 @@ function buildPersonaPageComponents(
   };
   containerComponents.push(navRow);
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components: containerComponents,
-  };
+  const container = buildPanelContainer(containerComponents, resolveAccentColor(options.color));
 
   return [container];
 }
 
 /**
  * Displays a paginated list of choices with emoji reactions for selection
- * @param interaction - Discord interaction
- * @param locale - User locale
- * @param options - Configuration options for the paginated choices
  * @returns A promise that resolves with the selected item or null if cancelled/timeout
  */
 export async function replyPaginatedChoices(
@@ -1769,14 +2464,12 @@ export async function replyPaginatedChoices(
   locale: string,
   options: PaginatedChoiceOptions,
 ): Promise<PaginatedChoiceResult> {
-  // Initialization
   const totalItems = options.items.length;
   const totalPages = Math.ceil(totalItems / PAGINATION_ITEMS_PER_PAGE);
   let currentPage = 1;
   const preserveSelectedInteraction = options.preserveSelectedInteraction === true;
 
   if (totalItems === 0) {
-    // If there are no items, show an empty state
     await replyInfoEmbed(interaction, locale, {
       titleKey: options.titleKey,
       titleVars: options.titleVars,
@@ -1791,28 +2484,22 @@ export async function replyPaginatedChoices(
     };
   }
 
-  // Outer try-catch for setup errors (e.g., initial reply fails)
   try {
     while (true) {
-      // This loop handles pagination navigation
-      // Calculate start and end indices for current page
       const startIdx = (currentPage - 1) * PAGINATION_ITEMS_PER_PAGE;
       const endIdx = Math.min(startIdx + PAGINATION_ITEMS_PER_PAGE, totalItems);
       const currentPageItems = options.items.slice(startIdx, endIdx);
 
-      // Build the item display with numbered emojis
       let itemsDisplay = "";
       if (options.itemLabelKey) {
         itemsDisplay += `**${localizer(locale, options.itemLabelKey)}**\n\n`;
       }
 
       currentPageItems.forEach((item, idx) => {
-        // Ensure item is a string before displaying
         const displayItem = typeof item === "string" ? item : String(item);
         itemsDisplay += `${NUMBER_EMOJIS[idx]} ${displayItem}\n`;
       });
 
-      // Add pagination information if there are multiple pages
       if (totalPages > 1) {
         itemsDisplay += `\n${localizer(locale, "general.pagination.page_info", {
           current: currentPage,
@@ -1820,10 +2507,8 @@ export async function replyPaginatedChoices(
         })}`;
       }
 
-      // Create pagination buttons
       const buttons: ButtonBuilder[] = [];
 
-      // Previous page button (if not on first page)
       if (currentPage > 1) {
         buttons.push(
           new ButtonBuilder()
@@ -1834,15 +2519,13 @@ export async function replyPaginatedChoices(
         );
       }
 
-      // Cancel button
       buttons.push(
         new ButtonBuilder()
           .setCustomId("cancel")
           .setLabel(localizer(locale, "general.pagination.cancel"))
-          .setStyle(ButtonStyle.Danger),
+          .setStyle(ButtonStyle.Secondary),
       );
 
-      // Next page button (if not on last page)
       if (currentPage < totalPages) {
         buttons.push(
           new ButtonBuilder()
@@ -1853,24 +2536,15 @@ export async function replyPaginatedChoices(
         );
       }
 
-      // Create selection buttons for each item on current page
       const selectionButtons: ButtonBuilder[] = [];
       currentPageItems.forEach((_, idx) => {
         selectionButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`select_${idx}`)
-            //.setLabel(String(idx + 1)) // Use the number as the label
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji(NUMBER_EMOJIS[idx]), // Use the number emoji
+          new ButtonBuilder().setCustomId(`select_${idx}`).setStyle(ButtonStyle.Secondary).setEmoji(NUMBER_EMOJIS[idx]), // Use the number emoji
         );
       });
 
-      // Create button rows
-      // Row 1: Pagination controls (Prev, Cancel, Next)
       const paginationRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
 
-      // --- Start Change: Split selection buttons into multiple rows ---
-      // Rows 2+: Selection buttons (max 5 per row)
       const selectionRows: ActionRowBuilder<ButtonBuilder>[] = [];
       for (let i = 0; i < selectionButtons.length; i += 5) {
         const rowButtons = selectionButtons.slice(i, i + 5);
@@ -1878,17 +2552,12 @@ export async function replyPaginatedChoices(
           selectionRows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(...rowButtons));
         }
       }
-      // --- End Change ---
 
-      // Combine all rows, ensuring type compatibility
       const rows: ActionRowBuilder<MessageActionRowComponentBuilder>[] = [
-        // Type assertion needed because ActionRowBuilder<ButtonBuilder> is not directly assignable
         paginationRow as ActionRowBuilder<MessageActionRowComponentBuilder>,
-        // Spread the selection rows (if any) with type assertions
         ...selectionRows.map((row) => row as ActionRowBuilder<MessageActionRowComponentBuilder>),
       ];
 
-      // Create the embed
       const embed = createStandardEmbed(locale, {
         titleKey: options.titleKey,
         titleVars: options.titleVars,
@@ -1900,19 +2569,15 @@ export async function replyPaginatedChoices(
         color: options.color ?? ColorCode.INFO, // Use provided color or default INFO
       });
 
-      // Define base reply options (used by both editReply and reply)
       const baseReplyOptions: Omit<InteractionReplyOptions, "flags"> = {
         embeds: [embed],
         components: rows,
       };
 
-      // Send or update the message
       let message: Message;
       if (interaction.replied || interaction.deferred) {
-        // 1. Edit the reply if already replied/deferred
         message = await interaction.editReply(baseReplyOptions);
       } else {
-        // 2. Reply initially, then fetch the message for awaitMessageComponent
         await interaction.reply({
           ...baseReplyOptions,
           flags: MessageFlags.Ephemeral,
@@ -1920,8 +2585,6 @@ export async function replyPaginatedChoices(
         message = await interaction.fetchReply();
       }
 
-      // --- Start Updated Interaction Handling Block ---
-      // This try-catch handles button interactions and timeouts
       try {
         const buttonInteraction = await message.awaitMessageComponent({
           filter: (i) => i.user.id === interaction.user.id,
@@ -1929,10 +2592,8 @@ export async function replyPaginatedChoices(
           time: PAGINATION_TIMEOUT_MS,
         });
 
-        // Handle the button interaction
         const customId = buttonInteraction.customId;
 
-        // Handle pagination navigation
         if (customId === "prev_page") {
           currentPage--;
           await buttonInteraction.deferUpdate();
@@ -1944,7 +2605,6 @@ export async function replyPaginatedChoices(
           continue; // Continue the while loop to show the next page
         }
         if (customId === "cancel") {
-          // Handle cancellation
           await buttonInteraction.update({
             embeds: [
               createStandardEmbed(locale, {
@@ -1957,13 +2617,11 @@ export async function replyPaginatedChoices(
             components: [], // Remove buttons
           });
 
-          // Execute the onCancel callback if provided
           if (options.onCancel) {
             try {
               await options.onCancel();
             } catch (cancelCallbackError) {
               log.error("Error executing onCancel callback in replyPaginatedChoices", cancelCallbackError);
-              // Don't block the cancellation flow, just log the error
             }
           }
 
@@ -1973,7 +2631,6 @@ export async function replyPaginatedChoices(
           };
         }
         if (customId.startsWith("select_")) {
-          // Handle item selection
           const selectionIdx = Number.parseInt(customId.split("_")[1], 10);
           const absoluteIndex = startIdx + selectionIdx;
           const selectedItem = options.items[absoluteIndex];
@@ -1989,7 +2646,13 @@ export async function replyPaginatedChoices(
                 interaction: buttonInteraction,
               };
             } catch (selectCallbackError) {
-              log.warn("Error occurred during onSelect callback execution:", selectCallbackError);
+              // The callback failed after the actor chose an item, so the user is about to be told
+              // the operation failed while nothing durable records why. Escalated from warn, which
+              // the production level filter drops.
+              await log.error("onSelect callback failed in replyPaginatedChoices", selectCallbackError, {
+                errorType: "PaginationSelectCallbackError",
+                metadata: { userDiscordId: interaction.user.id, absoluteIndex },
+              });
               await buttonInteraction.reply({
                 embeds: [
                   createStandardEmbed(locale, {
@@ -2011,12 +2674,9 @@ export async function replyPaginatedChoices(
           // Defer update before potentially long-running callback
           await buttonInteraction.deferUpdate();
 
-          // --- Start Nested Try-Catch for onSelect ---
           try {
-            // Process the selection using the callback provided by the command
             await options.onSelect(absoluteIndex);
 
-            // Update the message to show the selection was successful
             await interaction.editReply({
               embeds: [
                 createStandardEmbed(locale, {
@@ -2036,10 +2696,13 @@ export async function replyPaginatedChoices(
               selectedItem,
             };
           } catch (selectCallbackError) {
-            // Error occurred within the onSelect callback (e.g., DB update failed in the command)
-            log.warn("Error occurred during onSelect callback execution:", selectCallbackError); // Log as warn, the command's callback should use log.error with context
-
-            // Inform the user about the specific failure using new locale keys
+            // The callback failed after the actor chose an item, so the user is about to be told the
+            // operation failed while nothing durable records why. Escalated from warn, which the
+            // production level filter drops, and paired with the ambient interaction context.
+            await log.error("onSelect callback failed in replyPaginatedChoices", selectCallbackError, {
+              errorType: "PaginationSelectCallbackError",
+              metadata: { userDiscordId: interaction.user.id, absoluteIndex },
+            });
             await interaction.editReply({
               embeds: [
                 createStandardEmbed(locale, {
@@ -2052,17 +2715,24 @@ export async function replyPaginatedChoices(
               components: [], // Remove buttons
             });
 
-            // Return error state from the helper
             return {
               success: false,
               reason: "error", // Indicate an error occurred during processing
             };
           }
-          // --- End Nested Try-Catch for onSelect ---
         }
-      } catch (_error) {
-        // Handle timeout (This catch block now primarily handles timeouts from awaitMessageComponent)
-        log.warn(`Pagination interaction timed out for user ${interaction.user.id}`); // Log timeout specifically
+      } catch (error) {
+        // Only expiry is routine. An onSelect callback that threw, a deleted panel message, or a
+        // removed channel all land here too, and `log.warn` is filtered out of the production
+        // stream, so those would otherwise reach the user as a bare timeout with no record.
+        if (isCollectorTimeoutError(error)) {
+          log.warn(`Pagination interaction timed out for user ${interaction.user.id}`); // Log timeout specifically
+        } else {
+          await log.error("Pagination interaction ended abnormally in replyPaginatedChoices", error, {
+            errorType: "PaginationCollectorEnded",
+            metadata: { userDiscordId: interaction.user.id, currentPage },
+          });
+        }
         await interaction.editReply({
           embeds: [
             createStandardEmbed(locale, {
@@ -2080,14 +2750,12 @@ export async function replyPaginatedChoices(
           reason: "timeout",
         };
       }
-      // --- End Updated Interaction Handling Block ---
     } // End while loop
   } catch (error) {
     // Handle unexpected errors during setup (e.g., initial reply/edit failed)
     // Errors from onSelect are now caught inside the loop's try-catch
     log.error("Unexpected error during replyPaginatedChoices setup:", error); // Log the setup error
 
-    // Attempt to inform the user if possible
     try {
       // Use replyInfoEmbed for consistency, ensuring it handles deferred/replied state
       await replyInfoEmbed(
@@ -2112,8 +2780,9 @@ export async function replyPaginatedChoices(
 }
 
 /**
- * Displays a Components V2 persona selector with avatar cards and inline select buttons.
- * Designed for persona-targeting flows in /forget commands.
+ * Low-level Components V2 persona renderer used by `runPersonaPickerWorkflow`.
+ * Command and feature callers must use the workflow API so acknowledgment,
+ * retry, cache, and anchor-message invariants remain enforced.
  */
 export async function replyPaginatedPersonaChoicesV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
@@ -2127,12 +2796,21 @@ export async function replyPaginatedPersonaChoicesV2(
   const onSelect = options.onSelect ?? (async () => {});
 
   if (totalItems === 0) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: options.titleKey ?? "general.pagination.select_persona_title",
-      descriptionKey: "general.pagination.no_items",
-      color: ColorCode.INFO,
-      flags: MessageFlags.Ephemeral,
-    });
+    const components = buildV2StatusComponents(
+      locale,
+      options.titleKey ?? "general.pagination.select_persona_title",
+      "general.pagination.no_items",
+      ColorCode.INFO,
+    );
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ components, attachments: [], flags: MessageFlags.IsComponentsV2 });
+    } else {
+      await interaction.reply({
+        components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        withResponse: true,
+      });
+    }
 
     return {
       success: false,
@@ -2140,7 +2818,7 @@ export async function replyPaginatedPersonaChoicesV2(
     };
   }
 
-  // Compute fallback avatar URL once — used when no persona avatar can be resolved.
+  // Compute fallback avatar URL once; used when no persona avatar can be resolved.
   // Mirrors the same logic inside buildPersonaPageComponents so both agree on the fallback.
   const serverAvatarUrl = interaction.guild?.members.me?.displayAvatarURL({
     extension: "png",
@@ -2157,18 +2835,18 @@ export async function replyPaginatedPersonaChoicesV2(
     "https://cdn.discordapp.com/embed/avatars/0.png";
 
   // Outer try catches only programming errors (e.g. bad options). It must NOT make
-  // Discord API calls — by the time an error escapes the inner try, the interaction
+  // Discord API calls because by the time an error escapes the inner try, the interaction
   // token may already be dead and any recovery attempt just wastes rate-limit quota.
   const sessionStart = Date.now();
-  // Use a provided cache (outer retry loop) or create a fresh one for this session.
+  // Reuse the workflow-owned cache across retries, or create one for direct internal use.
   const avatarSessionCache: AvatarSessionCache = options.avatarSessionCache ?? new Map();
   try {
     while (true) {
-      // 1. Inner try wraps the ENTIRE loop body — setup, render, and button wait.
+      // Inner try wraps the ENTIRE loop body: setup, render, and button wait.
       //    This ensures every Discord API error is caught here and returned cleanly
       //    without propagating to the outer catch and triggering a second API call.
       try {
-        // 1a. Slash-command entry points may spend most of their 3-second ACK window
+        // Slash-command entry points may spend most of their 3-second ACK window
         //     loading personas before they reach the picker. Acknowledge here before
         //     avatar/file resolution so the initial render uses editReply() instead of
         //     racing the first interaction.reply().
@@ -2176,10 +2854,10 @@ export async function replyPaginatedPersonaChoicesV2(
           await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         }
 
-        // 1b. Guard against the Discord 15-minute interaction token expiry.
+        // Guard against the Discord 15-minute interaction token expiry.
         //     awaitMessageComponent resets its per-iteration timeout on each loop
         //     pass, so an active user clicking buttons can hold the session open
-        //     indefinitely — past the point where the token becomes invalid and all
+        //     indefinitely; past the point where the token becomes invalid and all
         //     editReply calls start throwing "Invalid Webhook Token".
         if (Date.now() - sessionStart >= PAGINATION_SESSION_MAX_MS) {
           try {
@@ -2190,6 +2868,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.pagination.timeout",
                 ColorCode.WARN,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
           } catch (error) {
@@ -2201,12 +2880,11 @@ export async function replyPaginatedPersonaChoicesV2(
           return { success: false, reason: "timeout" };
         }
 
-        // 1c. Determine which personas are on the current page.
         const startIdx = (currentPage - 1) * PERSONA_PAGINATION_ITEMS_PER_PAGE;
         const endIdx = Math.min(startIdx + PERSONA_PAGINATION_ITEMS_PER_PAGE, options.personas.length);
         const pagePersonas = options.personas.slice(startIdx, endIdx);
 
-        // 1d. Pre-resolve avatar URLs (and collect local file attachments when needed).
+        // Pre-resolve avatar URLs (and collect local file attachments when needed).
         //     In non-production without AVATAR_PUBLIC_BASE_URL, alter avatars stored as
         //     local paths are loaded from disk and attached directly to the message.
         //     avatarSessionCache ensures each persona's avatar is only fetched once per session.
@@ -2230,19 +2908,20 @@ export async function replyPaginatedPersonaChoicesV2(
           files,
         };
 
-        // 1e. Send or update the pagination message.
         let message: Message;
         if (interaction.replied || interaction.deferred) {
           message = await interaction.editReply({
             ...baseReplyOptions,
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } else {
-          await interaction.reply({
+          const response = await interaction.reply({
             ...baseReplyOptions,
             flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+            withResponse: true,
           });
-          message = await interaction.fetchReply();
+          message = response.resource?.message ?? (await interaction.fetchReply());
         }
 
         const buttonInteraction = await message.awaitMessageComponent({
@@ -2273,6 +2952,7 @@ export async function replyPaginatedPersonaChoicesV2(
               "general.pagination.cancelled",
               ColorCode.WARN,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
 
@@ -2311,6 +2991,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.errors.invalid_option_description",
                 ColorCode.ERROR,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2329,7 +3010,12 @@ export async function replyPaginatedPersonaChoicesV2(
                 interaction: buttonInteraction,
               };
             } catch (selectCallbackError) {
-              log.warn("Error occurred during onSelect callback execution:", selectCallbackError);
+              // Same blind spot as the sibling paginator: the caller's callback decides whether the
+              // write landed, and warn does not survive the production level filter.
+              await log.error("onSelect callback failed in replyPaginatedPersonaChoicesV2", selectCallbackError, {
+                errorType: "PaginationSelectCallbackError",
+                metadata: { userDiscordId: interaction.user.id, absoluteIndex },
+              });
               await buttonInteraction.reply({
                 embeds: [
                   createStandardEmbed(locale, {
@@ -2360,6 +3046,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.SUCCESS,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
 
@@ -2369,7 +3056,10 @@ export async function replyPaginatedPersonaChoicesV2(
               selectedItem,
             };
           } catch (selectCallbackError) {
-            log.warn("Error occurred during onSelect callback execution:", selectCallbackError);
+            await log.error("onSelect callback failed in replyPaginatedPersonaChoicesV2", selectCallbackError, {
+              errorType: "PaginationSelectCallbackError",
+              metadata: { userDiscordId: interaction.user.id, absoluteIndex },
+            });
             await interaction.editReply({
               components: buildV2StatusComponents(
                 locale,
@@ -2378,6 +3068,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.ERROR,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2387,15 +3078,20 @@ export async function replyPaginatedPersonaChoicesV2(
           }
         }
       } catch (innerError) {
-        // Discord.js signals awaitMessageComponent timeout by rejecting with the
-        // string "time". Any other value is a real Discord API error (rate limit,
-        // expired token, lost permission, etc.).
-        const isTimeout = innerError === "time";
+        // Discord.js signals an awaitMessageComponent expiry either with the bare
+        // string "time" or with an InteractionCollectorError carrying the end
+        // reason, depending on the surface: isCollectorTimeoutError covers both.
+        // Any other value is a real Discord API error (rate limit, expired token,
+        // lost permission, etc.) and must stay classified as fatal.
+        const isTimeout = isCollectorTimeoutError(innerError);
 
         if (isTimeout) {
           log.warn(`Pagination interaction timed out for user ${interaction.user.id}`);
         } else {
-          log.warn(`Pagination interaction failed for user ${interaction.user.id}`, innerError);
+          await log.error("Pagination interaction ended abnormally in replyPaginatedPersonaChoicesV2", innerError, {
+            errorType: "PaginationCollectorEnded",
+            metadata: { userDiscordId: interaction.user.id, currentPage },
+          });
         }
 
         // Best-effort: show a status message. We swallow any editReply failure
@@ -2409,6 +3105,7 @@ export async function replyPaginatedPersonaChoicesV2(
               isTimeout ? "general.pagination.timeout" : "general.errors.unknown_error_description",
               isTimeout ? ColorCode.WARN : ColorCode.ERROR,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } catch (error) {
@@ -2419,7 +3116,7 @@ export async function replyPaginatedPersonaChoicesV2(
         }
 
         // "fatal" signals callers that the interaction token is dead and they must
-        // NOT continue their own while(true) loop — doing so would call this
+        // NOT continue their own while(true) loop, because doing so would call this
         // function again on a dead interaction, creating an infinite API spam loop.
         return {
           success: false,
@@ -2429,7 +3126,7 @@ export async function replyPaginatedPersonaChoicesV2(
     }
   } catch (error) {
     // Only genuine programming errors reach here (e.g. bad options, sync throws).
-    // Do NOT make Discord API calls in this handler — the interaction state is
+    // Do NOT make Discord API calls in this handler because the interaction state is
     // unknown at this point and any attempt would just waste rate-limit quota.
     log.error("Unexpected error during replyPaginatedPersonaChoicesV2 setup:", error);
 
@@ -2442,11 +3139,7 @@ export async function replyPaginatedPersonaChoicesV2(
 
 /**
  * @description Creates a modal using raw Discord API with Component Type 18 (Label) support for descriptions and string selects
- * @param interaction The interaction to respond to
- * @param locale The locale for localization
- * @param options Configuration for the modal and its components
  * @param autoDeferReply Optional. If provided, automatically defers the modal submission reply to prevent 3-second timeout. Pass `true` for public reply, or `MessageFlags.Ephemeral` for ephemeral reply.
- * @returns Promise resolving to a ModalResult
  */
 export async function promptWithRawModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
@@ -2454,13 +3147,13 @@ export async function promptWithRawModal(
   options: ModalOptions,
   autoDeferReply?: boolean | MessageFlags.Ephemeral,
 ): Promise<ModalResult> {
-  // Set up WebSocket interception FIRST, before showing the modal
+  if (await rejectInteractionDuringShutdown(interaction)) return { outcome: "cancelled" };
   setupWebSocketInterception(interaction.client);
 
   const { modalTitleKey, modalCustomId, components } = options;
 
   // Generate a unique nonce for this modal instance. Discord's client caches
-  // checked state by custom_id — without a nonce, re-opening a modal (or
+  // checked state by custom_id because without a nonce, re-opening a modal (or
   // opening a different page that reuses the same component custom_ids)
   // causes the client to restore stale selections instead of honoring defaults.
   const modalNonce = Date.now().toString(36);
@@ -2470,20 +3163,18 @@ export async function promptWithRawModal(
   const nonceCustomId = (id: string) => `${id}_${modalNonce}`;
 
   try {
-    // Build raw Discord API payload with Component Type 18 (Label) support
     const rawModalPayload = {
       type: InteractionResponseType.Modal, // Type 9
       data: {
         custom_id: noncedModalCustomId,
         title: safeSelectOptionText(localizer(locale, modalTitleKey), MODAL_TITLE_MAX_LENGTH),
         components: components.map((component) => {
-          // Check kind-discriminated types first — before any structural guards.
+          // Check kind-discriminated types first: before any structural guards.
           // isModalSelectField checks "options" in component, which would also match
           // RadioGroupField and CheckboxGroupField. isModalInputField's fallback
           // (no options/minValues/style) would match CheckboxField. Checking `kind`
           // first avoids both false-positive matches.
           if (isModalRadioGroupField(component)) {
-            // Radio Group (type 21) wrapped in Label component (type 18)
             const c = component as ModalRadioGroupField;
             const rawComponent: RawDiscordComponent = {
               type: 21, // ComponentType.RadioGroup
@@ -2499,7 +3190,6 @@ export async function promptWithRawModal(
               required: c.required !== false,
             };
 
-            // Wrap in Label component (type 18)
             const radioLabelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, c.labelKey), MODAL_LABEL_MAX_LENGTH),
@@ -2512,7 +3202,6 @@ export async function promptWithRawModal(
 
             return radioLabelComponent;
           } else if (isModalCheckboxGroupField(component)) {
-            // Checkbox Group (type 22) wrapped in Label component (type 18)
             const cg = component as ModalCheckboxGroupField;
             const rawComponent: RawDiscordComponent = {
               type: 22, // ComponentType.CheckboxGroup
@@ -2531,7 +3220,6 @@ export async function promptWithRawModal(
             if (cg.maxValues !== undefined) rawComponent.max_values = cg.maxValues;
             if (cg.required !== undefined) rawComponent.required = cg.required;
 
-            // Wrap in Label component (type 18)
             const checkboxGroupLabelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, cg.labelKey), MODAL_LABEL_MAX_LENGTH),
@@ -2544,7 +3232,6 @@ export async function promptWithRawModal(
 
             return checkboxGroupLabelComponent;
           } else if (isModalCheckboxField(component)) {
-            // Checkbox (type 23) wrapped in Label component (type 18)
             const cb = component as ModalCheckboxField;
             const rawComponent: RawDiscordComponent = {
               type: 23, // ComponentType.Checkbox
@@ -2553,7 +3240,6 @@ export async function promptWithRawModal(
 
             if (cb.default !== undefined) rawComponent.default = cb.default;
 
-            // Wrap in Label component (type 18)
             const checkboxLabelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, cb.labelKey), MODAL_LABEL_MAX_LENGTH),
@@ -2565,8 +3251,97 @@ export async function promptWithRawModal(
             }
 
             return checkboxLabelComponent;
+          } else if (isModalUserSelectField(component)) {
+            const us = component as ModalUserSelectField;
+            const rawComponent: RawDiscordComponent = {
+              type: 5,
+              custom_id: nonceCustomId(us.customId),
+              min_values: us.minValues ?? 1,
+              max_values: us.maxValues ?? 1,
+              required: us.required !== false,
+            };
+
+            if (us.placeholder) {
+              const placeholder =
+                typeof us.placeholder === "string" && us.placeholder.startsWith("commands.")
+                  ? localizer(locale, us.placeholder)
+                  : us.placeholder;
+              rawComponent.placeholder = safeSelectOptionText(placeholder, SELECT_PLACEHOLDER_MAX_LENGTH);
+            }
+
+            const userSelectLabelComponent: RawDiscordComponent = {
+              type: 18, // ComponentType.Label
+              label: safeSelectOptionText(localizer(locale, us.labelKey), MODAL_LABEL_MAX_LENGTH),
+              component: rawComponent,
+            };
+
+            if (us.descriptionKey) {
+              userSelectLabelComponent.description = safeModalLocalizer(locale, us.descriptionKey);
+            }
+
+            return userSelectLabelComponent;
+          } else if (isModalRoleSelectField(component)) {
+            const rs = component as ModalRoleSelectField;
+            const rawComponent: RawDiscordComponent = {
+              type: 6,
+              custom_id: nonceCustomId(rs.customId),
+              min_values: rs.minValues ?? 1,
+              max_values: rs.maxValues ?? 1,
+              required: rs.required !== false,
+            };
+
+            if (rs.placeholder) {
+              const placeholder = rs.placeholder.startsWith("commands.")
+                ? localizer(locale, rs.placeholder)
+                : rs.placeholder;
+              rawComponent.placeholder = safeSelectOptionText(placeholder, SELECT_PLACEHOLDER_MAX_LENGTH);
+            }
+
+            const roleSelectLabelComponent: RawDiscordComponent = {
+              type: 18,
+              label: safeSelectOptionText(localizer(locale, rs.labelKey), MODAL_LABEL_MAX_LENGTH),
+              component: rawComponent,
+            };
+
+            if (rs.descriptionKey) {
+              roleSelectLabelComponent.description = safeModalLocalizer(locale, rs.descriptionKey);
+            }
+
+            return roleSelectLabelComponent;
+          } else if (isModalChannelSelectField(component)) {
+            const cs = component as ModalChannelSelectField;
+            const rawComponent: RawDiscordComponent = {
+              type: 8,
+              custom_id: nonceCustomId(cs.customId),
+              min_values: cs.minValues ?? 1,
+              max_values: cs.maxValues ?? 1,
+              required: cs.required !== false,
+            };
+
+            if (cs.channelTypes) {
+              rawComponent.channel_types = cs.channelTypes;
+            }
+
+            if (cs.placeholder) {
+              const placeholder =
+                typeof cs.placeholder === "string" && cs.placeholder.startsWith("commands.")
+                  ? localizer(locale, cs.placeholder)
+                  : cs.placeholder;
+              rawComponent.placeholder = safeSelectOptionText(placeholder, SELECT_PLACEHOLDER_MAX_LENGTH);
+            }
+
+            const channelSelectLabelComponent: RawDiscordComponent = {
+              type: 18, // ComponentType.Label
+              label: safeSelectOptionText(localizer(locale, cs.labelKey), MODAL_LABEL_MAX_LENGTH),
+              component: rawComponent,
+            };
+
+            if (cs.descriptionKey) {
+              channelSelectLabelComponent.description = safeModalLocalizer(locale, cs.descriptionKey);
+            }
+
+            return channelSelectLabelComponent;
           } else if (isModalInputField(component)) {
-            // Text Input wrapped in Label component (type 18)
             const rawComponent: RawDiscordComponent = {
               type: 4, // ComponentType.TextInput
               custom_id: component.customId,
@@ -2585,14 +3360,12 @@ export async function promptWithRawModal(
             if (component.maxLength) rawComponent.max_length = component.maxLength;
             if (component.value) rawComponent.value = component.value;
 
-            // Wrap in Label component (type 18)
             const labelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, component.labelKey), MODAL_LABEL_MAX_LENGTH),
               component: rawComponent,
             };
 
-            // Add description if provided
             if (component.descriptionKey) {
               labelComponent.description = safeModalLocalizer(locale, component.descriptionKey);
             }
@@ -2610,6 +3383,7 @@ export async function promptWithRawModal(
                   ? safeSelectOptionText(option.description, SELECT_OPTION_TEXT_MAX_LENGTH)
                   : undefined,
                 emoji: option.emoji,
+                default: option.default,
               })),
               required: component.required !== false,
             };
@@ -2622,21 +3396,18 @@ export async function promptWithRawModal(
               rawComponent.placeholder = safeSelectOptionText(placeholder, SELECT_PLACEHOLDER_MAX_LENGTH);
             }
 
-            // Wrap in Label component (type 18)
             const labelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, component.labelKey), MODAL_LABEL_MAX_LENGTH),
               component: rawComponent,
             };
 
-            // Add description if provided
             if (component.descriptionKey) {
               labelComponent.description = safeModalLocalizer(locale, component.descriptionKey);
             }
 
             return labelComponent;
           } else if (isModalFileUploadField(component)) {
-            // File Upload wrapped in Label component (type 18)
             const rawComponent: RawDiscordComponent = {
               type: 19, // ComponentType.FileUpload
               custom_id: component.customId,
@@ -2645,14 +3416,12 @@ export async function promptWithRawModal(
               required: component.required ?? false,
             };
 
-            // Wrap in Label component (type 18)
             const labelComponent: RawDiscordComponent = {
               type: 18, // ComponentType.Label
               label: safeSelectOptionText(localizer(locale, component.labelKey), MODAL_LABEL_MAX_LENGTH),
               component: rawComponent,
             };
 
-            // Add description if provided
             if (component.descriptionKey) {
               labelComponent.description = safeModalLocalizer(locale, component.descriptionKey);
             }
@@ -2665,26 +3434,7 @@ export async function promptWithRawModal(
       },
     };
 
-    // Send raw API response using Discord's REST API directly
-    const restEndpoint = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`;
-
-    const response = await fetch(restEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(rawModalPayload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      log.error(`Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`);
-      throw new Error(`Discord API error: ${response.status} ${response.statusText}`);
-    }
-
-    // Mark this interaction as acknowledged via raw API for state tracking
-    rawModalAcknowledged.set(interaction, true);
-    log.info(`Marked interaction ${interaction.id} as raw-modal-acknowledged`);
+    await showRoutedRawModal(interaction, rawModalPayload.data);
 
     // Now we can use the standard awaitModalSubmit with the transformed data
     // Use Discord's natural timeout duration (~15 minutes)
@@ -2703,7 +3453,7 @@ export async function promptWithRawModal(
       const fileUploadComponentCount = components.filter((component) => isModalFileUploadField(component)).length;
 
       // Check kind-based guards (radio, checkbox group, checkbox) BEFORE the
-      // catch-all isModalInputField — it matches anything without select-like
+      // catch-all isModalInputField: it matches anything without select-like
       // properties and would swallow checkbox/radio components otherwise.
       for (const component of components) {
         if (isModalRadioGroupField(component)) {
@@ -2723,7 +3473,6 @@ export async function promptWithRawModal(
         } else if (isModalCheckboxGroupField(component)) {
           try {
             const cg = component as ModalCheckboxGroupField;
-            // Checkbox Group values are stored under the nonce'd custom_id
             const storedValues = modalCheckboxGroupValues.get(submitted.id);
             const checkboxValues = storedValues?.[nonceCustomId(cg.customId)];
             if (checkboxValues !== undefined) {
@@ -2739,18 +3488,57 @@ export async function promptWithRawModal(
         } else if (isModalCheckboxField(component)) {
           try {
             const cb = component as ModalCheckboxField;
-            // Checkbox value is stored under the nonce'd custom_id
             const storedValues = modalSelectValues.get(submitted.id);
             const checkboxValue = storedValues?.[nonceCustomId(cb.customId)];
             if (checkboxValue !== undefined) {
               values[cb.customId] = checkboxValue;
             } else {
-              // If not stored, infer from default (unchecked = "false")
               values[cb.customId] = cb.default ? "true" : "false";
               log.warn(`No checkbox value found for ${cb.customId}, using default: ${values[cb.customId]}`);
             }
           } catch (error) {
             log.warn(`Failed to get checkbox value for component: ${error}`);
+          }
+        } else if (isModalUserSelectField(component)) {
+          try {
+            const us = component as ModalUserSelectField;
+            const storedValues = modalSelectValues.get(submitted.id);
+            const userValue = storedValues?.[nonceCustomId(us.customId)];
+            if (userValue !== undefined) {
+              values[us.customId] = userValue;
+            } else {
+              log.warn(`Could not extract user select value for ${us.customId}`);
+            }
+          } catch (error) {
+            log.warn(`Failed to get user select value for component: ${error}`);
+          }
+        } else if (isModalRoleSelectField(component)) {
+          try {
+            const rs = component as ModalRoleSelectField;
+            const storedValues = modalSelectValues.get(submitted.id);
+            const roleValue = storedValues?.[nonceCustomId(rs.customId)];
+            if (roleValue !== undefined) {
+              values[rs.customId] = roleValue;
+            } else {
+              log.warn(`Could not extract role select value for ${rs.customId}`);
+            }
+          } catch (error) {
+            log.warn(`Failed to get role select value for component: ${error}`);
+          }
+        } else if (isModalChannelSelectField(component)) {
+          try {
+            const cs = component as ModalChannelSelectField;
+            const storedValues = modalChannelSelectValues.get(submitted.id);
+            const channelValues = storedValues?.[nonceCustomId(cs.customId)];
+            if (channelValues === undefined) {
+              log.warn(`Could not extract channel select value for ${cs.customId}`);
+            } else if ((cs.maxValues ?? 1) > 1) {
+              multiValues[cs.customId] = channelValues;
+            } else if (channelValues[0] !== undefined) {
+              values[cs.customId] = channelValues[0];
+            }
+          } catch (error) {
+            log.warn(`Failed to get channel select value for component: ${error}`);
           }
         } else if (isModalInputField(component)) {
           try {
@@ -2774,7 +3562,6 @@ export async function promptWithRawModal(
           }
         } else if (isModalFileUploadField(component)) {
           try {
-            // Get stored resolved attachments from WebSocket interception
             const storedAttachments = modalResolvedAttachments.get(submitted.id);
             const storedFileUploadValues = modalFileUploadValues.get(submitted.id);
 
@@ -2811,10 +3598,11 @@ export async function promptWithRawModal(
         }
       }
 
-      // Clean up stored values
       modalSelectValues.delete(submitted.id);
       modalFileUploadValues.delete(submitted.id);
       modalCheckboxGroupValues.delete(submitted.id);
+      modalChannelSelectValues.delete(submitted.id);
+      modalStringSelectValues.delete(submitted.id);
       modalResolvedAttachments.delete(submitted.id);
 
       // Auto-defer reply if requested to prevent 3-second interaction timeout
@@ -2832,57 +3620,126 @@ export async function promptWithRawModal(
         interaction: submitted,
       };
     } catch (error) {
-      // This will only catch actual errors, not artificial timeouts
-      // Discord's natural timeout or user cancellation will be handled by command timeout
       log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
-      return { outcome: "timeout" };
+      return isCollectorTimeoutError(error) ? { outcome: "timeout" } : { outcome: "error", error };
     }
   } catch (error) {
     log.error("Failed to show raw modal:", error);
-    return { outcome: "timeout" };
+    return { outcome: "error", error };
   }
 }
 
 /**
+ * Shared page size for the `>25`-option paginated modal selector. Both the legacy
+ * page-button path in {@link promptWithPaginatedModal} and the Components V2 range
+ * selector in `personaWorkflow.ts` slice option lists into chunks of this size, so a
+ * single exported value keeps them in lockstep (previously `ITEMS_PER_PAGE` and
+ * `OPTIONS_PER_MODAL` duplicated the same `25`).
+ */
+export const MODAL_OPTIONS_PER_PAGE = 25;
+
+/**
+ * Finds the single string select in a modal's component list. Radio and checkbox groups also carry
+ * `options` but are capped at 10, so they are skipped; matching one that precedes the select would
+ * hide the select from pagination.
+ *
+ * @returns The paginatable select component, or `undefined` when none exists.
+ */
+export function getPaginatedModalComponent(options: ModalOptions): ModalComponent | undefined {
+  return options.components.find(
+    (component) => "options" in component && Array.isArray(component.options) && !("kind" in component),
+  );
+}
+
+/**
+ * Returns a shallow copy of `options` whose `target` select component has its
+ * option list narrowed to the half-open range `[start, end)`. Every other
+ * component is passed through by reference. Shared by both selector paths so the
+ * index math that maps a chosen page/range back to a modal is defined once.
+ *
+ * @param start - Inclusive start index into the target's option list.
+ * @param end - Exclusive end index into the target's option list.
+ */
+export function sliceModalOptions(
+  options: ModalOptions,
+  target: ModalComponent,
+  start: number,
+  end: number,
+): ModalOptions {
+  return {
+    ...options,
+    components: options.components.map((component) => {
+      if (component !== target || !("options" in component)) return component;
+      return { ...component, options: component.options.slice(start, end) } as ModalComponent;
+    }),
+  };
+}
+
+/**
+ * Parses a `${prefix}_range_${index}` custom id emitted by the shared range
+ * selector, returning the 0-based range index or `null` when the id is not a
+ * valid range button. Centralizing the parse keeps the selector's custom-id
+ * scheme in one place for every consumer of the range payload.
+ *
+ * @param prefix - The selector's per-session custom-id prefix.
+ * @returns The parsed 0-based range index, or `null` on a mismatch.
+ */
+export function parseModalRangeIndex(customId: string, prefix: string): number | null {
+  const marker = `${prefix}_range_`;
+  if (!customId.startsWith(marker)) return null;
+  const parsed = Number.parseInt(customId.slice(marker.length), 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
  * Enhanced modal function that automatically handles pagination when select options exceed 25 items
- * @param interaction - The interaction to respond to
- * @param locale - User locale for localization
- * @param options - Modal configuration options
- * @returns Promise<ModalResult> - The modal interaction result
  */
 export async function promptWithPaginatedModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
   options: ModalOptions,
 ): Promise<ModalResult> {
+  if (await rejectInteractionDuringShutdown(interaction)) return { outcome: "cancelled" };
   // Find the select component (should only be one per modal in current usage)
-  const selectComponent = options.components.find(
-    (comp): comp is ModalSelectField => "options" in comp && Array.isArray(comp.options),
-  );
+  const selectComponent = getPaginatedModalComponent(options);
+  const optionCount = selectComponent && "options" in selectComponent ? selectComponent.options.length : 0;
 
   // If no select component or (≤25 options and interaction not yet acknowledged), use direct modal.
-  // On loop re-entry the original slash interaction is already acknowledged — either via Discord.js
+  // On loop re-entry the original slash interaction is already acknowledged: either via Discord.js
   // (interaction.replied) or via raw REST modal (rawModalAcknowledged) which bypasses Discord.js
   // state tracking. In that case fall through to the paginated path, which uses editReply + a
   // fresh button interaction to open the modal.
   const wasRawModalAcked = rawModalAcknowledged.get(interaction) ?? false;
   if (
     !selectComponent ||
-    (selectComponent.options.length <= 25 && !interaction.deferred && !interaction.replied && !wasRawModalAcked)
+    (optionCount <= MODAL_OPTIONS_PER_PAGE && !interaction.deferred && !interaction.replied && !wasRawModalAcked)
   ) {
     return promptWithRawModal(interaction, locale, options);
   }
 
-  // Paginated modal system for >25 options
-  const allOptions = selectComponent.options;
-  const ITEMS_PER_PAGE = 25;
-  const totalPages = Math.ceil(allOptions.length / ITEMS_PER_PAGE);
+  // Opt-in Components V2 range selector (see ModalOptions.selectorStyle). Shares the
+  // payload + index math with the persona workflow via buildRangeSelectorPayload, but
+  // keeps its own transport + await loop: the global path's three delivery situations
+  // (reply / editReply / webhook.send) differ from the persona anchor message.
+  if (options.selectorStyle === "componentsV2") {
+    return runComponentsV2RangeSelectorModal(
+      interaction,
+      locale,
+      options,
+      selectComponent,
+      optionCount,
+      wasRawModalAcked,
+    );
+  }
 
-  // Create page selection embed
+  // Paginated modal system for >25 options
+  const ITEMS_PER_PAGE = MODAL_OPTIONS_PER_PAGE;
+  const totalPages = Math.ceil(optionCount / ITEMS_PER_PAGE);
+
   const pageSelectEmbed = createStandardEmbed(locale, {
-    titleKey: "general.pagination.select_page_title",
-    descriptionKey: "general.pagination.select_page_description",
-    descriptionVars: { totalItems: allOptions.length, totalPages },
+    titleKey: options.pageSelectTitleKey ?? "general.pagination.select_page_title",
+    descriptionKey: options.pageSelectDescriptionKey ?? "general.pagination.select_page_description",
+    descriptionVars: { totalItems: optionCount, totalPages },
     color: ColorCode.INFO,
   });
 
@@ -2891,13 +3748,13 @@ export async function promptWithPaginatedModal(
   const pageButtons: ButtonBuilder[] = [];
 
   for (let i = 1; i <= maxButtons; i++) {
-    pageButtons.push(new ButtonBuilder().setCustomId(`page_${i}`).setLabel(i.toString()).setStyle(ButtonStyle.Primary));
+    pageButtons.push(
+      new ButtonBuilder().setCustomId(`page_${i}`).setLabel(i.toString()).setStyle(ButtonStyle.Secondary),
+    );
   }
 
-  // Add page buttons to action row
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons);
 
-  // Send page selection message.
   // Always resolve to a Message (not InteractionResponse) so that
   // awaitMessageComponent works reliably on ephemeral messages.
   let pageSelectMessage: Message;
@@ -2907,7 +3764,7 @@ export async function promptWithPaginatedModal(
       components: [actionRow],
     });
   } else if (wasRawModalAcked) {
-    // Raw REST modal consumed the initial response — no reply to edit, followUp()
+    // Raw REST modal consumed the initial response, so no reply to edit, followUp()
     // guard blocks. Use webhook.send() directly to send the page picker.
     pageSelectMessage = (await interaction.webhook.send({
       embeds: [pageSelectEmbed],
@@ -2930,24 +3787,12 @@ export async function promptWithPaginatedModal(
       time: 300_000, // 5 minutes timeout
     });
 
-    // Extract page number
     const selectedPage = Number.parseInt(pageButtonInteraction.customId.replace("page_", ""), 10);
 
-    // Calculate page items
     const startIndex = (selectedPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, allOptions.length);
-    const pageOptions = allOptions.slice(startIndex, endIndex);
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, optionCount);
 
-    // Create new modal options with paginated items
-    const paginatedModalOptions: ModalOptions = {
-      ...options,
-      components: options.components.map((comp) => {
-        if ("options" in comp && Array.isArray(comp.options)) {
-          return { ...comp, options: pageOptions };
-        }
-        return comp;
-      }),
-    };
+    const paginatedModalOptions = sliceModalOptions(options, selectComponent, startIndex, endIndex);
 
     // Show modal with selected page items
     return promptWithRawModal(pageButtonInteraction as ButtonInteraction, locale, paginatedModalOptions);
@@ -2957,131 +3802,130 @@ export async function promptWithPaginatedModal(
   }
 }
 
-// Custom ID suffixes for status pagination buttons (scoped per interaction ID)
-const STATUS_PREV_SUFFIX = "_status_prev";
-const STATUS_NEXT_SUFFIX = "_status_next";
-const STATUS_LABEL_SUFFIX = "_status_label";
-
 /**
- * Displays an array of summary embed pages with previous/next navigation buttons.
- * Used by the `/status` command to show paginated scoped status data.
- * If only one page is provided, shows it directly with no buttons.
- * On pagination timeout, removes buttons but preserves the last viewed embed.
- * @param interaction - The slash command or button interaction to respond to
- * @param locale - User locale for localization
- * @param pages - Ordered array of SummaryEmbedOptions pages to display
- * @param flags - Message flags (defaults to Ephemeral)
+ * Components V2 range-selector implementation of the `>25`-option paginated modal.
+ * Renders the shared {@link buildRangeSelectorPayload} shell (identical to the persona
+ * workflow's `>25` selector) and drives its own await loop.
+ *
+ * Delivery is path-specific by design (see the plan's "Delivery must stay path-specific"):
+ * this branch preserves the global path's three situations: `reply` when unacknowledged,
+ * `editReply` when deferred/replied, and `webhook.send` after a raw modal; rather than
+ * routing through the persona anchor-message controller.
+ *
+ * @param selectComponent - The paginatable select (already guaranteed non-null by the caller).
+ * @param optionCount - Total option count across all ranges.
+ * @param wasRawModalAcked - Whether a raw REST modal already consumed the initial response.
+ *   `cancelled` when the user clicks the selector's Cancel button.
  */
-export async function replyPaginatedStatusPages(
+async function runComponentsV2RangeSelectorModal(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
-  pages: SummaryEmbedOptions[],
-  flags:
-    | MessageFlags.SuppressEmbeds
-    | MessageFlags.Ephemeral
-    | MessageFlags.SuppressNotifications
-    | undefined = MessageFlags.Ephemeral,
-): Promise<void> {
-  // 1. Guard: nothing to display
-  if (pages.length === 0) return;
-
-  // 2. Single page: skip navigation buttons entirely
-  if (pages.length === 1) {
-    await replySummaryEmbed(interaction, locale, pages[0], flags);
-    return;
-  }
-
-  let currentPage = 0;
-  const totalPages = pages.length;
-
-  // 3. Scope button IDs to this interaction to avoid cross-user conflicts
-  const prevId = `${interaction.id}${STATUS_PREV_SUFFIX}`;
-  const nextId = `${interaction.id}${STATUS_NEXT_SUFFIX}`;
-  const labelId = `${interaction.id}${STATUS_LABEL_SUFFIX}`;
-
-  /** Builds the navigation button row for the given page index */
-  function buildNavRow(page: number): ActionRowBuilder<MessageActionRowComponentBuilder> {
-    return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(prevId)
-        .setLabel(`◀ ${localizer(locale, "general.pagination.previous")}`)
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page === 0),
-      new ButtonBuilder()
-        .setCustomId(labelId)
-        .setLabel(
-          localizer(locale, "general.pagination.page_info", {
-            current: page + 1,
-            total: totalPages,
-          }),
-        )
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId(nextId)
-        .setLabel(`${localizer(locale, "general.pagination.next")} ▶`)
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page === totalPages - 1),
+  options: ModalOptions,
+  selectComponent: ModalComponent,
+  optionCount: number,
+  wasRawModalAcked: boolean,
+): Promise<ModalResult> {
+  // Per-session prefix so concurrent selectors never collide on custom ids.
+  const prefix = `paginated_modal_${interaction.id}_${Date.now().toString(36)}`;
+  const totalRangePages = Math.ceil(Math.ceil(optionCount / MODAL_OPTIONS_PER_PAGE) / RANGES_PER_SELECTOR_PAGE);
+  let rangePage = 0;
+  const renderSelector = () =>
+    buildRangeSelectorPayload(
+      locale,
+      prefix,
+      optionCount,
+      rangePage,
+      MODAL_OPTIONS_PER_PAGE,
+      options.pageSelectTitleKey,
+      options.pageSelectDescriptionKey,
     );
-  }
 
-  // 4. Send or update the initial reply with the first page and nav buttons
-  const embed = createSummaryEmbed(locale, pages[currentPage]);
-  const navRow = buildNavRow(currentPage);
-
-  let message: Message;
-  if (interaction.deferred || interaction.replied) {
-    message = await interaction.editReply({
-      embeds: [embed],
-      components: [navRow],
-    });
-  } else {
-    await interaction.reply({
-      embeds: [embed],
-      components: [navRow],
-      flags,
-    });
-    message = await interaction.fetchReply();
-  }
-
-  // 5. Pagination loop: keep collecting button presses until timeout
+  // Render the initial selector via the path-specific transport, always resolving
+  //    to a Message so awaitMessageComponent works on ephemeral replies. The reply now
+  //    carries IsComponentsV2, so mark the interaction so a later legacy embed sink renders
+  //    a V2 notice instead of throwing (Phase 1 collision guard).
+  const payload = renderSelector();
+  let selectorMessage: Message;
   try {
-    while (true) {
-      const buttonInteraction = await message.awaitMessageComponent({
-        filter: (i) => i.user.id === interaction.user.id && (i.customId === prevId || i.customId === nextId),
-        componentType: ComponentType.Button,
-        time: PAGINATION_TIMEOUT_MS,
+    if (interaction.deferred || interaction.replied) {
+      selectorMessage = await interaction.editReply({
+        components: payload.components,
+        flags: MessageFlags.IsComponentsV2,
       });
-
-      // 6. Advance or retreat page index based on which button was pressed
-      if (buttonInteraction.customId === prevId) {
-        currentPage = Math.max(0, currentPage - 1);
-      } else {
-        currentPage = Math.min(totalPages - 1, currentPage + 1);
-      }
-
-      // 7. Update the message with the new page embed and refreshed nav row
-      const newEmbed = createSummaryEmbed(locale, pages[currentPage]);
-      const newNavRow = buildNavRow(currentPage);
-      await buttonInteraction.update({
-        embeds: [newEmbed],
-        components: [newNavRow],
+    } else if (wasRawModalAcked) {
+      selectorMessage = (await interaction.webhook.send({
+        components: payload.components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+      })) as Message;
+    } else {
+      await interaction.reply({
+        components: payload.components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
       });
+      selectorMessage = await interaction.fetchReply();
     }
+    markComponentsV2Reply(interaction);
   } catch (error) {
-    log.warn("Status pagination collector ended", {
-      errorType: "PaginationCollectorEnded",
-      metadata: { userId: interaction.user.id, error },
-    });
-    // 8. Timeout: strip buttons from the last viewed page to keep it clean
+    log.error("Failed to render Components V2 range selector:", error);
+    return { outcome: "error", error };
+  }
+
+  // Await loop: paginate ranges (Previous/Next), cancel, or pick a range → open modal.
+  while (true) {
+    let button: ButtonInteraction;
     try {
-      const timeoutEmbed = createSummaryEmbed(locale, pages[currentPage]);
-      await interaction.editReply({ embeds: [timeoutEmbed], components: [] });
-    } catch (editError) {
-      log.warn("Failed to clear status pagination buttons after collector ended", {
-        errorType: "InteractionEditFailed",
-        metadata: { userId: interaction.user.id, error: editError },
-      });
+      button = (await selectorMessage.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (candidate) => candidate.user.id === interaction.user.id && candidate.customId.startsWith(prefix),
+        time: 300_000, // 5 minutes, matching the legacy page selector
+      })) as ButtonInteraction;
+    } catch (error) {
+      log.warn(`Range selection timed out or failed for user ${interaction.user.id}:`, error);
+      return { outcome: "timeout" };
     }
+
+    // Cancel: acknowledge with a cancelled notice and report the cancellation.
+    if (button.customId === `${prefix}_cancel`) {
+      try {
+        await button.update({
+          components: buildNoticeContainer({
+            locale,
+            color: ColorCode.WARN,
+            titleKey: "general.interaction.cancel_title",
+            descriptionKey: "general.pagination.cancelled",
+          }),
+          flags: MessageFlags.IsComponentsV2,
+        });
+      } catch (error) {
+        log.warn("Failed to render range-selector cancellation notice:", error);
+      }
+      return { outcome: "cancelled" };
+    }
+
+    // Previous / Next: re-render the selector page in place via the button update.
+    if (button.customId === `${prefix}_previous` || button.customId === `${prefix}_next`) {
+      rangePage =
+        button.customId === `${prefix}_previous`
+          ? Math.max(0, rangePage - 1)
+          : Math.min(totalRangePages - 1, rangePage + 1);
+      try {
+        await button.update(renderSelector());
+      } catch (error) {
+        log.warn("Failed to paginate the range selector:", error);
+        return { outcome: "error", error };
+      }
+      continue;
+    }
+
+    // Range button: slice options to the chosen 25 and open the modal on this button.
+    const rangeIndex = parseModalRangeIndex(button.customId, prefix);
+    if (rangeIndex === null) {
+      log.warn(`Unrecognized range-selector custom id: ${button.customId}`);
+      return { outcome: "error", error: new Error("Invalid range selector custom id") };
+    }
+    const startIndex = rangeIndex * MODAL_OPTIONS_PER_PAGE;
+    const endIndex = Math.min(startIndex + MODAL_OPTIONS_PER_PAGE, optionCount);
+    const rangedOptions = sliceModalOptions(options, selectComponent, startIndex, endIndex);
+    return promptWithRawModal(button, locale, rangedOptions);
   }
 }

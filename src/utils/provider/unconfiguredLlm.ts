@@ -1,7 +1,7 @@
 import type { LlmRow } from "@/types/db/schema";
 
-export const UNCONFIGURED_LLM_PROVIDER = "user-byok";
-export const UNCONFIGURED_LLM_CODENAME = "None";
+const UNCONFIGURED_LLM_PROVIDER = "user-byok";
+const UNCONFIGURED_LLM_CODENAME = "None";
 
 const UNCONFIGURED_LLM: LlmRow = {
   llm_id: 0,
@@ -21,14 +21,12 @@ const UNCONFIGURED_LLM: LlmRow = {
   supports_structoutput: false,
   strict_role_alternation: false,
   supports_prefix_completion: false,
+  supports_assistant_prefill: false,
+  verbatim_tool_calling: false,
   llm_description: null,
-  ja_description: null,
+  descriptions: null,
 };
 
 export function getUnconfiguredLlm(): LlmRow {
   return { ...UNCONFIGURED_LLM };
-}
-
-export function isUnconfiguredLlm(llm: LlmRow | null | undefined): boolean {
-  return (llm?.llm_provider ?? "").toLowerCase() === UNCONFIGURED_LLM_PROVIDER;
 }

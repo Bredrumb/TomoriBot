@@ -9,23 +9,21 @@ import { log } from "@/utils/misc/logger";
  * Read cache for the message → sprite-label mapping.
  *
  * Entries are immutable once written (a sent message's sprite never changes),
- * so this cache never needs invalidation — the TTL exists only to bound memory.
+ * so this cache never needs invalidation : the TTL exists only to bound memory.
  * Negative results are cached too: most persona webhook messages are plain
  * (non-sprite) sends, and caching the miss avoids re-querying them every turn.
  */
 
-const parsedCacheTtlMinutes = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES || "120", 10);
-const CACHE_TTL_MINUTES =
-  Number.isFinite(parsedCacheTtlMinutes) && parsedCacheTtlMinutes > 0 ? parsedCacheTtlMinutes : 120;
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = 120 * 60 * 1000;
 
 const parsedRetentionDays = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_RETENTION_DAYS || "30", 10);
 const RETENTION_DAYS = Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0 ? parsedRetentionDays : 30;
 
-// Housekeeping internals (not operational limits): sweep expired cache entries
-// once the map grows past the threshold, and prune aged DB rows at most once
-// per interval, piggybacked on the write path so no timer wiring is needed.
-const SWEEP_SIZE_THRESHOLD = 5000;
+// Housekeeping internals (not operational limits), both piggybacked on the write path so no timer
+// wiring is needed. The sweep is time-gated, not size-gated: the production working set peaks just
+// under any threshold high enough to be cheap, so a size gate never fired and expired entries stayed
+// until restart. A lower size gate would rescan the whole map on every insert once it held fresh entries.
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 const PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 type CachedSpriteMessage = {
@@ -35,6 +33,7 @@ type CachedSpriteMessage = {
 
 const spriteMessageCache = new Map<string, CachedSpriteMessage>();
 let lastPruneAt = 0;
+let lastSweepAt = Date.now();
 
 function getFreshEntry(messageDiscId: string): CachedSpriteMessage | undefined {
   const cached = spriteMessageCache.get(messageDiscId);
@@ -49,17 +48,18 @@ function getFreshEntry(messageDiscId: string): CachedSpriteMessage | undefined {
 }
 
 function setEntry(messageDiscId: string, record: PersonaSpriteMessageRow | null): void {
-  if (spriteMessageCache.size >= SWEEP_SIZE_THRESHOLD) {
-    sweepExpiredEntries();
+  const now = Date.now();
+  if (now - lastSweepAt >= SWEEP_INTERVAL_MS) {
+    lastSweepAt = now;
+    sweepExpiredEntries(now);
   }
   spriteMessageCache.set(messageDiscId, {
     record,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+    expiresAt: now + CACHE_TTL_MS,
   });
 }
 
-function sweepExpiredEntries(): void {
-  const now = Date.now();
+function sweepExpiredEntries(now: number): void {
   for (const [messageDiscId, entry] of spriteMessageCache) {
     if (entry.expiresAt <= now) {
       spriteMessageCache.delete(messageDiscId);
@@ -103,7 +103,6 @@ export async function getPersonaSpriteMessageRecord(messageDiscId: string): Prom
 
   const rows = await personaSpriteMessageRepository.getByMessageIds([messageDiscId]);
   if (!rows) {
-    // Transient DB error: degrade to a plain label this turn without caching.
     return null;
   }
 

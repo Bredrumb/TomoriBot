@@ -4,8 +4,8 @@
  * Fork of GoogleStreamAdapter with one key difference: client construction
  * uses Vertex AI (ADC) instead of an API key.
  *
- * Everything else — context assembly, chunk normalisation, function-call
- * extraction, speaker guard, thought signatures — is identical because
+ * Everything else: context assembly, chunk normalisation, function-call
+ * extraction, speaker guard, thought signatures, so is identical because
  * Vertex exposes the same Gemini wire format.
  *
  * Key changes from GoogleStreamAdapter:
@@ -14,6 +14,7 @@
  *   - buildTokenCountPayload() is not supported in v1 (throws)
  */
 
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import {
   BlockedReason,
   type Content,
@@ -25,8 +26,13 @@ import {
   type ThinkingConfig,
 } from "@google/genai";
 import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
+import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import {
+  classifyGenAIStreamInterruption,
+  createGoogleApiErrorDescription,
+} from "@/providers/google/googleStreamAdapter";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import {
@@ -35,7 +41,13 @@ import {
 } from "@/utils/discord/renderModifierParser";
 import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
+import {
+  buildGifToolHint,
+  buildGifUrlPlaceholder,
+  buildInlineGifPlaceholder,
+} from "@/providers/utils/gifContextPlaceholders";
+import { buildGeminiToolMediaParts } from "@/providers/utils/geminiToolMediaParts";
+import { isSystemInstructionContextItem, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
@@ -46,7 +58,7 @@ import type {
   StreamContext,
 } from "../../types/stream/interfaces";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
-import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
+import { createVertexClient, parseVertexCompositeKey, VERTEX_CONFIG_ERROR_CODE } from "./vertexClient";
 
 const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   1,
@@ -96,19 +108,15 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
-  public static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-    ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    ContextItemTag.SYSTEM_PERSONALITY,
-    ContextItemTag.KNOWLEDGE_SERVER_INFO,
-    ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-    ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-    ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ];
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
+  /**
+   * Latest `usageMetadata` seen on a raw Gemini stream chunk (native shape; the
+   * orchestrator normalizes it). Latest-wins matches Gemini's cumulative usage.
+   */
+  private pendingUsage: Record<string, unknown> | undefined;
   protected readonly providerName: string;
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
 
@@ -167,13 +175,10 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Start streaming from Vertex AI
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info(`VertexStreamAdapter: Initializing ${this.providerName} streaming`);
 
-    // 1. Build the provider client (ADC for Vertex, API key for Vertex Express)
+    // Build the provider client (ADC for Vertex, API key for Vertex Express)
     let genAI: GoogleGenAI;
     try {
       genAI = this.clientFactory(config.apiKey);
@@ -190,19 +195,19 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
     const vertexConfig_ = config as VertexStreamConfig;
 
-    // 2. Prepare the request configuration
     const requestConfig: GenerateContentConfig = {
       ...vertexConfig_.generationConfig,
       safetySettings: vertexConfig_.safetySettings,
     };
 
-    // 3. Speaker guard setup (same as Google)
+    // Speaker guard setup (same as Google)
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    this.pendingUsage = undefined;
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
-      collectPersonaNameAliases(context.tomoriState, botName),
+      collectPersonaNameAliases(context.tomoriState, botName, context.impersonatedSpeakerLabel),
     );
     const speakerStopPatternEnabled = context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false;
     this.speakerGuardEnabled = speakerStopPatternEnabled;
@@ -218,13 +223,13 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       requestConfig.stopSequences = mergedStopSequences;
     }
 
-    // 4. Thinking configuration (same as Google)
+    // Thinking configuration (same as Google)
     if (vertexConfig_.thinkingConfig) {
       requestConfig.thinkingConfig = vertexConfig_.thinkingConfig;
       log.info("VertexStreamAdapter: Thinking mode enabled");
     }
 
-    // 5. Assemble context (shared logic)
+    // Assemble context (shared logic)
     const payload = await this.buildTokenCountPayload(
       context.contextItems,
       config.model,
@@ -238,12 +243,10 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`Assembled system instruction. Length: ${payload.systemInstruction.length}`);
     }
 
-    // 6. Add tools if available
     if (config.tools && config.tools.length > 0) {
       requestConfig.tools = config.tools;
     }
 
-    // 7. Add current turn model parts
     if (context.currentTurnModelParts.length > 0) {
       finalContents.push({
         role: "model",
@@ -252,7 +255,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`Added ${context.currentTurnModelParts.length} accumulated model parts to API history.`);
     }
 
-    // 8. Add function interaction history
     if (context.functionInteractionHistory && context.functionInteractionHistory.length > 0) {
       for (const item of context.functionInteractionHistory) {
         const functionCallPart: Part = {
@@ -281,67 +283,54 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           parts: modelParts,
         });
 
-        // Build function response parts
-        const responseParts: Part[] = [item.functionResponse as Part];
-
-        // Add image parts if present
-        if (item.imageMetadata?.imageUrls) {
-          log.info(`Adding ${item.imageMetadata.imageUrls.length} image(s) to function response for LLM visibility`);
-
-          for (const imageInfo of item.imageMetadata.imageUrls) {
-            try {
-              const optimized = await fetchAndOptimizeImage(imageInfo.url, imageInfo.mimeType || "image/jpeg");
-
-              responseParts.push({
-                inlineData: {
-                  mimeType: optimized.mimeType,
-                  data: optimized.data,
-                },
-              });
-
-              log.success(`Successfully added image to function response: ${imageInfo.url}`);
-            } catch (imgErr) {
-              log.warn(`Error processing image for function response: ${imageInfo.url}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
-            }
-          }
-        }
-
-        // Surface Discord message IDs for image references
-        if (item.imageMetadata?.messageIds && item.imageMetadata.messageIds.length > 0) {
-          responseParts.push({
-            text: `[System: Images were sent to Discord in message ID(s): ${item.imageMetadata.messageIds.map((id) => context.messageIdMap?.register(id, "media") ?? id).join(", ")}]`,
-          });
-        }
-
+        // Vertex classifies a turn carrying a functionResponse as a function-response turn and
+        // rejects it if it also carries inlineData or text. The turn then fails to count at all
+        // and the request reads as ending on the model's functionCall turn, surfacing as
+        // "Requests ending with a model turn are not supported". Tool media therefore rides in
+        // its own user turn, matching the OpenRouter adapter.
         finalContents.push({
           role: "user",
-          parts: responseParts,
+          parts: [item.functionResponse as Part],
         });
+
+        const toolMediaParts = await buildGeminiToolMediaParts({
+          adapterName: "VertexStreamAdapter",
+          imageMetadata: item.imageMetadata,
+          seesImages: context.tomoriState.llm.sees_images,
+          messageIdMap: context.messageIdMap,
+        });
+
+        if (toolMediaParts.length > 0) {
+          finalContents.push({
+            role: "user",
+            parts: toolMediaParts,
+          });
+        }
       }
     }
 
-    // 9. Ensure model is provided
+    // Ensure model is provided
     if (!config.model) {
       throw new Error("Model must be specified in config. Use VertexProvider.getDefaultModel() if needed.");
     }
 
     log.info(`Generating content with Vertex AI model ${config.model}`);
 
-    // 10. Log sanitized request
-    this.logSanitizedRequest(requestConfig, finalContents);
+    // Log sanitized request
+    if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
-      // 11. Start the streaming
       const stream = await genAI.models.generateContentStream({
         model: config.model,
         contents: finalContents,
         config: requestConfig,
       });
 
-      // 12. Yield each chunk (same normalisation pipeline as Google)
       for await (const chunkResponse of stream) {
+        const usageMetadata = (chunkResponse as { usageMetadata?: Record<string, unknown> }).usageMetadata;
+        if (usageMetadata) {
+          this.pendingUsage = usageMetadata;
+        }
         const normalizedChunk = this.normalizeVertexStreamChunk(chunkResponse);
         const chunksToEmit = this.splitChunkWithTextAndFunctionCalls(normalizedChunk);
 
@@ -411,11 +400,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      yield this.createProviderErrorChunk(error, undefined, this.providerName);
+      yield this.createProviderErrorChunk(error, context, undefined, this.providerName);
     }
   }
-
-  // ─── Speaker guard helpers (same logic as Google) ────────────────────
 
   private consumeSpeakerGuardPendingTail(): string {
     if (!this.speakerGuardPendingTail) {
@@ -480,8 +467,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       this.streamedTextTail = this.streamedTextTail.slice(-VertexStreamAdapter.STREAM_TEXT_TAIL_CHARS);
     }
   }
-
-  // ─── Chunk normalisation (same wire format as Google) ────────────────
 
   private normalizeVertexStreamChunk(rawChunk: unknown): VertexStreamChunk {
     const chunk = rawChunk as VertexStreamChunk;
@@ -706,8 +691,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  // ─── StreamProvider interface ────────────────────────────────────────
-
   /**
    * Process a raw Vertex chunk into normalised format
    */
@@ -715,7 +698,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     const vertexChunk = chunk.data as VertexStreamChunk;
     const thoughts: ThoughtLogEntry[] = [];
 
-    // Handle errors first
     if ("error" in vertexChunk && vertexChunk.error) {
       return {
         type: "error",
@@ -723,7 +705,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for content blocks from prompt feedback
     if (
       vertexChunk.promptFeedback?.blockReason &&
       vertexChunk.promptFeedback.blockReason !== BlockedReason.BLOCKED_REASON_UNSPECIFIED
@@ -739,7 +720,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       return { type: "error", error };
     }
 
-    // Check for finish reason blocks
     const candidate = vertexChunk.candidates?.[0];
     if (candidate?.finishReason && this.isBlockingFinishReason(candidate.finishReason)) {
       const error: ProviderError = {
@@ -753,8 +733,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       return { type: "error", error };
     }
 
-    // Check for thought signatures and thought summaries
     const metadata: Record<string, unknown> = {};
+    // Attach the latest captured token usage so the orchestrator can record it.
+    if (this.pendingUsage) {
+      metadata.usage = this.pendingUsage;
+    }
     const thoughtSignature = this.extractThoughtSignature(vertexChunk);
     if (thoughtSignature) {
       metadata.thoughtSignature = thoughtSignature;
@@ -774,7 +757,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`VertexStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
-    // Check for function calls
     const functionCalls = this.extractFunctionCallsFromChunk(vertexChunk);
     if (functionCalls.length > 0) {
       const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
@@ -789,7 +771,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for text content
     const textContent = vertexChunk.text !== undefined ? vertexChunk.text : this.extractTextFromChunk(vertexChunk);
     if (textContent) {
       return {
@@ -800,7 +781,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Handle finish reason indicating completion
     if (candidate?.finishReason === FinishReason.STOP) {
       return {
         type: "done",
@@ -809,7 +789,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Default: empty chunk
     return {
       type: "text",
       content: "",
@@ -818,28 +797,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Extract function call from raw Vertex chunk
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const vertexChunk = chunk.data as VertexStreamChunk;
-
-    const functionCalls = this.extractFunctionCallsFromChunk(vertexChunk);
-    if (functionCalls.length > 0) {
-      const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
-      const thoughtSignature = this.extractThoughtSignature(vertexChunk);
-      if (thoughtSignature) {
-        functionCall.thoughtSignature = thoughtSignature;
-      }
-      return functionCall;
-    }
-
-    return null;
-  }
-
-  // ─── Error handling (Vertex shares Google API error codes) ───────────
-
   handleProviderError(error: unknown): ProviderError {
+    const interruption = classifyGenAIStreamInterruption(error);
+    if (interruption) return interruption;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Check for composite-key parse errors first (Vertex-specific)
@@ -851,13 +811,12 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       return {
         type: "api_error",
         message: `Vertex configuration error: ${errorMessage}`,
-        code: "vertex_config_error",
+        code: VERTEX_CONFIG_ERROR_CODE,
         retryable: false,
         originalError: error,
       };
     }
 
-    // Parse Google/Vertex API error structure
     let googleApiError: {
       code?: number;
       message?: string;
@@ -951,7 +910,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         ) {
           errorType = "rate_limit";
           retryable = true;
-        } else if (errorMessage.includes("timeout") || errorMessage.includes("DEADLINE_EXCEEDED")) {
+        } else if (isProviderTimeoutMessage(errorMessage) || errorMessage.includes("DEADLINE_EXCEEDED")) {
           errorType = "timeout";
           retryable = true;
         } else if (errorMessage.includes("overloaded") || errorMessage.includes("UNAVAILABLE")) {
@@ -988,74 +947,19 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     return providerError;
   }
 
-  /**
-   * Create Vertex-specific error description for embedding
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    // Check for Vertex-specific errors first
-    if (error.code === "vertex_config_error") {
-      return `Vertex Configuration Error: ${error.userMessage ?? error.message}`;
+    // The configuration message quotes the stored composite key, and the authentication message
+    // carries SDK text, so both use fixed copy.
+    if (error.code === VERTEX_CONFIG_ERROR_CODE) {
+      return localizer(locale, "genai.vertex.config_error_message");
     }
 
     if (error.code === "vertex_auth_error") {
-      return `Vertex Authentication Error: ${error.userMessage ?? error.message}`;
+      return localizer(locale, "genai.vertex.auth_error_message");
     }
 
-    // Fall back to Google-style locale messages (same error codes)
-    let apiMessage = error.userMessage;
-
-    if (!apiMessage) {
-      const errorCode = error.code;
-      let messageKey: string;
-
-      switch (error.type) {
-        case "content_blocked":
-          messageKey = "content_blocked_default_message";
-          break;
-        case "rate_limit":
-          messageKey = "429_default_message";
-          break;
-        case "timeout":
-          messageKey = "504_default_message";
-          break;
-        case "provider_overloaded":
-          messageKey = "503_default_message";
-          break;
-        case "api_error":
-          if (errorCode === "400" && error.message.includes("billing")) {
-            messageKey = "400_billing_default_message";
-          } else {
-            messageKey = `${errorCode}_default_message`;
-          }
-          break;
-        default:
-          messageKey = "unknown_default_message";
-          break;
-      }
-
-      try {
-        apiMessage = localizer(locale, `genai.google.${messageKey}`);
-
-        if (messageKey === "unknown_default_message") {
-          const maxErrorLength = 1000;
-          const apiErrorSnippet =
-            error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-          apiMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-        }
-      } catch {
-        apiMessage = localizer(locale, "genai.google.unknown_default_message");
-        const maxErrorLength = 1000;
-        const apiErrorSnippet =
-          error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-        apiMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-      }
-    }
-
-    const errorCode = error.code || "unknown";
-    return `Error Code ${errorCode}: ${apiMessage}`;
+    return createGoogleApiErrorDescription(error, locale);
   }
-
-  // ─── Context assembly (shared with Google) ───────────────────────────
 
   private async assembleVertexContext(
     contextItems: StructuredContextItem[],
@@ -1081,24 +985,18 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      // Check if this should be system instruction
-      if (
-        item.role === "system" ||
-        (item.role === "user" &&
-          item.metadataTag &&
-          VertexStreamAdapter.SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-      ) {
+      if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) systemInstructionParts.push(itemTextContent);
       } else if (item.role === "user" || item.role === "model") {
-        const geminiParts: Part[] = [];
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const geminiParts: Part[] = [];
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
           } else if (part.type === "image" && !seesImages) {
             // Defense-in-depth: an image part reached the adapter but the routed
             // model cannot process it (context built with images for a
             // vision-capable fallback model, then the image-blind primary runs).
-            // Emit a text placeholder instead of silently dropping it — mirrors
+            // Emit a text placeholder instead of silently dropping it, so mirrors
             // the Google, OpenRouter, and OpenAI-compatible message builders.
             geminiParts.push({
               text: "[System: An image is attached to this message that this model cannot process.]",
@@ -1107,27 +1005,18 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
             try {
               if (part.mimeType === "image/gif") {
                 // GIF handling: same environment-based logic as Google
-                const isProduction = process.env.RUN_ENV === "production";
-                if (isProduction) {
-                  if (part.uri.includes("tenor.com")) {
-                    geminiParts.push({
-                      text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
-                    });
-                  } else {
-                    geminiParts.push({
-                      text: "[System: This message contains a GIF. GIF processing disabled in production.]",
-                    });
-                  }
+                if (process.env.RUN_ENV === "production") {
+                  geminiParts.push({ text: buildGifUrlPlaceholder(part.uri) });
                 } else {
-                  const mediaMessageId = item.messageId
-                    ? (messageIdMap?.register(item.messageId, "media") ?? item.messageId)
-                    : "unknown";
                   geminiParts.push({
-                    text: `[System: This message (ID: ${mediaMessageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
+                    text: buildGifToolHint({
+                      messageId: item.messageId,
+                      messageIdMap,
+                      subject: "a GIF",
+                    }),
                   });
                 }
               } else {
-                // Regular image processing
                 const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
                 geminiParts.push({
                   inlineData: {
@@ -1142,14 +1031,14 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
                 try {
                   const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
                   geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
-                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN`);
                 } catch (fallbackErr) {
-                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed)`, {
                     error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
                   });
                 }
               } else {
-                log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
+                log.warn(`VertexStreamAdapter: Image processing error`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
@@ -1161,11 +1050,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
             };
             if (typeof inlineData === "object" && inlineData.mimeType && inlineData.data) {
               if (inlineData.mimeType === "image/gif") {
-                const isProduction = process.env.RUN_ENV === "production";
-                if (isProduction) {
-                  geminiParts.push({
-                    text: "[System: This context contains inline GIF data. GIF processing disabled in production.]",
-                  });
+                if (process.env.RUN_ENV === "production") {
+                  geminiParts.push({ text: buildInlineGifPlaceholder() });
                 } else {
                   // Dev mode: skip GIF processing to keep code manageable
                   geminiParts.push({
@@ -1194,7 +1080,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
                   log.info(`VertexStreamAdapter: Skipping YouTube auto-processing: ${part.uri}`);
                 }
               } else {
-                // Direct video uploads
                 const videoResponse = await safeDownload(part.uri, {
                   maxSizeMB: VIDEO_CONTEXT_MAX_INLINE_MB,
                   timeoutMs: 20_000,
@@ -1223,7 +1108,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
               });
             }
           }
-        }
+          return geminiParts;
+        });
+        const geminiParts = partsByInput.flat();
 
         if (geminiParts.length > 0) {
           dialogueContents.push({
@@ -1238,8 +1125,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
     return { systemInstruction, dialogueContents };
   }
-
-  // ─── Private helpers ─────────────────────────────────────────────────
 
   private extractThoughtSignature(vertexChunk: VertexStreamChunk): string | undefined {
     const directSignature = this.normalizeThoughtSignature(vertexChunk.thoughtSignature);
@@ -1297,6 +1182,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
   private convertGoogleFunctionCall(googleFunctionCall: GoogleFunctionCall): FunctionCall {
     return {
+      id: typeof googleFunctionCall.id === "string" ? googleFunctionCall.id : undefined,
       name: googleFunctionCall.name ?? "",
       args: googleFunctionCall.args || {},
     };

@@ -1,24 +1,47 @@
 /**
- * UserRepository — manages the `users` and `personalization_blacklist` tables.
+ * UserRepository: manages the `users` and `personalization_blacklist` tables.
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
-import type { ErrorContext, PrivacyLevel, UserRow } from "@/types/db/schema";
+import type { SQL } from "bun";
+import type { ErrorContext, PrivacyLevel, UserPersonalizationConfigsRow, UserRow } from "@/types/db/schema";
 import { PrivacyLevel as PrivacyLevelValue, userSchema } from "@/types/db/schema";
 import type { PersonalSettingsExportData } from "@/types/db/dataExport";
 import { personalSettingsExportDataSchema } from "@/types/db/dataExport";
+import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, invalidateUserCache, invalidateUserBlacklistCache } from "@/utils/cache/userCache";
-import { sql, withCachedPlanRetry } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateUserFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import type { IRepository } from "./IRepository";
 
 /** Export shape for a single user's portable settings. */
-export type UserExportShape = PersonalSettingsExportData;
+type UserExportShape = PersonalSettingsExportData;
 
-// ── Personal spotlight types ───────────────────────────────────────────────────
+const USER_PERSONALIZATION_FIELD_NAMES = [
+  "user_nickname",
+  "shortterm_cache_crossserver_opt_in",
+  "physical_appearance_tags",
+  "char_ref_url",
+  "impersonation_prompt",
+  "personal_dtm",
+  "personal_deliberate_tool_mode",
+  "personal_server_fallback_enabled",
+  "natural_nudge_opt_out",
+  "timezone_offset",
+  "prefix_override",
+  "suffix_override",
+  "gender_identity",
+  "pronouns",
+  "addressing_style",
+] as const;
+
+type UserPersonalizationField = (typeof USER_PERSONALIZATION_FIELD_NAMES)[number];
+type UserPersonalizationPatch = Partial<Pick<UserPersonalizationConfigsRow, UserPersonalizationField>>;
+
+const USER_PERSONALIZATION_FIELDS = new Set<string>(USER_PERSONALIZATION_FIELD_NAMES);
 
 type PersonalSpotlightAggregateRow = {
   server_id: number | string | bigint;
@@ -42,21 +65,80 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
-export class UserRepository implements IRepository<UserExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
+/**
+ * Every flag is scoped to the server being built for. An unscoped flag would admit
+ * a silent lurker who personalized the bot elsewhere, and each extra owner of a
+ * common name makes that name permanently unresolvable: the alias resolver drops
+ * a name outright once two participants answer to it.
+ */
+export type ContextReferenceEligibilityEvidence = {
+  hasServerActivity: boolean;
+  hasPersonalMemories: boolean;
+  hasPendingTasks: boolean;
+};
 
+export interface ContextReferenceCandidate {
+  userRow: UserRow;
+  evidence: ContextReferenceEligibilityEvidence;
+}
+
+/** Auto-created identity/default rows are not enough to load a user by alias. */
+export function isEligibleContextReferenceUserV1(
+  user: UserRow,
+  evidence: ContextReferenceEligibilityEvidence,
+): boolean {
+  return (
+    evidence.hasServerActivity ||
+    evidence.hasPersonalMemories ||
+    evidence.hasPendingTasks ||
+    user.shortterm_cache_crossserver_opt_in ||
+    user.physical_appearance_tags.some((tag) => tag.trim().length > 0) ||
+    Boolean(user.char_ref_url?.trim()) ||
+    Boolean(user.impersonation_prompt?.trim()) ||
+    user.personal_dtm !== "follow" ||
+    user.personal_deliberate_tool_mode !== "follow" ||
+    user.timezone_offset != null ||
+    user.privacy_level !== PrivacyLevelValue.MINIMAL
+  );
+}
+
+class UserRepository implements IRepository<UserExportShape> {
   /**
-   * Loads a user row by Discord ID.
    *
-   * @param userDiscId - Discord user snowflake
    * @returns UserRow or null if not found
    */
   async loadByDiscordId(userDiscId: string): Promise<UserRow | null> {
-    return await withCachedPlanRetry(async () => {
-      try {
+    try {
+      return await withTransientDbRetry(async () => {
         const rows = await sql`
-          SELECT * FROM users
-          WHERE user_disc_id = ${userDiscId}
+          SELECT
+            u.user_id,
+            u.user_disc_id,
+            upc.user_nickname,
+            u.language_pref,
+            u.registration_locale,
+            u.privacy_level,
+            u.message_proxy_service,
+            u.message_proxy_instance_id,
+            COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+            upc.timezone_offset,
+            upc.prefix_override,
+            upc.suffix_override,
+            upc.gender_identity,
+            upc.pronouns,
+            upc.addressing_style,
+            u.created_at,
+            u.updated_at,
+            COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+            COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+            upc.char_ref_url,
+            upc.impersonation_prompt,
+            COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+            COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+            COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out
+          FROM users u
+          LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+          WHERE u.user_disc_id = ${userDiscId}
           LIMIT 1
         `;
 
@@ -64,18 +146,12 @@ export class UserRepository implements IRepository<UserExportShape> {
           return null;
         }
 
-        const parsedUser = userSchema.safeParse(rows[0]);
-        if (!parsedUser.success) {
-          log.error(`Failed to validate user data for ID ${userDiscId}:`, parsedUser.error.flatten());
-          return null;
-        }
-
-        return parsedUser.data;
-      } catch (error) {
-        log.error(`Error loading user row for ID ${userDiscId}:`, error);
-        return null;
-      }
-    }, `load user row for ID ${userDiscId}`);
+        return this.parseUserRow(rows[0], `ID ${userDiscId}`);
+      }, `load user row for ID ${userDiscId}`);
+    } catch (error) {
+      log.error(`Error loading user row for ID ${userDiscId}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -85,57 +161,201 @@ export class UserRepository implements IRepository<UserExportShape> {
    * @returns Array of matching UserRow objects
    */
   async findByNormalizedNickname(normalizedNickname: string): Promise<UserRow[]> {
-    return (
-      (await withCachedPlanRetry(async () => {
-        try {
-          const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
-          if (!nickname) {
-            return [];
-          }
-
-          const rows = await sql`
-            SELECT *
-            FROM users
-            WHERE regexp_replace(lower(trim(user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
-          `;
-
-          const parsedUsers: UserRow[] = [];
-          for (const row of rows) {
-            const parsedUser = userSchema.safeParse(row);
-            if (!parsedUser.success) {
-              log.error(
-                `Failed to validate user data while matching nickname "${normalizedNickname}":`,
-                parsedUser.error.flatten(),
-              );
-              continue;
-            }
-            parsedUsers.push(parsedUser.data);
-          }
-
-          return parsedUsers;
-        } catch (error) {
-          log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
+    try {
+      return await withTransientDbRetry(async () => {
+        const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
+        if (!nickname) {
           return [];
         }
-      }, `load user rows for nickname ${normalizedNickname}`)) ?? []
-    );
+
+        const rows = await sql`
+            SELECT
+              u.user_id,
+              u.user_disc_id,
+              upc.user_nickname,
+              u.language_pref,
+              u.registration_locale,
+              u.privacy_level,
+              u.message_proxy_service,
+              u.message_proxy_instance_id,
+              COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+              upc.timezone_offset,
+              upc.prefix_override,
+              upc.suffix_override,
+              upc.gender_identity,
+              upc.pronouns,
+              upc.addressing_style,
+              u.created_at,
+              u.updated_at,
+              COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+              COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+              upc.char_ref_url,
+              upc.impersonation_prompt,
+              COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+              COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+              COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out
+            FROM users u
+            LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+            WHERE regexp_replace(lower(trim(upc.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
+          `;
+
+        const parsedUsers: UserRow[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `nickname "${normalizedNickname}"`);
+          if (parsedUser) parsedUsers.push(parsedUser);
+        }
+
+        return parsedUsers;
+      }, `load user rows for nickname ${normalizedNickname}`);
+    } catch (error) {
+      log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads bounded reference candidates plus the evidence needed by eligibility
+   * policy v1. The participant pipeline owns the policy decision so injected
+   * sources and repository results follow the same pure contract.
+   */
+  async loadContextReferenceCandidates(params: {
+    serverDiscId: string;
+    candidateDiscordIds: string[];
+    normalizedHistoryText: string;
+  }): Promise<ContextReferenceCandidate[]> {
+    try {
+      return await withTransientDbRetry(async () => {
+        const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
+        const normalizedHistoryText = params.normalizedHistoryText
+          .replaceAll("\u0000", " ")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
+        const rows = await sql`
+            WITH context_reference_candidates AS (
+              SELECT
+                u.user_id,
+                u.user_disc_id,
+                upc.user_nickname,
+                u.language_pref,
+                u.registration_locale,
+                u.privacy_level,
+                COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+                upc.timezone_offset,
+                upc.prefix_override,
+                upc.suffix_override,
+                upc.gender_identity,
+                upc.pronouns,
+                upc.addressing_style,
+                u.created_at,
+                u.updated_at,
+                COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+                COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+                upc.char_ref_url,
+                upc.impersonation_prompt,
+                COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+                COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+                COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out,
+                EXISTS (
+                  SELECT 1
+                  FROM stat_counters sc
+                  JOIN servers s ON s.server_id = sc.server_id
+                  WHERE sc.user_id = u.user_id
+                    AND s.server_disc_id = ${params.serverDiscId}
+                    AND sc.metric IN ('message_sent', 'command_used')
+                    AND sc.count > 0
+                ) AS has_server_activity,
+                -- Reached through persona_lineage_id rather than a server column because
+                -- personal_memories has none: the lineage is the cross-server pooling
+                -- namespace, so joining it back to the personas of this server keeps a
+                -- re-imported persona's memories counting while excluding a user whose
+                -- memories all belong to lineages this server never ran. Lineage 0 is the
+                -- global branch that loadForUserLineage ORs into every persona's read, so
+                -- it renders here regardless of which lineages this server owns.
+                EXISTS (
+                  SELECT 1
+                  FROM personal_memories pm
+                  WHERE pm.user_id = u.user_id
+                    AND (
+                      pm.persona_lineage_id = 0
+                      OR EXISTS (
+                        SELECT 1
+                        FROM personas p
+                        JOIN servers s ON s.server_id = p.server_id
+                        WHERE p.persona_lineage_id = pm.persona_lineage_id
+                          AND s.server_disc_id = ${params.serverDiscId}
+                      )
+                    )
+                ) AS has_personal_memories,
+                EXISTS (
+                  SELECT 1
+                  FROM reminders r
+                  JOIN servers s ON s.server_id = r.server_id
+                  WHERE (r.user_discord_id = u.user_disc_id OR r.created_by_user_id = u.user_id)
+                    AND r.reminder_time > CURRENT_TIMESTAMP
+                    AND s.server_disc_id = ${params.serverDiscId}
+                ) AS has_pending_tasks
+              FROM users u
+              LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+            )
+            SELECT *
+            FROM context_reference_candidates
+            WHERE (
+              user_disc_id = ANY(${sql.array(candidateDiscordIds, "TEXT")})
+              OR has_server_activity
+              OR (
+                ${normalizedHistoryText} <> ''
+                AND position(
+                  regexp_replace(lower(trim(user_nickname)), '[[:space:]]+', ' ', 'g')
+                  IN ${normalizedHistoryText}
+                ) > 0
+              )
+            )
+          `;
+
+        const candidates: ContextReferenceCandidate[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
+          if (parsedUser) {
+            candidates.push({
+              userRow: parsedUser,
+              evidence: {
+                hasServerActivity: row.has_server_activity === true,
+                hasPersonalMemories: row.has_personal_memories === true,
+                hasPendingTasks: row.has_pending_tasks === true,
+              },
+            });
+          }
+        }
+        return candidates;
+      }, `load context reference candidates for server ${params.serverDiscId}`);
+    } catch (error) {
+      log.error("Error loading context reference candidates:", error);
+      return [];
+    }
   }
 
   /**
    * Returns the user's privacy level (0 = MINIMAL, 1 = PARTIAL, 2 = FULL).
    * Defaults to MINIMAL if user not found.
    *
-   * @param userDiscId - Discord user snowflake
    */
   async getPrivacyLevel(userDiscId: string): Promise<PrivacyLevel> {
     try {
-      const result = await sql`
-        SELECT privacy_level
-        FROM users
-        WHERE user_disc_id = ${userDiscId}
-        LIMIT 1
-      `;
+      const result = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT privacy_level
+          FROM users
+          WHERE user_disc_id = ${userDiscId}
+          LIMIT 1
+        `,
+        "get privacy level",
+      );
 
+      // A user with no row is genuinely new, and MINIMAL is the right default for them. This
+      // branch must not be merged with the failure path below: an absent row and an unreadable
+      // database are different facts, and only one of them permits a permissive answer.
       if (!result.length) {
         return PrivacyLevelValue.MINIMAL;
       }
@@ -149,8 +369,11 @@ export class UserRepository implements IRepository<UserExportShape> {
 
       return level as PrivacyLevel;
     } catch (error) {
+      // Returning MINIMAL here treated a user who chose FULL (completely invisible) as fully
+      // personalizable for the duration of every pool cascade, because this catch cannot tell
+      // an unreadable database from a new user. Callers that cannot propagate must pick FULL.
       log.error(`Error checking privacy level for user ${userDiscId}:`, error);
-      return PrivacyLevelValue.MINIMAL;
+      throw new DatabaseUnavailableError(`Failed to read the privacy level for user ${userDiscId}`);
     }
   }
 
@@ -158,7 +381,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Returns true if the user has opted out of all personalization (privacy level FULL).
    *
    * @deprecated Use getPrivacyLevel() for granular checks.
-   * @param userDiscId - Discord user snowflake
    */
   async isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
     const level = await this.getPrivacyLevel(userDiscId);
@@ -168,7 +390,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Returns the user's cross-server short-term memory sharing preference.
    *
-   * @param userDiscId - Discord user snowflake
    */
   async getCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
     try {
@@ -178,9 +399,10 @@ export class UserRepository implements IRepository<UserExportShape> {
       }
 
       const [user] = await sql`
-        SELECT shortterm_cache_crossserver_opt_in
-        FROM users
-        WHERE user_disc_id = ${userDiscId}
+        SELECT COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in
+        FROM users u
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+        WHERE u.user_disc_id = ${userDiscId}
       `;
 
       return user?.shortterm_cache_crossserver_opt_in ?? false;
@@ -193,33 +415,36 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Returns true if the user is blacklisted from a specific server.
    *
-   * @param serverDiscId - Discord server snowflake
-   * @param userDiscId   - Discord user snowflake
    */
   async isBlacklisted(serverDiscId: string, userDiscId: string): Promise<boolean> {
     try {
-      const result = await sql`
-        SELECT EXISTS (
-          SELECT 1
-          FROM personalization_blacklist pb
-          JOIN servers s ON pb.server_id = s.server_id
-          WHERE s.server_disc_id = ${serverDiscId}
-          AND pb.user_disc_id = ${userDiscId}
-        ) as "exists";
-      `;
+      const result = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT EXISTS (
+            SELECT 1
+            FROM personalization_blacklist pb
+            JOIN servers s ON pb.server_id = s.server_id
+            WHERE s.server_disc_id = ${serverDiscId}
+            AND pb.user_disc_id = ${userDiscId}
+          ) as "exists";
+        `,
+        "check personalization blacklist",
+      );
 
       // biome-ignore lint/style/noNonNullAssertion: Query guarantees result[0] exists.
       return result[0]!.exists;
     } catch (error) {
+      // Returning false meant a moderation control that evaporated whenever the database
+      // hiccuped. Callers that cannot propagate must treat the restriction as still in force.
       log.error(`Error checking blacklist for user ${userDiscId} in server ${serverDiscId}:`, error);
-      return false;
+      throw new DatabaseUnavailableError(`Failed to read the blacklist entry for user ${userDiscId}`);
     }
   }
 
   /**
    * Returns the list of blacklisted user Discord IDs for a server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
@@ -242,15 +467,14 @@ export class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
-   * Registers a user (upsert — preserves existing nickname and preferences on conflict).
+   * Registers a user while preserving existing preferences on conflict.
+   * The observed Discord display name is diagnostic only. A null saved nickname
+   * keeps the user's name linked to their live Discord profile until they opt in
+   * to a custom name.
    * Invalidates the user cache after write.
    *
-   * @param userDiscId  - Discord user snowflake
-   * @param displayName - Displayed nickname from Discord
-   * @param language    - Registration locale
+   * @param language - Registration locale
    * @returns UserRow on success, null on failure
    */
   async register(userDiscId: string, displayName: string, language = "en"): Promise<UserRow | null> {
@@ -260,11 +484,8 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Sets the user's global privacy level.
    * Invalidates the user cache after write.
    *
-   * @param userDiscId - Discord user snowflake
-   * @param level      - Privacy level to set
    * @returns Updated UserRow or null on failure
    */
   async setPrivacyLevel(userDiscId: string, level: PrivacyLevel): Promise<UserRow | null> {
@@ -285,19 +506,27 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Toggles cross-server short-term memory opt-in for a user.
    * Invalidates the user cache after write.
    *
-   * @param userDiscId - Discord user snowflake
    * @returns New opt-in state
    */
   async toggleCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
     try {
       const [updated] = await sql`
-        UPDATE users
-        SET shortterm_cache_crossserver_opt_in = NOT shortterm_cache_crossserver_opt_in
+        INSERT INTO user_personalization_configs (
+          user_id,
+          shortterm_cache_crossserver_opt_in
+        )
+        SELECT
+          user_id,
+          true
+        FROM users
         WHERE user_disc_id = ${userDiscId}
+        ON CONFLICT (user_id) DO UPDATE SET
+          shortterm_cache_crossserver_opt_in = NOT user_personalization_configs.shortterm_cache_crossserver_opt_in,
+          updated_at = NOW()
         RETURNING shortterm_cache_crossserver_opt_in
       `;
 
-      invalidateUserCache(userDiscId);
+      if (updated) invalidateUserCache(userDiscId);
       return updated?.shortterm_cache_crossserver_opt_in ?? false;
     } catch (error) {
       log.error(`Error toggling cross-server short-term memory opt-in for user ${userDiscId}:`, error);
@@ -309,9 +538,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Updates arbitrary user fields. Validates against the user schema before writing.
    * Invalidates the user cache after write.
    *
-   * @param userId   - Internal user DB ID
-   * @param userData - Partial UserRow with fields to update
-   * @returns Updated UserRow or null on failure
    */
   async update(userId: number, userData: Partial<UserRow>): Promise<UserRow | null> {
     const user = await this.updateUserRow(userId, userData);
@@ -319,14 +545,7 @@ export class UserRepository implements IRepository<UserExportShape> {
     return user;
   }
 
-  /**
-   * Removes a user's blacklist entry in a specific server.
-   * Invalidates only the per-server blacklist cache slot.
-   *
-   * @param serverId   - Internal server DB ID
-   * @param userDiscId - Discord user snowflake
-   * @returns true on success
-   */
+  /** Invalidates only the per-server blacklist cache slot. */
   async removeBlacklistEntry(serverId: number, userDiscId: string, serverDiscId: string): Promise<boolean> {
     try {
       await sql`
@@ -356,20 +575,34 @@ export class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  async setNickname(userId: number, nickname: string): Promise<boolean> {
+  async setNickname(userId: number, nickname: string | null): Promise<boolean> {
     const updated = await this.update(userId, { user_nickname: nickname });
     return updated !== null;
   }
 
-  // ── Personal spotlight ────────────────────────────────────────────────────
+  async setTimezoneOffset(userId: number, offset: number | null): Promise<boolean> {
+    const updated = await this.update(userId, { timezone_offset: offset });
+    return updated !== null;
+  }
+
+  async setMessageProxyService(
+    userId: number,
+    serviceId: string | null,
+    selectedInstanceId?: string,
+  ): Promise<boolean> {
+    const instanceId =
+      serviceId === "pluralkit" || serviceId === "pluralbuddy" ? (selectedInstanceId ?? `${serviceId}:official`) : null;
+    const updated = await this.update(userId, {
+      message_proxy_service: serviceId,
+      message_proxy_instance_id: instanceId,
+    });
+    return updated !== null;
+  }
 
   /**
    * Upserts a personal spotlight for a user in a channel, replacing all persona
    * associations atomically.
    *
-   * @param serverId            - Internal server DB ID
-   * @param userId              - Internal user DB ID
-   * @param channelDiscId       - Discord channel snowflake
    * @param personaIds          - Tomori IDs to allow in the spotlight
    * @param autoTriggerPersonaId - Tomori ID to auto-trigger, or null
    * @param expiresAt           - Expiry timestamp, or null for permanent
@@ -446,9 +679,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Deletes a personal spotlight entry for a user in a specific channel.
    *
-   * @param serverId      - Internal server DB ID
-   * @param userId        - Internal user DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @returns true if a row was deleted
    */
   async removePersonalSpotlight(serverId: number, userId: number, channelDiscId: string): Promise<boolean> {
@@ -463,12 +693,25 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
+   * Reports whether a server has any personal spotlight rows.
+   *
+   * Lets the cache layer skip {@link getPersonalSpotlightStatus}, which issues a DELETE before its
+   * SELECT and is keyed per user per channel, when the answer is the same server-wide.
+   */
+  async serverHasPersonalSpotlights(serverId: number): Promise<boolean> {
+    const [row] = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM personal_spotlights WHERE server_id = ${serverId}
+      ) AS exists
+    `;
+
+    return row?.exists ?? false;
+  }
+
+  /**
    * Loads the current personal spotlight status for a user in a channel, pruning
    * expired entries and orphaned spotlights (no remaining personas) first.
    *
-   * @param serverId      - Internal server DB ID
-   * @param userId        - Internal user DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @returns PersonalSpotlightStatus or null if none active
    */
   async getPersonalSpotlightStatus(
@@ -518,7 +761,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       return status;
     }
 
-    // Orphaned spotlight — remove it so it doesn't accumulate
+    // Orphaned spotlight: remove it so it doesn't accumulate
     await this.removePersonalSpotlight(serverId, userId, channelDiscId);
     return null;
   }
@@ -527,8 +770,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Returns all active personal spotlights for a user in a server, pruning expired
    * and orphaned entries first.
    *
-   * @param serverId - Internal server DB ID
-   * @param userId   - Internal user DB ID
    * @returns Sorted array of active PersonalSpotlightStatus entries
    */
   async getActivePersonalSpotlightsForUser(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]> {
@@ -593,10 +834,9 @@ export class UserRepository implements IRepository<UserExportShape> {
 
   /**
    * Returns true if the given personaId is permitted by the spotlight status.
-   * A null spotlight means no restriction — all personas are allowed.
+   * A null spotlight means no restriction: all personas are allowed.
    *
    * @param spotlightStatus - Current spotlight, or null/undefined if none
-   * @param personaId        - Persona DB ID to check
    */
   isPersonaAllowedByPersonalSpotlight(
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
@@ -617,7 +857,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Filters a persona array to only those allowed by the given spotlight status.
    * Returns all personas unchanged when spotlightStatus is null/undefined.
    *
-   * @param personas        - Array of persona-like objects with optional persona_id
    * @param spotlightStatus - Current spotlight filter, or null/undefined
    */
   filterPersonasByPersonalSpotlight<T extends { persona_id?: number | null | undefined }>(
@@ -630,8 +869,6 @@ export class UserRepository implements IRepository<UserExportShape> {
 
     return personas.filter((persona) => this.isPersonaAllowedByPersonalSpotlight(spotlightStatus, persona.persona_id));
   }
-
-  // ── Personal spotlight private helpers ───────────────────────────────────
 
   private normalizeNumber(value: number | string | bigint | null | undefined): number | null {
     if (typeof value === "number") {
@@ -751,19 +988,30 @@ export class UserRepository implements IRepository<UserExportShape> {
     `;
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports a user's portable settings for data portability (GDPR etc.).
    * The ownerId is the Discord snowflake of the user.
    *
-   * @param ownerId - Discord user snowflake
    * @returns UserExportShape or null if the user has no data
    */
   async toExportShape(ownerId: string | number): Promise<UserExportShape | null> {
     const userDiscId = String(ownerId);
     const user = await this.loadByDiscordId(userDiscId);
     if (!user) return null;
+
+    const personaNamingPreferences = await sql<
+      Array<{
+        persona_lineage_id: number;
+        nickname_override: string | null;
+        prefix_override: string | null;
+        suffix_override: string | null;
+      }>
+    >`
+      SELECT persona_lineage_id, nickname_override, prefix_override, suffix_override
+      FROM user_persona_naming_preferences
+      WHERE user_id = ${user.user_id as number}
+      ORDER BY persona_lineage_id
+    `;
 
     return {
       user_nickname: user.user_nickname,
@@ -773,17 +1021,26 @@ export class UserRepository implements IRepository<UserExportShape> {
       personal_dtm: (user.personal_dtm as "off" | "follow" | "on") ?? undefined,
       shortterm_cache_crossserver_opt_in: user.shortterm_cache_crossserver_opt_in,
       physical_appearance_tags: user.physical_appearance_tags ?? [],
-      nai_char_ref_url: user.nai_char_ref_url ?? null,
+      char_ref_url: user.char_ref_url ?? null,
+      personal_deliberate_tool_mode: user.personal_deliberate_tool_mode,
+      timezone_offset: user.timezone_offset ?? null,
+      prefix_override: user.prefix_override ?? null,
+      suffix_override: user.suffix_override ?? null,
+      gender_identity: user.gender_identity ?? null,
+      pronouns: user.pronouns ?? null,
+      addressing_style: user.addressing_style ?? null,
+      persona_naming_preferences: personaNamingPreferences.map((preference) => ({
+        ...preference,
+        persona_lineage_id: Number(preference.persona_lineage_id),
+      })),
     };
   }
 
   /**
    * Imports a previously exported user settings shape, merging into the existing row.
-   * Dual-writes: updates users table AND upserts into user_personalization_configs (Stage A).
+   * Account identity stays on users; durable user settings write to user_personalization_configs.
    * Creates the user row first if it doesn't exist.
    *
-   * @param ownerId - Discord user snowflake
-   * @param data    - Previously exported UserExportShape
    * @returns true on success, false on validation or write failure
    */
   async fromExportShape(ownerId: string | number, data: UserExportShape): Promise<boolean> {
@@ -797,30 +1054,48 @@ export class UserRepository implements IRepository<UserExportShape> {
     const parsed = validated.data;
 
     try {
-      await this.registerUserRow(userDiscId, parsed.user_nickname, parsed.language_pref);
+      await this.registerUserRow(userDiscId, parsed.user_nickname ?? userDiscId, parsed.language_pref);
 
       const user = await this.loadByDiscordId(userDiscId);
       if (!user?.user_id) return false;
 
       await Promise.all([
         this.updateUserRow(user.user_id, {
-          user_nickname: parsed.user_nickname,
           language_pref: parsed.language_pref,
-          impersonation_prompt: parsed.impersonation_prompt ?? undefined,
           privacy_level: parsed.privacy_level,
-          personal_dtm: parsed.personal_dtm,
-          shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in,
-          physical_appearance_tags: parsed.physical_appearance_tags,
-          nai_char_ref_url: parsed.nai_char_ref_url ?? undefined,
         }),
         this.sqlUpsertUserPersonalizationConfigs(user.user_id, {
           shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in ?? false,
           physical_appearance_tags: parsed.physical_appearance_tags,
-          nai_char_ref_url: parsed.nai_char_ref_url ?? null,
+          char_ref_url: parsed.char_ref_url ?? null,
           impersonation_prompt: parsed.impersonation_prompt ?? null,
           personal_dtm: parsed.personal_dtm,
+          user_nickname: parsed.user_nickname,
+          personal_deliberate_tool_mode: parsed.personal_deliberate_tool_mode,
+          timezone_offset: parsed.timezone_offset,
+          prefix_override: parsed.prefix_override,
+          suffix_override: parsed.suffix_override,
+          gender_identity: parsed.gender_identity,
+          pronouns: parsed.pronouns,
+          addressing_style: parsed.addressing_style,
         }),
       ]);
+
+      for (const preference of parsed.persona_naming_preferences) {
+        await sql`
+          INSERT INTO user_persona_naming_preferences (
+            user_id, persona_lineage_id, nickname_override, prefix_override, suffix_override
+          ) VALUES (
+            ${user.user_id}, ${preference.persona_lineage_id}, ${preference.nickname_override},
+            ${preference.prefix_override}, ${preference.suffix_override}
+          )
+          ON CONFLICT (user_id, persona_lineage_id) DO UPDATE SET
+            nickname_override = EXCLUDED.nickname_override,
+            prefix_override = EXCLUDED.prefix_override,
+            suffix_override = EXCLUDED.suffix_override,
+            updated_at = NOW()
+        `;
+      }
 
       invalidateUserCache(userDiscId);
       return true;
@@ -830,34 +1105,106 @@ export class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  // ── user_personalization_configs upsert ──────────────────────────
-
   private async sqlUpsertUserPersonalizationConfigs(
     userId: number,
     data: {
       shortterm_cache_crossserver_opt_in: boolean;
       physical_appearance_tags: string[];
-      nai_char_ref_url: string | null | undefined;
+      char_ref_url: string | null | undefined;
       impersonation_prompt: string | null | undefined;
       personal_dtm: "off" | "follow" | "on" | undefined;
+      user_nickname: string | null;
+      personal_deliberate_tool_mode: "off" | "follow" | "on" | undefined;
+      timezone_offset: number | null | undefined;
+      prefix_override: string | null | undefined;
+      suffix_override: string | null | undefined;
+      gender_identity: string | null | undefined;
+      pronouns: string | null | undefined;
+      addressing_style: "masculine" | "feminine" | "neutral" | null | undefined;
     },
+    client: SQL = sql,
   ): Promise<void> {
-    await sql`
+    await client`
       INSERT INTO user_personalization_configs (
-        user_id, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
-        nai_char_ref_url, impersonation_prompt, personal_dtm
+        user_id, user_nickname, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
+        char_ref_url, impersonation_prompt, personal_dtm, personal_deliberate_tool_mode,
+        timezone_offset, prefix_override, suffix_override, gender_identity, pronouns,
+        addressing_style
       ) VALUES (
-        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
-        ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
-        ${data.personal_dtm ?? "follow"}
+        ${userId}, ${data.user_nickname}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
+        ${data.char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
+        ${data.personal_dtm ?? "follow"}, ${data.personal_deliberate_tool_mode ?? "follow"},
+        ${data.timezone_offset ?? null}, ${data.prefix_override ?? null}, ${data.suffix_override ?? null},
+        ${data.gender_identity ?? null}, ${data.pronouns ?? null},
+        ${data.addressing_style ?? null}
       )
       ON CONFLICT (user_id) DO UPDATE SET
+        user_nickname                      = EXCLUDED.user_nickname,
         shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
         physical_appearance_tags                      = EXCLUDED.physical_appearance_tags,
-        nai_char_ref_url                   = EXCLUDED.nai_char_ref_url,
+        char_ref_url                   = EXCLUDED.char_ref_url,
         impersonation_prompt               = EXCLUDED.impersonation_prompt,
         personal_dtm                       = EXCLUDED.personal_dtm,
+        personal_deliberate_tool_mode      = EXCLUDED.personal_deliberate_tool_mode,
+        timezone_offset                    = EXCLUDED.timezone_offset,
+        prefix_override                    = EXCLUDED.prefix_override,
+        suffix_override                    = EXCLUDED.suffix_override,
+        gender_identity                    = EXCLUDED.gender_identity,
+        pronouns                           = EXCLUDED.pronouns,
+        addressing_style                   = EXCLUDED.addressing_style,
         updated_at                         = NOW()
+    `;
+  }
+
+  private async sqlUpsertUserPersonalizationPatch(
+    userId: number,
+    patch: UserPersonalizationPatch,
+    client: SQL = sql,
+  ): Promise<void> {
+    const entries = Object.entries(patch).filter(([, value]) => value !== undefined) as Array<
+      [UserPersonalizationField, UserPersonalizationPatch[UserPersonalizationField]]
+    >;
+    if (entries.length === 0) return;
+
+    const columns = ["user_id"];
+    const placeholders = ["$1"];
+    const setParts: string[] = [];
+    const values: SqlParameterArray = [userId];
+
+    for (const [field, rawValue] of entries) {
+      columns.push(field);
+      const placeholder = `$${values.length + 1}`;
+      if (field === "physical_appearance_tags") {
+        placeholders.push(`${placeholder}::TEXT[]`);
+        values.push(this.toTextArrayLiteral(rawValue as string[]));
+      } else {
+        placeholders.push(placeholder);
+        values.push(rawValue);
+      }
+      setParts.push(`${field} = EXCLUDED.${field}`);
+    }
+
+    await client.unsafe(
+      `
+        INSERT INTO user_personalization_configs (${columns.join(", ")})
+        VALUES (${placeholders.join(", ")})
+        ON CONFLICT (user_id) DO UPDATE SET
+          ${setParts.join(", ")},
+          updated_at = NOW()
+      `,
+      values,
+    );
+  }
+
+  private async ensureUserPersonalizationConfigRow(
+    userId: number,
+    client: SQL = sql,
+    initialNickname: string | null = null,
+  ): Promise<void> {
+    await client`
+      INSERT INTO user_personalization_configs (user_id, user_nickname)
+      VALUES (${userId}, ${initialNickname})
+      ON CONFLICT (user_id) DO NOTHING
     `;
   }
 
@@ -865,39 +1212,51 @@ export class UserRepository implements IRepository<UserExportShape> {
     try {
       log.info(`Ensuring user ${userDiscId} exists (${displayName})`);
 
-      const [userData] = await sql`
-        WITH inserted_user AS (
-          INSERT INTO users (
-            user_disc_id,
-            user_nickname,
-            language_pref,
-            registration_locale
-          ) VALUES (
-            ${userDiscId},
-            ${displayName},
-            ${language},
-            ${language}
-          )
-          ON CONFLICT (user_disc_id) DO NOTHING
-          RETURNING *
-        )
-        SELECT *
-        FROM inserted_user
-        UNION ALL
-        SELECT *
-        FROM users
-        WHERE user_disc_id = ${userDiscId}
-          AND NOT EXISTS (SELECT 1 FROM inserted_user)
-        LIMIT 1
-      `;
+      // Wrapped where the raw driver error can still reach the helper: a `try/catch` inside the
+      // thunk would hand it a resolved value and the retry would never fire. Replay-safe because
+      // both writes are `ON CONFLICT DO NOTHING`.
+      await withTransientDbRetry(async () => {
+        await sql.begin(async (tx) => {
+          const [row] = await tx`
+            WITH inserted_user AS (
+              INSERT INTO users (
+                user_disc_id,
+                language_pref,
+                registration_locale
+              ) VALUES (
+                ${userDiscId},
+                ${language},
+                ${language}
+              )
+              ON CONFLICT (user_disc_id) DO NOTHING
+              RETURNING user_id
+            )
+            SELECT user_id
+            FROM inserted_user
+            UNION ALL
+            SELECT user_id
+            FROM users
+            WHERE user_disc_id = ${userDiscId}
+              AND NOT EXISTS (SELECT 1 FROM inserted_user)
+            LIMIT 1
+          `;
 
-      const validatedUser = userSchema.safeParse(userData);
-      if (!validatedUser.success) {
-        log.error(`Failed to validate registered user data for ${userDiscId}:`, validatedUser.error);
+          if (!row?.user_id) {
+            throw new Error(`User ${userDiscId} was not returned after registration upsert`);
+          }
+
+          await this.ensureUserPersonalizationConfigRow(row.user_id, tx);
+        });
+      }, "register user");
+
+      const userData = await this.loadByDiscordId(userDiscId);
+
+      if (!userData) {
+        log.error(`Failed to validate registered user data for ${userDiscId}`);
         return null;
       }
 
-      return validatedUser.data;
+      return userData;
     } catch (error) {
       log.error(`Error registering user ${userDiscId}:`, error);
       return null;
@@ -917,7 +1276,7 @@ export class UserRepository implements IRepository<UserExportShape> {
         UPDATE users
         SET privacy_level = ${level}
         WHERE user_disc_id = ${userDiscId}
-        RETURNING *
+        RETURNING user_disc_id
       `;
 
       if (!userData) {
@@ -925,14 +1284,8 @@ export class UserRepository implements IRepository<UserExportShape> {
         return null;
       }
 
-      const validatedUser = userSchema.safeParse(userData);
-      if (!validatedUser.success) {
-        log.error(`Failed to validate user data after privacy update for ${userDiscId}:`, validatedUser.error);
-        return null;
-      }
-
       log.success(`Privacy level successfully set to ${level} for user ${userDiscId}`);
-      return validatedUser.data;
+      return await this.loadByDiscordId(userData.user_disc_id);
     } catch (error) {
       log.error(`Error setting privacy level for user ${userDiscId}:`, error);
       return null;
@@ -942,7 +1295,10 @@ export class UserRepository implements IRepository<UserExportShape> {
   private async updateUserRow(userId: number, userData: Partial<UserRow>): Promise<UserRow | null> {
     try {
       const validUserData = userSchema.partial().parse(userData);
-      const fields = Object.keys(validUserData).filter((key) => key !== "user_id" && key in userData);
+      const fields = Object.keys(userData).filter((key) => {
+        if (key === "user_id") return false;
+        return validUserData[key as keyof typeof validUserData] !== undefined;
+      });
 
       if (fields.length === 0) {
         log.warn(`No fields provided to update for user_id: ${userId}`);
@@ -951,62 +1307,68 @@ export class UserRepository implements IRepository<UserExportShape> {
 
       validateUserFields(fields);
 
-      const setParts: string[] = [];
-      const values: SqlParameterArray = [];
+      const userFields: string[] = [];
+      const personalizationPatch: UserPersonalizationPatch = {};
 
-      fields.forEach((field, index) => {
-        setParts.push(`${field} = $${index + 1}`);
+      for (const field of fields) {
         const rawValue = validUserData[field as keyof typeof validUserData];
-        if (Array.isArray(rawValue)) {
-          const escaped = rawValue.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`);
-          values.push(`{${escaped.join(",")}}`);
+        if (this.isUserPersonalizationField(field)) {
+          this.assignUserPersonalizationPatchField(personalizationPatch, field, rawValue);
         } else {
-          values.push(rawValue);
+          userFields.push(field);
         }
+      }
+
+      let userDiscId: string | null = null;
+
+      await sql.begin(async (tx) => {
+        const [existingUser] = await tx`
+          SELECT user_disc_id
+          FROM users
+          WHERE user_id = ${userId}
+          FOR UPDATE
+        `;
+
+        if (!existingUser?.user_disc_id) {
+          throw new Error("User not found");
+        }
+        userDiscId = existingUser.user_disc_id;
+
+        if (userFields.length > 0) {
+          const setParts: string[] = [];
+          const values: SqlParameterArray = [];
+
+          for (const field of userFields) {
+            const rawValue = validUserData[field as keyof typeof validUserData];
+            this.pushUnsafeUpdateValue(field, rawValue, setParts, values);
+          }
+
+          values.push(userId);
+
+          const result = await tx.unsafe(
+            `
+              UPDATE users
+              SET ${setParts.join(", ")}
+              WHERE user_id = $${values.length}
+              RETURNING user_disc_id
+            `,
+            values,
+          );
+
+          if (!result.length) {
+            throw new Error("User not found");
+          }
+          userDiscId = result[0].user_disc_id;
+        }
+
+        await this.sqlUpsertUserPersonalizationPatch(userId, personalizationPatch, tx);
       });
 
-      const setClause = setParts.join(", ");
-      const finalPlaceholderIndex = values.length + 1;
-      values.push(userId);
-
-      const result = await sql.unsafe(
-        `
-          UPDATE users
-          SET ${setClause}
-          WHERE user_id = $${finalPlaceholderIndex}
-          RETURNING *
-        `,
-        values,
-      );
-
-      if (!result.length) {
-        const context: ErrorContext = {
-          userId,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            operation: "updateUser",
-            fields,
-          },
-        };
-        await log.error(`No user found with id: ${userId}`, new Error("User not found"), context);
+      if (!userDiscId) {
         return null;
       }
 
-      const updatedUser = userSchema.safeParse(result[0]);
-      if (!updatedUser.success) {
-        const context: ErrorContext = {
-          userId,
-          errorType: "SchemaValidationError",
-          metadata: {
-            operation: "updateUser",
-            validationErrors: updatedUser.error.flatten(),
-          },
-        };
-        await log.error(`Failed to validate updated user for id: ${userId}`, updatedUser.error, context);
-        return null;
-      }
-
-      return updatedUser.data;
+      return await this.loadByDiscordId(userDiscId);
     } catch (error) {
       const context: ErrorContext = {
         userId,
@@ -1019,7 +1381,202 @@ export class UserRepository implements IRepository<UserExportShape> {
       return null;
     }
   }
+
+  private parseUserRow(row: unknown, contextLabel: string): UserRow | null {
+    const parsedUser = userSchema.safeParse(row);
+    if (!parsedUser.success) {
+      log.error(`Failed to validate user data for ${contextLabel}:`, parsedUser.error.flatten());
+      return null;
+    }
+    return parsedUser.data;
+  }
+
+  private isUserPersonalizationField(field: string): field is UserPersonalizationField {
+    return USER_PERSONALIZATION_FIELDS.has(field);
+  }
+
+  private assignUserPersonalizationPatchField(
+    patch: UserPersonalizationPatch,
+    field: UserPersonalizationField,
+    rawValue: unknown,
+  ): void {
+    switch (field) {
+      case "user_nickname":
+        patch.user_nickname = rawValue as string | null;
+        break;
+      case "shortterm_cache_crossserver_opt_in":
+        patch.shortterm_cache_crossserver_opt_in = rawValue as boolean;
+        break;
+      case "physical_appearance_tags":
+        patch.physical_appearance_tags = rawValue as string[];
+        break;
+      case "char_ref_url":
+        patch.char_ref_url = rawValue as string | null;
+        break;
+      case "impersonation_prompt":
+        patch.impersonation_prompt = rawValue as string | null;
+        break;
+      case "personal_dtm":
+        patch.personal_dtm = rawValue as "off" | "follow" | "on";
+        break;
+      case "personal_deliberate_tool_mode":
+        patch.personal_deliberate_tool_mode = rawValue as "off" | "follow" | "on";
+        break;
+      case "personal_server_fallback_enabled":
+        patch.personal_server_fallback_enabled = rawValue as boolean;
+        break;
+      case "natural_nudge_opt_out":
+        patch.natural_nudge_opt_out = rawValue as boolean;
+        break;
+      case "timezone_offset":
+        patch.timezone_offset = rawValue as number | null;
+        break;
+      case "prefix_override":
+        patch.prefix_override = rawValue as string | null;
+        break;
+      case "suffix_override":
+        patch.suffix_override = rawValue as string | null;
+        break;
+      case "gender_identity":
+        patch.gender_identity = rawValue as string | null;
+        break;
+      case "pronouns":
+        patch.pronouns = rawValue as string | null;
+        break;
+      case "addressing_style":
+        patch.addressing_style = rawValue as "masculine" | "feminine" | "neutral" | null;
+        break;
+    }
+  }
+
+  /**
+   * Erases a user's own record, cascading every personal table.
+   *
+   * `users` is the cascade root for the personal tables (memories, personalization config,
+   * persona naming preferences, spotlights, saved provider configs, custom endpoint connections,
+   * scoped model registrations, conditioning history, stat counters). The four remaining
+   * references are ON DELETE SET NULL, so server memories, reminders, uploaded documents, and
+   * error logs survive with the authorship link severed rather than deleting content a server
+   * owns. The Privacy Policy describes exactly this split.
+   *
+   * Spotlight server ids are read inside the same transaction before the delete because the
+   * cascade destroys the rows that post-commit cache invalidation needs to target.
+   */
+  async nukeUser(userId: number): Promise<PersonalNukeResult | null> {
+    try {
+      return await sql.begin(async (tx: SQL) => {
+        // Read the Discord id before the cascade: reminders key their target by that string, not
+        // by user_id, so it is unreachable once the row is gone.
+        const [user] = await tx<Array<{ user_disc_id: string }>>`
+          SELECT user_disc_id FROM users WHERE user_id = ${userId}
+        `;
+        if (!user) return null;
+
+        const spotlights = await tx<Array<{ server_id: number }>>`
+          SELECT DISTINCT server_id FROM personal_spotlights WHERE user_id = ${userId}
+        `;
+
+        // Reminders are ON DELETE SET NULL, so the cascade alone would leave both halves behind:
+        // one the user authored (their own prose and schedule, firing forever with a null creator
+        // nobody can claim) and one aimed at them (their Discord id and nickname, held by a row
+        // somebody else created). An erasure has to reach both.
+        const reminders = await tx`
+          DELETE FROM reminders
+          WHERE created_by_user_id = ${userId} OR user_discord_id = ${user.user_disc_id}
+        `;
+
+        await tx`DELETE FROM short_term_memories WHERE user_disc_id = ${user.user_disc_id}`;
+        await tx`DELETE FROM users WHERE user_id = ${userId}`;
+
+        return {
+          userDiscId: user.user_disc_id,
+          affectedServerIds: spotlights.map((row) => row.server_id),
+          remindersDeleted: reminders.count ?? 0,
+        };
+      });
+    } catch (error) {
+      log.error(`[PersonalNuke] Failed to erase user ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /** Whether migration 131 or the purge script left `webhook_user_cleanup` rows to merge. */
+  async hasPendingWebhookUserCleanup(): Promise<boolean> {
+    // Checked first because clean installs record migration 131 without running it, so the table may not exist.
+    const [table] = await sql<Array<{ present: boolean }>>`
+      SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS present
+    `;
+    if (!table?.present) return false;
+    const [queue] = await sql<Array<{ pending: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM webhook_user_cleanup) AS pending
+    `;
+    return queue?.pending === true;
+  }
+
+  /**
+   * Moves the stat counters of the users rows queued in `webhook_user_cleanup` (shared persona webhooks,
+   * queued by migration 131 or `scripts/maintenance/purge-webhook-users.ts`) onto the bot account's row,
+   * deletes those rows, and empties the queue, so server and persona spend totals survive.
+   *
+   * @returns The deleted rows' Discord IDs for cache invalidation, or null when no cleanup is pending.
+   */
+  async mergeWebhookUsersIntoBot(botUserId: number): Promise<string[] | null> {
+    return sql.begin(async (tx: SQL) => {
+      const [table] = await tx<Array<{ present: boolean }>>`
+        SELECT to_regclass('public.webhook_user_cleanup') IS NOT NULL AS present
+      `;
+      if (!table?.present) return null;
+
+      // The production runtime role has no DDL privilege, so the queue is emptied rather than dropped;
+      // claiming rows first leaves anything queued mid-merge for the next run instead of discarding it.
+      const claimed = await tx<Array<{ user_id: number }>>`DELETE FROM webhook_user_cleanup RETURNING user_id`;
+      if (claimed.length === 0) return null;
+      const userIds = claimed.map((row) => row.user_id);
+
+      await tx`
+        INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+        SELECT sc.server_id, ${botUserId}, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket,
+               SUM(sc.count), MIN(sc.first_at), MAX(sc.last_at)
+        FROM stat_counters sc
+        WHERE sc.user_id IN ${tx(userIds)}
+        GROUP BY sc.server_id, sc.persona_lineage_id, sc.metric, sc.metric_key, sc.bucket
+        ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket) DO UPDATE
+        SET count = stat_counters.count + EXCLUDED.count,
+            first_at = LEAST(stat_counters.first_at, EXCLUDED.first_at),
+            last_at = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
+      `;
+      const deleted = await tx<Array<{ user_disc_id: string }>>`
+        DELETE FROM users WHERE user_id IN ${tx(userIds)}
+        RETURNING user_disc_id
+      `;
+      return deleted.map((row) => row.user_disc_id);
+    });
+  }
+
+  private pushUnsafeUpdateValue(field: string, rawValue: unknown, setParts: string[], values: SqlParameterArray): void {
+    const placeholder = `$${values.length + 1}`;
+    if (Array.isArray(rawValue)) {
+      setParts.push(`${field} = ${placeholder}::TEXT[]`);
+      values.push(this.toTextArrayLiteral(rawValue));
+      return;
+    }
+
+    setParts.push(`${field} = ${placeholder}`);
+    values.push(rawValue);
+  }
+
+  private toTextArrayLiteral(values: string[]): string {
+    const escaped = values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`);
+    return `{${escaped.join(",")}}`;
+  }
 }
 
-/** Singleton instance — import this in callers. */
+/** Outcome of a successful personal erasure, carrying the keys post-commit invalidation needs. */
+interface PersonalNukeResult {
+  userDiscId: string;
+  affectedServerIds: number[];
+  remindersDeleted: number;
+}
+
+/** Singleton instance: import this in callers. */
 export const userRepository = new UserRepository();

@@ -1,18 +1,49 @@
 import { isIP } from "node:net";
 import {
-  Agent,
-  fetch as undiciFetch,
-  interceptors,
-  type RequestInfo as UndiciRequestInfo,
-  type RequestInit as UndiciRequestInit,
-  type Response as UndiciResponse,
-} from "undici";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+  type RemoteUrlValidationFailureCode,
+  type ValidateRemoteUrlOptions,
+  validateRemoteUrl,
+} from "@/utils/security/remoteUrlSecurity";
 
-interface PinnedDnsRecord {
-  address: string;
-  family: 4 | 6;
-  ttl: number;
+export type RemoteUrlPolicyFailureCode =
+  | RemoteUrlValidationFailureCode
+  | "REDIRECT_FORBIDDEN"
+  | "REDIRECT_LIMIT_EXCEEDED"
+  | "REDIRECT_LOCATION_MISSING"
+  | "REDIRECT_CREDENTIALS_WITHHELD"
+  | "ADDRESS_NOT_PINNABLE";
+
+/**
+ * A user-supplied URL was refused by the SSRF gate, either before the first
+ * request or at a redirect hop.
+ *
+ * Thrown instead of a bare Error so callers can tell a deliberate refusal from a
+ * transport failure: no socket was opened, so these must not be reported as
+ * network errors, retried, or alerted on as connectivity problems.
+ */
+export class RemoteUrlPolicyError extends Error {
+  readonly failureCode: RemoteUrlPolicyFailureCode | undefined;
+  readonly hostname: string;
+
+  constructor(message: string, hostname: string, failureCode?: RemoteUrlPolicyFailureCode) {
+    super(message);
+    this.name = "RemoteUrlPolicyError";
+    this.hostname = hostname;
+    this.failureCode = failureCode;
+  }
+}
+
+/** True when the host's private-network setting refused the endpoint, as opposed to any other policy refusal. */
+export function isPrivateNetworkRefusal(error: unknown): error is RemoteUrlPolicyError {
+  return (
+    error instanceof RemoteUrlPolicyError &&
+    (error.failureCode === "PRODUCTION_LOCALHOST_FORBIDDEN" || error.failureCode === "PRODUCTION_BLOCKED_ADDRESS")
+  );
+}
+
+export interface PinnedFetchRequest {
+  url: URL;
+  init: BunFetchRequestInit;
 }
 
 function readPositiveIntegerEnv(name: string, fallback: number): number {
@@ -77,49 +108,84 @@ async function normalizeRequestInput(
   };
 }
 
-function toPinnedDnsRecords(addresses: string[]): PinnedDnsRecord[] {
-  return addresses
-    .map((address) => {
-      const family = isIP(address);
-      if (family !== 4 && family !== 6) {
-        return null;
-      }
-
-      return {
-        address,
-        family,
-        ttl: 1,
-      } satisfies PinnedDnsRecord;
-    })
-    .filter((entry): entry is PinnedDnsRecord => entry !== null);
-}
-
-function createPinnedDispatcher(records: PinnedDnsRecord[]): Agent | null {
-  // interceptors.dns is absent in Bun's built-in undici shim; fall back to
-  // no pinning (validateRemoteMcpUrl already validated the resolved IPs).
-  if (typeof interceptors?.dns !== "function") {
-    return null;
+/**
+ * Build a Bun-native request pinned to an already validated IP address.
+ *
+ * The URL uses the literal IP so the transport performs no second DNS lookup,
+ * while Host and TLS SNI retain the validated origin hostname. Bun's native fetch
+ * is used because npm Undici response bodies can stall under Bun for lengthless or
+ * compressed streaming responses.
+ */
+export function createPinnedFetchRequest(url: URL, requestInit: RequestInit, address: string): PinnedFetchRequest {
+  const addressFamily = isIP(address);
+  if (addressFamily !== 4 && addressFamily !== 6) {
+    throw new Error(`Validated address '${address}' is not a valid IP address.`);
   }
 
-  return new Agent({
-    interceptors: {
-      Agent: [
-        interceptors.dns({
-          lookup: (_origin, _options, callback) => callback(null, records),
-        }),
-      ],
-      Client: [],
-    },
-  });
+  const pinnedUrl = new URL(url);
+  pinnedUrl.hostname = addressFamily === 6 ? `[${address}]` : address;
+
+  const headers = mergeHeaders(requestInit.headers);
+  headers.set("host", url.host);
+
+  const init: BunFetchRequestInit = {
+    ...requestInit,
+    headers,
+    redirect: "manual",
+  };
+  if (url.protocol === "https:") {
+    init.tls = { serverName: url.hostname };
+  }
+
+  return { url: pinnedUrl, init };
 }
 
 function isRedirectStatus(status: number): status is 301 | 302 | 303 | 307 | 308 {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
-function buildRedirectRequestInit(requestInit: RequestInit, status: number): RequestInit {
+function isConnectionRefusedTransportError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const record = error as Record<string, unknown>;
+  if (record.code === "ConnectionRefused" || record.code === "ECONNREFUSED") return true;
+  return isConnectionRefusedTransportError(record.cause);
+}
+
+/**
+ * Headers that carry no credential and may follow a redirect to another origin. Every other header
+ * is dropped at an origin change, because callers attach provider keys under custom names
+ * (`x-api-key`, `x-goog-api-key`) and a denylist would forward the next one somebody adds.
+ */
+const CROSS_ORIGIN_REDIRECT_HEADERS = new Set([
+  "accept",
+  "accept-language",
+  "content-language",
+  "content-type",
+  "user-agent",
+]);
+
+/** Statuses that mean the redirected origin wanted the credential this fetcher withheld. */
+const CREDENTIAL_CHALLENGE_STATUSES = new Set([401, 403, 407]);
+
+function hasUrlCredentials(url: URL): boolean {
+  return url.username !== "" || url.password !== "";
+}
+
+function hasCrossOriginUnsafeHeaders(headers: Headers): boolean {
+  for (const name of headers.keys()) {
+    if (!CROSS_ORIGIN_REDIRECT_HEADERS.has(name)) return true;
+  }
+  return false;
+}
+
+function buildRedirectRequestInit(requestInit: RequestInit, status: number, crossOrigin: boolean): RequestInit {
   const currentMethod = (requestInit.method ?? "GET").toUpperCase();
   const headers = mergeHeaders(requestInit.headers);
+  if (crossOrigin) {
+    for (const name of [...headers.keys()]) {
+      if (!CROSS_ORIGIN_REDIRECT_HEADERS.has(name)) headers.delete(name);
+    }
+  }
 
   if (status === 303 || ((status === 301 || status === 302) && currentMethod === "POST")) {
     headers.delete("content-length");
@@ -140,86 +206,179 @@ function buildRedirectRequestInit(requestInit: RequestInit, status: number): Req
   };
 }
 
+function credentialsWithheldError(url: URL, reason: string): RemoteUrlPolicyError {
+  return new RemoteUrlPolicyError(
+    `Credentials were not forwarded to '${url.origin}' because ${reason}. Configure the endpoint with its final URL directly.`,
+    url.hostname,
+    "REDIRECT_CREDENTIALS_WITHHELD",
+  );
+}
+
+/**
+ * Refuses a cross-origin hop that cannot be made anonymous, before anything is sent to it.
+ *
+ * Origin equality (scheme, hostname, effective port) is the trust unit: the operator configured
+ * one origin, and a redirect response cannot extend that trust. Other cross-origin hops continue
+ * anonymously so signed asset URLs still download.
+ *
+ * @returns Whether the hop drops credentials the request carried.
+ */
+export function checkCrossOriginRedirect(currentUrl: URL, nextUrl: URL, requestInit: RequestInit): boolean {
+  if (hasUrlCredentials(nextUrl)) {
+    throw credentialsWithheldError(nextUrl, "the redirect target embeds a username or password");
+  }
+  const carriesCredentials =
+    hasUrlCredentials(currentUrl) || hasCrossOriginUnsafeHeaders(mergeHeaders(requestInit.headers));
+  if (carriesCredentials && currentUrl.protocol === "https:" && nextUrl.protocol === "http:") {
+    throw credentialsWithheldError(nextUrl, "the redirect downgrades HTTPS to HTTP");
+  }
+  return carriesCredentials;
+}
+
+export async function resolveValidatedUserRedirect(
+  currentUrl: URL,
+  location: string,
+  policy: FetchUserRemoteUrlOptions,
+): Promise<URL> {
+  const nextUrl = new URL(location, currentUrl);
+  const validation = await validateRemoteUrl(nextUrl.toString(), policy);
+  if (!validation.valid) {
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`,
+      nextUrl.hostname,
+      validation.failureCode,
+    );
+  }
+  return nextUrl;
+}
+
+interface RedirectState {
+  redirectCount: number;
+  policy: FetchUserRemoteUrlOptions;
+  /** Set once a hop dropped credentials; they are never reattached, even if a later hop returns. */
+  credentialsWithheld: boolean;
+}
+
 async function fetchUserRemoteUrlInternal(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
-  redirectCount: number,
-  strict: boolean,
+  state: RedirectState,
 ): Promise<Response> {
+  const { redirectCount, policy } = state;
   const { url, requestInit } = await normalizeRequestInput(input, init);
-  const validation = await validateRemoteMcpUrl(url.toString(), { strict });
+  const validation = await validateRemoteUrl(url.toString(), policy);
   if (!validation.valid) {
-    throw new Error(validation.details ?? `Remote URL validation failed for '${url.hostname}'.`);
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote URL validation failed for '${url.hostname}'.`,
+      url.hostname,
+      validation.failureCode,
+    );
   }
 
   const redirectPolicy = requestInit.redirect ?? "follow";
-  const pinnedRecords = toPinnedDnsRecords(validation.resolvedAddresses ?? []);
-  const dispatcher =
-    isIP(url.hostname) === 0 && pinnedRecords.length > 0 ? createPinnedDispatcher(pinnedRecords) : null;
+  let fetchUrl = url;
+  let fetchInit: BunFetchRequestInit = { ...requestInit, redirect: "manual" };
+  let response: Response | null = null;
 
-  try {
-    const response = await undiciFetch(url as unknown as UndiciRequestInfo, {
-      ...(requestInit as unknown as UndiciRequestInit),
-      redirect: "manual",
-      dispatcher: dispatcher ?? undefined,
-    });
-
-    if (!isRedirectStatus(response.status)) {
-      return response as unknown as Response;
+  if (isIP(url.hostname) === 0) {
+    const pinnedAddresses = [...new Set(validation.resolvedAddresses?.filter((address) => isIP(address) !== 0) ?? [])];
+    if (pinnedAddresses.length === 0) {
+      throw new RemoteUrlPolicyError(
+        `Remote URL validation did not return a pinnable address for '${url.hostname}'.`,
+        url.hostname,
+        "ADDRESS_NOT_PINNABLE",
+      );
     }
-
-    if (redirectPolicy === "manual") {
-      return response as unknown as Response;
+    const method = (requestInit.method ?? "GET").toUpperCase();
+    const canRetryAfterAnyTransportFailure = method === "GET" || method === "HEAD";
+    let lastTransportError: unknown;
+    for (const [index, pinnedAddress] of pinnedAddresses.entries()) {
+      ({ url: fetchUrl, init: fetchInit } = createPinnedFetchRequest(url, requestInit, pinnedAddress));
+      try {
+        response = await fetch(fetchUrl, fetchInit);
+        lastTransportError = undefined;
+        break;
+      } catch (error) {
+        lastTransportError = error;
+        const isFinalAddress = index === pinnedAddresses.length - 1;
+        const canRetry = canRetryAfterAnyTransportFailure || isConnectionRefusedTransportError(error);
+        if (!canRetry || requestInit.signal?.aborted || isFinalAddress) throw error;
+      }
     }
-
-    await response.body?.cancel();
-
-    if (redirectPolicy === "error") {
-      throw new Error(`Redirects are not allowed for user-supplied URL '${url.toString()}'.`);
-    }
-
-    if (redirectCount >= USER_REMOTE_FETCH_MAX_REDIRECTS) {
-      throw new Error(`Too many redirects while fetching '${url.toString()}'.`);
-    }
-
-    const location = response.headers.get("location");
-    if (!location) {
-      throw new Error(`Redirect response from '${url.toString()}' did not include a Location header.`);
-    }
-
-    const nextUrl = new URL(location, url);
-    return await fetchUserRemoteUrlInternal(
-      nextUrl,
-      buildRedirectRequestInit(requestInit, response.status),
-      redirectCount + 1,
-      strict,
-    );
-  } finally {
-    if (dispatcher) {
-      void dispatcher.close().catch(() => undefined);
-    }
+    if (lastTransportError !== undefined) throw lastTransportError;
+  } else {
+    response = await fetch(fetchUrl, fetchInit);
   }
+  if (!response) {
+    throw new Error(`Remote request to '${url.hostname}' completed without a response.`);
+  }
+
+  // Do not expose the transport-level pinned IP to callers or redirect logic.
+  Object.defineProperty(response, "url", { value: url.toString() });
+
+  if (!isRedirectStatus(response.status)) {
+    if (state.credentialsWithheld && CREDENTIAL_CHALLENGE_STATUSES.has(response.status)) {
+      await response.body?.cancel();
+      throw credentialsWithheldError(url, `the redirect left the configured origin and '${url.origin}' requires them`);
+    }
+    return response;
+  }
+
+  if (redirectPolicy === "manual") {
+    return response;
+  }
+
+  await response.body?.cancel();
+
+  if (redirectPolicy === "error") {
+    throw new RemoteUrlPolicyError(
+      `Redirects are not allowed for user-supplied URL '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_FORBIDDEN",
+    );
+  }
+
+  if (redirectCount >= USER_REMOTE_FETCH_MAX_REDIRECTS) {
+    throw new RemoteUrlPolicyError(
+      `Too many redirects while fetching '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_LIMIT_EXCEEDED",
+    );
+  }
+
+  const location = response.headers.get("location");
+  if (!location) {
+    throw new RemoteUrlPolicyError(
+      `Redirect response from '${url.toString()}' did not include a Location header.`,
+      url.hostname,
+      "REDIRECT_LOCATION_MISSING",
+    );
+  }
+
+  const nextUrl = await resolveValidatedUserRedirect(url, location, policy);
+  const crossOrigin = url.origin !== nextUrl.origin;
+  const withholdsCredentials = crossOrigin && checkCrossOriginRedirect(url, nextUrl, requestInit);
+  return await fetchUserRemoteUrlInternal(
+    nextUrl,
+    buildRedirectRequestInit(requestInit, response.status, crossOrigin),
+    {
+      ...state,
+      redirectCount: redirectCount + 1,
+      credentialsWithheld: state.credentialsWithheld || withholdsCredentials,
+    },
+  );
 }
 
-export interface FetchUserRemoteUrlOptions {
-  /** Enforce the private/link-local/loopback blocklist even outside production.
-   *  Pass true for personal (user-scoped) endpoint calls. */
-  strict?: boolean;
-}
+export type FetchUserRemoteUrlOptions = ValidateRemoteUrlOptions;
 
 export async function fetchUserRemoteUrl(
   input: RequestInfo | URL,
   init?: RequestInit,
   options?: FetchUserRemoteUrlOptions,
 ): Promise<Response> {
-  return await fetchUserRemoteUrlInternal(input, init, 0, options?.strict === true);
+  return await fetchUserRemoteUrlInternal(input, init, {
+    redirectCount: 0,
+    policy: options ?? {},
+    credentialsWithheld: false,
+  });
 }
-
-export const fetchUserRemoteUrlUndici: typeof undiciFetch = async (
-  input: UndiciRequestInfo,
-  init?: UndiciRequestInit,
-): Promise<UndiciResponse> =>
-  (await fetchUserRemoteUrl(
-    input as unknown as RequestInfo | URL,
-    init as unknown as RequestInit,
-  )) as unknown as UndiciResponse;

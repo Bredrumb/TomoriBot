@@ -6,9 +6,5 @@ function readPositiveIntegerEnv(name: string): number | null {
 }
 
 export function resolveTtsSynthesizeTimeoutMs(): number {
-  return (
-    readPositiveIntegerEnv("TTS_SYNTHESIZE_TIMEOUT_MS") ??
-    readPositiveIntegerEnv("TTS_CLONE_TIMEOUT_MS") ??
-    DEFAULT_TTS_SYNTHESIZE_TIMEOUT_MS
-  );
+  return readPositiveIntegerEnv("TTS_SYNTHESIZE_TIMEOUT_MS") ?? DEFAULT_TTS_SYNTHESIZE_TIMEOUT_MS;
 }

@@ -11,6 +11,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 const MODAL_CUSTOM_ID = "nsfw_jailbreaks_modal";
@@ -174,17 +175,16 @@ export async function execute(
     };
     await log.error("Error executing /nsfw jailbreaks", error as Error, context);
 
+    const errorOptions = {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+    };
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyInfoEmbed(interaction, locale, errorOptions);
       return;
     }
 
-    await interaction.followUp({
-      content: localizer(locale, "general.errors.unknown_error_description"),
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.followUp({ embeds: [createStandardEmbed(locale, errorOptions)], flags: MessageFlags.Ephemeral });
   }
 }

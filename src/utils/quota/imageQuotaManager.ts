@@ -1,24 +1,29 @@
 import { log } from "@/utils/misc/logger";
 import type { ImageQuotaConfigRow } from "@/types/db/schema";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import {
-  cleanupOldImageQuotas as repositoryCleanupOldImageQuotas,
+  getImageConfigResult,
   getOrCreateImageConfig,
-  incrementImageQuota as repositoryIncrementImageQuota,
+  reserveImageQuotaUnits,
   resetServerwideImagePeriod,
-  resetServerwideImageQuotaPool,
   touchServerwideImageQuota,
   touchUserImageQuota,
+  type QuotaReservation,
+  type QuotaReservationOutcome,
 } from "@/utils/db/repositories/QuotaRepository";
 
-/**
- * Result of quota check operations
- */
+export { releaseImageQuotaUnits as releaseImageQuota } from "@/utils/db/repositories/QuotaRepository";
+
 export interface QuotaCheckResult {
   allowed: boolean; // Whether user can generate image
   reason?: "user_quota_exceeded" | "serverwide_quota_exceeded" | "disabled"; // Reason if denied
   userRemaining?: number; // User's remaining quota for the day
   serverwideRemaining?: number; // Server's remaining quota for the period
   resetTime?: Date; // When the quota resets (for error messages)
+}
+
+export interface ImageQuotaClaim extends QuotaCheckResult {
+  reservation: QuotaReservation | null;
 }
 
 /**
@@ -33,103 +38,81 @@ export async function getQuotaConfig(serverId: number): Promise<ImageQuotaConfig
  * Check if user can generate an image based on daily quota
  * Returns remaining quota and whether generation is allowed
  */
-export async function checkUserDailyQuota(
+async function checkUserDailyQuota(
   serverId: number,
   userDiscId: string,
   config: ImageQuotaConfigRow,
 ): Promise<QuotaCheckResult> {
-  // 1. If daily user quota is 0 (unlimited), allow
+  // If daily user quota is 0 (unlimited), allow
   if (config.daily_user_quota === 0) {
     return { allowed: true };
   }
 
-  try {
-    // 2. Get current date in YYYY-MM-DD format (server's local date)
-    const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
 
-    // 3. Get or create user's quota record for today
-    const userQuota = await touchUserImageQuota(serverId, userDiscId, today);
+  const userQuota = await touchUserImageQuota(serverId, userDiscId, today);
 
-    // 4. Check if user has exceeded their daily quota
-    const remaining = config.daily_user_quota - userQuota.usage_count;
+  const remaining = config.daily_user_quota - userQuota.usage_count;
 
-    if (remaining <= 0) {
-      // Calculate midnight tonight for reset time
-      const resetTime = new Date();
-      resetTime.setHours(24, 0, 0, 0); // Next midnight
+  if (remaining <= 0) {
+    const resetTime = new Date();
+    resetTime.setHours(24, 0, 0, 0); // Next midnight
 
-      return {
-        allowed: false,
-        reason: "user_quota_exceeded",
-        userRemaining: 0,
-        resetTime,
-      };
-    }
-
-    // 5. User has remaining quota
     return {
-      allowed: true,
-      userRemaining: remaining,
+      allowed: false,
+      reason: "user_quota_exceeded",
+      userRemaining: 0,
+      resetTime,
     };
-  } catch (error) {
-    log.error("Failed to check user daily quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
-    return { allowed: true };
   }
+
+  return {
+    allowed: true,
+    userRemaining: remaining,
+  };
 }
 
 /**
  * Check if server has remaining server-wide quota
  * Returns remaining quota and whether generation is allowed
  */
-export async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
-  // 1. If serverwide quota is 0 (unlimited), allow
+async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
+  // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
   }
 
-  try {
-    // 2. Get or create server-wide quota record
-    const serverwideQuota = await touchServerwideImageQuota(serverId, config.serverwide_quota_resets_in);
+  const serverwideQuota = await touchServerwideImageQuota(serverId, config.serverwide_quota_resets_in);
 
-    // 3. Check if quota period has expired (needs reset)
-    const now = new Date();
-    const periodEnd = new Date(serverwideQuota.quota_period_end);
+  const now = new Date();
+  const periodEnd = new Date(serverwideQuota.quota_period_end);
 
-    if (now >= periodEnd) {
-      // Reset the server-wide quota
-      const resetQuota = await resetServerwideImagePeriod(serverId, config.serverwide_quota_resets_in);
+  if (now >= periodEnd) {
+    const resetQuota = await resetServerwideImagePeriod(serverId, config.serverwide_quota_resets_in);
 
-      return {
-        allowed: true,
-        serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(resetQuota.quota_period_end),
-      };
-    }
-
-    // 4. Check if server has exceeded its quota
-    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
-
-    if (remaining <= 0) {
-      return {
-        allowed: false,
-        reason: "serverwide_quota_exceeded",
-        serverwideRemaining: 0,
-        resetTime: periodEnd,
-      };
-    }
-
-    // 5. Server has remaining quota
     return {
       allowed: true,
-      serverwideRemaining: remaining,
+      serverwideRemaining: config.serverwide_quota,
+      resetTime: new Date(resetQuota.quota_period_end),
+    };
+  }
+
+  const remaining = config.serverwide_quota - serverwideQuota.usage_count;
+
+  if (remaining <= 0) {
+    return {
+      allowed: false,
+      reason: "serverwide_quota_exceeded",
+      serverwideRemaining: 0,
       resetTime: periodEnd,
     };
-  } catch (error) {
-    log.error("Failed to check serverwide quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
-    return { allowed: true };
   }
+
+  return {
+    allowed: true,
+    serverwideRemaining: remaining,
+    resetTime: periodEnd,
+  };
 }
 
 /**
@@ -137,24 +120,21 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
  * Returns combined result indicating if generation is allowed
  */
 export async function checkImageQuota(serverId: number, userDiscId: string): Promise<QuotaCheckResult> {
-  try {
-    // 1. Get quota configuration
-    const config = await getQuotaConfig(serverId);
+  const read = await getImageConfigResult(serverId);
+  if (read.status === "unavailable") throw new QuotaUnavailableError();
+  if (!read.config) return { allowed: true };
 
-    // 2. Check user daily quota first (most common limit)
-    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyQuota)
-    const userCheck = await checkUserDailyQuota(serverId, userDiscId, config);
+  try {
+    const userCheck = await checkUserDailyQuota(serverId, userDiscId, read.config);
     if (!userCheck.allowed) {
       return userCheck;
     }
 
-    // 4. Check server-wide quota
-    const serverwideCheck = await checkServerwideQuota(serverId, config);
+    const serverwideCheck = await checkServerwideQuota(serverId, read.config);
     if (!serverwideCheck.allowed) {
       return serverwideCheck;
     }
 
-    // 5. Both checks passed, combine remaining counts
     return {
       allowed: true,
       userRemaining: userCheck.userRemaining,
@@ -163,54 +143,48 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
     };
   } catch (error) {
     log.error("Failed to check image quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
-    return { allowed: true };
+    throw new QuotaUnavailableError();
   }
 }
 
 /**
- * Increment both user daily and server-wide quotas after successful image generation
- * Should only be called AFTER image generation succeeds
+ * Claim one image generation on both counters or neither.
+ * A database failure throws, so the caller refuses instead of spending an uncounted generation.
  */
-export async function incrementImageQuota(serverId: number, userDiscId: string): Promise<void> {
+export async function reserveImageQuota(serverId: number, userDiscId: string): Promise<ImageQuotaClaim> {
+  const read = await getImageConfigResult(serverId);
+  if (read.status === "unavailable") throw new QuotaUnavailableError();
+  if (!read.config) return { allowed: true, reservation: null };
+
+  let outcome: QuotaReservationOutcome;
   try {
-    await repositoryIncrementImageQuota(serverId, userDiscId);
-    log.info("Incremented image quotas");
+    outcome = await reserveImageQuotaUnits(serverId, userDiscId, read.config);
   } catch (error) {
-    log.error("Failed to increment image quota", error);
-    // Don't throw - quota increment failure shouldn't block user
+    log.error("Failed to reserve image quota", error);
+    throw new QuotaUnavailableError();
   }
-}
 
-/**
- * Clean up old user quota records (older than 7 days)
- * Should be called periodically (e.g., on startup or via cron)
- */
-export async function cleanupOldImageQuotas(): Promise<number> {
-  try {
-    const deletedCount = await repositoryCleanupOldImageQuotas();
-
-    if (deletedCount > 0) {
-      log.info("Cleaned up old image quota records");
-    }
-
-    return deletedCount;
-  } catch (error) {
-    log.error("Failed to cleanup old image quotas", error);
-    return 0;
+  if (outcome.status === "reserved") {
+    return {
+      allowed: true,
+      reservation: outcome.reservation,
+      ...(outcome.userRemaining !== undefined ? { userRemaining: outcome.userRemaining } : {}),
+      ...(outcome.serverwideRemaining !== undefined ? { serverwideRemaining: outcome.serverwideRemaining } : {}),
+      ...(outcome.serverwidePeriodEnd ? { resetTime: outcome.serverwidePeriodEnd } : {}),
+    };
   }
-}
 
-/**
- * Manually reset server-wide quota (admin override)
- * Creates new quota period starting now
- */
-export async function resetServerwideQuota(serverId: number): Promise<void> {
-  try {
-    await resetServerwideImageQuotaPool(serverId);
-    log.info("Manually reset serverwide quota");
-  } catch (error) {
-    log.error("Failed to reset serverwide quota", error);
-    throw error;
+  if (outcome.status === "user_quota_exceeded") {
+    const resetTime = new Date();
+    resetTime.setHours(24, 0, 0, 0); // Next midnight
+    return { allowed: false, reason: "user_quota_exceeded", userRemaining: 0, resetTime, reservation: null };
   }
+
+  return {
+    allowed: false,
+    reason: "serverwide_quota_exceeded",
+    serverwideRemaining: 0,
+    resetTime: outcome.periodEnd,
+    reservation: null,
+  };
 }

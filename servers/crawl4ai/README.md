@@ -1,22 +1,22 @@
-# Crawl4AI Sidecar
+# Crawl4AI Local Server
 
 Optional self-hosted Crawl4AI Docker server used by TomoriBot's hidden
 `fetch_url` engine chain:
 
 ```text
-crawl4ai -> mcp_fetch
+crawl4ai -> safe_http
 ```
 
 The LLM still sees only `fetch_url(url, max_length?, start_index?, raw?)`.
 Crawl4AI is enabled only when `CRAWL4AI_BASE_URL` is set and `/health` responds
-successfully. If the sidecar is absent or unhealthy, TomoriBot falls back to the
-bundled MCP fetch server.
+successfully. If the server is absent, unhealthy, or fails a fetch, TomoriBot
+falls back to its built-in `safe_http` fetcher.
 
 ## Local Development
 
 ### Compose Profile
 
-Start the optional sidecar with:
+Start the optional local server with:
 
 ```bash
 docker compose --profile fetch-crawl4ai up -d crawl4ai
@@ -26,14 +26,13 @@ Set the bot env to the compose service URL:
 
 ```env
 CRAWL4AI_BASE_URL=http://crawl4ai:11235/
-FETCH_URL_ENGINE_ORDER=crawl4ai,mcp_fetch
-```
-
-If you enable Crawl4AI JWT/API-token auth, set the same secret in both places:
-
-```env
 CRAWL4AI_TOKEN=change-me
+# Required in every RUN_ENV, because Crawl4AI can reach private network addresses.
+FETCH_URL_ALLOW_PRIVATE_NETWORK=true
 ```
+
+Crawl4AI 0.9.4 refuses outside connections without an API token, so
+`CRAWL4AI_TOKEN` is required.
 
 The compose service passes `CRAWL4AI_TOKEN` to the container as
 `CRAWL4AI_API_TOKEN`, while TomoriBot sends it as `Authorization: Bearer ...`.
@@ -89,27 +88,27 @@ Replace `unclecode/crawl4ai:latest` with the returned
 - Keep `--shm-size=3g` or an equivalent `/dev/shm` mount. Browser engines can
   crash or hang with Docker's small default shared-memory segment.
 - TomoriBot's `FETCH_URL_TIMEOUT_MS` bounds each Crawl4AI request from the bot
-  side. The sidecar may continue internal cleanup after a client timeout.
+  side. The server may continue internal cleanup after a client timeout.
 
 ## Robots.txt and Site Policy
 
 TomoriBot does not add a separate `robots.txt` enforcement layer in this pass.
 Crawl4AI fetches pages according to its own crawler/runtime behavior and the
-target site's responses. Operators are responsible for using this sidecar only
+target site's responses. Operators are responsible for using this server only
 where they have permission to fetch content and for honoring site terms,
 rate-limits, and robots expectations.
 
-TomoriBot blocks localhost/private/internal target URLs before it calls
-Crawl4AI unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Keep the default false
-unless the bot is in a trusted self-hosted deployment where users are allowed to
-make `fetch_url` reach internal network addresses.
+TomoriBot skips Crawl4AI and blocks localhost/private/internal target URLs unless
+`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`, in every `RUN_ENV`. That setting also lets
+`fetch_url` read internal network pages, so enable it only on an instance whose
+members you trust.
 
 ## Internal Redis Notes
 
 The Crawl4AI Docker server includes Redis-backed job and monitoring plumbing for
 its broader API surface. TomoriBot uses only synchronous `POST /md` plus
 `GET /health`; it does not submit Crawl4AI background jobs and does not depend on
-the sidecar's job queue. If Redis is exposed or configured separately in a custom
+the server's job queue. If Redis is exposed or configured separately in a custom
 deployment, keep it private to the Crawl4AI service.
 
 ## TomoriBot Configuration
@@ -117,11 +116,10 @@ deployment, keep it private to the Crawl4AI service.
 | Env var | Consumed by | Default |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | TomoriBot | unset, Crawl4AI disabled |
-| `CRAWL4AI_TOKEN` | TomoriBot and compose sidecar | unset |
-| `FETCH_URL_ENGINE_ORDER` | TomoriBot | `crawl4ai,mcp_fetch` |
+| `CRAWL4AI_TOKEN` | TomoriBot and the compose container | unset |
 | `FETCH_URL_TIMEOUT_MS` | TomoriBot | `15000` |
 | `FETCH_URL_HEALTHCHECK_CACHE_SEC` | TomoriBot | `60` |
-| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` (required for Crawl4AI in every `RUN_ENV`) |
 | `FETCH_URL_FILTER_MODE` | TomoriBot Crawl4AI `/md` requests | `fit` |
 
 `FETCH_URL_FILTER_MODE=fit` uses Crawl4AI's content filtering for cleaner

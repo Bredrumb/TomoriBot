@@ -1,13 +1,14 @@
 import { type Client, REST, Routes } from "discord.js";
-import { log } from "../../utils/misc/logger";
-import { loadCommandData } from "../../utils/discord/commandLoader";
-import type { ErrorContext } from "../../types/db/schema";
-import { resolveEnvironment } from "@/types/config";
+import { log } from "@/utils/misc/logger";
+import { loadCommandData } from "@/utils/discord/commandLoader";
+import type { ErrorContext } from "@/types/db/schema";
+import { isPrimaryProcess } from "@/utils/cluster/shardLeases";
 
 /**
  * Event handler for registering commands when the bot is ready
  */
 export default async (client: Client): Promise<void> => {
+  if (!isPrimaryProcess()) return;
   try {
     log.section("Registering application commands");
 
@@ -29,7 +30,6 @@ export default async (client: Client): Promise<void> => {
       return;
     }
 
-    // Load command data using our new function
     const { registrationData } = await loadCommandData();
 
     if (registrationData.length === 0) {
@@ -39,7 +39,6 @@ export default async (client: Client): Promise<void> => {
 
     log.info(`Preparing to register ${registrationData.length} top-level commands`);
 
-    // Initialize REST API for command registration
     const rest = new REST().setToken(discordToken);
 
     // Register globally for both production and development
@@ -47,18 +46,11 @@ export default async (client: Client): Promise<void> => {
     log.info("Registering commands globally");
 
     try {
+      if (!isPrimaryProcess()) return;
       await rest.put(Routes.applicationCommands(applicationId), {
         body: registrationData,
       });
       log.success(`Successfully registered ${registrationData.length} commands globally`);
-
-      const testGuildId = process.env.TESTSRV_ID;
-      if (resolveEnvironment() !== "production" && testGuildId) {
-        await rest.put(Routes.applicationGuildCommands(applicationId, testGuildId), {
-          body: registrationData,
-        });
-        log.success(`Successfully registered ${registrationData.length} commands in test guild ${testGuildId}`);
-      }
     } catch (error) {
       const context: ErrorContext = {
         errorType: "CommandRegistrationError",

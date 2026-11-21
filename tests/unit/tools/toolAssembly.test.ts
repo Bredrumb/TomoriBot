@@ -1,18 +1,51 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
+import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { applyStreamContextAvailability, getAvailableToolsForContext } from "@/tools/availability";
+import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { createPersona } from "../../helpers/fixtures";
+import {
+  DanbooruGetPostTool,
+  DanbooruSearchPostsTool,
+  DanbooruSearchTagsTool,
+} from "@/tools/functionCalls/danbooruTools";
 import { buildGenerateImageToolVariant, GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
 import type { ImageToolCapabilities } from "@/tools/functionCalls/generateImageToolCapabilities";
 import { buildVoiceMessageToolVariant, GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
 import { buildWebSearchToolVariant, WebSearchTool } from "@/tools/webSearch/webSearchTool";
 import type { SearchCategory } from "@/tools/webSearch/types";
 import type { Tool, ToolAssemblyContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
+import type { CustomEndpointRow } from "@/types/db/schema";
+import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
+import { createScopedModuleMocker } from "../../helpers/mockSurface";
+
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/provider/speechEndpointResolver": realSpeechEndpointResolver,
+});
+
+scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
+  ...realSpeechEndpointResolver,
+  resolveSpeechTargets: async () => ({
+    design: null,
+    clone: {
+      endpoint: {
+        api_style: "tts-clone",
+        endpoint_url: "http://127.0.0.1:8016",
+        extra_config: { voice_mode: "clone", script_markup: "plain", supports_instruct: true },
+      } as unknown as CustomEndpointRow,
+      apiKey: "",
+    },
+  }),
+}));
 
 function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAssemblyState {
   return {
     server_id: "1",
     activePersonaHasElevenlabsVoice: true,
     activePersonaVoiceDesignPrompt: null,
-    activePersonaVoiceName: null,
+
+    activePersonaVoiceSampleId: 12,
+    activePersonaVoiceSourcePriority: "design",
     diffusion_model_id: 1,
     nai_diffusion_model_id: null,
     video_model_id: null,
@@ -25,6 +58,7 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       supports_structoutput: true,
     },
     config: {
+      emoji_usage_enabled: true,
       sticker_usage_enabled: true,
       web_search_enabled: true,
       self_teaching_enabled: true,
@@ -32,7 +66,12 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       imagegen_enabled: true,
       videogen_enabled: true,
       voice_message_enabled: true,
+      user_blocking_enabled: true,
+      user_info_updates_enabled: true,
       thread_creation_enabled: true,
+      conditioning_interactions_enabled: false,
+      dice_rolling_enabled: false,
+      danbooru_enabled: true,
     },
     ...overrides,
   };
@@ -60,6 +99,40 @@ function createStaticTool(): Tool {
   };
 }
 
+it("exposes optional sprite selection only for the active persona's advertised roster", () => {
+  const persona = createPersona({ persona_id: 7 });
+  const voice = buildVoiceMessageToolVariant(new GenerateVoiceMessageTool(), "plain");
+  const interaction = new ConditioningInteractionTool();
+  const unrelated = createStaticTool();
+  for (const scenario of [
+    { personaSprites: undefined, enabled: false },
+    { personaSprites: { personaId: 7, spriteKeys: [] }, enabled: false },
+    { personaSprites: { personaId: 8, spriteKeys: ["joy"] }, enabled: false },
+    { personaSprites: { personaId: 7, spriteKeys: ["joy"] }, enabled: true },
+    { personaSprites: { personaId: 7, spriteKeys: ["joy"] }, impersonating: true, enabled: false },
+  ]) {
+    const tools = applyStreamContextAvailability({
+      providerLabel: "fixture",
+      provider: "google",
+      builtInTools: [voice, interaction, unrelated],
+      tomoriState: persona,
+      streamContext: {
+        disableYouTubeProcessing: false,
+        personaSprites: scenario.personaSprites,
+        deliveryMode: scenario.impersonating ? "user_impersonation" : "persona",
+      },
+    });
+    for (const tool of tools.slice(0, 2)) {
+      expect(Boolean(tool.parameters.properties.sprite)).toBe(scenario.enabled);
+      expect(tool.parameters.required).not.toContain("sprite");
+      expect(tool.parameters.properties.sprite?.enum).toBeUndefined();
+    }
+    expect(tools[2].parameters.properties.sprite).toBeUndefined();
+  }
+  expect(voice.parameters.properties.sprite).toBeUndefined();
+  expect(interaction.parameters.properties.sprite).toBeUndefined();
+});
+
 function getEnum(tool: Tool, parameterName: string): string[] {
   const parameter = tool.parameters.properties[parameterName];
   return parameter.enum ?? [];
@@ -70,6 +143,21 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
+  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
+    const tool = new InteractWithRecentMessageTool();
+    const state = createAssemblyState();
+    state.config.emoji_usage_enabled = false;
+    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+    expect(replyOnly).toBeDefined();
+    expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
+    expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
+      /react|emoji|sticker/i,
+    );
+    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
+    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
+    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+  });
+
   it("leaves tools without an assembly hook unchanged", async () => {
     const tool = createStaticTool();
 
@@ -81,7 +169,7 @@ describe("tool schema assembly", () => {
 
   it("assembles web_search with SearXNG categories", () => {
     const tool = buildWebSearchToolVariant(new WebSearchTool(), {
-      categories: ["text", "image", "video", "news", "science", "it", "files", "music"],
+      categories: ["text", "image", "video", "news", "papers", "code", "files", "music"],
       engineLabel: "SearXNG",
     });
 
@@ -91,8 +179,8 @@ describe("tool schema assembly", () => {
       "image",
       "video",
       "news",
-      "science",
-      "it",
+      "papers",
+      "code",
       "files",
       "music",
     ]);
@@ -112,17 +200,11 @@ describe("tool schema assembly", () => {
   it("assembles web_search with text-only fallback categories", () => {
     const tool = buildWebSearchToolVariant(new WebSearchTool(), {
       categories: ["text"],
-      engineLabel: "DuckDuckGo MCP",
+      engineLabel: "DuckDuckGo",
     });
 
-    expect(getEnum(tool as Tool, "category")).toEqual(["text"]);
-    expect(tool?.parameters.properties.category.description).toContain("Only 'text'");
-  });
-
-  it("omits web_search when no backend categories are available", () => {
-    const tool = buildWebSearchToolVariant(new WebSearchTool(), null);
-
-    expect(tool).toBeNull();
+    expect(getEnum(tool, "category")).toEqual(["text"]);
+    expect(tool.parameters.properties.category.description).toContain("Only 'text'");
   });
 
   it("assembles generate_image as text-to-image only", () => {
@@ -137,7 +219,7 @@ describe("tool schema assembly", () => {
 
     const tool = buildGenerateImageToolVariant(new GenerateImageTool(), capabilities);
 
-    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "prompt"]);
+    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "nsfw", "prompt"]);
     expect((tool as Tool).description).toContain("text-to-image");
     // Prompt guidance must not reference modes the backend cannot perform
     const promptDescription = (tool as Tool).parameters.properties.prompt.description;
@@ -157,14 +239,14 @@ describe("tool schema assembly", () => {
 
     const tool = buildGenerateImageToolVariant(new GenerateImageTool(), capabilities);
 
-    expect(getPropertyNames(tool as Tool)).toContain("media_id");
-    expect(getPropertyNames(tool as Tool)).toContain("target_identity");
+    expect(getPropertyNames(tool as Tool)).toContain("references");
+    expect(getPropertyNames(tool as Tool)).not.toContain("media_id");
     expect(getPropertyNames(tool as Tool)).not.toContain("mask_prompt");
     expect(getPropertyNames(tool as Tool)).not.toContain("outpaint");
-    // media_id/denoise/prompt guidance should mention img2img only — no inpaint/outpaint
+    // denoise/prompt guidance should mention img2img only; no inpaint/outpaint
     const properties = (tool as Tool).parameters.properties;
-    expect(properties.media_id.description).toBe("Reference media ID such as media_1. Use for img2img.");
     expect(properties.denoise.description).toBe("Img2img strength from 0 to 1. Lower preserves more.");
+    expect(properties.prompt.description).toContain("references");
     expect(properties.prompt.description).not.toContain("inpaint");
     expect(properties.prompt.description).not.toContain("outpaint");
   });
@@ -190,9 +272,7 @@ describe("tool schema assembly", () => {
     const properties = (tool as Tool).parameters.properties;
     expect(properties.prompt.description).toContain("For inpaint");
     expect(properties.prompt.description).toContain("For outpaint");
-    expect(properties.media_id.description).toBe(
-      "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
-    );
+    expect(properties.media_id.description).toContain("inpaint or outpaint");
     expect(properties.denoise.description).toBe("Img2img/inpaint strength from 0 to 1. Lower preserves more.");
   });
 
@@ -221,5 +301,43 @@ describe("tool schema assembly", () => {
 
     expect(getPropertyNames(tool)).toEqual(["script", "title", "voice_instructions"]);
     expect(tool.description).toContain("voice design prompt");
+  });
+
+  it("assembles generate_voice_message with clone instructions when the endpoint advertises them", () => {
+    const tool = buildVoiceMessageToolVariant(new GenerateVoiceMessageTool(), "plain", {
+      voiceInstructionsAvailable: true,
+    });
+
+    expect(getPropertyNames(tool)).toEqual(["script", "title", "voice_instructions"]);
+    expect(tool.parameters.properties.voice_instructions?.description).toContain("one-off delivery");
+  });
+
+  it("assembles clone instructions from the active endpoint capability", async () => {
+    const assembled = await assembleToolsForContext([new GenerateVoiceMessageTool()], createAssemblyContext());
+    const tool = assembled[0];
+
+    expect(tool).toBeDefined();
+    expect(getPropertyNames(tool as Tool)).toContain("voice_instructions");
+  });
+});
+
+describe("Danbooru Search toggle", () => {
+  const danbooruTools = (): Tool[] => [
+    new DanbooruSearchTagsTool(),
+    new DanbooruGetPostTool(),
+    new DanbooruSearchPostsTool(),
+  ];
+
+  it("withholds every Danbooru tool from the assembled list when the toggle is off", () => {
+    const names = (enabled: boolean) => {
+      const state = createAssemblyState();
+      return getAvailableToolsForContext(danbooruTools(), "google", {
+        ...state,
+        config: { ...state.config, danbooru_enabled: enabled },
+      }).map((tool) => tool.name);
+    };
+
+    expect(names(true)).toEqual(danbooruTools().map((tool) => tool.name));
+    expect(names(false)).toEqual([]);
   });
 });

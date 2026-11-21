@@ -5,11 +5,13 @@
  */
 
 import { log } from "@/utils/misc/logger";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import {
+  type FetchUserRemoteUrlOptions,
+  fetchUserRemoteUrl,
+  RemoteUrlPolicyError,
+} from "@/utils/security/userRemoteFetch";
+import { readBoundedResponse, ResponseSizeError } from "@/utils/security/boundedResponse";
 
-/**
- * Options for safe download operation
- */
 export interface SafeDownloadOptions {
   /**
    * Maximum file size in MB
@@ -38,11 +40,11 @@ export interface SafeDownloadOptions {
    * When fired, it also aborts the internal timeout controller early.
    */
   externalSignal?: AbortSignal;
+
+  /** Pass `getEndpointRemotePolicy()` only for an operator-registered service, because unset keeps member media off private networks. */
+  remotePolicy?: FetchUserRemoteUrlOptions;
 }
 
-/**
- * Result of safe download operation
- */
 export interface SafeDownloadResult {
   /**
    * Whether the download succeeded
@@ -60,9 +62,13 @@ export interface SafeDownloadResult {
   contentType?: string;
 
   /**
-   * Error type if download failed
+   * Error type if download failed.
+   *
+   * `blocked_by_policy` means the SSRF gate refused the URL and no request was
+   * ever sent, so it is never a transport problem and must not be retried against
+   * the same URL.
    */
-  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
+  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response" | "blocked_by_policy";
 
   /**
    * Additional error details for logging/debugging
@@ -75,7 +81,6 @@ export interface SafeDownloadResult {
  *
  * @param url - URL to download from
  * @param options - Download options (maxSizeMB, timeoutMs, knownSize)
- * @returns Download result with buffer or error information
  *
  * @example
  * ```typescript
@@ -93,14 +98,20 @@ export interface SafeDownloadResult {
  * ```
  */
 export async function safeDownload(url: string, options: SafeDownloadOptions): Promise<SafeDownloadResult> {
-  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal } = options;
+  // Signed attachment queries authorize access, so logs retain only the download origin.
+  let urlOrigin: string;
+  try {
+    urlOrigin = new URL(url).origin;
+  } catch {
+    urlOrigin = "invalid";
+  }
+  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal, remotePolicy } = options;
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-  // 1. Pre-check known size if provided (early rejection, no network call)
   if (knownSize !== undefined && knownSize > maxSizeBytes) {
     log.warn(`File size ${(knownSize / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
       metadata: {
-        url,
+        urlOrigin,
         knownSizeMB: knownSize / (1024 * 1024),
         maxSizeMB,
       },
@@ -113,7 +124,6 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     };
   }
 
-  // Handle data URIs natively without a network request
   if (url.startsWith("data:")) {
     // Early rejection: base64 is ~1.33x the size of the raw data.
     // Using 0.75x of string length gives a safe lower-bound estimate of the byte size.
@@ -170,7 +180,6 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     }
   }
 
-  // 2. Setup timeout controller; chain optional external signal into it
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (externalSignal) {
@@ -182,14 +191,12 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   }
 
   try {
-    // 3. Fetch with timeout and abort signal
-    const response = await fetchUserRemoteUrl(url, { ...(requestInit ?? {}), signal: controller.signal });
+    const response = await fetchUserRemoteUrl(url, { ...(requestInit ?? {}), signal: controller.signal }, remotePolicy);
 
-    // 4. Validate response status
     if (!response.ok) {
       log.warn(`Download failed with HTTP ${response.status}`, {
         metadata: {
-          url,
+          urlOrigin,
           status: response.status,
           statusText: response.statusText,
         },
@@ -202,14 +209,13 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       };
     }
 
-    // 5. Check content-length header as backup size validation
     const contentLength = response.headers.get("content-length");
     if (contentLength) {
       const sizeBytes = Number.parseInt(contentLength, 10);
       if (sizeBytes > maxSizeBytes) {
         log.warn(`Content-Length ${(sizeBytes / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
           metadata: {
-            url,
+            urlOrigin,
             contentLengthMB: sizeBytes / (1024 * 1024),
             maxSizeMB,
           },
@@ -223,15 +229,12 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       }
     }
 
-    // 6. Download as ArrayBuffer and convert to Buffer
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = await readBoundedResponse(response, maxSizeBytes, controller.signal);
 
-    // 7. Final size check on actual downloaded data
     if (buffer.length > maxSizeBytes) {
       log.warn(`Downloaded file ${(buffer.length / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
         metadata: {
-          url,
+          urlOrigin,
           actualSizeMB: buffer.length / (1024 * 1024),
           maxSizeMB,
         },
@@ -244,7 +247,6 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       };
     }
 
-    // 8. Success!
     log.info(`Successfully downloaded ${(buffer.length / (1024 * 1024)).toFixed(2)} MB`);
 
     return {
@@ -253,10 +255,12 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       contentType: response.headers.get("content-type") ?? undefined,
     };
   } catch (error) {
-    // Handle abort (timeout)
+    if (error instanceof ResponseSizeError) {
+      return { success: false, error: "size_exceeded", details: error.message };
+    }
     if (error instanceof Error && error.name === "AbortError") {
       log.warn(`Download timed out after ${timeoutMs}ms`, {
-        metadata: { url, timeoutMs },
+        metadata: { urlOrigin, timeoutMs },
       });
 
       return {
@@ -266,11 +270,31 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       };
     }
 
-    // Handle other network errors
+    if (error instanceof RemoteUrlPolicyError) {
+      // Logged at warn, not error: an unreachable-by-policy URL (a plain-HTTP
+      // image host, a redirect to a private address) is an expected outcome of
+      // user-supplied content, not an incident.
+      log.warn("Download blocked by URL policy", {
+        errorType: "download_blocked_by_policy",
+        metadata: {
+          urlOrigin,
+          hostname: error.hostname,
+          failureCode: error.failureCode ?? "UNKNOWN",
+          error: error.message,
+        },
+      });
+
+      return {
+        success: false,
+        error: "blocked_by_policy",
+        details: error.message,
+      };
+    }
+
     log.error("Download failed with network error", {
       errorType: "download_network_error",
       metadata: {
-        url,
+        urlOrigin,
         error: error instanceof Error ? error.message : String(error),
       },
     });

@@ -1,3 +1,6 @@
+import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
+import type { TomoriState } from "@/types/db/schema";
+import { StickerTool } from "@/tools/functionCalls/stickerTool";
 import type { Message } from "discord.js";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import {
@@ -5,6 +8,9 @@ import {
   isSupportedVideoAttachmentContentType,
 } from "@/utils/chat/contextMedia";
 import { log } from "@/utils/misc/logger";
+import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
+import { DELIBERATE_TOOL_PACK_KEYS, getIntentPackUnion } from "@/utils/text/localeIntentPacks";
+import { isUnspacedScriptText } from "@/utils/text/processors/regexUtils";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
 export type PersonalDeliberateToolMode = (typeof PERSONAL_DELIBERATE_TOOL_MODES)[number];
@@ -33,6 +39,13 @@ const DEFAULT_TOOL_CONTEXT_TURNS = 4;
 const MAX_TOOL_CONTEXT_TURNS = 10;
 
 const URL_PATTERN = /\bhttps?:\/\/\S+/i;
+const DICE_ROLL_REQUEST_PATTERN = /\b(?:roll(?:ing)?|dice|\d*d\d+)\b/i;
+/** The host must open the link or follow whitespace, so a lookalike subdomain does not match. */
+const DANBOORU_POST_LINK_PATTERN = /(?:https?:\/\/|^|\s)danbooru\.donmai\.us\/posts\/\d+/i;
+/** A request to see existing art "of" or "from" something, such as "show me art of Ryza" or "send pics from Atelier". */
+const EXISTING_ART_REQUEST_PATTERN =
+  /\b(?:show|send|post|find|share|get)\b.{0,40}\b(?:art|arts|fanarts?|pics?|pictures?|images?|illustrations?)\s+(?:of|from)\b/i;
+const DANBOORU_NAME_PATTERN = /\b(?:danbooru|booru)\b/i;
 
 const RELATIVE_TIME_PATTERN =
   /\b(?:in|for|after)\s+(?:about\s+|around\s+|like\s+|another\s+|a\s+)?\d+\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?)\b/i;
@@ -69,6 +82,7 @@ function hasReminderUpdateIntent(text: string): boolean {
 }
 
 const TOOL_INTENT_PATTERNS: RegExp[] = [
+  DICE_ROLL_REQUEST_PATTERN,
   /\b(search|web\s*search|look\s+up|browse|google|fetch|read\s+this\s+(?:url|link|page)|open\s+this\s+(?:url|link|page))\b/i,
   /\b(latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i,
   /\b(remember|save\s+(?:this|that|it)|forget|(?:delete|update)\s+(?:(?:this|that|your|my|the)\s+)?memory|store\s+(?:this|that|it))\b/i,
@@ -106,6 +120,20 @@ const URL_TOOL_INTENT_PATTERNS: RegExp[] = [
   /\b(what(?:'s| is)\s+(?:this|on|in)|tell\s+me\s+about\s+this)\b/i,
 ];
 
+const SELF_DIAGNOSTIC_INTENT_PATTERNS: RegExp[] = [
+  /\b(?:capabilities|what\s+can\s+you\s+do|available\s+(?:tools|commands|settings)|review\s+(?:your\s+)?(?:capabilities|settings))\b/i,
+  /\b(?:what|which)\b.{0,50}\b(?:model|provider|tools?|commands?|settings?|configuration|config)\b.{0,80}\b(?:you|your|tomoribot)\b/i,
+  /\b(?:you|your|tomoribot)\b.{0,80}\b(?:model|provider|tools?|commands?|settings?|configuration|config)\b/i,
+  /\b(?:is|are)\b.{0,80}\b(?:web\s+search|memory|image\s+generation|video\s+generation|voice|tools?|feature)\b.{0,80}\b(?:enabled|available|configured|supported|working)\b/i,
+  /\bwhy\b.{0,100}\b(?:can(?:not|'t)|could(?:\s+not|n't)|did(?:\s+not|n't)|won't|failed\s+to)\b.{0,80}\b(?:you|tomoribot)\b/i,
+  /\bwhy\b.{0,40}\b(?:do|does)\b.{0,40}\b(?:you|tomoribot)\b.{0,80}\b(?:forget|remember|search|generate|respond|behave)\b/i,
+  /\bhow\s+(?:does|do)\s+(?:your|tomoribot(?:'s)?)\b.{0,100}\b(?:work|behave|remember|forget|search|generate|respond)\b/i,
+];
+
+function hasSelfDiagnosticIntent(text: string): boolean {
+  return SELF_DIAGNOSTIC_INTENT_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 const CROSS_CHANNEL_INTENT_PATTERNS: RegExp[] = [
   /\bcross[-_\s]?channel\b.{0,80}\b(?:message|send|post|peek|check|boomerang|tool|function)\b/i,
   /\b(?:send|post|say|tell|ask|message|write)\b.{0,120}\b(?:in|to|into|over\s+in)\s+(?:<#\d+>|#[^\s]+|`[^`]+`)/iu,
@@ -115,11 +143,6 @@ const CROSS_CHANNEL_INTENT_PATTERNS: RegExp[] = [
   /\b(?:go|hop|peek|check|read|look)\b.{0,100}\b(?:another|other|different|specific|target|that|the)\s+(?:channel|thread)\b/i,
   /\b(?:peek|check|read|look)\b.{0,100}(?:<#\d+>|#[^\s]+|`[^`]+`)\b/iu,
   /\b(?:boomerang|report\s+back)\b.{0,120}\b(?:channel|thread|<#\d+>|#[^\s]+|`[^`]+`)\b/iu,
-];
-
-const STICKER_INTENT_PATTERNS: RegExp[] = [
-  /\b(?:send|use|pick|choose|select|add)\b.{0,80}\b(?:sticker|stickers|emote|reaction\s+sticker)\b/i,
-  /\b(?:sticker|stickers)\b.{0,80}\b(?:please|pls|plz|too|also|instead|for\s+that|with\s+that)\b/i,
 ];
 
 const MESSAGE_METADATA_INTENT_PATTERNS: RegExp[] = [
@@ -139,6 +162,12 @@ const USER_UNBLOCK_INTENT_PATTERNS: RegExp[] = [
   /\b(?:remove|clear|delete)\b.{0,100}\b(?:user\s+)?(?:block|mute)\b/i,
 ];
 
+const USER_INFO_INTENT_PATTERNS: RegExp[] = [
+  /\b(?:call|address|refer\s+to)\s+(?:me|them|him|her|@[A-Za-z0-9_.-]+|<@\d+>)(?:\s+(?:as|by))?\s+[A-Za-z0-9_.-]+\b/i,
+  /\b(?:my|their|his|her)\s+(?:nickname|name|pronouns?|gender|title|honorific|prefix|suffix|timezone|utc\s*offset)\b/i,
+  /\b(?:change|set|update|clear|forget|use)\b.{0,100}\b(?:nickname|pronouns?|gender|addressing\s+style|title|honorific|prefix|suffix|timezone|utc\s*offset)\b/i,
+];
+
 const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
   /\b(?:do|try|make|send|say|generate|run|repeat|redo)\b.{0,80}\b(?:that|it|this|one|again|same)\b/i,
   /\buse\s+(?:that|it|this|one|the\s+same)\b/i,
@@ -151,9 +180,6 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 const WEB_TOOL_NAMES = [
   "web_search",
   "web-search",
-  "felo-search",
-  "iask-search",
-  "monica-search",
   "brave_web_search",
   "brave_image_search",
   "brave_video_search",
@@ -164,15 +190,18 @@ const WEB_TOOL_NAMES = [
   "fetch",
   "url-metadata",
 ];
+const URL_READING_TOOL_NAMES = ["fetch_url", "fetch", "fetch-url", "url-metadata"];
 const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
+/** The image tools plus the tag lookup, so a drawing of an existing character can check its tags first. */
+const IMAGE_REQUEST_TOOL_NAMES = [...IMAGE_GENERATION_TOOL_NAMES, "danbooru_search_tags"];
+const DANBOORU_ART_TOOL_NAMES = ["danbooru_search_tags", "danbooru_search_posts"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
 const VOICE_GENERATION_TOOL_NAMES = ["generate_voice_message"];
 const SHORT_TERM_MEMORY_TOOL_NAMES = ["update_short_term_memory"];
 const MEDIA_ANALYSIS_TOOL_NAMES = [
   "analyze_image",
-  "increase_media_context",
   "peek_profile_picture",
   "process_gif",
   "process_youtube_video",
@@ -180,23 +209,101 @@ const MEDIA_ANALYSIS_TOOL_NAMES = [
 ];
 const MESSAGE_ACTION_TOOL_NAMES = ["interact_with_recent_message", "manage_message", "reveal_message_metadata"];
 const CAPABILITY_TOOL_NAMES = ["review_capabilities"];
-const STICKER_TOOL_NAMES = ["select_sticker_for_response"];
 const USER_BLOCKING_TOOL_NAMES = ["block_user", "unblock_user"];
+const USER_INFO_TOOL_NAMES = ["update_user_info"];
+
+/** Tools whose backend job can outlive a killed turn and still bill. */
+export const MEDIA_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...IMAGE_GENERATION_TOOL_NAMES,
+  ...VIDEO_GENERATION_TOOL_NAMES,
+  ...VOICE_GENERATION_TOOL_NAMES,
+]);
 
 export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
-  { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
-  { value: "video", label: "Video generation", toolNames: VIDEO_GENERATION_TOOL_NAMES },
-  { value: "voice", label: "Voice message", toolNames: VOICE_GENERATION_TOOL_NAMES },
-  { value: "reminder", label: "Reminder/task", toolNames: REMINDER_TOOL_NAMES },
-  { value: "cross-channel", label: "Cross-channel message", toolNames: ["cross_channel_message"] },
-  { value: "search", label: "Web search/fetch", toolNames: WEB_TOOL_NAMES },
-  { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
-  { value: "media-analysis", label: "Media analysis", toolNames: MEDIA_ANALYSIS_TOOL_NAMES },
-  { value: "message-action", label: "Message actions", toolNames: MESSAGE_ACTION_TOOL_NAMES },
-  { value: "user-blocking", label: "Persona user blocking", toolNames: USER_BLOCKING_TOOL_NAMES },
-  { value: "sticker", label: "Sticker selection", toolNames: STICKER_TOOL_NAMES },
-  { value: "thread", label: "Thread creation", toolNames: ["create_thread"] },
-  { value: "capabilities", label: "Capability review", toolNames: CAPABILITY_TOOL_NAMES },
+  {
+    value: "dice",
+    labelKey: "commands.config.panel.tool_target_dice",
+    label: "Dice rolling",
+    toolNames: ["roll_dice"],
+  },
+  {
+    value: "image",
+    labelKey: "commands.config.panel.tool_target_image",
+    label: "Image generation",
+    toolNames: IMAGE_REQUEST_TOOL_NAMES,
+  },
+  {
+    value: "video",
+    labelKey: "commands.config.panel.tool_target_video",
+    label: "Video generation",
+    toolNames: VIDEO_GENERATION_TOOL_NAMES,
+  },
+  {
+    value: "voice",
+    labelKey: "commands.config.panel.tool_target_voice",
+    label: "Voice message",
+    toolNames: VOICE_GENERATION_TOOL_NAMES,
+  },
+  {
+    value: "reminder",
+    labelKey: "commands.config.panel.tool_target_reminder",
+    label: "Reminder/task",
+    toolNames: REMINDER_TOOL_NAMES,
+  },
+  {
+    value: "cross-channel",
+    labelKey: "commands.config.panel.tool_target_cross-channel",
+    label: "Cross-channel message",
+    toolNames: ["cross_channel_message"],
+  },
+  {
+    value: "search",
+    labelKey: "commands.config.panel.tool_target_search",
+    label: "Web search/fetch",
+    toolNames: WEB_TOOL_NAMES,
+  },
+  {
+    value: "memory",
+    labelKey: "commands.config.panel.tool_target_memory",
+    label: "Memory",
+    toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES],
+  },
+  {
+    value: "media-analysis",
+    labelKey: "commands.config.panel.tool_target_media-analysis",
+    label: "Media analysis",
+    toolNames: MEDIA_ANALYSIS_TOOL_NAMES,
+  },
+  {
+    value: "message-action",
+    labelKey: "commands.config.panel.tool_target_message-action",
+    label: "Message actions",
+    toolNames: MESSAGE_ACTION_TOOL_NAMES,
+  },
+  {
+    value: "user-blocking",
+    labelKey: "commands.config.panel.tool_target_user-blocking",
+    label: "Persona user blocking",
+    toolNames: USER_BLOCKING_TOOL_NAMES,
+  },
+  {
+    value: "user-info",
+    labelKey: "commands.config.panel.tool_target_user-info",
+    label: "User info updates",
+    toolNames: USER_INFO_TOOL_NAMES,
+  },
+  {
+    value: "thread",
+    labelKey: "commands.config.panel.tool_target_thread",
+    label: "Thread creation",
+    toolNames: ["create_thread"],
+  },
+  {
+    value: "capabilities",
+    labelKey: "commands.config.panel.tool_target_capabilities",
+    label: "Capability review",
+    toolNames: CAPABILITY_TOOL_NAMES,
+  },
 ] as const;
 
 export type DeliberateToolTriggerTarget = (typeof DELIBERATE_TOOL_TRIGGER_TARGETS)[number]["value"];
@@ -219,18 +326,12 @@ function uniqueMatches(matches: DeliberateToolIntentMatch[]): DeliberateToolInte
   });
 }
 
-function parseDeliberateToolContextTurnsEnv(): number {
-  const parsed = Number.parseInt(process.env.DELIBERATE_TOOL_CONTEXT_TURNS ?? "", 10);
-  if (!Number.isFinite(parsed)) return DEFAULT_TOOL_CONTEXT_TURNS;
-  return Math.min(Math.max(parsed, 0), MAX_TOOL_CONTEXT_TURNS);
-}
-
 export function resolveDeliberateToolContextTurns(configuredTurns: number | null | undefined): number {
   if (typeof configuredTurns === "number" && Number.isFinite(configuredTurns)) {
     return Math.min(Math.max(Math.trunc(configuredTurns), 0), MAX_TOOL_CONTEXT_TURNS);
   }
 
-  return parseDeliberateToolContextTurnsEnv();
+  return DEFAULT_TOOL_CONTEXT_TURNS;
 }
 
 function escapeRegExpLiteral(value: string): string {
@@ -245,16 +346,23 @@ export function normalizeDeliberateToolRegexTrigger(trigger: string | null | und
   return (trigger ?? "").trim();
 }
 
+/**
+ * A trailing "*" makes the literal a word-start stem ("lembr*" matches "lembrete"). Han, kana, and
+ * Hangul literals match as substrings, because a letter-boundary requirement rejects nearly every
+ * real use in scripts without spaces or with attached particles.
+ */
 function literalTriggerMatches(text: string, trigger: string): boolean {
   const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
-  if (!normalizedTrigger) return false;
+  const isStem = normalizedTrigger.length > 1 && normalizedTrigger.endsWith("*");
+  const literal = isStem ? normalizedTrigger.slice(0, -1) : normalizedTrigger;
+  if (!literal) return false;
 
-  const escaped = escapeRegExpLiteral(normalizedTrigger).replace(/\s+/g, "\\s+");
-  const wordLike = /^[\p{L}\p{N}_-]+$/u.test(normalizedTrigger);
-  const pattern = wordLike
-    ? new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}($|[^\\p{L}\\p{N}_-])`, "iu")
-    : new RegExp(escaped, "iu");
-  return pattern.test(text);
+  const escaped = escapeRegExpLiteral(literal).replace(/\s+/g, "\\s+");
+  if (isUnspacedScriptText(literal) || !/^[\p{L}\p{N}_-]+$/u.test(literal)) {
+    return new RegExp(escaped, "iu").test(text);
+  }
+  const trailingBoundary = isStem ? "" : "($|[^\\p{L}\\p{N}_-])";
+  return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}${trailingBoundary}`, "iu").test(text);
 }
 
 function regexTriggerMatches(text: string, trigger: string): boolean {
@@ -315,6 +423,10 @@ export function hasDeliberateToolIntent(
 
   if (!text) return false;
 
+  if (getCustomDeliberateToolIntentResult(text, getLocalePackTriggerMap(), "built-in").allowedToolNames.length > 0) {
+    return true;
+  }
+
   if (hasReminderCreationIntent(text)) {
     return true;
   }
@@ -343,11 +455,11 @@ export function hasDeliberateToolIntent(
     return true;
   }
 
-  if (STICKER_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+  if (MESSAGE_METADATA_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
     return true;
   }
 
-  if (MESSAGE_METADATA_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+  if (hasSelfDiagnosticIntent(text)) {
     return true;
   }
 
@@ -361,9 +473,28 @@ export function hasDeliberateToolIntent(
   return URL_PATTERN.test(text) && URL_TOOL_INTENT_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Locale keyword packs expressed as a trigger map, so they reuse the custom-trigger matcher. English
+ * relies on the built-in patterns above and ships empty packs.
+ */
+function getLocalePackTriggerMap(): DeliberateToolTriggerMap {
+  return Object.fromEntries(
+    DELIBERATE_TOOL_TRIGGER_TARGETS.map((target) => [
+      target.value,
+      getIntentPackUnion(DELIBERATE_TOOL_PACK_KEYS[target.value]),
+    ]),
+  );
+}
+
+/** True when any authored locale's keyword pack for `targetValue` matches `text`. */
+export function matchesLocaleDeliberateToolPack(targetValue: DeliberateToolTriggerTarget, text: string): boolean {
+  return getIntentPackUnion(DELIBERATE_TOOL_PACK_KEYS[targetValue]).some((entry) => literalTriggerMatches(text, entry));
+}
+
 function getCustomDeliberateToolIntentResult(
   text: string,
   customTriggers: DeliberateToolTriggerMap | null | undefined,
+  source: DeliberateToolIntentMatchSource = "custom",
 ): DeliberateToolIntentResult {
   const allowedToolNames: string[] = [];
   const matches: DeliberateToolIntentMatch[] = [];
@@ -379,14 +510,14 @@ function getCustomDeliberateToolIntentResult(
         if (!normalizedTrigger) continue;
         // "^" is the deliberate-tool wildcard: expose this target on every turn.
         if (normalizedTrigger !== "^" && !literalTriggerMatches(text, normalizedTrigger)) continue;
-        addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
+        addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, source);
         continue;
       }
 
       if (trigger.type === "regex") {
         const normalizedTrigger = normalizeDeliberateToolRegexTrigger(trigger.value);
         if (!normalizedTrigger || !regexTriggerMatches(text, normalizedTrigger)) continue;
-        addToolMatches(allowedToolNames, matches, toolNames, `/${normalizedTrigger}/`, "custom");
+        addToolMatches(allowedToolNames, matches, toolNames, `/${normalizedTrigger}/`, source);
       }
     }
   }
@@ -417,6 +548,14 @@ export function getDeliberateToolIntentResult(
     };
   }
 
+  const localePackResult = getCustomDeliberateToolIntentResult(text, getLocalePackTriggerMap(), "built-in");
+  allowedToolNames.push(...localePackResult.allowedToolNames);
+  matches.push(...localePackResult.matches);
+
+  if (DICE_ROLL_REQUEST_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, ["roll_dice"], "dice roll request", "built-in");
+  }
+
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");
   }
@@ -426,9 +565,10 @@ export function getDeliberateToolIntentResult(
   }
 
   if (
-    /\b(search|web\s*search|look\s+up|browse|google|fetch|latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i.test(
-      text,
-    ) ||
+    (!hasSelfDiagnosticIntent(text) &&
+      /\b(search|web\s*search|look\s+up|browse|google|fetch|latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i.test(
+        text,
+      )) ||
     (URL_PATTERN.test(text) && URL_TOOL_INTENT_PATTERNS.some((pattern) => pattern.test(text)))
   ) {
     addToolMatches(
@@ -442,6 +582,14 @@ export function getDeliberateToolIntentResult(
       ),
       "built-in",
     );
+  }
+
+  if (DANBOORU_POST_LINK_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, ["danbooru_get_post"], "Danbooru post link", "built-in");
+  }
+
+  if (EXISTING_ART_REQUEST_PATTERN.test(text) || DANBOORU_NAME_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, DANBOORU_ART_TOOL_NAMES, "existing art request", "built-in");
   }
 
   if (
@@ -481,7 +629,7 @@ export function getDeliberateToolIntentResult(
     addToolMatches(
       allowedToolNames,
       matches,
-      IMAGE_GENERATION_TOOL_NAMES,
+      IMAGE_REQUEST_TOOL_NAMES,
       getRegexTrigger(text, /\b(image|picture|photo|pic|img)\b/i, "image request"),
       "built-in",
     );
@@ -507,7 +655,7 @@ export function getDeliberateToolIntentResult(
         ? VIDEO_GENERATION_TOOL_NAMES
         : target === "voice" || target === "audio" || target === "speech"
           ? VOICE_GENERATION_TOOL_NAMES
-          : IMAGE_GENERATION_TOOL_NAMES;
+          : IMAGE_REQUEST_TOOL_NAMES;
     addToolMatches(allowedToolNames, matches, generationToolNames, target || "generation request", "built-in");
   }
 
@@ -527,24 +675,26 @@ export function getDeliberateToolIntentResult(
     addToolMatches(allowedToolNames, matches, ["unblock_user"], "persona user unblock request", "built-in");
   }
 
-  if (CROSS_CHANNEL_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
-    addToolMatches(allowedToolNames, matches, ["cross_channel_message"], "cross-channel request", "built-in");
+  if (USER_INFO_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+    addToolMatches(allowedToolNames, matches, USER_INFO_TOOL_NAMES, "structured user info request", "built-in");
   }
 
-  if (STICKER_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
-    addToolMatches(allowedToolNames, matches, STICKER_TOOL_NAMES, "sticker request", "built-in");
+  if (CROSS_CHANNEL_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+    addToolMatches(allowedToolNames, matches, ["cross_channel_message"], "cross-channel request", "built-in");
   }
 
   if (/\b(create|make|start|open)\b.*\b(thread)\b/i.test(text)) {
     addToolMatches(allowedToolNames, matches, ["create_thread"], "thread request", "built-in");
   }
 
-  if (
-    /\b(capabilities|what\s+can\s+you\s+do|available\s+(?:tools|commands|settings)|review\s+(?:your\s+)?(?:capabilities|settings))\b/i.test(
-      text,
-    )
-  ) {
-    addToolMatches(allowedToolNames, matches, CAPABILITY_TOOL_NAMES, "capability review request", "built-in");
+  if (hasSelfDiagnosticIntent(text)) {
+    addToolMatches(
+      allowedToolNames,
+      matches,
+      [...CAPABILITY_TOOL_NAMES, ...URL_READING_TOOL_NAMES],
+      "self-diagnostic request",
+      "built-in",
+    );
   }
 
   return {
@@ -602,13 +752,29 @@ export function isToolAllowedByDeliberateMode(
   return !allowedToolNames?.length || allowedToolNames.includes(toolName);
 }
 
+/** Family intent follows the configured service's discovered names without changing its argument schema. */
+export function expandDeliberateToolAllowedNames(
+  allowedToolNames: readonly string[] | null | undefined,
+  families: Record<string, string> = {},
+): string[] | null | undefined {
+  if (!allowedToolNames?.length) return allowedToolNames ? [...allowedToolNames] : allowedToolNames;
+  const names = new Set(allowedToolNames);
+  for (const [name, family] of Object.entries(families)) {
+    if ((family === "web_search" && names.has("web_search")) || (family === "url_fetcher" && names.has("fetch_url")))
+      names.add(name);
+  }
+  return [...names];
+}
+
 export function applyDeliberateToolAllowlist<T extends { name: string }>(params: {
   providerLabel: string;
   builtInTools: T[];
   mcpFunctionNames: string[];
   allowedToolNames?: string[] | null;
+  mcpToolFamilies?: Record<string, string>;
 }): { builtInTools: T[]; mcpFunctionNames: string[] } {
-  const { providerLabel, builtInTools, mcpFunctionNames, allowedToolNames } = params;
+  const { providerLabel, builtInTools, mcpFunctionNames } = params;
+  const allowedToolNames = expandDeliberateToolAllowedNames(params.allowedToolNames, params.mcpToolFamilies);
   if (!allowedToolNames?.length) {
     return { builtInTools, mcpFunctionNames };
   }
@@ -657,7 +823,7 @@ export function getRecentToolAffordanceNames(
     .reverse();
 
   for (const msg of lookbackMessages) {
-    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+    const isPersonaOutput = isManagedWebhookMessage(msg) || (Boolean(clientUserId) && msg.author.id === clientUserId);
 
     if (!isPersonaOutput) {
       const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);
@@ -704,7 +870,7 @@ export function getRecentTriggeredToolIntentResult(
     .slice(-lookbackMessageCount);
 
   for (const msg of lookbackMessages) {
-    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+    const isPersonaOutput = isManagedWebhookMessage(msg) || (Boolean(clientUserId) && msg.author.id === clientUserId);
     if (msg.author.bot || isPersonaOutput) continue;
 
     const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);
@@ -724,4 +890,48 @@ export function getRecentTriggeredToolIntentResult(
       new Map(matches.map((match) => [`${match.toolName}\0${match.trigger}\0${match.source}`, match])).values(),
     ),
   };
+}
+
+/**
+ * Media on the triggering message is itself the request to look at it, so each kind admits only the
+ * tool that reads that kind. Media elsewhere in history admits nothing; otherwise one old GIF would
+ * keep its tool exposed for every later turn. Each tool's own availability gate still decides whether
+ * the model receives it (`analyze_image` only reaches a model that cannot see images).
+ */
+export function getAttachmentDeliberateToolIntentResult(
+  message:
+    | Pick<SimplifiedMessageForContext, "imageAttachments" | "videoAttachments" | "documentAttachments">
+    | undefined,
+): DeliberateToolIntentResult {
+  const allowedToolNames: string[] = [];
+  const matches: DeliberateToolIntentMatch[] = [];
+  if (!message) return { allowedToolNames, matches };
+
+  const images = message.imageAttachments.filter((attachment) => !attachment.isEmoji);
+  if ((message.documentAttachments?.length ?? 0) > 0) {
+    addToolMatches(allowedToolNames, matches, ["read_file"], "attached file", "built-in");
+  }
+  if (images.length > 0) {
+    addToolMatches(allowedToolNames, matches, ["analyze_image"], "attached image", "built-in");
+  }
+  if (images.some((attachment) => attachment.mimeType === "image/gif")) {
+    addToolMatches(allowedToolNames, matches, ["process_gif"], "attached GIF", "built-in");
+  }
+  if (message.videoAttachments.some((attachment) => attachment.isYouTubeLink)) {
+    addToolMatches(allowedToolNames, matches, ["process_youtube_video"], "YouTube link", "built-in");
+  }
+
+  return { allowedToolNames, matches };
+}
+
+/** Expression tools remain available without a task request; their feature toggles still apply. */
+export function getAutonomousDeliberateToolNames(state: TomoriState): string[] {
+  const stickerTool = new StickerTool();
+  if (!state.llm.has_tools || state.config.tool_use_enabled === false) return [];
+  return [
+    ...(state.config.sticker_usage_enabled && stickerTool.isAvailableFor(state.llm.llm_provider)
+      ? [stickerTool.name]
+      : []),
+    ...(state.config.conditioning_interactions_enabled ? ["interact_with_target"] : []),
+  ];
 }

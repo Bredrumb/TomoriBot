@@ -3,6 +3,7 @@ import type {
   ProviderNativeImageGenerationResult,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { toZaiApiModelName, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -39,7 +40,7 @@ export async function generateZaiNativeImage(
   const apiModel = toZaiApiModelName(request.model);
   const size = ASPECT_RATIO_TO_SIZE[request.aspectRatio] ?? DEFAULT_SIZE;
 
-  // Log warning if reference images were provided — Z.ai doesn't support img2img
+  // Log warning if reference images were provided, so Z.ai doesn't support img2img
   if (request.referenceImages && request.referenceImages.length > 0) {
     log.warn(
       "Z.ai image generation does not support reference images (img2img). Proceeding with text-only generation.",
@@ -50,7 +51,6 @@ export async function generateZaiNativeImage(
     );
   }
 
-  // 1. Send generation request to Z.ai
   const response = await fetch(request.endpointUrl || ZAI_GENERAL_IMAGES_GENERATIONS_URL, {
     method: "POST",
     headers: {
@@ -66,19 +66,16 @@ export async function generateZaiNativeImage(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    log.error("Z.ai image generation request failed", new Error(errorBody), {
-      errorType: "ZaiImageGenerationHttpError",
-      metadata: {
-        model: apiModel,
+    const errorBody = await readProviderErrorBody(response, request.apiKey);
+    // Z.ai answers an exhausted balance with 429, so only the body tells it apart from a rate limit.
+    throw Object.assign(
+      new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}. ${errorBody}`),
+      {
         status: response.status,
-        size,
       },
-    });
-    throw new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}`);
+    );
   }
 
-  // 2. Parse response — expects { data: [{ url }] }
   const result = (await response.json()) as {
     data?: Array<{ url?: string }>;
   };
@@ -91,7 +88,6 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // 3. Fetch the image from the URL and convert to base64
   const imageResponse = await safeDownload(imageUrl, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: 15_000,
@@ -104,11 +100,9 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // 4. Determine MIME type from Content-Type header
   const contentType = imageResponse.contentType ?? "image/png";
   const mimeType = contentType.split(";")[0].trim();
 
-  // 5. Convert to base64
   const base64 = imageResponse.buffer.toString("base64");
 
   return {

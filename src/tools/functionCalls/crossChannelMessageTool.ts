@@ -11,13 +11,20 @@ import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { ContextItemTag } from "../../types/misc/context";
-import { isRefreshMarkerEmbed } from "../../utils/discord/embedDetection";
+import { truncateHistoryAtRefreshMarker } from "@/utils/discord/refreshMarkerHistory";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { convertMentions } from "@/utils/text/contextBuilder";
+import { PrivacyLevel } from "@/types/db/schema";
+import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageProxy/historyAttribution";
+import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
+import type { ManualTriggerInvoker } from "@/utils/chat/types";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
+import { localizer } from "@/utils/text/localizer";
 
-// ─── Boomerang Mechanism ─────────────────────────────────────────────
 // Stores pending boomerang data keyed by source channel ID.
 // After tomoriChat() completes in the target channel, the source channel
 // consumes this data to trigger a separate follow-up generation.
@@ -42,6 +49,8 @@ export interface PendingBoomerang {
   isUserImpersonation?: boolean;
   /** Impersonated Discord user ID to preserve across boomerang follow-up */
   impersonatedUserId?: string;
+  manualTriggerInvoker?: ManualTriggerInvoker;
+  borrowsTriggerMessage: boolean;
   /** Recent messages from the target channel (newest first) */
   targetChannelMessages: Array<{
     author: string;
@@ -59,11 +68,43 @@ export interface PendingBoomerang {
 
 const pendingBoomerangs = new Map<string, PendingBoomerang>();
 
+async function formatVisibleHistory(
+  messages: Message[],
+  context: ToolContext,
+): Promise<PendingBoomerang["targetChannelMessages"]> {
+  const proxyIdentities = await resolveMessageProxyMessageIdentitiesForHistory(messages);
+  const visibleMessages: Message[] = [];
+  for (const message of messages) {
+    const authorId = proxyIdentities.get(message.id)?.senderDiscId ?? message.author.id;
+    if ((await getCachedPrivacyLevel(authorId)) !== PrivacyLevel.FULL) {
+      visibleMessages.push(message);
+    }
+  }
+
+  return Promise.all(
+    visibleMessages.map(async (message) => ({
+      author: await resolveContextAuthorLabel(message, {
+        guildId: context.guildId,
+        personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
+      }),
+      content: message.content
+        ? await convertMentions(
+            message.content,
+            context.client,
+            context.guildId ?? "",
+            undefined,
+            context.tomoriState.persona_nickname,
+            context.tomoriState.config.personal_memories_enabled,
+          )
+        : "(no text content)",
+      timestamp: message.createdAt.toISOString(),
+    })),
+  );
+}
+
 /**
- * Store a pending boomerang for a given source channel.
  * Exposed so other tools (e.g. create_thread) can register boomerangs
  * without duplicating the map or the consume/build logic.
- * @param boomerang - The boomerang payload to store
  */
 export function storePendingBoomerang(boomerang: PendingBoomerang): void {
   pendingBoomerangs.set(boomerang.sourceChannelId, boomerang);
@@ -97,7 +138,6 @@ function inferTargetChannelFromTask(task: unknown): string | undefined {
 /**
  * Consume (retrieve and delete) a pending boomerang for a given channel.
  * Called by tomoriChat after STM storage to check if a follow-up is needed.
- * @param channelId - The channel ID to check for pending boomerangs
  * @returns The boomerang data if one exists, otherwise undefined
  */
 export function consumePendingBoomerang(channelId: string): PendingBoomerang | undefined {
@@ -111,15 +151,11 @@ export function consumePendingBoomerang(channelId: string): PendingBoomerang | u
 /**
  * Build the injected context items for a boomerang report-back generation.
  * @param boomerang - The boomerang data to format
- * @returns StructuredContextItem array for injection into tomoriChat
  */
 export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredContextItem[] {
-  // Format target channel messages for context
   let messagesBlock = "";
   if (boomerang.targetChannelMessages.length > 0) {
-    const formatted = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
-    // Truncate if total exceeds ~1500 chars to stay within reasonable context size
-    messagesBlock = formatted.length > 1500 ? `${formatted.substring(0, 1497)}...` : formatted;
+    messagesBlock = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
   }
 
   const resultStr = boomerang.success ? "Success" : `Failed: ${boomerang.error ?? "unknown error"}`;
@@ -129,11 +165,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
     `You have just returned from channel \`${boomerang.targetChannelName}\`.\nReport back naturally on what happened there.`;
   const outro = boomerang.outroText ?? "Now continue the conversation here with a concise update.";
 
-  let contextText = `[System: ${intro}\nOutcome: ${resultStr}.`;
-  if (messagesBlock) {
-    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
-  }
-  contextText += `\n${outro}]`;
+  const contextText = `[System: ${intro}\nOutcome: ${resultStr}.\n${outro}]`;
 
   return [
     {
@@ -141,10 +173,23 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
       parts: [{ type: "text", text: contextText }],
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     },
+    ...(messagesBlock
+      ? [
+          {
+            role: "user" as const,
+            parts: [
+              {
+                type: "text" as const,
+                text: `Recent transcript from channel \`${boomerang.targetChannelName}\` (oldest first):\n${messagesBlock}`,
+              },
+            ],
+            metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+            boomerangTranscript: true,
+          },
+        ]
+      : []),
   ];
 }
-
-// ─── Cross-Channel Message Tool ──────────────────────────────────────
 
 /**
  * Tool for sending an instant, natural message to a different channel in the same server,
@@ -154,7 +199,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 export class CrossChannelMessageTool extends BaseTool {
   name = "cross_channel_message";
   description =
-    "Send an instant message to a different channel in the same server, or silently peek its recent message history. Use this when you want to immediately say something, ask a question, or perform a task in another channel (NOT for scheduled or recurring posts; use create_task for those). Set peek_only to true to read what is happening there without sending any message. Optionally enable 'boomerang' to report back to the current channel about what you did.";
+    "Dispatch yourself to a different channel in the same server to do work there right now, once, or silently peek its recent message history. Anything you can do here (generate an image, search, answer, say something) happens in that channel instead. For work at a later time or on a repeat, use create_task. Set peek_only to true to read what is happening there without sending any message. Optionally enable 'boomerang' to report back to the current channel about what you did.";
   category = "discord" as const;
 
   parameters: ToolParameterSchema = {
@@ -168,7 +213,7 @@ export class CrossChannelMessageTool extends BaseTool {
       task: {
         type: "string",
         description:
-          "A descriptive task (2-4 sentences) explaining what you should do in the target channel. Be specific about WHAT to say, the TONE to use, and any context from the current conversation that's relevant. This instruction guides your message generation in the target channel. Not used when peek_only is true.",
+          "A descriptive task (2-4 sentences) explaining what you should do in the target channel. Be specific about the output wanted (for example, generate an image of X, or say Y), the TONE to use, and any context from the current conversation that's relevant. This instruction guides your message generation in the target channel. Not used when peek_only is true.",
       },
       boomerang: {
         type: "boolean",
@@ -183,16 +228,6 @@ export class CrossChannelMessageTool extends BaseTool {
     },
     required: ["target_channel", "task"],
   };
-
-  /**
-   * Check if cross-channel message tool is available for the given provider.
-   * Excluded for NovelAI (GLM) due to token budget limitations.
-   * @param provider - LLM provider name
-   * @returns True if provider supports this tool
-   */
-  isAvailableFor(provider: string): boolean {
-    return provider.toLowerCase() !== "novelai";
-  }
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) {
@@ -213,9 +248,6 @@ export class CrossChannelMessageTool extends BaseTool {
    * 2. Fetches a context message from the target channel
    * 3. Calls tomoriChat() with injected task context
    * 4. Optionally stores boomerang data for follow-up
-   * @param args - Tool arguments
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableCrossChannelMessage) {
@@ -230,7 +262,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 1. Extract and validate parameters
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
     const legacyChannelNameArg = args.channel_name as string | undefined;
@@ -267,7 +298,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 2. DM guard — cross-channel only works within a guild
+    // DM guard: cross-channel only works within a guild
     if (!context.guildId) {
       return {
         success: false,
@@ -279,7 +310,12 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 3. Resolve the target channel
+    const assertOwned = captureDiscordOwnership(context.guildId);
+    const assertActive = () => {
+      context.abortSignal?.throwIfAborted();
+      assertOwned();
+    };
+    assertActive();
     const guild = await context.client.guilds.fetch(context.guildId).catch(() => null);
     if (!guild) {
       return {
@@ -323,7 +359,7 @@ export class CrossChannelMessageTool extends BaseTool {
 
     const targetChannel: GuildTextBasedChannel = channelResolution.channel;
 
-    // 4. Same-channel guard
+    // Same-channel guard
     if (targetChannel.id === context.channel.id) {
       return {
         success: false,
@@ -333,6 +369,14 @@ export class CrossChannelMessageTool extends BaseTool {
           status: "cross_channel_failed_same_channel",
           reason: "Target channel is the same as source.",
         },
+      };
+    }
+
+    if (getChannelPrivacyReason(targetChannel, context.tomoriState.config.private_channel_ids ?? [])) {
+      return {
+        success: false,
+        error: localizer(context.locale, "tools.execution.private_channel_target"),
+        data: { status: "cross_channel_failed_private_target" },
       };
     }
 
@@ -361,12 +405,17 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 5. Permission check — ViewChannel always required; send permissions only for dispatch mode
+    // Permission check: ViewChannel always required; send permissions only for dispatch mode
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
-    const invokingMember =
-      context.message?.member ?? (context.userId ? await guild.members.fetch(context.userId).catch(() => null) : null);
+    const invokingMember = context.borrowsTriggerMessage
+      ? null
+      : context.message && context.message.member?.id === context.userId
+        ? context.message.member
+        : context.userId
+          ? await guild.members.fetch(context.userId).catch(() => null)
+          : null;
 
     if (!invokingMember) {
       return {
@@ -405,7 +454,6 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Peek mode only needs ViewChannel — skip send permission check
       if (!isPeekOnly) {
         const isThread =
           "isThread" in targetChannel && typeof targetChannel.isThread === "function" && targetChannel.isThread();
@@ -434,9 +482,19 @@ export class CrossChannelMessageTool extends BaseTool {
           },
         };
       }
+      if (
+        !perms?.has(PermissionFlagsBits.ReadMessageHistory) ||
+        !invokerPerms.has(PermissionFlagsBits.ReadMessageHistory)
+      ) {
+        return {
+          success: false,
+          error: localizer(context.locale, "tools.execution.channel_history_unavailable"),
+          data: { status: "cross_channel_failed_no_history_permission" },
+        };
+      }
     }
 
-    // 6. Peek-only path — fetch recent messages and return as context without dispatching
+    // Peek-only path: fetch recent messages and return as context without dispatching
     if (isPeekOnly) {
       const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);
       let recentMessages: Awaited<ReturnType<typeof targetChannel.messages.fetch>> | null = null;
@@ -459,39 +517,12 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
-      const messagesArray = [...recentMessages.values()];
-      const filteredMessages: Message[] = [];
-      for (const m of messagesArray) {
-        if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
-          log.info(
-            `Cross-channel tool: Peek hit refresh embed at ${m.id} in #${targetChannel.name} — truncating older messages`,
-          );
-          break;
-        }
-        filteredMessages.push(m);
-      }
-      filteredMessages.reverse();
-
-      const formattedMessages = await Promise.all(
-        filteredMessages.map(async (m) => ({
-          author: await resolveContextAuthorLabel(m, {
-            guildId: context.guildId,
-            personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
-          }),
-          content: m.content
-            ? await convertMentions(
-                m.content,
-                context.client,
-                context.guildId ?? "",
-                undefined,
-                context.tomoriState.persona_nickname,
-                context.tomoriState.config.personal_memories_enabled,
-              )
-            : "(no text content)",
-          timestamp: m.createdAt.toISOString(),
-        })),
+      const filteredMessages = truncateHistoryAtRefreshMarker(
+        [...recentMessages.values()],
+        `Cross-channel tool: Peek hit refresh embed at ${targetChannel.name}`,
       );
+
+      const formattedMessages = await formatVisibleHistory(filteredMessages, context);
 
       log.info(
         `Cross-channel tool: Peek complete for #${targetChannel.name} — ${formattedMessages.length} messages fetched`,
@@ -509,7 +540,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 7. Fetch last message from target channel (context for tomoriChat)
     let lastMessage: Message | undefined;
     try {
       const messages = await targetChannel.messages.fetch({ limit: 1 });
@@ -518,14 +548,14 @@ export class CrossChannelMessageTool extends BaseTool {
       log.warn(`Cross-channel tool: Failed to fetch last message from #${targetChannel.name}:`, fetchError);
     }
 
-    // Seed a braille blank if channel is empty (same pattern as reminderTimer)
+    // A placeholder message provides the anchor that later updates require.
+    assertActive();
     if (!lastMessage && "send" in targetChannel) {
       try {
-        lastMessage = await targetChannel.send({
-          content: "\u2800",
-        });
+        lastMessage = await sendChannelMessageOnce(targetChannel, { content: "\u2800" }, assertActive);
         log.info(`Cross-channel tool: Seeded placeholder message in #${targetChannel.name}`);
       } catch (sendError) {
+        assertActive();
         log.warn(`Cross-channel tool: Failed to seed placeholder in #${targetChannel.name}:`, sendError);
       }
     }
@@ -541,39 +571,35 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 8. Build injected context with the task instruction
     const taskInjection: StructuredContextItem = {
       role: "user",
       parts: [
         {
           type: "text",
-          // taskArg is guaranteed non-empty here — validated above for non-peek mode
-          text: `[System: You have been dispatched to this channel to perform a task.\nTask: "${(taskArg as string).trim()}".\nComplete this task naturally as a conversational message.]`,
+          text: `[System: You have been dispatched to this channel to perform a task.\nTask: "${(taskArg as string).trim()}".\nComplete this task in this channel, using your tools if needed.]`,
         },
       ],
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     };
 
-    // 9. Suppress self-reply to avoid loop
-    const { suppressNextSelfReply } = await import("../../events/messageCreate/tomoriChat");
-    suppressNextSelfReply(targetChannel.id);
-
-    // 10. Call tomoriChat in the target channel
     const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
     const isSourceUserImpersonation = context.isUserImpersonation === true;
     const sourceImpersonatedUserId = context.impersonatedUserId;
-    const manualTriggerInvoker = context.userId
-      ? {
-          userDiscId: context.userId,
-          username: context.message?.author.username ?? "System",
-          locale: context.locale,
-          member: invokingMember,
-        }
-      : undefined;
+    const borrowsTriggerMessage = context.borrowsTriggerMessage === true;
+    const manualTriggerInvoker =
+      !borrowsTriggerMessage && context.userId
+        ? {
+            userDiscId: context.userId,
+            username: context.message?.author.username ?? "System",
+            locale: context.locale,
+            member: invokingMember,
+          }
+        : undefined;
 
     try {
+      assertActive();
       await tomoriChat({
         client: context.client,
         message: lastMessage,
@@ -588,6 +614,8 @@ export class CrossChannelMessageTool extends BaseTool {
         textQuotaSource: "system",
         injectedContextItems: [taskInjection],
         manualTriggerInvoker,
+        borrowsTriggerMessage,
+        suppressSelfReply: true,
         manualStreamingContextOverrides: { disableCrossChannelMessage: true },
       });
 
@@ -595,10 +623,10 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      // 11. Handle boomerang — store data for follow-up generation in source channel
+      // Handle boomerang: store data for follow-up generation in source channel
       if (boomerangArg) {
         // Fetch last 10 messages from target channel (including the one the bot just sent),
-        // but respect refresh embed boundaries — only include messages after the most recent one
+        // but respect refresh embed boundaries, only include messages after the most recent one
         let targetMessages: Array<{
           author: string;
           content: string;
@@ -608,43 +636,16 @@ export class CrossChannelMessageTool extends BaseTool {
           const recentMessages = await targetChannel.messages.fetch({
             limit: 10,
           });
-          // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
-          const messagesArray = [...recentMessages.values()];
-          const filteredMessages: Message[] = [];
-          for (const m of messagesArray) {
-            // Stop if we hit a refresh/reset embed — everything before it is stale context
-            if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
-              log.info(
-                `Cross-channel tool: Boomerang message fetch hit refresh embed at ${m.id} — truncating older messages`,
-              );
-              break;
-            }
-            filteredMessages.push(m);
-          }
-          filteredMessages.reverse();
-          targetMessages = await Promise.all(
-            filteredMessages.map(async (m) => ({
-              author: await resolveContextAuthorLabel(m, {
-                guildId: context.guildId,
-                personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
-              }),
-              content: m.content
-                ? await convertMentions(
-                    m.content,
-                    context.client,
-                    context.guildId ?? "",
-                    undefined,
-                    context.tomoriState.persona_nickname,
-                    context.tomoriState.config.personal_memories_enabled,
-                  )
-                : "(no text content)",
-              timestamp: m.createdAt.toISOString(),
-            })),
+          const filteredMessages = truncateHistoryAtRefreshMarker(
+            [...recentMessages.values()],
+            "Cross-channel tool: Boomerang message fetch hit refresh embed at",
           );
+          targetMessages = await formatVisibleHistory(filteredMessages, context);
         } catch (msgFetchError) {
           log.warn(`Cross-channel tool: Failed to fetch target channel messages for boomerang:`, msgFetchError);
         }
 
+        assertActive();
         pendingBoomerangs.set(context.channel.id, {
           sourceChannelId: context.channel.id,
           targetChannelName: targetChannel.name,
@@ -654,6 +655,8 @@ export class CrossChannelMessageTool extends BaseTool {
           personaId: sourcePersonaId,
           isUserImpersonation: isSourceUserImpersonation,
           impersonatedUserId: sourceImpersonatedUserId,
+          manualTriggerInvoker,
+          borrowsTriggerMessage,
           targetChannelMessages: targetMessages,
         });
 
@@ -689,6 +692,7 @@ export class CrossChannelMessageTool extends BaseTool {
         },
       };
     } catch (error) {
+      assertActive();
       log.error(`Cross-channel tool: Failed to dispatch to #${targetChannel.name}:`, error as Error);
 
       // Store failed boomerang if requested
@@ -703,6 +707,8 @@ export class CrossChannelMessageTool extends BaseTool {
           personaId: sourcePersonaId,
           isUserImpersonation: isSourceUserImpersonation,
           impersonatedUserId: sourceImpersonatedUserId,
+          manualTriggerInvoker,
+          borrowsTriggerMessage,
           targetChannelMessages: [],
         });
       }

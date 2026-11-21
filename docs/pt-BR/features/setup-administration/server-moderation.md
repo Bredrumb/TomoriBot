@@ -1,0 +1,82 @@
+---
+title: "Moderação do Servidor"
+sidebar:
+  order: 2
+---
+
+TomoriBot fornece aos gerentes de servidores controle refinado sobre uso, custos, permissões e canais por meio de `/moderation` e `/config`. A maioria desses controles requer a permissão `Gerenciar servidor`. Para obter uma lista completa de comandos, consulte a [Referência de comandos](/features/command-reference/).
+
+## Controle de Custo: Cotas
+<!-- anchor: cost-control-quotas -->
+
+A geração custa dinheiro, seja pago pela conta do seu provedor ou pelos seus membros. Uso do limite de cotas por usuário e em todo o servidor:
+
+- **Configurar limites**: em `/moderation` > `Cotas`, configure limites diários por usuário e pools de redefinição em todo o servidor para geração de texto, imagem e vídeo. Defina um limite por usuário para `0` ilimitado.
+- **Reinicializações manuais**: execute `/quota reset user` para limpar o uso diário de um membro ou `/quota reset global` para redefinir todo o pool do servidor.
+
+Os pools de todo o servidor são redefinidos automaticamente em um intervalo configurável em dias.
+
+## BYOK de Usuário (Traga Sua Própria Chave)
+<!-- anchor: user-byok-bring-your-own-key -->
+
+Em `/moderation` > `Acesso de Membros`, você pode controlar se os membros podem usar IA financiada pelo servidor:
+
+- **Modelos de servidor permitidos** (padrão): os membros usam provedores configurados no servidor.
+- **Provedores pessoais necessários**: os membros devem configurar suas próprias chaves API via `/personal providers`. O servidor não paga nada por mensagens iniciadas por membros. As ações iniciadas pelo servidor (como saudações automatizadas ou tarefas agendadas) ainda usam o provedor do servidor.
+
+Os membros configuram seus provedores pessoais em [Personalização](/features/knowledge/personalization/#your-own-providers).
+
+Você também pode inicializar um servidor sem um provedor de texto do lado do servidor escolhendo `BYOK do Usuário` durante `/setup`.
+
+## Controle de Acesso: Listas de Permissões
+
+Use `/moderation` > `Lista Branca` para restringir onde e como TomoriBot responde:
+
+- **Canais**: escolha quais canais permitem respostas de bot e defina substituições de resfriamento específicas do canal. Os canais herdam o resfriamento global, a menos que uma substituição seja definida.
+- **Personas**: restrinja quais canais uma persona específica pode acionar.
+- **Funções**: restrinja as interações do bot a membros com funções Discord específicas.
+
+Configure o resfriamento da resposta global em todo o servidor em `/config` > `Comportamento` > Comportamento do acionador.
+
+## Controles de Aprendizado & Privacidade
+
+- **Permissões de membro**: em `/moderation` > `Acesso de Membros`, clique em `Editar Permissões` para controlar
+  se os membros sem `Gerenciar Servidor` podem gerenciar memórias do servidor, inspecionar instantâneos de prompt
+  ou exportar personas. O ensino de memórias do servidor vem desativado por
+  padrão e permite que os membros vejam suas próprias memórias, adicionem novas e editem ou removam as suas. Quando
+  desativado, apenas membros com `Gerenciar Servidor` podem ver ou gerenciar memórias do servidor. Visualizar e
+  gerenciar documentos e lorebooks requer `Gerenciar Servidor`.
+- **Exportações de persona**: desativadas por padrão para membros sem `Gerenciar Servidor`. Ative `Exportações de Persona`
+  em `/moderation` > `Acesso de Membros` > `Editar Permissões` para permitir que membros usem todos os formatos de
+  `/persona export`. Isso inclui pacotes com sprites, referências de personagem e, opcionalmente, o áudio de voz
+  atribuído e a transcrição. Exportações bem-sucedidas são sempre públicas no canal. Membros com acesso negado
+  recebem uma resposta privada direcionando-os a um administrador do servidor. Administradores podem exportar
+  independentemente dessa configuração.
+- **Lista negra de usuários**: em `/moderation` > `Lista Negra de Usuários`, escolha membros para TomoriBot ignorar completamente. Os membros da lista negra não podem acioná-la ou executar comandos, e suas mensagens nunca alcançam o contexto imediato. Você também pode definir bloqueios de membros específicos para cada pessoa.
+- **Regras de canal**: em `/config` > `Canais` > `Regras de Canal`, marque canais de texto públicos como privados ou adicione listas de bloqueio de ferramentas multicanal. Canais restritos do Discord são privados automaticamente. Canais privados não têm logs de pensamento nem ferramentas multicanal de entrada, incluindo espiadas, criação de tópicos e tarefas agendadas a partir de outros canais. A STM não pode entrar nem sair, a menos que `Compartilhamento de STM de Canais Privados` esteja `Permitido`. Você ainda pode pedir para o bot trabalhar dentro de um canal privado ou despachar tarefas para fora; uma tarefa enviada para fora pode incluir informações da sua conversa.
+
+`/config` exige `Gerenciar Servidor` em servidores, incluindo ver atributos da persona, diálogos de exemplo,
+sprites e memória de curto prazo. Atributos da persona e diálogos de exemplo só podem ser editados por administradores
+do servidor. Proprietários de DM mantêm acesso ao próprio workspace. A permissão de exportação concede acesso a
+`/persona export`; ela não concede acesso a `/config` nem ao botão `Exportar Sprites`. Downloads completos de prompt
+usam a permissão separada `Capturas de Prompt`.
+
+A privacidade automática verifica as permissões de cargos: `@everyone` deve conseguir visualizar o canal e nenhum cargo pode ter uma negação explícita de `Ver canal`. Sobrescritas de membros individuais não afetam essa classificação. Servidores com cargos de verificação ou cargos de restrição que negam a visualização podem, portanto, ter canais marcados como privados mesmo quando membros comuns conseguem lê-los. O painel distingue a privacidade automática de seleções manuais. Remover uma seleção manual não pode sobrepor as restrições do Discord.
+
+## Transparência: Logs de Pensamento
+
+Em `/config` > `Canais` > Logs e boas-vindas, clique em `Definir Canal de Logs` para designar um canal onde TomoriBot publica seu raciocínio interno, avisos de fallback e chamadas de ferramenta bem-sucedidas. Isso é útil para auditar o que ela está fazendo, incluindo qual gatilho expôs uma ferramenta no [Modo Ferramenta Deliberada](/features/capabilities/tools-and-extensions/deliberate-tool-mode/).
+
+O log usa a mesma verificação de privacidade baseada em cargos que a STM. Atividades em canais privados e em seus tópicos ficam fora do log. O canal de logs deve estar no mesmo servidor.
+
+:::tip
+O canal de logs pode ser restrito à sua equipe de moderação enquanto recebe atividades de canais abertos para todos os cargos.
+:::
+
+## Saudações de Boas-Vindas
+
+Em `/config` > `Canais` > Logs e boas-vindas, configure saudações automatizadas para novos membros em um canal escolhido. TomoriBot espera até que o novo membro conclua a triagem e integração das regras do Discord antes de enviar a saudação. Se um membro sair antes de terminar a triagem, nenhuma saudação será enviada. Clique em `Limpar Boas-vindas` na mesma página para desativar as saudações.
+
+## Expressões
+
+Execute `/expressions initialize` para indexar os emojis e figurinhas personalizados do seu servidor para que as pessoas possam usá-los com precisão nas conversas. Para saber como as personas usam emojis, figurinhas e reações, consulte [Expressões e reações](/features/chatting-personality/chatting-and-triggers/#expressions--reactions).

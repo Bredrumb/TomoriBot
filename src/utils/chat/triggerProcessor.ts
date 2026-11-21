@@ -2,9 +2,11 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
+import { isKnownMessageProxyMessage } from "@/utils/messageProxy/proxyExpectation";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
+import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
 const NEVER_MATCH_REGEX = /a^/i;
 
@@ -12,7 +14,7 @@ const NEVER_MATCH_REGEX = /a^/i;
  * Creates a regex that matches a trigger word with "screaming" support.
  * Allows repeated letters, e.g. "Lilja" matches "Liiiljaaaa".
  */
-export function createScreamingRegex(trigger: string): RegExp {
+function createScreamingRegex(trigger: string): RegExp {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
     return NEVER_MATCH_REGEX;
@@ -28,7 +30,7 @@ export function createScreamingRegex(trigger: string): RegExp {
     }
   }
 
-  return new RegExp(`\\b${pattern}\\b`, "i");
+  return new RegExp(wrapWithWordBoundary(pattern), "iu");
 }
 
 function createDeliberateTriggerRegex(trigger: string): RegExp {
@@ -68,8 +70,7 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
     return null;
   }
 
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  const hasFullTriggerMatch = isJapanese
+  const hasFullTriggerMatch = isUnspacedScriptText(normalizedTrigger)
     ? content.includes(normalizedTrigger)
     : createScreamingRegex(normalizedTrigger).test(content);
   if (!hasFullTriggerMatch) {
@@ -77,6 +78,38 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
   }
 
   return content.match(createDeliberateTriggerRegex(firstTriggerWord));
+}
+
+/**
+ * Finds a persona trigger in already-sanitized text without applying deliberate
+ * trigger mode. Context-reference discovery uses this so loading a public
+ * profile cannot affect response routing.
+ */
+export function getTriggerFirstMatchIndexInContent(content: string, trigger: string, deliberateOnly = false): number {
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (normalizedTrigger.startsWith("<@")) {
+    const userId = normalizedTrigger.replace(/[<@!>]/g, "");
+    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
+    const mentionMatch = content.match(mentionPattern);
+    return mentionMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  if (deliberateOnly) {
+    const deliberateMatch = getDeliberateTriggerMatch(content, normalizedTrigger);
+    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  if (isUnspacedScriptText(normalizedTrigger)) {
+    const index = content.indexOf(normalizedTrigger);
+    return index >= 0 ? index : Number.POSITIVE_INFINITY;
+  }
+
+  const match = content.match(createScreamingRegex(normalizedTrigger));
+  return match?.index ?? Number.POSITIVE_INFINITY;
 }
 
 export function getTriggerFirstMatchIndex(message: Message, trigger: string, deliberateOnly = false): number {
@@ -90,37 +123,27 @@ export function getTriggerFirstMatchIndex(message: Message, trigger: string, del
     if (!message.mentions.users.has(userId)) {
       return Number.POSITIVE_INFINITY;
     }
-
-    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
-    const mentionMatch = message.content.match(mentionPattern);
-    return mentionMatch?.index ?? Number.MAX_SAFE_INTEGER;
+    const contentMatchIndex = getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
+    return contentMatchIndex === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : contentMatchIndex;
   }
 
-  if (deliberateOnly) {
-    const deliberateMatch = getDeliberateTriggerMatch(message.content, normalizedTrigger);
-    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
-  }
-
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  if (isJapanese) {
-    const index = message.content.indexOf(normalizedTrigger);
-    return index >= 0 ? index : Number.POSITIVE_INFINITY;
-  }
-
-  const match = message.content.match(createScreamingRegex(normalizedTrigger));
-  return match?.index ?? Number.POSITIVE_INFINITY;
+  return getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
 }
 
 export function doesMessageMatchTrigger(message: Message, trigger: string, deliberateOnly = false): boolean {
   return getTriggerFirstMatchIndex(message, trigger, deliberateOnly) !== Number.POSITIVE_INFINITY;
 }
 
-export function isMatrixRelayMessage(message: Pick<Message, "webhookId" | "author">): boolean {
-  return Boolean(message.webhookId) && isMatrixBridgeWebhookUsername(message.author.username);
+export function isMatrixRelayMessage(message: Message): boolean {
+  return isManagedWebhookMessage(message) && isMatrixBridgeWebhookUsername(message.author.username);
+}
+
+export function isMessageProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
+  return isKnownMessageProxyMessage(message);
 }
 
 export function isRealUserLikeMessage(message: Message): boolean {
-  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message);
+  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isMessageProxyMessage(message);
 }
 
 export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[]): boolean {
@@ -131,7 +154,10 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
     return true;
   }
 
-  if (!message.webhookId) {
+  if (!isManagedWebhookMessage(message)) {
+    return false;
+  }
+  if (isMessageProxyMessage(message)) {
     return false;
   }
 
@@ -178,7 +204,12 @@ export function getAutochatAssignedPersonaId(config: AssembledServerConfig, chan
 }
 
 export function isAutochatQualifyingMessage(message: Message, isSelfMessage: boolean): boolean {
-  return !isSelfMessage && isRealUserLikeMessage(message) && !(message.channel instanceof DMChannel);
+  return (
+    !isSelfMessage &&
+    !message.content.startsWith("!") &&
+    isRealUserLikeMessage(message) &&
+    !(message.channel instanceof DMChannel)
+  );
 }
 
 export function isAutochatCounterChannelActive(config: AssembledServerConfig, channelId: string): boolean {
@@ -219,16 +250,15 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
  *
  * @param message - The incoming Discord message
  * @param allPersonas - All known personas for this server
- * @param activePersonaId - The persona_id currently streaming/responding
  */
 export function hasExplicitCrossPersonaTrigger(
   message: Message,
   allPersonas: TomoriState[],
   activePersonaId: number,
+  refMessage: Message | null,
 ): boolean {
   const mainPersona = allPersonas.find((p) => !p.is_alter);
 
-  // Build nickname → persona lookup for webhook/reply resolution
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
     const key = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
@@ -237,18 +267,13 @@ export function hasExplicitCrossPersonaTrigger(
 
   const clientUserId = message.client.user?.id;
 
-  // 1. Bot mention or reply-to-bot triggers the main persona
   const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
-  const refMessage = message.reference?.messageId
-    ? message.channel.messages.cache.get(message.reference.messageId)
-    : undefined;
   const isReplyToBot = refMessage ? refMessage.author.id === clientUserId : false;
   if ((isBotMentioned || isReplyToBot) && mainPersona?.persona_id !== activePersonaId) {
     return true;
   }
 
-  // 2. Reply to a webhook persona message triggers that persona
-  if (refMessage?.webhookId) {
+  if (refMessage && isManagedWebhookMessage(refMessage)) {
     const webhookPersona =
       resolveRenderModifierSourcePersona(refMessage.author.username, personaByNickname)?.persona ??
       personaByNickname.get(normalizeRenderModifierName(refMessage.author.username));
@@ -257,7 +282,6 @@ export function hasExplicitCrossPersonaTrigger(
     }
   }
 
-  // 3. Trigger words for any persona other than the active one
   for (const persona of allPersonas) {
     if (persona.persona_id === activePersonaId) continue;
     const triggers = persona.trigger_words ?? [];
@@ -273,6 +297,7 @@ export function determineMatchingPersonas(
   message: Message,
   allPersonas: TomoriState[],
   client: Client,
+  referenceMessage: Message | null,
   isReplyToBot: boolean,
   replyPersona: TomoriState | null,
   isBotMentioned: boolean,
@@ -281,7 +306,6 @@ export function determineMatchingPersonas(
   autoTriggerPersonaId?: number | null,
   alwaysReplyFallbackPersonaId?: number | null,
   deliberateTriggerMode = false,
-  isAutochatDtmExemptChannel = false,
   allowedPersonaIds?: ReadonlySet<number> | null,
 ): TomoriState[] {
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
@@ -328,7 +352,7 @@ export function determineMatchingPersonas(
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
-  if (message.webhookId) {
+  if (isManagedWebhookMessage(message)) {
     const webhookName = message.author.username;
     senderPersona =
       resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
@@ -338,17 +362,14 @@ export function determineMatchingPersonas(
   }
 
   let repliedToPersona: TomoriState | undefined;
-  if (message.reference?.messageId) {
-    const referenceMessage = message.channel.messages.cache.get(message.reference.messageId);
-    if (referenceMessage) {
-      if (referenceMessage.author.id === client.user?.id) {
-        repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
-      } else if (referenceMessage.webhookId) {
-        const webhookName = referenceMessage.author.username;
-        repliedToPersona =
-          resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
-          personaByNickname.get(normalizeRenderModifierName(webhookName));
-      }
+  if (referenceMessage) {
+    if (referenceMessage.author.id === client.user?.id) {
+      repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
+    } else if (isManagedWebhookMessage(referenceMessage)) {
+      const webhookName = referenceMessage.author.username;
+      repliedToPersona =
+        resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
+        personaByNickname.get(normalizeRenderModifierName(webhookName));
     }
   }
 
@@ -382,10 +403,7 @@ export function determineMatchingPersonas(
     let firstMatchIndex = Number.MAX_SAFE_INTEGER;
 
     for (const trigger of triggers) {
-      const isPersonaDtmExempt =
-        isAutochatDtmExemptChannel &&
-        (autoTriggerPersonaId === null ? !persona.is_alter : autoTriggerPersonaId === persona.persona_id);
-      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode && !isPersonaDtmExempt);
+      const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode);
       if (matchIndex !== Number.POSITIVE_INFINITY) {
         hasMatch = true;
         if (matchIndex < firstMatchIndex) {

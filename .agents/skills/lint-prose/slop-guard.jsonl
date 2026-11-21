@@ -1,0 +1,10 @@
+{"config": {"context_window_chars": 60, "penalty": -2}, "rule_type": "slop_guard.rules.word.slop_word.SlopWordRule"}
+{"config": {"context_window_chars": 60, "penalty": -3}, "rule_type": "slop_guard.rules.sentence.slop_phrase.SlopPhraseRule"}
+{"config": {"context_window_chars": 60, "sentence_opener_penalty": -2, "tone_penalty": -3}, "rule_type": "slop_guard.rules.sentence.tone_marker.ToneMarkerRule"}
+{"config": {"context_window_chars": 60, "penalty": -2}, "rule_type": "slop_guard.rules.sentence.weasel_phrase.WeaselPhraseRule"}
+{"config": {"context_window_chars": 60, "penalty": -10}, "rule_type": "slop_guard.rules.sentence.ai_disclosure.AIDisclosureRule"}
+{"config": {"context_window_chars": 60, "penalty": -5}, "rule_type": "slop_guard.rules.sentence.placeholder.PlaceholderRule"}
+{"config": {"context_window_chars": 60, "penalty": -3, "record_cap": 1000}, "rule_type": "slop_guard.rules.sentence.setup_resolution.SetupResolutionRule"}
+{"config": {"min_sentences": 4, "penalty": -4}, "rule_type": "slop_guard.rules.passage.closing_aphorism.ClosingAphorismRule"}
+{"config": {"min_sentences": 6, "threshold": 0.5, "penalty": -3}, "rule_type": "slop_guard.rules.passage.copula_chain.CopulaChainRule"}
+{"config": {"advice_min": 2, "context_window_chars": 60, "penalty": -1, "record_cap": 1000}, "rule_type": "slop_guard.rules.sentence.contrast_pair.ContrastPairRule"}

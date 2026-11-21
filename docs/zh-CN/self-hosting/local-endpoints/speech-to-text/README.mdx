@@ -1,0 +1,42 @@
+---
+title: "语音识别（本地引擎）"
+sidebar:
+  label: "总览"
+  groupLabel: "语音识别"
+  order: 7
+aiGenerated: true
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+在本地转录语音消息和音频附件，以便TomoriBot可以理解聊天中的语音，而无需将录音发送到第三方云API。
+
+TomoriBot将语音转文本视为`transcription`自定义端点功能。当活动转录端点存在时，音频附件在后台转录并添加到对话上下文中。
+
+可见的成绩单发布是单独的。`/config` > 引擎 > 通知仅控制是否在聊天中发布语音消息记录； 它不会启用或禁用后台STT。
+
+## 可用发动机
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="使用servers/stt下的参考WhisperX服务器进行初学者友好的本地转录。" />
+  <LinkCard title="耳语.cpp" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="当公开OpenAI兼容的转录端点时，使用轻量级的tweet.cpp HTTP服务器。" />
+  <LinkCard title="KoboldCPP" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="当你的构建公开与OpenAI兼容的音频转录时，请使用基于Whisper的KoboldCPP STT。" />
+</CardGrid>
+
+## 设置流程
+
+1. 从上面的引擎指南启动一台STT服务器。
+2. 在`/providers`中，选择`+ 添加新自定义端点`（或`Add New Custom Endpoint`）并选择`openai-compatible-transcription`（OpenAI兼容转录）。
+3. 选择保存的端点并使用其模型下拉列表添加服务器报告的模型代码。
+4. 打开`/config` > `模型` > 切换型号选择并激活已注册的端点。
+
+## 转录流程
+
+当转录端点处于活动状态时，TomoriBot在后台读取支持的音频附件并将转录添加到聊天上下文中。不需要人格分配。
+
+仅当你还希望这些记录在聊天中可见时，才使用`/config` > 引擎 > 通知。
+
+ElevenLabs用户应在`/providers`中选择`添加新提供方`和`ElevenLabs`； 它会与语音一起记录转录。

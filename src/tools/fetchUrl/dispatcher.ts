@@ -1,69 +1,42 @@
+import { isCrawl4aiConfigured } from "@/tools/restAPIs/crawl4ai/crawl4aiService";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { Crawl4aiEngine } from "./crawl4aiEngine";
-import { McpFetchEngine } from "./mcpFetchEngine";
+import { SafeHttpFetchEngine } from "./safeHttpFetchEngine";
 import type { FetchEngine, FetchEngineName, FetchOpts } from "./types";
-
-const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["crawl4ai", "mcp_fetch"];
-const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "mcp_fetch";
+import { isPrivateNetworkFetchAllowed } from "./urlSafety";
 
 function createEngine(name: FetchEngineName): FetchEngine {
   switch (name) {
     case "crawl4ai":
       return new Crawl4aiEngine();
-    case "mcp_fetch":
-      return new McpFetchEngine();
+    case "safe_http":
+      return new SafeHttpFetchEngine();
   }
 }
 
-export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDER): FetchEngineName[] {
-  const parsedNames = raw?.trim().length
-    ? raw.split(",").map((name) => name.trim().toLowerCase())
-    : [...DEFAULT_ENGINE_ORDER];
+/**
+ * Setting `CRAWL4AI_BASE_URL` is the opt-in. `safe_http` always ends the chain, so a stopped or
+ * failing crawler degrades to the guarded in-process fetch.
+ */
+export function getFetchUrlEngineOrder(): FetchEngineName[] {
+  if (!isCrawl4aiConfigured()) return ["safe_http"];
 
-  const order: FetchEngineName[] = [];
-  const seen = new Set<FetchEngineName>();
-
-  for (const name of parsedNames) {
-    if (!name) {
-      continue;
-    }
-
-    if (name !== "crawl4ai" && name !== REQUIRED_FALLBACK_ENGINE) {
-      log.warn(`Ignoring unknown fetch_url engine name "${name}" from FETCH_URL_ENGINE_ORDER`);
-      continue;
-    }
-
-    if (name === REQUIRED_FALLBACK_ENGINE) {
-      continue;
-    }
-
-    if (seen.has(name)) {
-      continue;
-    }
-
-    seen.add(name);
-    order.push(name);
+  // Crawl4AI follows redirects outside this process with no SSRF gate, so admitting it already
+  // grants private-network reach and requires the same explicit opt-in.
+  if (!isPrivateNetworkFetchAllowed()) {
+    log.warn(
+      "Ignoring Crawl4AI for fetch_url: set FETCH_URL_ALLOW_PRIVATE_NETWORK=true in .env to admit it, because it can reach private network addresses",
+    );
+    return ["safe_http"];
   }
 
-  order.push(REQUIRED_FALLBACK_ENGINE);
-
-  return order;
+  return ["crawl4ai", "safe_http"];
 }
 
 function buildEngineChain(): FetchEngine[] {
-  return parseFetchUrlEngineOrder().map((name) => createEngine(name));
-}
-
-export async function getActiveFetchUrlEngine(context: ToolContext): Promise<FetchEngine | null> {
-  for (const engine of buildEngineChain()) {
-    if (await engine.available(context)) {
-      return engine;
-    }
-  }
-
-  return null;
+  return getFetchUrlEngineOrder().map((name) => createEngine(name));
 }
 
 export async function executeFetchUrlWithFallback(

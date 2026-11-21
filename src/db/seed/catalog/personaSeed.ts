@@ -1,12 +1,19 @@
 import type { SQL } from "bun";
 import { personaSections } from "./personas";
-import { str, textArray } from "./sql";
+import { jsonb, str, textArray } from "./sql";
+import { PRESET_NATURAL_NUDGE_DEFAULTS, type PresetNaturalNudgeDefaults } from "./personas/naturalNudges";
 import type { PersonaInput } from "./types";
+import { personaNamingConfigSchema, validatePersonaNamingAuthoring } from "@/types/personaNaming";
+import {
+  naturalNudgeInterestsSchema,
+  naturalNudgeTalkativenessSchema,
+  personaAuthoredIdleNudgesSchema,
+} from "@/modules/natural-nudges/db/types";
 
-const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 716, 1770, 3585, 50]); // 1337 (Zaya) pending
+const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 256, 716, 1770, 3585, 50, 666]); // 1337 (Zaya) pending
 
 const PERSONA_COLUMNS =
-  "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id";
+  "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id, preset_naming_config, is_nsfw, natural_nudge_interests, natural_nudge_talkativeness, natural_nudge_idle_nudges";
 
 // Upsert identity is the stable (lineage, language) pair, NOT persona_preset_name.
 // The name is a mutable, human-facing catalog label, so keying on it would turn a
@@ -24,6 +31,11 @@ const PERSONA_ON_CONFLICT = `ON CONFLICT (preset_lineage_id, preset_language) WH
   preset_sample_dialogues_out = EXCLUDED.preset_sample_dialogues_out,
   preset_avatar_path = EXCLUDED.preset_avatar_path,
   preset_trigger_words = EXCLUDED.preset_trigger_words,
+  preset_naming_config = EXCLUDED.preset_naming_config,
+  is_nsfw = EXCLUDED.is_nsfw,
+  natural_nudge_interests = EXCLUDED.natural_nudge_interests,
+  natural_nudge_talkativeness = EXCLUDED.natural_nudge_talkativeness,
+  natural_nudge_idle_nudges = EXCLUDED.natural_nudge_idle_nudges,
   updated_at = CURRENT_TIMESTAMP`;
 
 const OFFICIAL_ATTRIBUTE_FLAGS_UPDATE = `WITH official_attribute_flags AS (
@@ -36,7 +48,7 @@ const OFFICIAL_ATTRIBUTE_FLAGS_UPDATE = `WITH official_attribute_flags AS (
       ORDER BY attr.ord
     )::BOOLEAN[] AS public_flags
   FROM persona_presets pp
-  WHERE pp.preset_lineage_id IN (4, 716, 1770, 3585, 50)
+  WHERE pp.preset_lineage_id IN (${[...OFFICIAL_LINEAGE_IDS].join(", ")})
 )
 UPDATE persona_presets pp
 SET
@@ -45,6 +57,12 @@ SET
 FROM official_attribute_flags
 WHERE pp.persona_preset_id = official_attribute_flags.persona_preset_id
   AND pp.preset_attribute_public_flags IS DISTINCT FROM official_attribute_flags.public_flags`;
+
+function naturalNudgeDefaults(preset: PersonaInput): PresetNaturalNudgeDefaults {
+  const defaults = PRESET_NATURAL_NUDGE_DEFAULTS[preset.lineageId];
+  if (!defaults) throw new Error(`persona_presets/${preset.name}: no Natural Nudges defaults`);
+  return defaults;
+}
 
 function rowsOf(): PersonaInput[] {
   return personaSections.flatMap((section) => section.rows);
@@ -61,6 +79,11 @@ function renderPersonaTuple(preset: PersonaInput): string {
     str(preset.avatarPath),
     textArray(preset.triggerWords),
     String(preset.lineageId),
+    str(JSON.stringify(preset.namingConfig)),
+    String(preset.isNsfw === true),
+    jsonb(naturalNudgeDefaults(preset).interests),
+    String(naturalNudgeDefaults(preset).talkativeness),
+    jsonb(naturalNudgeDefaults(preset).idleNudges),
   ].join(", ");
 }
 
@@ -94,6 +117,33 @@ export function validatePersonas(): string[] {
       );
     }
 
+    const parsedNamingConfig = personaNamingConfigSchema.safeParse(preset.namingConfig);
+    if (!parsedNamingConfig.success) {
+      errors.push(
+        `persona_presets/${preset.name}: invalid naming config: ${parsedNamingConfig.error.issues.map((issue) => issue.message).join("; ")}`,
+      );
+    } else {
+      try {
+        validatePersonaNamingAuthoring(parsedNamingConfig.data, [
+          preset.desc,
+          ...preset.attributes,
+          ...preset.sampleDialoguesOut,
+        ]);
+      } catch (error) {
+        errors.push(`persona_presets/${preset.name}: ${(error as Error).message}`);
+      }
+    }
+
+    const nudgeDefaults = PRESET_NATURAL_NUDGE_DEFAULTS[preset.lineageId];
+    if (
+      !nudgeDefaults ||
+      !naturalNudgeInterestsSchema.safeParse(nudgeDefaults.interests).success ||
+      !naturalNudgeTalkativenessSchema.safeParse(nudgeDefaults.talkativeness).success ||
+      !personaAuthoredIdleNudgesSchema.safeParse(nudgeDefaults.idleNudges).success
+    ) {
+      errors.push(`persona_presets/${preset.name}: invalid Natural Nudges defaults`);
+    }
+
     if (OFFICIAL_LINEAGE_IDS.has(preset.lineageId)) {
       seenOfficialLineages.add(preset.lineageId);
       if (preset.attributes.length === 0) {
@@ -111,9 +161,9 @@ export function validatePersonas(): string[] {
   return errors;
 }
 
-export function buildPersonaSeedStatements(): string[] {
+function buildPersonaSeedStatements(): string[] {
   const rows = rowsOf();
-  
+
   const backfillValues = rows
     .map((preset) => `  (${str(preset.name)}, CAST(${preset.lineageId} AS BIGINT))`)
     .join(",\n");
@@ -126,9 +176,7 @@ ${backfillValues}
 WHERE persona_presets.persona_preset_name = seed.name
   AND persona_presets.preset_lineage_id IS NULL;`;
 
-  const values = rows
-    .map((preset) => `  (${renderPersonaTuple(preset)})`)
-    .join(",\n");
+  const values = rows.map((preset) => `  (${renderPersonaTuple(preset)})`).join(",\n");
 
   return [
     backfillStatement,

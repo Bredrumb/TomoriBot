@@ -6,12 +6,13 @@
  * press "Import Now" to import the freshly generated persona as an alter without
  * re-uploading the image via `/persona import`. Because the message is public,
  * the manager-only restriction is enforced on click (not by visibility), and the
- * button is driven by a per-message collector — matching the established pattern
+ * button is driven by a per-message collector; matching the established pattern
  * in `expandableEmbedNotice.ts` (this codebase has no global button router).
  */
 
 import {
   type ButtonInteraction,
+  ButtonStyle,
   type ChatInputCommandInteraction,
   type Client,
   ComponentType,
@@ -26,48 +27,43 @@ import {
   type PersonaResultButtonOptions,
   type PersonaResultContainerOptions,
 } from "@/utils/discord/ui/statusComponents";
+import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { localizer } from "@/utils/text/localizer";
 import type { PresetExportData } from "@/types/preset/presetExport";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 /** Custom ID for the Import Now button (unique across the app). */
-export const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
+const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
 
 /**
- * Collector lifetime for the Import Now button. Capped under Discord's 15-minute
+ * Collector lifetime for the Import Now button. Kept under Discord's 15-minute
  * interaction-token window so the timeout teardown can still edit the original
- * reply. Configurable via env (CLAUDE.md rule 6).
+ * reply.
  */
-const IMPORT_NOW_BUTTON_TIMEOUT_MS = (() => {
-  const parsed = Number.parseInt(process.env.PERSONA_IMPORT_NOW_BUTTON_TIMEOUT_MS ?? "", 10);
-  // Default to 14 minutes; clamp to a sane range below the 15-minute token expiry.
-  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 14 * 60 * 1000) : 14 * 60 * 1000;
-})();
+const IMPORT_NOW_BUTTON_TIMEOUT_MS = 14 * 60 * 1000;
 
-/** Visual state of the Import Now button. */
 type ImportNowButtonState = "active" | "done" | "expired";
 
 /**
  * Builds the Import Now button config for a given state. The label is a locale
  * key resolved later by {@link buildPersonaResultContainer}, so no locale is needed here.
  *
- * @param state - "active" (clickable), "done" (imported, disabled), or "expired" (timed out, disabled).
- * @returns A {@link PersonaResultButtonOptions} for {@link buildPersonaResultContainer}.
  */
 export function importNowButton(state: ImportNowButtonState): PersonaResultButtonOptions {
   if (state === "done") {
     return {
       customId: IMPORT_NOW_CUSTOM_ID,
       labelKey: "commands.persona.import_now.imported",
-      style: 2, // Secondary
+      style: ButtonStyle.Secondary,
       disabled: true,
     };
   }
   return {
     customId: IMPORT_NOW_CUSTOM_ID,
     labelKey: "commands.persona.import_now.button",
-    style: state === "expired" ? 2 : 3, // Secondary when expired, Success when active
+    style: ButtonStyle.Secondary,
     disabled: state === "expired",
   };
 }
@@ -99,7 +95,6 @@ export interface ImportNowCollectorParams {
 /**
  * Maps an {@link importAlterPreset} failure reason to a localized error embed.
  *
- * @param locale - Locale for the error strings.
  * @param result - The failed import result.
  * @returns An EmbedBuilder describing the failure.
  */
@@ -110,29 +105,33 @@ function buildImportErrorEmbed(
   const embed = new EmbedBuilder().setColor(ColorCode.ERROR);
   switch (result.reason) {
     case "limit_reached":
-      return embed.setTitle(localizer(locale, "commands.persona.import.alter_limit_title")).setDescription(
-        localizer(locale, "commands.persona.import.alter_limit_description", {
-          current: result.current,
-          max: result.max,
-        }),
-      );
+      return embed
+        .setTitle(localizedStatusTitle(locale, "commands.persona.import.alter_limit_title", ColorCode.ERROR))
+        .setDescription(
+          localizer(locale, "commands.persona.import.alter_limit_description", {
+            current: result.current,
+            max: result.max,
+          }),
+        );
     case "name_conflict":
-      return embed.setTitle(localizer(locale, "commands.persona.import.alter_name_conflict_title")).setDescription(
-        localizer(locale, "commands.persona.import.alter_name_conflict_description", {
-          name: result.name,
-        }),
-      );
+      return embed
+        .setTitle(localizedStatusTitle(locale, "commands.persona.import.alter_name_conflict_title", ColorCode.ERROR))
+        .setDescription(
+          localizer(locale, "commands.persona.import.alter_name_conflict_description", {
+            name: result.name,
+          }),
+        );
     case "no_main_persona":
       return embed
-        .setTitle(localizer(locale, "general.errors.tomori_not_setup_title"))
+        .setTitle(localizedStatusTitle(locale, "general.errors.tomori_not_setup_title", ColorCode.ERROR))
         .setDescription(localizer(locale, "general.errors.tomori_not_setup_description"));
     case "config_failed":
       return embed
-        .setTitle(localizer(locale, "general.errors.update_failed_title"))
+        .setTitle(localizedStatusTitle(locale, "general.errors.update_failed_title", ColorCode.ERROR))
         .setDescription(localizer(locale, "general.errors.update_failed_description"));
     default:
       return embed
-        .setTitle(localizer(locale, "general.errors.unknown_error_title"))
+        .setTitle(localizedStatusTitle(locale, "general.errors.unknown_error_title", ColorCode.ERROR))
         .setDescription(localizer(locale, "general.errors.unknown_error_description"));
   }
 }
@@ -142,10 +141,9 @@ function buildImportErrorEmbed(
  *
  * On click: enforces ManageGuild, then runs the shared {@link importAlterPreset}
  * core (always as an alter, identity preserved), disables the button on success,
- * and replies ephemerally with the outcome. The button is one-shot — a successful
+ * and replies ephemerally with the outcome. The button is one-shot: a successful
  * import stops the collector; a failure re-arms it for another attempt.
  *
- * @param params - {@link ImportNowCollectorParams} message, import inputs, and re-render layout.
  */
 export function attachImportNowCollector(params: ImportNowCollectorParams): void {
   const {
@@ -170,7 +168,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
-    // 1. Manager-only gate. The message is public, so the restriction must be
+    // Manager-only gate. The message is public, so the restriction must be
     //    enforced here rather than relying on who can see the button.
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasPermission) {
@@ -179,7 +177,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
           embeds: [
             new EmbedBuilder()
               .setColor(ColorCode.ERROR)
-              .setTitle(localizer(locale, "commands.persona.import.no_permission_title"))
+              .setTitle(localizedStatusTitle(locale, "commands.persona.import.no_permission_title", ColorCode.ERROR))
               .setDescription(localizer(locale, "commands.persona.import.no_permission_description")),
           ],
           flags: MessageFlags.Ephemeral,
@@ -188,14 +186,15 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 2. One-shot guard: ignore clicks once an import is in flight or succeeded.
     if (consumed) {
       await interaction
         .reply({
           embeds: [
             new EmbedBuilder()
               .setColor(ColorCode.WARN)
-              .setTitle(localizer(locale, "commands.persona.import_now.already_imported_title"))
+              .setTitle(
+                localizedStatusTitle(locale, "commands.persona.import_now.already_imported_title", ColorCode.WARN),
+              )
               .setDescription(localizer(locale, "commands.persona.import_now.already_imported_description")),
           ],
           flags: MessageFlags.Ephemeral,
@@ -205,7 +204,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     }
     consumed = true;
 
-    // 3. Acknowledge the click; the import (DB + storage) may exceed the 3s window.
+    // Acknowledge the click; the import (DB + storage) may exceed the 3s window.
     try {
       await interaction.deferUpdate();
     } catch (error) {
@@ -214,7 +213,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 4. Run the shared alter-import core (always alter, identity preserved).
+    // Run the shared alter-import core (always alter, identity preserved).
     const result = await importAlterPreset({
       client,
       guild,
@@ -225,7 +224,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     });
 
     if (!result.ok) {
-      // 4a. Re-arm the button so the manager can retry after fixing the cause.
       consumed = false;
       await interaction
         .followUp({ embeds: [buildImportErrorEmbed(locale, result)], flags: MessageFlags.Ephemeral })
@@ -233,28 +231,36 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 4b. Disable the button on the public message to reflect the completed import.
     try {
-      await interaction.editReply({
-        components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),
-        flags: MessageFlags.IsComponentsV2,
-      });
+      await interaction.editReply(
+        validateAndFallbackPanelPayload(
+          {
+            components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),
+            flags: MessageFlags.IsComponentsV2,
+          },
+          locale,
+        ),
+      );
     } catch (error) {
       log.warn("Import Now: failed to disable button after import", error as Error);
     }
 
-    // 4c. Confirm privately to the manager who imported.
+    // Confirm privately to the manager who imported.
+    const followUpColor = result.hasNoTriggers || result.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
     await interaction
       .followUp({
         embeds: [
           new EmbedBuilder()
-            .setColor(result.hasNoTriggers || result.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS)
-            .setTitle(localizer(locale, "commands.persona.import.alter_success_title"))
+            .setColor(followUpColor)
+            .setTitle(localizedStatusTitle(locale, "commands.persona.import.alter_success_title", followUpColor))
             .setDescription(
               localizer(locale, "commands.persona.import.alter_success_confirmation", {
                 nickname: result.nickname,
                 trigger_count: result.uniqueTriggerCount,
-              }),
+              }) +
+                (presetData.lorebook_entries !== undefined
+                  ? `\n\n${localizer(locale, "commands.persona.import.lorebook_count", { count: presetData.lorebook_entries.length })}`
+                  : ""),
             ),
         ],
         flags: MessageFlags.Ephemeral,
@@ -271,10 +277,15 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     // Best-effort: grey out the button on timeout. Edits the original reply via
     // the source interaction token, which is still valid given the <15m timeout.
     try {
-      await sourceInteraction.editReply({
-        components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("expired") }),
-        flags: MessageFlags.IsComponentsV2,
-      });
+      await sourceInteraction.editReply(
+        validateAndFallbackPanelPayload(
+          {
+            components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("expired") }),
+            flags: MessageFlags.IsComponentsV2,
+          },
+          locale,
+        ),
+      );
     } catch (error) {
       log.warn("Import Now: failed to disable button after collector end", error as Error);
     }

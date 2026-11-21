@@ -45,6 +45,27 @@ export function buildThoughtLogPayload(
   };
 }
 
+export function mergeThoughtLogPayloads(
+  previous: ThoughtLogPayload | undefined,
+  next: ThoughtLogPayload | undefined,
+): ThoughtLogPayload | undefined {
+  if (!previous) return next;
+  if (!next) return previous;
+
+  const reasoning = (payload: ThoughtLogPayload) =>
+    payload.iterations ?? (payload.summary || payload.raw ? [{ summary: payload.summary, raw: payload.raw }] : []);
+  const iterations = [...reasoning(previous), ...reasoning(next)];
+  return {
+    summary: iterations.length === 1 ? iterations[0]?.summary : undefined,
+    raw: iterations.length === 1 ? iterations[0]?.raw : undefined,
+    iterations: iterations.length > 1 ? iterations : undefined,
+    fetchedContent: next.fetchedContent ?? previous.fetchedContent,
+    firstReplyUrl: previous.firstReplyUrl ?? next.firstReplyUrl,
+    generationDurationMs: next.generationDurationMs ?? previous.generationDurationMs,
+    servingProvider: next.servingProvider ?? previous.servingProvider,
+  };
+}
+
 export function wasEmptyStreamResponse(result: StreamResult & { messageSentCount?: number }): boolean {
   if ("messageSentCount" in result && typeof result.messageSentCount === "number") {
     return result.messageSentCount === 0;

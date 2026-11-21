@@ -2,12 +2,12 @@ import type { APIAttachment } from "discord.js";
 import { safeDownload } from "@/utils/security/safeDownload";
 
 const UTF8_BOM = "\uFEFF";
-export const BATCH_UPLOAD_MAX_SIZE_MB = 1;
+const BATCH_UPLOAD_MAX_SIZE_MB = 1;
 
 const SAMPLE_USER_PREFIX = /^(?:\{user\}|\{\{user\}\})\s*:\s*(.+)$/i;
 const SAMPLE_BOT_PREFIX = /^(?:\{bot\}|\{\{char\}\})\s*:?\s*(.+)$/i;
 
-export type TxtUploadReadError = "invalid_format" | "file_too_large" | "download_failed";
+type TxtUploadReadError = "invalid_format" | "file_too_large" | "download_failed";
 
 export interface TxtUploadReadResult {
   isValid: boolean;
@@ -25,7 +25,7 @@ export interface SampleDialoguePair {
   botInput: string;
 }
 
-export interface SampleDialogueParseError {
+interface SampleDialogueParseError {
   code: "odd_line_count" | "invalid_user_prefix" | "invalid_bot_prefix";
   lineNumber: number;
 }

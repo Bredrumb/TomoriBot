@@ -1,0 +1,108 @@
+---
+// Override of Starlight's Pagination (the "Previous"/"Next" footer pager).
+//
+// Why: category landing READMEs use `sidebar.label: "Overview"` so the sidebar
+// isn't redundant with the group header. Starlight's pager, however, reuses that
+// same sidebar label — so navigating past a hub shows a generic "Overview" as the
+// prev/next title. Here we resolve each pager link back to the target page's real
+// frontmatter `title` via an href→title map, keeping meaningful footer navigation.
+//
+// Safety: if a link's href isn't found in the map (unexpected slug shape), we fall
+// back to the original sidebar label, so this can never render worse than default.
+import { Icon } from "@astrojs/starlight/components";
+import { getCollection } from "astro:content";
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const isRtl = dir === "rtl";
+
+// 1. Build a lookup from each docs page's canonical href to its frontmatter title.
+//    Mirror Starlight's slug rules: strip the extension, collapse a trailing
+//    `README`/`index` segment to its folder, then wrap in leading/trailing slashes.
+const docs = await getCollection("docs");
+const titleByHref = new Map<string, string>();
+for (const entry of docs) {
+  const slug = entry.id
+    .replace(/\.mdx?$/i, "")
+    .replace(/(^|\/)(readme|index)$/i, "$1")
+    .replace(/\/$/, "");
+  titleByHref.set(slug ? `/${slug}/` : "/", entry.data.title);
+}
+
+// 2. Swap each pager link's label for the resolved title (fallback: sidebar label).
+const relabel = (link: typeof pagination.prev) =>
+  link ? { ...link, label: titleByHref.get(link.href) ?? link.label } : link;
+const prev = relabel(pagination.prev);
+const next = relabel(pagination.next);
+---
+
+<div class="pagination-links print:hidden" dir={dir}>
+  {
+    prev && (
+      <a href={prev.href} rel="prev">
+        <Icon name={isRtl ? "right-arrow" : "left-arrow"} size="1.5rem" />
+        <span>
+          {Astro.locals.t("page.previousLink")}
+          <br />
+          <span class="link-title">{prev.label}</span>
+        </span>
+      </a>
+    )
+  }
+  {
+    next && (
+      <a href={next.href} rel="next">
+        <Icon name={isRtl ? "left-arrow" : "right-arrow"} size="1.5rem" />
+        <span>
+          {Astro.locals.t("page.nextLink")}
+          <br />
+          <span class="link-title">{next.label}</span>
+        </span>
+      </a>
+    )
+  }
+</div>
+
+<style>
+  @layer starlight.core {
+    .pagination-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+      gap: 1rem;
+    }
+
+    a {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.5rem;
+      width: 100%;
+      flex-basis: calc(50% - 0.5rem);
+      flex-grow: 1;
+      border: 1px solid var(--sl-color-gray-5);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      text-decoration: none;
+      color: var(--sl-color-gray-2);
+      box-shadow: var(--sl-shadow-md);
+      overflow-wrap: anywhere;
+    }
+    [rel="next"] {
+      justify-content: end;
+      text-align: end;
+      flex-direction: row-reverse;
+    }
+    a:hover {
+      border-color: var(--sl-color-gray-2);
+    }
+
+    .link-title {
+      color: var(--sl-color-white);
+      font-size: var(--sl-text-2xl);
+      line-height: var(--sl-line-height-headings);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+</style>

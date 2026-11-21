@@ -1,0 +1,131 @@
+---
+title: "Chatterbox TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Nhân bản giọng nói tiếng Anh kèm các thẻ cảm xúc bằng máy chủ text-to-speech cục bộ [Chatterbox](https://github.com/resemble-ai/chatterbox).
+
+Chatterbox chạy cục bộ qua `servers/tts/chatterbox/server.py`. Máy chủ mặc định dùng model Chatterbox-Turbo nhanh (350M tham số) với các thẻ sự kiện cảm xúc nội tuyến như `[laugh]` và `[sigh]`. Bạn cũng có thể cấu hình model nhẹ Chatterbox-Nano (110M tham số) cho máy dùng CPU hoặc model tiêu chuẩn 0.5B để tinh chỉnh classifier-free guidance (`cfg_weight`) và độ biểu cảm (`exaggeration`). Wrapper này không nạp Chatterbox Multilingual V3.
+
+## Thiết lập
+
+Chạy các lệnh sau từ thư mục gốc của kho lưu trữ TomoriBot, tức thư mục nơi bạn đã clone TomoriBot (`numpy` phải được cài đặt trước `requirements.txt` vì `pkuseg` import nó trong quá trình build):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\chatterbox\.venv
+servers\tts\chatterbox\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install numpy
+pip install -r servers\tts\chatterbox\requirements.txt
+python servers\tts\chatterbox\server.py
+```
+
+Tự động dùng CUDA khi driver NVIDIA và PyTorch CUDA khả dụng, ngược lại dùng CPU.
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+Tự động dùng CUDA khi driver NVIDIA và PyTorch CUDA khả dụng, ngược lại dùng CPU.
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+python3 -m venv servers/tts/chatterbox/.venv
+source servers/tts/chatterbox/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install numpy
+python -m pip install -r servers/tts/chatterbox/requirements.txt
+python servers/tts/chatterbox/server.py
+```
+
+Python 3.11 (có cài sẵn Xcode Command Line Tools để build `pkuseg` nếu không có wheel nhị phân phù hợp) hoạt động ổn định nhất trên Mac. Vì `--extra-index-url https://download.pytorch.org/whl/cu124` trong `requirements.txt` không có bản dựng cho macOS, `pip` sẽ dùng các wheel PyPI tiêu chuẩn. Wrapper đi kèm chọn `cpu` khi không có CUDA (các đường dẫn `torch.load` phía upstream có giả định giải tuần tự CUDA trên MPS, nên CPU an toàn hơn và Chatterbox-Nano bên dưới giúp tăng tốc trên CPU).
+
+</TabItem>
+</Tabs>
+
+Giữ cửa sổ terminal đó mở trong khi TomoriBot đang sử dụng Chatterbox. URL endpoint mặc định là `http://127.0.0.1:8011`; đặt `CHATTERBOX_PORT` để dùng cổng khác.
+
+### Tùy chọn: dùng Chatterbox-Nano
+
+Nano cần một bản dựng Chatterbox có tùy chọn nạp `nano=True`. Sau khi hoàn tất thiết lập thông thường ở trên, hãy cài đặt bản sửa đổi upstream đã ghim trong cùng môi trường ảo đó. Mã hash commit cố định phiên bản mã nguồn tương thích; đây không phải bảo đảm bảo mật. Lệnh này yêu cầu `git` và giữ nguyên các dependency runtime đã cài trước đó:
+
+```sh
+python -m pip install --no-deps --force-reinstall "git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
+```
+
+Sau đó đặt `CHATTERBOX_FAST_MODEL=nano` trước khi khởi động máy chủ (để trống nếu dùng Turbo):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$env:CHATTERBOX_FAST_MODEL = "nano"
+python servers\tts\chatterbox\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py
+```
+
+</TabItem>
+</Tabs>
+
+Phản hồi từ `/health` sẽ trả về `fast_model` để bạn xác nhận lựa chọn đang nạp. Nano và Turbo dùng chung định dạng yêu cầu nhân bản và các thẻ sự kiện được hỗ trợ. Cả hai chỉ hỗ trợ tiếng Anh.
+
+Nút bật/tắt model nhanh trong `/config` phải luôn được bật để dùng Nano hoặc Turbo. Tắt tùy chọn đó sẽ chọn model Chatterbox 0.5B tiêu chuẩn để tinh chỉnh `cfg_weight` và `exaggeration`.
+
+### Chatterbox tiêu chuẩn
+
+Để dùng model tiêu chuẩn, hãy tắt `Model nhanh Chatterbox` trong `/config` > `Model` > `Tham số & Giọng đọc TTS`. Bản tiêu chuẩn hỗ trợ tinh chỉnh `cfg_weight` và `exaggeration`, nhưng không hỗ trợ thẻ sự kiện trong ngoặc vuông.
+
+## Đăng ký trong TomoriBot
+
+Hãy đưa từ `Chatterbox` vào nhãn endpoint hoặc tên model. TomoriBot chỉ nhận diện endpoint Chatterbox dựa trên tên đó (hoặc URL endpoint có chứa nó), vì vậy danh sách thẻ hợp lệ của Turbo, bước lọc thẻ ở bản tiêu chuẩn và các tùy chọn Chatterbox trong `/generate voice-message` chỉ áp dụng khi có tên này.
+
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và dùng độ tương thích API giọng nói:
+
+- `Độ tương thích API`: `tts-clone`
+- `endpoint_url`: `http://127.0.0.1:8011`
+
+Sau khi lưu kết nối, chọn nó và chọn `+ Thêm model Giọng nói mới` từ dropdown model. Chọn `Sao chép giọng đọc` cho `Chế độ nguồn giọng đọc` và `Thẻ trong ngoặc vuông` cho `Kiểu định dạng kịch bản` để các thẻ diễn đạt được giữ nguyên khi gửi.
+
+Dùng `/providers` để đăng ký endpoint và thiết lập model. Sau đó mở `/config` > `Model` > `Chuyển đổi model` để chọn và kích hoạt endpoint đã đăng ký.
+
+## Thiết lập giọng nói persona
+
+1. Chuẩn bị một đoạn giọng nói sạch dài khoảng 10 giây chỉ có một người nói và không có nhạc nền.
+2. Mở `/config`, vào `Model` > `Tham số & Giọng đọc TTS` và tải đoạn âm thanh lên.
+3. Mở `/config`, vào `Persona` > `Giọng nói`, sau đó chọn persona và mẫu giọng nói đó.
+
+Chatterbox cần hơn 5 giây âm thanh. Hãy nhắm tới khoảng 10 giây; model chỉ sử dụng một phần giới hạn của các clip dài hơn để làm điều kiện tham chiếu.
+
+## Tinh chỉnh tùy chọn
+
+Trong `/config` > `Model` > `Tham số & Giọng đọc TTS`, điều chỉnh `cfg_weight` và `exaggeration` cho model tiêu chuẩn. Cả hai mặc định là `0.5`; giá trị cao hơn lần lượt giúp bám sát giọng tham chiếu hơn và tăng mức độ biểu cảm.
+
+Các thẻ sự kiện được Turbo/Nano hỗ trợ là `[clear throat]`, `[sigh]`, `[shush]`, `[cough]`, `[groan]`, `[sniff]`, `[gasp]`, `[chuckle]` và `[laugh]`. Các từ mô tả không được hỗ trợ như `[excited]`, `[whisper]` hoặc `[smiles]` sẽ bị lược bỏ thay vì gửi sang TTS.

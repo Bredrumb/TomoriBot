@@ -1,0 +1,148 @@
+---
+title: "06.1: Build Context"
+aiGenerated: true
+---
+
+The build-context stage constructs the `ChatTurnContext` closure for a persona turn. It fetches and
+simplifies recent message history, translates Discord message IDs to compact prompt identifiers,
+resolves participant metadata, and delegates prompt assembly to the context-build pipeline.
+
+## Flow and ownership
+
+The stage is coordinated by `buildChatTurnContext()` across two modules:
+
+1. **Intent wrapper** (`src/utils/chat/contextPipelineIntent.ts`): checks whether autonomous short-term
+   memory (STM) maintenance is due via `isShortTermMemoryMaintenanceDue()`. When Deliberate Tool Mode
+   is active and maintenance is due, it temporarily admits `update_short_term_memory` into the tool
+   allowlist so memory updates run without requiring user prompt keywords.
+2. **Base builder** (`src/utils/chat/contextPipeline.ts`): coordinates history retrieval, message simplification,
+   participant resolution, and prompt synthesis.
+
+```mermaid
+flowchart TD
+  turn["ChatTurn"] --> intent["contextPipelineIntent<br/>checks autonomous STM maintenance"]
+  intent --> build["contextPipeline.buildChatTurnContext()"]
+  build --> hist["readChannelHistory()<br/>fetches or reuses busy channel's history window"]
+  hist --> simp["buildSimplifiedHistory()<br/>builds MessageIdMap, collapses same-author runs,<br/>extracts embed/CV2 notices, filters privacy"]
+  simp --> part["prepareParticipantContext()<br/>resolves visible authors, aliases, personas"]
+  part --> ctx["buildContext() (context-build pipeline)<br/>assembles StructuredContextItem prompt items"]
+  ctx --> tail["appendTailDirectives()<br/>appends stop, reasoning, and queued directives"]
+  tail --> prefill["resolveAssistantPrefill()<br/>stores TurnPrefill on context closure"]
+```
+
+### History fetching and simplification
+
+- **Message retrieval**: the first turn fetches up to `message_fetch_limit` messages from Discord.
+  Within the same busy stretch, later personas and queued replays merge the previous window with
+  cached messages newer than its oldest entry and confirmed deliveries. Cached instances take
+  precedence; deleted IDs are removed, then messages sort by snowflake and trim to the turn's limit.
+  Delivery recording retains webhook messages before their gateway echoes arrive.
+  A delivery without a full message object drops the window so the next turn reads it from Discord.
+- **History freshness**: update, delete, bulk-delete, and raw reaction events record changed IDs on
+  the lock entry. Changes to uncached window messages, an increased limit, a cache with a gap,
+  or a deletion requiring older history take the REST path. A change arriving during a REST read
+  forces another read because discord.js can overwrite a cached edit with the response. Signal
+  overflow drops the window. A cleared cache or one whose oldest entry is newer than the previous
+  window's newest message requires REST even below capacity, because deletion or sweeping can
+  shrink a cache after earlier messages were evicted. Shard disconnects and reconnects drop all
+  windows; disconnected shards disable reuse. DM turns use REST unless the client subscribes to DM reaction events. The idle channel
+  keeps no window because the message sweeper can evict cache entries.
+- **Anchored selection**: after queued-trigger add-back, proxy filtering, and reset/compact-refresh
+  slicing, `selectAnchoredHistory()` in `historyWindow.ts` retains a start ID until the window would
+  exceed the normalized message limit. It advances by `historyWindowStride(limit)`: 30% rounded down
+  to an even number (24 at 80). With enough history, selection holds between `limit - stride` and
+  `limit` Discord messages before simplification. Resets take precedence; a required queued trigger
+  remains included. ID-only anchors survive idle release for five minutes; gateway reconnects,
+  boundary deletions, changed limits, and unavailable starts can force a new anchor.
+- **Budget truncation**: `truncateDialogueHistory()` removes whole stride batches of oldest exchanges
+  when over budget, preserving samples, the newest user request, tail-slot facts, and reserved-tail
+  accounting. It reapplies the registry slot, saved STM depth and cacheable-prefix boundary against
+  surviving history. Inspection reads the same channel anchor without changing its state, and both
+  truncation paths receive the configured limit.
+- **History auxiliary reads**: proxy identities use the unfiltered history; sprite records, minimal
+  notice bodies, and agendas use visible messages after blacklist and block filtering. These reads
+  run concurrently before simplification.
+- **Reply targets**: missing same-channel targets are deduplicated and fetched with at most four
+  concurrent REST calls before simplification. Failed targets omit their annotations without retrying
+  during that build. Simplification and compact ID registration remain in message order.
+- **Message ID translation**: `MessageIdMap` maps 64-bit Discord snowflake IDs to compact sequential
+  identifiers (`ref_1`, `ref_2`). This reduces prompt token usage and provides stable references for
+  tools that target messages.
+- **Same-author merging**: consecutive pure-text messages from the same author collapse into a single
+  entry while preserving individual timestamps and IDs for metadata tools. Media-bearing messages,
+  including messages with file attachments, remain distinct to keep media attachments unambiguous.
+- **File attachments**: text-readable files are recorded as `documentAttachments` on the entry. A reply
+  carries its target's files the same way it carries the target's images. The `read_file` hint is rendered
+  later, once the turn's tool list is known (see
+  [Dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)).
+- **Thread starter media**: references to parent-channel messages are fetched from the referenced
+  channel, including forwarded snapshots; image references use the starter's ID so tools can retrieve
+  them from inside the thread.
+- **Privacy and blocks**: messages from full-privacy users and blocked authors are excluded.
+- **System notice hydration**: extracts system notices from Discord embeds and Components V2 containers,
+  restoring the full text of minimal-verbosity cards via `resolveMinimalNoticeBodies()`.
+
+### Deliberate Tool Mode admission
+
+Besides keyword triggers, follow-ups, and the autonomous sticker and STM tools, media on the triggering
+message's history entry admits the tool that reads it: a file admits `read_file`, a non-emoji image
+admits `analyze_image`, a GIF also admits `process_gif`, and a YouTube link admits
+`process_youtube_video` (`getAttachmentDeliberateToolIntentResult()`). Only the triggering entry counts,
+so older media never keeps a tool exposed. Each tool's own availability gate still applies.
+`/tool` prompt inspection applies the same rule in `buildSnapshotToolFilter()`.
+
+### Participant resolution and prompt delegation
+
+- **Participant context**: `prepareParticipantContext()` scans visible messages for mentions, aliases,
+  and persona triggers. Results are cached in a request-scoped map (`participantRequestScopes`) across
+  co-responding persona turns under the same channel lock. The same scope shares member-fetch promises,
+  keyed by guild and user, across history naming, participant hydration, presence, and mention resolution.
+  Failed member fetches remain shared for that invocation; a new invocation can retry.
+- **Hydration**: user rows, blacklist status, and privacy use the user cache. Both hydration phases run
+  at most four seeds at once and assemble profiles and proxy namespace notes in seed order. Registration
+  invalidates a cached missing user after the write succeeds. Cache failures use the existing restrictive
+  blacklist and privacy defaults.
+- **Mention names**: each native build memoizes user-name promises by guild and user. Persona builds
+  share member fetches but resolve mention names independently because personalization can differ.
+  Callers outside native assembly can omit the memo and resolve names locally.
+- **Timing**: `context_built.participantMs` and the latency metric's `participant_ms` measure participant
+  preparation; hydration remains inside the native-build duration. The
+  [turn latency metric](/architecture/pipelines/chat/#turn-latency-metric) splits preparation into
+  candidate reads, concurrent member resolution, proxy-identity reads, and discovery-plan composition,
+  with request-cache reuse and lookup counts.
+- **Prompt construction**: delegates to `buildContext()` in `src/utils/text/contextBuilder.ts`.
+  The [Context-Build Pipeline](/architecture/pipelines/context-build/) owns persona system prompts,
+  retrieved memories, and RAG document assembly.
+- **Tail directives**: applies registry positional inserts, including tail-slot blocks, then appends
+  prompt directives in prioritized order, including emoji usage penalties,
+  reasoning formatting instructions, queued reply guidance, and uncensor rules.
+- **Prefill resolution**: expanded prefill text is stored on `context.assistantPrefill` rather than
+  committed directly to `contextItems`, allowing individual model attempts to determine how the prefill
+  is formatted.
+
+### Streaming context flags
+
+The stage initializes per-turn flags on `StreamingContext`:
+
+- `replyNoticeState`: initialized to `{ attempted: false, sent: false }` for queued turns. This allows
+  subsequent delivery stages to post a "Replying to..." notice before sending alter or sprite webhook
+  messages that cannot use native Discord replies.
+- `disableRecentMessageReplyTool`: set to `true` on queued turns. The active stream already delivers the
+  reply text, so suppressing tool-driven replies avoids duplicate delivery paths.
+
+## Constraints and rationale
+
+- **Stable compact references**: translating raw snowflakes into sequential reference IDs prevents
+  token inflation and prevents models from hallucinating 19-digit Discord snowflake numbers.
+- **Delegated prompt ownership**: chat coordination confines itself to channel history and delivery
+  flags, delegating dialogue assembly and memory retrieval to the context-build pipeline.
+- **Tool suppression on queued replies**: blocking the reply tool on queued turns prevents the bot
+  from executing an autonomous tool reply that conflicts with its streamed text.
+
+## Source pointers
+
+- `src/utils/chat/contextPipelineIntent.ts`: autonomous STM intent preflight.
+- `src/utils/chat/contextPipeline.ts`: `buildChatTurnContext()` implementation.
+- `src/utils/chat/historyWindow.ts`: bounded history reuse and gateway change signals.
+- `src/utils/text/contextBuilder.ts`: `buildContext()` entry point to the context-build pipeline.
+- `src/utils/text/messageIdMap.ts`: Discord snowflake to compact ID translation.

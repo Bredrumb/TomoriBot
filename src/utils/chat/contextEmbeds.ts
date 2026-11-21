@@ -2,11 +2,13 @@ import type { Embed } from "discord.js";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import {
   checkTargetEmbedTitle,
+  checkTargetEmbed,
   formatSystemProducedEmbedHint,
   processLinkEmbed,
 } from "@/utils/discord/embedClassifier";
+import { extractNoticeTextFromComponents, hasMediaGallery } from "@/utils/discord/componentNoticeReader";
 import { ColorCode } from "@/utils/misc/logger";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { classifyProtocolEmbed, isMinimalTitleKind, matchesProtocolTemplateKey } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { truncateForSystemContext } from "@/utils/chat/contextDirectives";
 
@@ -17,20 +19,37 @@ const ERROR_EMBED_COLOR_DECIMAL = Number.parseInt(ColorCode.ERROR.replace("#", "
 
 export function processEmbedsFromMessage(args: {
   embeds: readonly Embed[];
+  /**
+   * The message's Components V2 tree. Required so system notices sent as CV2
+   * containers (memory-learning, scheduled-task) stay visible to the LLM , so
+   * those messages have an empty `embeds` array, so the embed loop alone would
+   * drop them entirely and Tomori would re-run tools she already ran.
+   */
+  components?: readonly unknown[];
+  /** Body restored from `resolveMinimalNoticeBodies` for a Minimal notice that rendered its title alone. */
+  minimalNoticeBody?: string;
   content: string;
+  completionContent?: string;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   isTomoriAuthoredMessage: boolean;
   selfDebugEnabled: boolean;
   tomoriNickname: string | null | undefined;
-}): { content: string; processedSystemEmbed: boolean } {
+}): { content: string; completionContent: string; processedSystemEmbed: boolean } {
   let content = args.content;
+  const completionSegments = [args.completionContent ?? args.content];
   let processedSystemEmbed = false;
 
   for (const embed of args.embeds) {
-    const embedCheck = checkTargetEmbedTitle(embed.title);
+    if (classifyProtocolEmbed(embed) === "unshared_dice_roll") continue;
+    const embedCheck = checkTargetEmbed(embed);
     if (embedCheck.isTarget && embed.description) {
-      const embedContent = formatTargetEmbedForContext(embed, embedCheck.type, args.tomoriNickname);
+      const embedContent = formatTargetEmbedForContext(
+        { title: embed.title, description: embed.description },
+        embedCheck.type,
+        args.tomoriNickname,
+      );
       content = content ? `${content}\n${embedContent}` : embedContent;
+      completionSegments.push(formatTargetEmbedForCompletion(embed.description, embedCheck.type));
       processedSystemEmbed = true;
       continue;
     }
@@ -61,11 +80,67 @@ export function processEmbedsFromMessage(args: {
     }
   }
 
-  return { content, processedSystemEmbed };
+  // Components V2 pass: a CV2 notice carries no embeds at all, so its text has
+  // to be reconstructed from the component tree before it can be classified.
+  // This runs after the embed loop and is mutually exclusive with it, because
+  // Discord rejects messages that mix `embeds` with the IsComponentsV2 flag.
+  const notice = extractNoticeTextFromComponents(args.components);
+  if (args.isTomoriAuthoredMessage && !notice?.title && (hasMediaGallery(args.components) || args.minimalNoticeBody)) {
+    const footer = notice?.footer ?? "";
+    const hasVisibleSource = [args.content, footer].some((text) =>
+      text.split("\n").some((line) => matchesProtocolTemplateKey("tools.media.generation_source_line", line.trim())),
+    );
+    const caption = [footer, ...(hasVisibleSource ? [] : [args.minimalNoticeBody])].filter(Boolean).join("\n");
+    content = [content, caption].filter(Boolean).join("\n");
+    completionSegments.push(caption);
+  }
+  if (notice?.title) {
+    const noticeCheck = checkTargetEmbedTitle(notice.title);
+    if (noticeCheck.isTarget && (notice.description || isMinimalTitleKind(noticeCheck.type))) {
+      const noticeContent = formatTargetEmbedForContext(
+        { title: notice.title, description: notice.description ?? args.minimalNoticeBody ?? "" },
+        noticeCheck.type,
+        args.tomoriNickname,
+      );
+      content = content ? `${content}\n${noticeContent}` : noticeContent;
+      completionSegments.push(formatTargetEmbedForCompletion(notice.description ?? "", noticeCheck.type));
+      processedSystemEmbed = true;
+    }
+  }
+
+  return { content, completionContent: completionSegments.filter(Boolean).join("\n"), processedSystemEmbed };
 }
 
-function formatTargetEmbedForContext(
-  embed: Embed,
+export function formatTargetEmbedForCompletion(
+  description: string,
+  embedType: ReturnType<typeof checkTargetEmbedTitle>["type"],
+): string {
+  switch (embedType) {
+    case "reward":
+    case "punish":
+      return description ? `_${description}_` : "";
+    case "system_injection":
+    case "scene_directive":
+    case "compact_summary":
+    case "compact_refresh":
+    case "dice_roll":
+      return description;
+    default:
+      return "";
+  }
+}
+
+/**
+ * Formats a classified system notice into the `[System: ...]` form the LLM sees.
+ *
+ * Takes a transport-agnostic {title, description} pair rather than an `Embed`
+ * so real embeds and reconstructed Components V2 notices produce byte-identical
+ * context strings.
+ *
+ * @param tomoriNickname - Used to strip a leading "Nickname:" prefix from the body.
+ */
+export function formatTargetEmbedForContext(
+  source: { title: string | null; description: string },
   embedType: ReturnType<typeof checkTargetEmbedTitle>["type"],
   tomoriNickname: string | null | undefined,
 ): string {
@@ -76,11 +151,13 @@ function formatTargetEmbedForContext(
     embedType === "compact_refresh"
   ) {
     const titleLine =
-      (embedType === "compact_summary" || embedType === "compact_refresh") && embed.title ? `## ${embed.title}\n` : "";
-    return `[System: ${titleLine}${embed.description}]`;
+      (embedType === "compact_summary" || embedType === "compact_refresh") && source.title
+        ? `## ${source.title}\n`
+        : "";
+    return `[System: ${titleLine}${source.description}]`;
   }
 
-  let cleanedDescription = embed.description ?? "";
+  let cleanedDescription = source.description ?? "";
   if (tomoriNickname) {
     const botNamePattern = new RegExp(`^${escapeRegExp(tomoriNickname)}:\\s*`, "i");
     if (botNamePattern.test(cleanedDescription)) {
@@ -88,35 +165,27 @@ function formatTargetEmbedForContext(
     }
   }
 
-  const includeTitleInEmbedContent = embedType === "memory_learning" || embedType === "reminder_set";
-  const titleLine = includeTitleInEmbedContent && embed.title ? `${embed.title}\n` : "";
-  const embedBody = `${titleLine}${cleanedDescription}`;
-  return embedType === "memory_learning" || embedType === "reward" || embedType === "punish"
+  // Titles of action-record notices carry the target and the action itself, so
+  // the body alone would not say who was changed; a tag lookup's title names where its tags came from.
+  const titledTypes = ["memory_learning", "reminder_set", "user_info_update", "user_moderation", "danbooru_tags"];
+  const titleLine = titledTypes.includes(embedType ?? "") && source.title ? source.title : "";
+  const embedBody = [titleLine, cleanedDescription].filter((part) => part.length > 0).join("\n");
+  const inlineSystemTypes = [
+    "memory_learning",
+    "reward",
+    "punish",
+    "user_info_update",
+    "user_moderation",
+    "danbooru_tags",
+    "dice_roll",
+  ];
+  return inlineSystemTypes.includes(embedType ?? "")
     ? `[System: ${embedBody}]`
     : formatSystemProducedEmbedHint(embedBody);
 }
 
-function checkSelfDebugDiagnosticEmbedTitle(embedTitle: string | null): boolean {
-  if (!embedTitle) return false;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    const diagnosticTitles = [
-      localizer(supportedLocale, "genai.fallback_used_title"),
-      localizer(supportedLocale, "genai.error_stream_timeout_title"),
-      localizer(supportedLocale, "genai.empty_response_title"),
-      localizer(supportedLocale, "genai.max_iterations_title"),
-      localizer(supportedLocale, "genai.no_response_title"),
-    ];
-    if (diagnosticTitles.includes(embedTitle)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function shouldIncludeSelfDebugEmbed(embed: Embed): boolean {
-  return embed.color === ERROR_EMBED_COLOR_DECIMAL || checkSelfDebugDiagnosticEmbedTitle(embed.title);
+  return embed.color === ERROR_EMBED_COLOR_DECIMAL || classifyProtocolEmbed(embed) === "diagnostic";
 }
 
 function formatTomoriSelfDebugEmbedAsSystemMessage(embed: Embed): string | null {
@@ -125,7 +194,9 @@ function formatTomoriSelfDebugEmbedAsSystemMessage(embed: Embed): string | null 
   }
 
   const isErrorEmbed = embed.color === ERROR_EMBED_COLOR_DECIMAL;
-  const lines: string[] = [isErrorEmbed ? "Tomori emitted an error embed." : "Tomori emitted a diagnostic embed."];
+  const lines: string[] = [
+    isErrorEmbed ? "The system emitted an error embed." : "The system emitted a diagnostic embed.",
+  ];
 
   if (embed.title?.trim()) {
     lines.push(`Title: ${truncateForSystemContext(embed.title, 160)}`);

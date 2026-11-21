@@ -8,11 +8,14 @@ import { YOUTUBE_URL_PATTERNS } from "@/utils/text/youTubeUrlCleaner";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { formatInlineSystemContent } from "@/utils/chat/contextAnnotations";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
+import { resolveForwardChain } from "@/utils/discord/forwardChain";
+import { stickerImage } from "@/utils/discord/stickerImage";
 
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",
   "video/mov",
+  "video/quicktime",
   "video/avi",
   "video/x-flv",
   "video/mpg",
@@ -83,7 +86,7 @@ function inferMimeTypeFromFilename(filename: string | null | undefined): string 
   if (lower.endsWith(".heif")) return "image/heif";
   if (lower.endsWith(".mp4")) return "video/mp4";
   if (lower.endsWith(".webm")) return "video/webm";
-  if (lower.endsWith(".mov")) return "video/mov";
+  if (lower.endsWith(".mov")) return "video/quicktime";
   return null;
 }
 
@@ -311,11 +314,28 @@ export function appendComponentMediaFromMessage(
   return { imageCount, videoCount };
 }
 
-export function formatAttachmentSystemHint(filename: string, messageId: string): string {
-  return `[System: A file named \`${filename}\` is attached (message ID: ${messageId}). Use \`read_file\` with this message ID to read its contents, only if needed.]`;
+/** Anything that is not image, video, or audio media falls to `read_file`, which rejects what it cannot parse. */
+function isDocumentAttachment(attachment: Attachment): boolean {
+  const effectiveContentType = getEffectiveAttachmentContentType(attachment);
+  return (
+    !isSupportedImageAttachmentContentType(effectiveContentType) &&
+    !isSupportedVideoAttachmentContentType(effectiveContentType) &&
+    !isAudioAttachment(attachment)
+  );
 }
 
-export function formatAudioAttachmentHint(filename: string): string {
+export function appendDocumentAttachmentsFromMessage(
+  message: Pick<Message, "attachments">,
+  documentAttachments: NonNullable<SimplifiedMessageForContext["documentAttachments"]>,
+  sourceMessageId?: string,
+): void {
+  for (const attachment of message.attachments.values()) {
+    if (!isDocumentAttachment(attachment)) continue;
+    documentAttachments.push({ filename: attachment.name ?? "file", ...(sourceMessageId && { sourceMessageId }) });
+  }
+}
+
+function formatAudioAttachmentHint(filename: string): string {
   return `[System: An audio file named \`${filename}\` was sent here but was not transcribed.]`;
 }
 
@@ -325,20 +345,15 @@ export function appendStickersFromMessage(
 ): number {
   let stickerCount = 0;
   for (const sticker of message.stickers.values()) {
-    const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
-    imageAttachments.push({
-      url: stickerUrl,
-      proxyUrl: stickerUrl,
-      mimeType: "image/png",
-      filename: `${sticker.name}.png`,
-    });
+    const image = stickerImage(sticker.client.rest, sticker);
+    if (!image) continue;
+    imageAttachments.push({ ...image, proxyUrl: image.url });
     stickerCount++;
   }
   return stickerCount;
 }
 
 type ForwardedMessageSnapshot = {
-  id?: string;
   channelId?: string | null;
   content?: string | null;
   attachments: Message["attachments"];
@@ -348,9 +363,18 @@ type ForwardedMessageSnapshot = {
   member: Message["member"] | null;
 };
 
-export function buildForwardContext(args: {
+/**
+ * Render a forwarded message into context text and harvest its media.
+ *
+ * Resolves nested forwards first (see {@link resolveForwardChain}), so a forward of a
+ * forward still yields the original's text and attachments instead of an empty block.
+ *
+ * @param args - Wrapper message, in-progress context content, and media collectors
+ */
+export async function buildForwardContext(args: {
   message: Message;
   content: string;
+  completionContent?: string;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   videoAttachments: SimplifiedMessageForContext["videoAttachments"];
   messageIdMap: MessageIdMap;
@@ -358,19 +382,37 @@ export function buildForwardContext(args: {
   clientUserId: string | undefined;
   tomoriNickname: string | null | undefined;
   selfDebugEnabled: boolean;
-}): {
+}): Promise<{
   content: string;
+  completionContent: string;
   mediaSourceMessageIds: string[];
   remoteMediaSourceKind?: SimplifiedMessageForContext["remoteMediaSourceKind"];
-} {
+}> {
   if (args.message.reference?.type !== MessageReferenceType.Forward || args.message.messageSnapshots.size === 0) {
-    return { content: args.content, mediaSourceMessageIds: [] };
+    return {
+      content: args.content,
+      completionContent: args.completionContent ?? args.content,
+      mediaSourceMessageIds: [],
+    };
+  }
+
+  // Chase forwards-of-forwards: Discord flattens nested snapshots to nothing, so an
+  // unresolved chain must say so explicitly. Staying silent leaves the model asserting
+  // a forward it cannot see, which invites it to invent a media ID.
+  const chain = await resolveForwardChain(args.message);
+  if (chain.unresolved) {
+    return {
+      content: `[System: ${args.forwarderName} forwarded a message that was itself a forward. Discord does not include the original message's contents in a nested forward, so its text and any attached media cannot be seen.]${args.content ? `\n${args.content}` : ""}`,
+      completionContent: args.completionContent ?? args.content,
+      mediaSourceMessageIds: [],
+    };
   }
 
   const blocks: string[] = [];
+  const completionBlocks: string[] = [];
   const mediaSourceMessageIds: string[] = [];
   let remoteMediaSourceKind: SimplifiedMessageForContext["remoteMediaSourceKind"];
-  for (const rawSnapshot of args.message.messageSnapshots.values()) {
+  for (const rawSnapshot of chain.snapshots) {
     const snapshot = rawSnapshot as ForwardedMessageSnapshot;
     const preForwardImageCount = args.imageAttachments.length;
     const preForwardVideoCount = args.videoAttachments.length;
@@ -395,6 +437,7 @@ export function buildForwardContext(args: {
     const isForwardedTomoriAuthoredMessage = snapshot.author?.id === args.clientUserId;
     const embedResult = processEmbedsFromMessage({
       embeds: snapshot.embeds,
+      components: snapshot.components,
       content: forwardedTextSegments.join("\n"),
       imageAttachments: args.imageAttachments,
       isTomoriAuthoredMessage: isForwardedTomoriAuthoredMessage,
@@ -404,6 +447,7 @@ export function buildForwardContext(args: {
     if (embedResult.content) {
       forwardedTextSegments.splice(0, forwardedTextSegments.length, embedResult.content);
     }
+    completionBlocks.push(embedResult.completionContent);
 
     const imageCount = args.imageAttachments.length - preForwardImageCount;
     const videoCount = args.videoAttachments.length - preForwardVideoCount;
@@ -423,17 +467,21 @@ export function buildForwardContext(args: {
     );
 
     if (args.imageAttachments.length > preForwardImageCount || args.videoAttachments.length > preForwardVideoCount) {
-      const forwardedMessageId = snapshot.id ?? args.message.reference.messageId;
-      if (forwardedMessageId) {
-        mediaSourceMessageIds.push(forwardedMessageId);
-        remoteMediaSourceKind = "forwarded";
-        args.messageIdMap.register(forwardedMessageId, "media");
+      // Register the WRAPPER message id, not the original's: the original message
+      // lives in the source channel, so tools resolving media IDs against the
+      // current channel could never fetch it. The wrapper resolves in-channel and
+      // carries the same media inside its messageSnapshots.
+      if (!mediaSourceMessageIds.includes(args.message.id)) {
+        mediaSourceMessageIds.push(args.message.id);
       }
+      remoteMediaSourceKind = "forwarded";
+      args.messageIdMap.register(args.message.id, "media");
     }
   }
 
   return {
     content: blocks.length > 0 ? `${blocks.join("\n")}${args.content ? `\n${args.content}` : ""}` : args.content,
+    completionContent: [...completionBlocks, args.completionContent ?? args.content].filter(Boolean).join("\n"),
     mediaSourceMessageIds,
     remoteMediaSourceKind,
   };
@@ -443,40 +491,30 @@ export function appendDirectMediaFromMessage(args: {
   message: Message;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   videoAttachments: SimplifiedMessageForContext["videoAttachments"];
-  messageIdMap: MessageIdMap;
+  documentAttachments: NonNullable<SimplifiedMessageForContext["documentAttachments"]>;
   voiceTranscriptChatMode: boolean;
   appendTextHint: (hint: string) => void;
+  appendCompletionText?: (text: string) => void;
 }): void {
   const cachedRenderedTable = getCachedRenderedMarkdownTable(args.message.id);
   if (cachedRenderedTable) {
     args.appendTextHint(`[System: This was sent as a rendered markdown table image.]\n${cachedRenderedTable}`);
+    args.appendCompletionText?.(cachedRenderedTable);
     return;
   }
 
   appendSupportedMediaFromMessage(args.message, args.imageAttachments, args.videoAttachments);
   appendComponentMediaFromMessage(args.message, args.imageAttachments, args.videoAttachments);
+  appendDocumentAttachmentsFromMessage(args.message, args.documentAttachments);
+  if (args.voiceTranscriptChatMode) return;
   for (const attachment of args.message.attachments.values()) {
-    const effectiveContentType = getEffectiveAttachmentContentType(attachment);
-    if (
-      isSupportedImageAttachmentContentType(effectiveContentType) ||
-      isSupportedVideoAttachmentContentType(effectiveContentType)
-    ) {
-      continue;
-    }
-    if (isAudioAttachment(attachment)) {
-      if (args.voiceTranscriptChatMode) {
-        continue;
-      }
-      const cached = getCachedVoiceTranscript(args.message.id);
-      args.appendTextHint(
-        cached?.source === "user_stt"
-          ? `[System: This was sent as a voice message.]\n${cached.transcript}`
-          : formatAudioAttachmentHint(attachment.name ?? "audio"),
-      );
-      continue;
-    }
+    if (!isAudioAttachment(attachment)) continue;
+    const cached = getCachedVoiceTranscript(args.message.id);
+    if (cached?.source === "user_stt") args.appendCompletionText?.(cached.transcript);
     args.appendTextHint(
-      formatAttachmentSystemHint(attachment.name ?? "file", args.messageIdMap.register(args.message.id, "media")),
+      cached?.source === "user_stt"
+        ? `[System: This was sent as a voice message.]\n${cached.transcript}`
+        : formatAudioAttachmentHint(attachment.name ?? "audio"),
     );
   }
 }

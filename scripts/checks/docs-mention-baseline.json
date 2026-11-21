@@ -1,0 +1,41 @@
+{
+  "_notes": "Stale command mentions in documentation that are owed a fix. If a baselined path no longer occurs anywhere, the gate fails and demands its removal.",
+  "exceptions": [
+    {
+      "path": "config params",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "config provider switch",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "context-note",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server autotrigger channels",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server autotrigger threshold",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server avatar",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server dtm",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server thought-logs",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    },
+    {
+      "path": "server trigger add",
+      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
+    }
+  ]
+}

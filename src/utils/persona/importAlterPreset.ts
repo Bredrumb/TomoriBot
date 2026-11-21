@@ -1,3 +1,5 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { lorebookEntryInputSchema, LOREBOOK_ENTRIES_PER_SCOPE_MAX } from "@/modules/lorebooks/db/types";
 /**
  * Shared alter-persona import core.
  *
@@ -15,9 +17,16 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "@/utils/storage/avatarStorage";
-import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { getAllBaseTriggerWords } from "@/utils/text/localizer";
 import { selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
-import type { PresetExportData } from "@/types/preset/presetExport";
+import type { PresetImportMode, PresetExportData } from "@/types/preset/presetExport";
+import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import {
+  DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+  personaAuthoredIdleNudgesSchema,
+  type PersonaAuthoredIdleNudge,
+} from "@/modules/natural-nudges/db/types";
 
 /**
  * Parameters for {@link importAlterPreset}.
@@ -38,6 +47,7 @@ export interface ImportAlterPresetParams {
   identityMode: "preserve" | "fork";
   /** Raw persona image (PNG) used as the alter avatar, or null to inherit the main avatar. */
   avatarImageBuffer: Buffer | null;
+  importMode?: PresetImportMode;
 }
 
 /**
@@ -76,8 +86,6 @@ export type ImportAlterPresetResult =
  * be surfaced as a friendly conflict instead of an unhandled error.
  * Mirrors the private helper in `commands/persona/import.ts`.
  *
- * @param error - Unknown error thrown by a repository insert.
- * @returns True when the error is a unique violation (SQLSTATE 23505).
  */
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -94,13 +102,27 @@ function isUniqueViolation(error: unknown): boolean {
  * All side effects are completed before returning; the caller only renders the
  * outcome.
  *
- * @param params - {@link ImportAlterPresetParams} import inputs.
  * @returns A {@link ImportAlterPresetResult} describing success or the failure reason.
  */
 export async function importAlterPreset(params: ImportAlterPresetParams): Promise<ImportAlterPresetResult> {
-  const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer } = params;
+  const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer, importMode = "card" } = params;
 
-  // 1. Load existing personas and enforce the per-server persona cap.
+  if (
+    presetData.lorebook_entries !== undefined &&
+    !lorebookEntryInputSchema.array().max(LOREBOOK_ENTRIES_PER_SCOPE_MAX).safeParse(presetData.lorebook_entries).success
+  ) {
+    return { ok: false, reason: "config_failed" };
+  }
+
+  let importedIdleNudges: PersonaAuthoredIdleNudge[] | undefined;
+  if (presetData.natural_nudge_idle_nudges !== undefined) {
+    const parsedIdleNudges = personaAuthoredIdleNudgesSchema.safeParse(presetData.natural_nudge_idle_nudges);
+    if (!parsedIdleNudges.success) {
+      return { ok: false, reason: "config_failed" };
+    }
+    importedIdleNudges = parsedIdleNudges.data;
+  }
+
   const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
   const personaLimits = getMemoryLimits();
 
@@ -113,40 +135,39 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     };
   }
 
-  // 2. Reject case-insensitive name collisions early (DB also enforces this).
   const existingNames = allPersonas.map((persona) => normalizePersonaName(persona.persona_nickname));
   const importName = normalizePersonaName(presetData.tomori_nickname);
   if (existingNames.includes(importName)) {
     return { ok: false, reason: "name_conflict", name: presetData.tomori_nickname };
   }
 
-  // 3. Gather every trigger already claimed by existing personas so the new
+  // Gather every trigger already claimed by existing personas so the new
   //    alter never steals an overlapping trigger word. Reserve the base words
   //    ("tomori" etc.) too: they belong to the main persona regardless of locale,
   //    and the loader's single-owner dedup would strip them from an alter anyway.
   const claimedTriggerWords = [
-    ...getBaseTriggerWords("en-US"),
-    ...getBaseTriggerWords("ja"),
+    ...getAllBaseTriggerWords(),
     ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
   ];
 
-  // 4. Filter the incoming triggers to the unique set this alter actually owns.
+  // Filter the incoming triggers to the unique set this alter actually owns.
   //    This is what we store and display for both custom and official-preset
-  //    (pointer) imports — the loader enforces the same ownership at read time.
+  //    (pointer) imports; the loader enforces the same ownership at read time.
   const importTriggers = presetData.trigger_words ?? [];
   const uniqueTriggers = selectUnclaimedTriggerWords(importTriggers, claimedTriggerWords, { lowercase: false });
-  const matchingOfficialPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);
+  const matchingOfficialPreset =
+    importMode === "bundle" ? null : await presetRepository.findMatchingOfficialPresetForImport(presetData);
   const createdAsPointer = matchingOfficialPreset !== null;
   const displayedTriggers = uniqueTriggers;
   const hasNoTriggers = displayedTriggers.length === 0;
 
-  // 5. Alters copy structural config from the main persona, so it must exist.
+  // Alters copy structural config from the main persona, so it must exist.
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
   if (!mainPersona) {
     return { ok: false, reason: "no_main_persona" };
   }
 
-  // 6. Resolve avatar fallbacks: a raw reference for persistence (storage URL or
+  // Resolve avatar fallbacks: a raw reference for persistence (storage URL or
   //    bot avatar) and a public display URL for embeds/thumbnails.
   const fallbackAvatarReference =
     guild?.members.me?.displayAvatarURL({ extension: "png", size: 1024, forceStatic: true }) ??
@@ -159,9 +180,8 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     client.user?.displayAvatarURL({ extension: "png", size: 1024, forceStatic: true }) ??
     null;
 
-  // 7. Insert the alter persona row honoring lineage mode and NovelAI fields.
   const importedLineageId = presetData.persona_lineage_id ?? null;
-  let newAlterRow: { persona_id?: number } | undefined;
+  let newAlterRow: { persona_id?: number; persona_lineage_id?: number | string | bigint } | undefined;
   try {
     newAlterRow = matchingOfficialPreset
       ? ((await personaRepository.createPresetPointerAlterPersona({
@@ -181,16 +201,19 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           sampleDialoguesIn: presetData.sample_dialogues_in,
           sampleDialoguesOut: presetData.sample_dialogues_out,
           personaLineageId: identityMode === "preserve" ? importedLineageId : null,
+          presetLineageId: importMode === "bundle" ? (presetData.preset_lineage_id ?? null) : null,
+          namingConfig: importMode === "bundle" ? (presetData.naming_config ?? EMPTY_PERSONA_NAMING_CONFIG) : undefined,
           physicalAppearanceTags: presetData.physical_appearance_tags ?? [],
-          naiCharRefUrl: presetData.nai_char_ref_url ?? null,
+          charRefUrl: presetData.char_ref_url ?? null,
           naiAttgAuthor: presetData.nai_attg_author ?? null,
           naiAttgTitle: presetData.nai_attg_title ?? null,
           naiAttgTags: presetData.nai_attg_tags ?? null,
           naiAttgGenre: presetData.nai_attg_genre ?? null,
           naiAttgStars: presetData.nai_attg_stars ?? null,
+          isNsfw: presetData.is_nsfw === true,
         })) ?? undefined);
   } catch (error) {
-    // 7a. Surface a duplicate-name race as a friendly conflict; rethrow others.
+    // Surface a duplicate-name race as a friendly conflict; rethrow others.
     if (isUniqueViolation(error)) {
       return { ok: false, reason: "name_conflict", name: presetData.tomori_nickname };
     }
@@ -203,7 +226,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   }
   const newTomoriId = newAlterRow.persona_id;
 
-  // 8. Persist the alter's trigger words + optional persona prompt. Pointer rows
+  // Persist the alter's trigger words + optional persona prompt. Pointer rows
   //    already carry their config from the official preset, so skip them.
   const importedPersonaPrompt = typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null;
   if (!createdAsPointer) {
@@ -215,10 +238,54 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     if (!personaConfigUpdated) {
       return { ok: false, reason: "config_failed" };
     }
+    if (
+      !(await naturalNudgeRepository.savePersonaConfig(newTomoriId, {
+        talkativeness: presetData.natural_nudge_talkativeness ?? DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+        interests: presetData.natural_nudge_interests ?? [],
+      }))
+    ) {
+      return { ok: false, reason: "config_failed" };
+    }
+    if (
+      importedIdleNudges !== undefined &&
+      (await naturalNudgeRepository.replacePersonaIdleNudges(newTomoriId, importedIdleNudges)) !== "success"
+    ) {
+      return { ok: false, reason: "config_failed" };
+    }
   }
 
-  // 9. Persist the avatar: upload the supplied image to storage, or inherit the
-  //    main persona avatar reference when no image was provided.
+  if (
+    !(await personaRepository.setVoiceConfig(
+      newTomoriId,
+      {
+        speech_voice_design_prompt: presetData.speech_voice_design_prompt ?? null,
+        voice_source_priority: presetData.voice_source_priority ?? "design",
+        speech_voice_sample_id: null,
+        speech_voice_id: null,
+        speech_voice_name: null,
+      },
+      { materialize: Boolean(presetData.speech_voice_design_prompt) },
+    ))
+  )
+    return { ok: false, reason: "config_failed" };
+  invalidateTomoriStateCache(serverDiscId);
+
+  if (presetData.lorebook_entries !== undefined) {
+    const lineageId = Number(newAlterRow.persona_lineage_id);
+    if (
+      !Number.isSafeInteger(lineageId) ||
+      (await lorebookRepository.replaceLineageEntries(
+        mainPersona.server_id,
+        lineageId,
+        presetData.lorebook_entries,
+      )) !== "replaced"
+    ) {
+      await personaRepository.removePersona(newTomoriId);
+      invalidateTomoriStateCache(serverDiscId);
+      return { ok: false, reason: "config_failed" };
+    }
+  }
+
   const usedMainAvatarFallback = !avatarImageBuffer && Boolean(fallbackAvatarReference);
   let avatarUrl: string | null;
   if (avatarImageBuffer) {
@@ -241,7 +308,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     log.warn(`Failed to persist imported avatar for alter persona ${newTomoriId}`);
   }
 
-  // 10. Invalidate cache so the next message rebuilds with the new alter persona.
+  // Invalidate cache so the next message rebuilds with the new alter persona.
   invalidateTomoriStateCache(serverDiscId);
 
   log.success(
@@ -266,7 +333,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
  * Mirrors the private helper in `commands/persona/import.ts`.
  *
  * @param name - Raw persona nickname.
- * @returns Trimmed, lowercased nickname.
  */
 function normalizePersonaName(name: string): string {
   return name.trim().toLowerCase();

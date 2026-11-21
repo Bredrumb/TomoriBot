@@ -7,11 +7,12 @@ export const novelaiProviderInfo: ProviderInfo = {
   supportedModels: [],
   requiresApiKey: true,
   supportsStreaming: true,
-  supportsFunctionCalling: true,
+  supportsFunctionCalling: false,
   supportsImages: false,
   supportsVideos: false,
   apiFamily: "novelai",
   featureSupport: {
+    decisions: false,
     imageGeneration: "nai-pipeline",
     videoGeneration: "none",
     embeddings: false,

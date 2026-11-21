@@ -1,23 +1,44 @@
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import type { PersonaPostContext } from "@/utils/discord/webhook/personaPost";
 import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import type { WebhookCreateErrorReason } from "@/utils/discord/webhook/fallback";
 import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { TOMORIBOT_ERROR_FOOTER_KEY } from "@/utils/discord/stream/errorUi";
+import { classifySendFailure, wasSendFailureLogged } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
-import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
+import { createUserImpersonationWebhook } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ProviderError } from "@/types/stream/interfaces";
 
-const WEBHOOK_ERROR_COOLDOWN_MS = parseIntegerEnvFlag(process.env.WEBHOOK_ERROR_COOLDOWN_MS, 600000, 1000);
-const webhookErrorCooldowns = new Map<string, number>();
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (!value) return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(parsed, minimum);
+export function buildChatPersonaPostContext(context: ChatTurnContext): PersonaPostContext {
+  const target = context.responseTarget;
+  return {
+    channel: context.channel as SendableChannel,
+    persona: context.currentPersona,
+    deliveryMode:
+      context.streamingContext.deliveryMode ?? (context.isUserImpersonation ? "user_impersonation" : "persona"),
+    webhook: target?.webhook,
+    impersonatedIdentity: target
+      ? {
+          username: target.personaUsername,
+          avatarUrl: target.personaAvatarUrl,
+          avatarDataUri: target.personaAvatarUrl?.startsWith("data:image/") ? target.personaAvatarUrl : undefined,
+        }
+      : undefined,
+    abortSignal: context.streamingContext.abortSignal,
+    holdResponseText: context.streamingContext.holdResponseText,
+    deliveryReceipts: context.streamingContext.deliveryReceipts,
+    deliveryState: context.streamingContext.deliveryState,
+    locale: context.locale,
+  };
 }
+
+const WEBHOOK_ERROR_COOLDOWN_MS = 10 * 60_000;
+const webhookErrorCooldowns = new Map<string, number>();
 
 function shouldSendWebhookError(channelId: string): boolean {
   const now = Date.now();
@@ -31,7 +52,7 @@ function shouldSendWebhookError(channelId: string): boolean {
   return true;
 }
 
-export async function sendWebhookErrorEmbed(
+async function sendWebhookErrorEmbed(
   channel: BaseGuildTextChannel | AnyThreadChannel,
   locale: string,
   reason: WebhookCreateErrorReason,
@@ -62,6 +83,17 @@ export async function sendWebhookErrorEmbed(
 
 export function createChatResponseSink(context: ChatTurnContext): ChatResponseSink {
   let target: ChatResponseTarget | undefined;
+  let temporaryWebhookReleased = false;
+
+  // Guarded so the guaranteed cleanup path and a normal finalize cannot both issue the delete
+  // and log a spurious 404 warning for the second one.
+  const releaseTemporaryWebhook = async (): Promise<void> => {
+    if (!target?.temporaryWebhook || temporaryWebhookReleased) return;
+    temporaryWebhookReleased = true;
+    await target.temporaryWebhook.delete("User impersonation complete").catch((error: unknown) => {
+      log.warn("Failed to delete temporary user impersonation webhook", error);
+    });
+  };
 
   return {
     async prepare() {
@@ -92,14 +124,13 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
       await emitGenerationError(context, error);
     },
     async finalize(result: GenerationTurnResult) {
-      if (target?.temporaryWebhook) {
-        await target.temporaryWebhook.delete("User impersonation complete").catch((error: unknown) => {
-          log.warn("Failed to delete temporary user impersonation webhook", error);
-        });
-      }
+      await releaseTemporaryWebhook();
       log.info(
         `Chat response finalized for message ${context.message.id} with status ${result.status} and ${result.personaResponses.length} captured response(s).`,
       );
+    },
+    async cleanup() {
+      await releaseTemporaryWebhook();
     },
   };
 }
@@ -138,6 +169,7 @@ async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResp
   const identity = await resolvePersonaWebhookIdentity(currentPersona, guild);
   return {
     webhook: webhookResult.webhook,
+    deliveryMode: "persona",
     personaUsername: identity.username ?? currentPersona.persona_nickname,
     personaAvatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
     webhookTargetChannel: webhookTargetChannel as BaseGuildTextChannel,
@@ -150,25 +182,19 @@ async function createUserImpersonationTarget(
 ): Promise<ChatResponseTarget | undefined> {
   if (!context.impersonatedUserId) return undefined;
 
-  const identity = await resolveImpersonatedIdentity(
+  const { webhook, displayName, avatarUrl } = await createUserImpersonationWebhook(
     context.client,
-    context.guild,
+    webhookTargetChannel,
     context.impersonatedUserId,
-    undefined,
+    "TomoriBot user impersonation",
   );
-  const webhook = await webhookTargetChannel.createWebhook({
-    name: identity.displayName || "User",
-    avatar: identity.avatarUrl || undefined,
-    reason: "TomoriBot user impersonation",
-  });
-
-  cacheUserImpersonationWebhook(webhook.id, context.impersonatedUserId);
   return {
     webhook,
     temporaryWebhook: webhook,
-    personaUsername: identity.displayName || "User",
-    personaAvatarUrl: identity.avatarUrl,
-    prefixStrippingName: identity.displayName || "User",
+    deliveryMode: "user_impersonation",
+    personaUsername: displayName,
+    personaAvatarUrl: avatarUrl,
+    prefixStrippingName: displayName,
     webhookTargetChannel,
   };
 }
@@ -193,7 +219,22 @@ function isProviderError(value: unknown): value is ProviderError {
 }
 
 async function emitGenerationError(context: ChatTurnContext, error: unknown): Promise<void> {
-  log.error(`Generation failed for message ${context.message.id}`, error);
+  if (context.streamingContext?.generationErrorReported) {
+    // The same failed turn reports through the stream result and again from the turn's catch
+    // block. Logging both turns one failure into two `Generation failed` rows for one message id
+    // and sends the user a second error embed.
+    log.warn(`Suppressing repeat generation error report for message ${context.message.id}`, error);
+    return;
+  }
+  if (context.streamingContext) {
+    context.streamingContext.generationErrorReported = true;
+  }
+
+  if (classifySendFailure(error) || wasSendFailureLogged(error)) {
+    log.warn(`Generation failed for message ${context.message.id}`, error);
+  } else {
+    log.error(`Generation failed for message ${context.message.id}`, error);
+  }
   if (context.isUserImpersonation) {
     throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
   }
@@ -209,17 +250,29 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       color: ColorCode.ERROR,
       titleKey: "genai.generic_error_title",
       descriptionKey: "genai.stream.streaming_failed_description",
-      descriptionVars: {
-        error_message: error instanceof Error ? error.message : "Unknown Error",
-      },
-      footerKey: "genai.generic_error_footer",
+      tipKeys: await withProviderOptionCopy(["genai.tips.refresh_context"], {
+        surface: "recovery",
+        managedProvider: context.usageContext?.credentialProvider ?? null,
+        userDiscId: context.userDiscId,
+        serverId: context.tomoriState.server_id,
+        credentialScope:
+          context.usageContext?.credentialScope ??
+          (context.textCredentialSource === "personal"
+            ? "personal"
+            : context.textCredentialSource === "server"
+              ? "server"
+              : undefined),
+      }),
+      footerKey: TOMORIBOT_ERROR_FOOTER_KEY,
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
-  );
+    buildChatPersonaPostContext(context),
+  ).catch((embedError: unknown) => {
+    // Reporting a failure must not itself fail. The two causes worth naming are a channel the
+    // send cannot reach (deleted, or the bot lost access), where the retry this would trigger
+    // reports the same failure again and turns one error into a burst, and the same refusal
+    // the original send already reported.
+    log.warn(`Failed to send the generation error embed for message ${context.message.id}`, embedError);
+  });
 }
 
 export async function handleStopResponse(originalStopMessage: Message, client: Client): Promise<void> {

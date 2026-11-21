@@ -1,4 +1,5 @@
 import { ThinkingLevel, type ThinkingConfig } from "@google/genai";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import {
   DEFAULT_THINKING_LEVEL,
   THINKING_LEVEL_LOCALIZER_KEYS,
@@ -12,23 +13,19 @@ const DEFAULT_HIGH_BUDGET_TOKENS = 8192;
 const GOOGLE_GEMINI_25_PRO_MIN_BUDGET = 128;
 const GOOGLE_GEMINI_25_FLASH_LITE_MIN_BUDGET = 512;
 
-export interface ThinkingLevelSource {
-  thinking_level?: string | null;
-}
-
 export interface AnthropicThinkingRequest {
   thinking?: {
-    type: "adaptive" | "disabled";
+    type: "adaptive" | "disabled" | "between_tools";
   };
   output_config?: {
-    effort: "low" | "medium" | "high";
+    effort: "low" | "medium" | "high" | "xhigh" | "max";
   };
   omitSampling: boolean;
 }
 
 export interface OpenRouterReasoningRequest {
   reasoning?: {
-    effort: "none" | "low" | "medium" | "high";
+    effort: "none" | "low" | "medium" | "high" | "xhigh";
   };
 }
 
@@ -39,26 +36,39 @@ export interface ThinkingModeRequest {
   omitSampling: boolean;
 }
 
+export interface DeepSeekThinkingRequest extends ThinkingModeRequest {
+  reasoning_effort?: "low" | "medium" | "high" | "max";
+}
+
 export interface CustomThinkingRequest {
   /** Ollama-native boolean thinking toggle (on/off only). */
   think?: boolean;
   /** OpenAI-convention effort level (vLLM, other compatible servers). */
-  reasoning_effort?: "none" | "low" | "medium" | "high";
+  reasoning_effort?: "none" | "low" | "medium" | "high" | "xhigh";
 }
 
-function parseBudgetEnv(name: string, fallback: number): number {
-  const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+export interface NvidiaThinkingRequest {
+  chat_template_kwargs?: {
+    enable_thinking: boolean;
+    thinking: boolean;
+  };
+  reasoning_effort?: "low" | "medium" | "high";
 }
+
+type ProviderEffortLevel = "low" | "medium" | "high";
+type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel | "xhigh";
 
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
+    case "minimal":
+      return 1;
     case "low":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_LOW_TOKENS", DEFAULT_LOW_BUDGET_TOKENS);
+      return DEFAULT_LOW_BUDGET_TOKENS;
     case "medium":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_MEDIUM_TOKENS", DEFAULT_MEDIUM_BUDGET_TOKENS);
+      return DEFAULT_MEDIUM_BUDGET_TOKENS;
     case "high":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_HIGH_TOKENS", DEFAULT_HIGH_BUDGET_TOKENS);
+    case "xhigh":
+      return DEFAULT_HIGH_BUDGET_TOKENS;
   }
 }
 
@@ -75,10 +85,6 @@ function isGemini3FamilyModel(model: string): boolean {
   return normalized.startsWith("gemini-3") || normalized.startsWith("gemini-3.1");
 }
 
-function isGeminiFlashModel(model: string): boolean {
-  return normalizeModel(model).includes("flash");
-}
-
 function isGeminiFlashLiteModel(model: string): boolean {
   return normalizeModel(model).includes("flash-lite");
 }
@@ -87,23 +93,54 @@ function isGeminiProModel(model: string): boolean {
   return normalizeModel(model).includes("pro");
 }
 
-function supportsAnthropicAdaptiveThinking(model: string): boolean {
+// Pro models and Gemini 3.7 Flash onward reject MINIMAL with a 400 instead of clamping it, while
+// every Gemini 3 model accepts LOW. An allow-list therefore costs an unlisted release a little extra
+// thinking rather than every request; add a Flash release here once it is confirmed to accept MINIMAL.
+const GEMINI_MINIMAL_THINKING_PREFIXES = [
+  "gemini-3-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
+];
+
+function supportsGeminiMinimalThinking(model: string): boolean {
   const normalized = normalizeModel(model);
-  return (
-    normalized.includes("claude-sonnet-4-6") ||
-    normalized.includes("claude-opus-4-6") ||
-    normalized.includes("claude-opus-4-7") ||
-    normalized.includes("claude-mythos-preview")
-  );
+  return GEMINI_MINIMAL_THINKING_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
-function isDeepSeekReasonerModel(model: string): boolean {
-  return normalizeModel(model) === "deepseek-reasoner";
+interface AnthropicThinkingProfile {
+  /** How `none` turns thinking off; `null` where the model always thinks and `none` falls to low effort. */
+  off: "disabled" | "between_tools" | null;
+  /** The API rejects `top_p` and any `temperature` other than 1 with a 400 even when thinking is off. */
+  samplingLocked: boolean;
+  extraHighEffort: "xhigh" | "max";
 }
 
-function isDeepSeekChatModel(model: string): boolean {
-  return normalizeModel(model) === "deepseek-chat";
+// Each family answers another family's off switch or sampling fields with a 400, so every profile
+// was confirmed against the live API. An unlisted release keeps the pre-adaptive request (no thinking
+// fields, sampling sent); add it here once its accepted fields are confirmed. A longer codename
+// precedes its prefix so `claude-sonnet-5-5` is not read as `claude-sonnet-5`.
+const ANTHROPIC_THINKING_PROFILES: ReadonlyArray<readonly [prefix: string, profile: AnthropicThinkingProfile]> = [
+  ["claude-fable-", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-5-5", { off: null, samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-sonnet-5-5", { off: "between_tools", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-haiku-5-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-sonnet-5", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-8", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-7", { off: "disabled", samplingLocked: true, extraHighEffort: "xhigh" }],
+  ["claude-opus-4-6", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
+  ["claude-sonnet-4-6", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
+  ["claude-mythos-preview", { off: "disabled", samplingLocked: false, extraHighEffort: "max" }],
+];
+
+function resolveAnthropicThinkingProfile(model: string): AnthropicThinkingProfile | undefined {
+  const normalized = normalizeModel(model);
+  return ANTHROPIC_THINKING_PROFILES.find(([prefix]) => normalized.startsWith(prefix))?.[1];
 }
+
+// API names (after `toDeepseekApiModelName`) that accept the `thinking` switch.
+const DEEPSEEK_THINKING_TOGGLE_MODELS = new Set(["deepseek-flash", "deepseek-v4-pro"]);
 
 function looksLikeOllamaEndpoint(endpointUrl: string): boolean {
   try {
@@ -115,11 +152,22 @@ function looksLikeOllamaEndpoint(endpointUrl: string): boolean {
   }
 }
 
-export function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
+function toProviderEffortLevel(level: Exclude<ThinkingLevelValue, "auto" | "none">): ProviderEffortLevel {
+  if (level === "minimal") {
+    return "low";
+  }
+  return level === "xhigh" ? "high" : level;
+}
+
+function toProviderReasoningEffortLevel(level: Exclude<ThinkingLevelValue, "auto">): ProviderReasoningEffortLevel {
+  return level === "none" || level === "xhigh" ? level : toProviderEffortLevel(level);
+}
+
+function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
   return value && isThinkingLevelValue(value) ? value : DEFAULT_THINKING_LEVEL;
 }
 
-export function resolveEffectiveThinkingLevel(
+function resolveEffectiveThinkingLevel(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
 ): ThinkingLevelValue {
@@ -173,9 +221,9 @@ export function buildGoogleThinkingConfig(
     return undefined;
   }
 
-  if (effectiveLevel === "none") {
+  if (effectiveLevel === "none" || effectiveLevel === "minimal") {
     return {
-      thinkingLevel: isGeminiFlashModel(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
+      thinkingLevel: supportsGeminiMinimalThinking(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
     };
   }
 
@@ -211,14 +259,22 @@ export function buildAnthropicThinkingRequest(
   forceReason?: boolean,
 ): AnthropicThinkingRequest {
   const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
-  if (!supportsAnthropicAdaptiveThinking(model)) {
+  const profile = resolveAnthropicThinkingProfile(model);
+  if (!profile) {
     return { omitSampling: false };
   }
 
   if (effectiveLevel === "none") {
+    if (profile.off === null) {
+      return {
+        thinking: { type: "adaptive" },
+        output_config: { effort: "low" },
+        omitSampling: true,
+      };
+    }
     return {
-      thinking: { type: "disabled" },
-      omitSampling: false,
+      thinking: { type: profile.off },
+      omitSampling: profile.samplingLocked,
     };
   }
 
@@ -231,7 +287,9 @@ export function buildAnthropicThinkingRequest(
 
   return {
     thinking: { type: "adaptive" },
-    output_config: { effort: effectiveLevel },
+    output_config: {
+      effort: effectiveLevel === "xhigh" ? profile.extraHighEffort : toProviderEffortLevel(effectiveLevel),
+    },
     omitSampling: true,
   };
 }
@@ -247,7 +305,7 @@ export function buildOpenRouterReasoningRequest(
 
   return {
     reasoning: {
-      effort: effectiveLevel,
+      effort: toProviderReasoningEffortLevel(effectiveLevel),
     },
   };
 }
@@ -256,20 +314,27 @@ export function buildDeepSeekThinkingRequest(
   model: string,
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
-): ThinkingModeRequest {
+): DeepSeekThinkingRequest {
   const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
-  if (isDeepSeekReasonerModel(model)) {
-    return { omitSampling: true };
+  const apiModel = normalizeModel(toDeepseekApiModelName(model));
+  if (!DEEPSEEK_THINKING_TOGGLE_MODELS.has(apiModel) || effectiveLevel === "auto") {
+    return { omitSampling: false };
   }
 
-  if (isDeepSeekChatModel(model) && effectiveLevel !== "auto" && effectiveLevel !== "none") {
+  // V4 models think at high effort when the switch is omitted, so `none` has to send it.
+  if (effectiveLevel === "none") {
     return {
-      thinking: { type: "enabled" },
-      omitSampling: true,
+      thinking: { type: "disabled" },
+      omitSampling: false,
     };
   }
 
-  return { omitSampling: false };
+  // DeepSeek maps native xhigh to high, so the extra-high setting must request max.
+  return {
+    thinking: { type: "enabled" },
+    reasoning_effort: effectiveLevel === "xhigh" ? "max" : toProviderEffortLevel(effectiveLevel),
+    omitSampling: true,
+  };
 }
 
 export function buildZaiThinkingRequest(
@@ -311,19 +376,53 @@ export function buildCustomThinkingRequest(
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
-  return { reasoning_effort: effectiveLevel };
+  return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
+}
+
+/**
+ * Maps `thinking_level` onto NVIDIA NIM, which serves many model families behind one endpoint and
+ * each family reads a different switch, so every level other than `auto` sends all of them:
+ * `enable_thinking` (Nemotron) and `thinking` (DeepSeek) are chat-template kwargs that other
+ * templates ignore, and `reasoning_effort` is the only control GLM and gpt-oss honor.
+ *
+ * `none` still sends effort `"low"`: NIM validates `reasoning_effort` against low/medium/high on
+ * gpt-oss and Llama and returns 400 for `"none"`, and GLM ignores both template switches, so low
+ * effort is the closest it gets to off. Levels map to effort rather than a token budget because
+ * NIM's V2 model runner rejects `reasoning_budget`.
+ */
+export function buildNvidiaThinkingRequest(
+  configuredLevel: string | null | undefined,
+  forceReason?: boolean,
+): NvidiaThinkingRequest {
+  const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
+  if (effectiveLevel === "auto") {
+    return {};
+  }
+
+  if (effectiveLevel === "none") {
+    return {
+      chat_template_kwargs: { enable_thinking: false, thinking: false },
+      reasoning_effort: "low",
+    };
+  }
+
+  return {
+    chat_template_kwargs: { enable_thinking: true, thinking: true },
+    reasoning_effort: toProviderEffortLevel(effectiveLevel),
+  };
 }
 
 export function getNovelAiThinkingDirective(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
+  thinkingByDefault = true,
 ): "<think></think>" | "/nothink" {
   const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
   if (effectiveLevel === "none") {
     return "/nothink";
   }
   if (effectiveLevel === "auto") {
-    return (process.env.NAI_GLM_THINKING_ENABLED ?? "true").toLowerCase() === "true" ? "<think></think>" : "/nothink";
+    return thinkingByDefault ? "<think></think>" : "/nothink";
   }
   return "<think></think>";
 }

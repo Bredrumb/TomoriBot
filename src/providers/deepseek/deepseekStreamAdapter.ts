@@ -14,6 +14,8 @@ export class DeepseekStreamAdapter extends OpenAICompatibleStreamAdapter {
       localeNamespace: ["genai", "deepseek"].join("."),
       errorMessagePrefix: "DeepSeek API error",
       preserveReasoningContent: true,
+      requiresReasoningContentReplay: true,
+      mandatoryBodyKeys: ["thinking"],
       resolveApiUrl: (config) => {
         if (!config.endpointUrl) {
           throw new Error("DeepSeek endpoint URL is required");
@@ -28,6 +30,9 @@ export class DeepseekStreamAdapter extends OpenAICompatibleStreamAdapter {
         );
         if (thinkingRequest.thinking) {
           requestBody.thinking = thinkingRequest.thinking;
+        }
+        if (thinkingRequest.reasoning_effort) {
+          requestBody.reasoning_effort = thinkingRequest.reasoning_effort;
         }
         if (thinkingRequest.omitSampling) {
           delete requestBody.temperature;

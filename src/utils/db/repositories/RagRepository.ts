@@ -1,5 +1,6 @@
+import { chunkStructuredDocument } from "@/utils/documents/documentChunker";
 /**
- * RagRepository — manages documents, chunks, and vector embeddings.
+ * RagRepository: manages documents, chunks, and vector embeddings.
  *
  * Wraps documentService.ts (insert, retrieve, re-embed) and ragDetection.ts
  * (pgvector availability check). All RAG-capable reads go through this
@@ -13,7 +14,6 @@ import {
   retrieveRelevantDocumentChunks,
   reembedServerDocuments,
   normalizeDocumentText,
-  chunkDocumentText,
   formatVector,
   formatRetrievedChunksForPrompt,
   type RetrievedDocumentChunk,
@@ -22,17 +22,15 @@ import { detectRagAvailability, isRagAvailable } from "@/utils/db/ragAvailabilit
 import type { IRepository } from "./IRepository";
 
 /** Portable RAG export shape (expanded in Phase 6 #16.7). */
-export type RagExportShape = {
+type RagExportShape = {
   server_disc_id: string;
   document_count: number;
 };
 
-export class RagRepository implements IRepository<RagExportShape> {
-  // ── availability ───────────────────────────────────────────────────────────
-
+class RagRepository implements IRepository<RagExportShape> {
   /**
    * Returns true if pgvector is available in the current database.
-   * Reads the in-process flag set during startup — no DB round-trip.
+   * Reads the in-process flag set during startup: no DB round-trip.
    */
   isAvailable(): boolean {
     return isRagAvailable();
@@ -50,8 +48,6 @@ export class RagRepository implements IRepository<RagExportShape> {
     return detectRagAvailability(...args);
   }
 
-  // ── text utilities (pure, no DB) ───────────────────────────────────────────
-
   /**
    * Normalizes raw document text (strip BOM, normalize whitespace).
    *
@@ -61,21 +57,13 @@ export class RagRepository implements IRepository<RagExportShape> {
     return normalizeDocumentText(text);
   }
 
-  /**
-   * Splits text into overlapping chunks for embedding.
-   *
-   * @param text      - Text to chunk
-   * @param chunkSize - Characters per chunk
-   * @param overlap   - Overlap characters between adjacent chunks
-   */
-  chunkText(text: string, chunkSize: number, overlap: number): string[] {
-    return chunkDocumentText(text, chunkSize, overlap);
+  chunkText(text: string): ReturnType<typeof chunkStructuredDocument> {
+    return chunkStructuredDocument(text);
   }
 
   /**
    * Formats a numeric embedding vector as a pgvector literal string.
    *
-   * @param values - Embedding values
    */
   formatVector(values: number[]): string {
     return formatVector(values);
@@ -84,19 +72,15 @@ export class RagRepository implements IRepository<RagExportShape> {
   /**
    * Formats retrieved document chunks into a prompt-ready string.
    *
-   * @param chunks - Retrieved document chunks from retrieveRelevantChunks
    * @returns Formatted string or null if chunks is empty
    */
   formatChunksForPrompt(chunks: RetrievedDocumentChunk[]): string | null {
     return formatRetrievedChunksForPrompt(chunks);
   }
 
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Retrieves document chunks relevant to a query using vector similarity.
    *
-   * @param args - Forwarded to retrieveRelevantDocumentChunks
    */
   async retrieveRelevantChunks(
     ...args: Parameters<typeof retrieveRelevantDocumentChunks>
@@ -104,12 +88,9 @@ export class RagRepository implements IRepository<RagExportShape> {
     return retrieveRelevantDocumentChunks(...args);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Inserts a document and its pre-chunked embeddings in a single transaction.
    *
-   * @param args - Forwarded to insertDocumentWithChunks
    * @returns Internal document_id or null on failure
    */
   async insertWithChunks(
@@ -119,18 +100,13 @@ export class RagRepository implements IRepository<RagExportShape> {
   }
 
   /**
-   * Re-embeds all documents for a server using a new embedding model.
-   * Used after a server changes its embedding provider.
-   *
-   * @param args - Forwarded to reembedServerDocuments
+   * Re-embeds stored chunks in place and rejects if any document could not be completed.
    */
   async reembedServerDocuments(
     ...args: Parameters<typeof reembedServerDocuments>
   ): ReturnType<typeof reembedServerDocuments> {
     return reembedServerDocuments(...args);
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * RAG document export is handled by ImportExportRepository.
@@ -151,5 +127,5 @@ export class RagRepository implements IRepository<RagExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const ragRepository = new RagRepository();

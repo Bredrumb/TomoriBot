@@ -1,11 +1,8 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type {
-  Client,
-  // Import specific event argument types if needed later for type guards
-} from "discord.js";
-import type { EventArg, EventFunction } from "../types/discord/global"; // Rule 14
-import { log } from "../utils/misc/logger"; // Rule 18
+import type { Client, RateLimitData } from "discord.js";
+import type { EventArg, EventFunction } from "../types/discord/global";
+import { log } from "../utils/misc/logger";
 import { healthTracker } from "../utils/misc/healthTracker";
 
 type Handler = {
@@ -23,9 +20,17 @@ function isEventFunction(value: unknown): value is EventFunction {
 
 const eventFolderMap: Record<string, string> = {
   guildCreate: "guildCreate",
+  guildAvailable: "guildAvailable",
   guildMemberAdd: "guildMemberAdd",
+  guildMemberUpdate: "guildMemberUpdate",
+  guildMemberRemove: "guildMemberRemove",
   interactionCreate: "interactionCreate",
   messageCreate: "messageCreate",
+  messageReactionAdd: "messageReactionAdd",
+  messageDelete: "messageDelete",
+  messageDeleteBulk: "messageDeleteBulk",
+  messageUpdate: "messageUpdate",
+  raw: "raw",
   clientReady: "clientReady",
   emojiCreate: "guildEmojisUpdate",
   emojiDelete: "guildEmojisUpdate",
@@ -33,9 +38,15 @@ const eventFolderMap: Record<string, string> = {
   stickerCreate: "guildStickersUpdate",
   stickerDelete: "guildStickersUpdate",
   stickerUpdate: "guildStickersUpdate",
-  messageReactionAdd: "messageReactionAdd",
-  rateLimit: "rateLimit",
 };
+
+/**
+ * REST rate limits arrive on `client.rest`, not on the client.
+ *
+ * discord.js v14 keeps the limiter in the REST instance, so a `rateLimit` listener on the client
+ * never fires and the handler folder would be dead weight.
+ */
+const REST_RATE_LIMIT_FOLDER = "rateLimit";
 
 async function getExistingEventFolders(eventsBasePath: string): Promise<Set<string>> {
   const existingFolders = new Set<string>();
@@ -124,12 +135,26 @@ async function loadEventHandlerMap(eventsBasePath: string): Promise<Map<string, 
 /**
  * Sets up all event listeners for the Discord client after loading event modules.
  * Maps specific Discord events to handler folders.
- * @param client - The Discord client instance.
  */
 const setupEventListeners = async (client: Client): Promise<void> => {
-  log.section("Starting Event Listeners Setup..."); // Rule 18
+  log.section("Starting Event Listeners Setup...");
   const eventsBasePath = path.join(__dirname, "..", "events");
   const handlerMap = await loadEventHandlerMap(eventsBasePath);
+
+  // One failed handler must not hide the handlers behind it, for REST rate limits the same as for
+  // gateway events.
+  const runHandlers = async (eventName: string, handlers: Handler[], args: EventArg[]): Promise<void> => {
+    for (const handler of handlers) {
+      try {
+        await handler.execute(client, ...args);
+      } catch (error) {
+        log.error(`Failed to execute event file: ${handler.file} for event ${eventName}`, error, {
+          errorType: "EventHandlerError",
+          metadata: { eventName, eventFile: handler.file },
+        });
+      }
+    }
+  };
 
   for (const [eventName, handlerFolderName] of Object.entries(eventFolderMap)) {
     const handlers = handlerMap.get(eventName);
@@ -140,22 +165,28 @@ const setupEventListeners = async (client: Client): Promise<void> => {
 
     client.on(eventName, async (...args: EventArg[]) => {
       healthTracker.recordActivity();
-
-      for (const handler of handlers) {
-        try {
-          await handler.execute(client, ...args);
-        } catch (error) {
-          log.error(`Failed to execute event file: ${handler.file} for event ${eventName}`, error, {
-            errorType: "EventHandlerError",
-            metadata: { eventName, eventFile: handler.file, handlerFolderName },
-          });
-        }
-      }
+      await runHandlers(eventName, handlers, args);
     });
-    log.success(`Mapped "${eventName}" listener to "${handlerFolderName}" handlers`); // Rule 18
+    log.success(`Mapped "${eventName}" listener to "${handlerFolderName}" handlers`);
   }
 
-  log.section("Event Listeners Setup Complete."); // Rule 18
+  const existingFolders = await getExistingEventFolders(eventsBasePath);
+  if (existingFolders.has(REST_RATE_LIMIT_FOLDER)) {
+    const rateLimitHandlers = await loadHandlersForEvent(
+      "rateLimited",
+      REST_RATE_LIMIT_FOLDER,
+      path.join(eventsBasePath, REST_RATE_LIMIT_FOLDER),
+    );
+
+    if (rateLimitHandlers.length > 0) {
+      client.rest.on("rateLimited", (rateLimitData: RateLimitData) => {
+        void runHandlers("rateLimited", rateLimitHandlers, [rateLimitData]);
+      });
+      log.success(`Mapped "rateLimited" listener to "${REST_RATE_LIMIT_FOLDER}" handlers`);
+    }
+  }
+
+  log.section("Event Listeners Setup Complete.");
 };
 
 export default setupEventListeners;

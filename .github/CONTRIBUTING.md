@@ -1,20 +1,29 @@
 # Contributing to TomoriBot
 
-Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/architecture/getting-started.md`](../docs/architecture/getting-started.md).
+Thanks for your interest in contributing! This guide covers what you need to know before opening a PR.
 
 ## Branching
 
 | Branch | Purpose |
 |---|---|
 | `main` | Default branch, fork from here, target PRs **here** |
-| `release` | Deploy gate, maintainers cut this from `main`. Do not target it. |
-| `dev` | Maintainer's personal (unstable) development branch, not a contribution target |
+| `release` | Deploy gate, stable versions that reflect the public deployed TomoriBot. |
+
+Cloud deployment code lives on `release` only. Changes belong on `main` and flow forward into `release`. Never merge `release` into `main`.
 
 ## Quality Gates
 
-The project has no strict coding standards other than what the automated tools enforce. Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR.
+The coding conventions in [Development Tasks](https://docs.tomoribot.app/en/contributing/development-tasks/) apply to all source code. The automated gates enforce part of it; reviewers check the rest. The [Architecture](https://docs.tomoribot.app/en/architecture/) docs explain the flows and invariants behind conventions.
 
-CI handles these automatically, but running them locally and fixing any problems saves time.
+Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR. CI handles these automatically, but running them locally and fixing any problems saves time. 
+
+If your PR is too big (around ~1000 lines of changes/additions), please split it up into multiple, smaller PRs instead if possible so it is easier to discuss and test.
+
+### AI-Generated Code
+This project accepts code assisted by AI tools, guided by [`AGENTS.md`](../AGENTS.md) with `.agents/skills/` holding project-specific workflows. But just like all tools, the one using it (you) is responsible for it. Please test and review thoroughly before opening a PR, and be ready to discuss and fix problems that the maintainer(s) find, if any.
+
+### Translations
+You do not have to keep every user-facing string/locale up to date. Author your strings in `src/locales/en-US/` and you are done: other locales render the English value for any key they do not define, so `en-US` alone is enough to merge. Translating the string yourself is welcome but optional.
 
 ## Scope of Contributions
 
@@ -34,7 +43,7 @@ Please open an issue first to discuss:
 
 ## License
 
-TomoriBot is licensed under **AGPL-3.0**. By submitting a contribution, you agree it will be licensed under AGPL-3.0. AGPL requires source disclosure to users of network-deployed modified versions — please understand this before contributing or self-hosting a fork.
+TomoriBot is licensed under **AGPL-3.0**. By submitting a contribution, you agree it will be licensed under AGPL-3.0. AGPL requires source disclosure to users of network-deployed modified versions. Please understand this before contributing or self-hosting a fork.
 
 ## Security
 

@@ -2,9 +2,10 @@ import {
   ELEVENLABS_API_BASE_URL,
   getElevenLabsSttConfig,
   normalizeTranscriptText,
+  readElevenLabsErrorDetail,
 } from "@/utils/audio/elevenLabsShared";
 
-export type ElevenLabsSttErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
+type ElevenLabsSttErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
 
 export interface ElevenLabsSttRequest {
   apiKey: string;
@@ -22,6 +23,8 @@ export interface ElevenLabsSttResult {
   errorKind?: ElevenLabsSttErrorKind;
   statusCode?: number;
   details?: string;
+  /** ElevenLabs' status and response body, for the operator log. */
+  providerDetail?: string;
 }
 
 export async function transcribeWithElevenLabs(request: ElevenLabsSttRequest): Promise<ElevenLabsSttResult> {
@@ -59,20 +62,21 @@ export async function transcribeWithElevenLabs(request: ElevenLabsSttRequest): P
 
     clearTimeout(timeoutId);
 
-    let responseJson: Record<string, unknown> | null = null;
-    try {
-      responseJson = (await response.json()) as Record<string, unknown>;
-    } catch {
-      responseJson = null;
-    }
-
     if (!response.ok) {
       return {
         success: false,
         errorKind: "request_failed",
         statusCode: response.status,
-        details: typeof responseJson?.detail === "string" ? responseJson.detail : `HTTP ${response.status}`,
+        details: `HTTP ${response.status}`,
+        providerDetail: await readElevenLabsErrorDetail(response, request.apiKey),
       };
+    }
+
+    let responseJson: Record<string, unknown> | null = null;
+    try {
+      responseJson = (await response.json()) as Record<string, unknown>;
+    } catch {
+      responseJson = null;
     }
 
     const rawTranscript =

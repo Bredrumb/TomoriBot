@@ -1,0 +1,163 @@
+import { describe, expect, it, spyOn } from "bun:test";
+import type { Client, TextChannel, Webhook } from "discord.js";
+import type { TomoriState } from "@/types/db/schema";
+import type { StreamingContext } from "@/types/tool/interfaces";
+import type { MessageIdMap } from "@/utils/text/messageIdMap";
+import { type BuildStreamContextParams, buildStreamContext } from "@/utils/provider/streamContext";
+import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
+import { createPersona } from "../../helpers/fixtures";
+import {
+  createChatLatencyInvocation,
+  recordChatProviderDispatch,
+  runWithChatTurnLatency,
+} from "@/utils/chat/turnLatency";
+import { log } from "@/utils/misc/logger";
+
+// Minimal Discord/Tomori stand-ins: the helper only shuttles references, never invokes them.
+const CHANNEL = { id: "channel_1" } as unknown as TextChannel;
+const CLIENT = {} as Client;
+const TOMORI_STATE: TomoriState = createPersona();
+
+/**
+ * Build the minimal required params, letting each test override specifics.
+ */
+function makeParams(overrides: Partial<BuildStreamContextParams> = {}): BuildStreamContextParams {
+  return {
+    provider: "google",
+    channel: CHANNEL,
+    client: CLIENT,
+    tomoriState: TOMORI_STATE,
+    contextItems: [],
+    currentTurnModelParts: [],
+    ...overrides,
+  };
+}
+
+describe("buildStreamContext", () => {
+  it("delivers provider progress to the turn latency timer", async () => {
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    try {
+      await runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, async () => {
+        const context = buildStreamContext(
+          makeParams({
+            provider: "deepseek",
+            streamingContext: {
+              disableYouTubeProcessing: false,
+              onStreamProgress: recordChatProviderDispatch("deepseek"),
+            },
+          }),
+        );
+        context.onStreamProgress?.();
+      });
+      expect(metric.mock.calls.at(-1)?.[1].provider_ttfb_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      metric.mockRestore();
+    }
+  });
+
+  it("uses explicit delivery mode for main and alter personas regardless of webhook identity", () => {
+    for (const isAlter of [false, true]) {
+      for (const deliveryMode of ["persona", "user_impersonation"] as const) {
+        const receipts: NonNullable<StreamingContext["deliveryReceipts"]> = [];
+        const ctx = buildStreamContext(
+          makeParams({
+            tomoriState: createPersona({ is_alter: isAlter }),
+            personaUsername: "Juno",
+            personaAvatarUrl: "https://example.com/juno.png",
+            webhook: { id: "webhook" } as Webhook,
+            streamingContext: { disableYouTubeProcessing: false, deliveryMode, deliveryReceipts: receipts },
+          }),
+        );
+        expect(isUserImpersonationStreamContext(ctx)).toBe(deliveryMode === "user_impersonation");
+        expect(ctx.deliveryReceipts).toBe(receipts);
+      }
+    }
+    expect(isUserImpersonationStreamContext(buildStreamContext(makeParams({ personaUsername: "Juno" })))).toBe(false);
+  });
+  it("copies common copy-through fields from the streaming context", () => {
+    const messageIdMap = { resolve: () => undefined } as unknown as MessageIdMap;
+    const replyNoticeState = { attempted: false, sent: false };
+    const deliveryState = { unconfirmed: false };
+    const forcedMentions = [{ handle: "@alice", userId: "42" }];
+    const abortSignal = new AbortController().signal;
+
+    const streamingContext: StreamingContext = {
+      disableYouTubeProcessing: false,
+      suppressUserErrors: true,
+      suppressTextOutput: true,
+      rotationKeyRetriesUsed: true,
+      outputPrefill: "prefix ",
+      replyNoticeState,
+      deliveryState,
+      forcedMentions,
+      abortSignal,
+      messageIdMap,
+    };
+
+    const ctx = buildStreamContext(makeParams({ provider: "novelai", streamingContext }));
+
+    expect(ctx.provider).toBe("novelai");
+    expect(ctx.suppressUserErrors).toBe(true);
+    expect(ctx.suppressTextOutput).toBe(true);
+    expect(ctx.rotationKeyRetriesUsed).toBe(true);
+    expect(ctx.outputPrefill).toBe("prefix ");
+    expect(ctx.replyNoticeState).toBe(replyNoticeState);
+    if (!ctx.deliveryState) throw new Error("Missing delivery state");
+    ctx.deliveryState.unconfirmed = true;
+    expect(streamingContext.deliveryState?.unconfirmed).toBe(true);
+    expect(ctx.forcedMentions).toBe(forcedMentions);
+    expect(ctx.abortSignal).toBe(abortSignal);
+    expect(ctx.messageIdMap).toBe(messageIdMap);
+  });
+
+  it("applies the en-US locale fallback when userLocale is absent", () => {
+    expect(buildStreamContext(makeParams()).locale).toBe("en-US");
+    expect(buildStreamContext(makeParams({ userLocale: "ja" })).locale).toBe("ja");
+  });
+
+  it("preserves webhook and persona identity fields", () => {
+    const webhook = { id: "wh_1" } as unknown as Webhook;
+
+    const ctx = buildStreamContext(
+      makeParams({
+        webhook,
+        personaAvatarUrl: "https://example.test/avatar.png",
+        personaUsername: "Alter",
+        prefixStrippingName: "Alter Prime",
+      }),
+    );
+
+    expect(ctx.webhook).toBe(webhook);
+    expect(ctx.personaAvatarUrl).toBe("https://example.test/avatar.png");
+    expect(ctx.personaUsername).toBe("Alter");
+    expect(ctx.prefixStrippingName).toBe("Alter Prime");
+  });
+
+  it("leaves optional fields undefined when no streaming context is supplied", () => {
+    const ctx = buildStreamContext(makeParams());
+
+    expect(ctx.suppressUserErrors).toBeUndefined();
+    expect(ctx.suppressTextOutput).toBeUndefined();
+    expect(ctx.rotationKeyRetriesUsed).toBeUndefined();
+    expect(ctx.outputPrefill).toBeUndefined();
+    expect(ctx.replyNoticeState).toBeUndefined();
+    expect(ctx.forcedMentions).toBeUndefined();
+    expect(ctx.abortSignal).toBeUndefined();
+    expect(ctx.messageIdMap).toBeUndefined();
+    expect(ctx.webhook).toBeUndefined();
+    expect(ctx.personaUsername).toBeUndefined();
+  });
+
+  it("passes through Discord and application context by reference", () => {
+    const contextItems: BuildStreamContextParams["contextItems"] = [];
+    const currentTurnModelParts = [{ text: "hi" }];
+
+    const ctx = buildStreamContext(makeParams({ contextItems, currentTurnModelParts }));
+
+    expect(ctx.channel).toBe(CHANNEL);
+    expect(ctx.client).toBe(CLIENT);
+    expect(ctx.tomoriState).toBe(TOMORI_STATE);
+    expect(ctx.contextItems).toBe(contextItems);
+    expect(ctx.currentTurnModelParts).toBe(currentTurnModelParts);
+  });
+});

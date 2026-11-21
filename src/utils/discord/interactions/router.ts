@@ -1,0 +1,137 @@
+import type { Client, Interaction } from "discord.js";
+import { compactInteractionRoute } from "@/utils/discord/interactions/compactRoutes";
+import { conditioningInteractionRoute } from "@/utils/discord/interactions/conditioningRoutes";
+import { expressionsInteractionRoute } from "@/utils/discord/interactions/expressionsRoutes";
+import { configInteractionRoute } from "@/utils/discord/interactions/configRoutes";
+import { contextInteractionRoute } from "@/utils/discord/interactions/contextRoutes";
+import { helpInteractionRoute } from "@/utils/discord/interactions/helpRoutes";
+import { memoriesInteractionRoute } from "@/utils/discord/interactions/memoriesRoutes";
+import { moderationInteractionRoute } from "@/utils/discord/interactions/moderationRoutes";
+import { nudgeStudioInteractionRoute } from "@/modules/natural-nudges/discord/studioRoutes";
+import {
+  identityConfigInteractionRoute,
+  personalConfigInteractionRoute,
+} from "@/utils/discord/interactions/personalConfigRoutes";
+import {
+  identityMemoriesInteractionRoute,
+  personalMemoriesInteractionRoute,
+} from "@/utils/discord/interactions/personalMemoriesRoutes";
+import {
+  personalProvidersInteractionRoute,
+  providersInteractionRoute,
+} from "@/utils/discord/interactions/providersRoutes";
+import { setupInteractionRoute } from "@/utils/discord/interactions/setupRoutes";
+import { statusInteractionRoute } from "@/utils/discord/interactions/statusRoutes";
+import { statsInteractionRoute } from "@/utils/discord/interactions/statsRoutes";
+import { modelOverrideInteractionRoute } from "@/utils/discord/interactions/modelOverrideRoutes";
+import { transferInteractionRoute } from "@/utils/discord/interactions/transferRoutes";
+import { InteractionRouteRegistry, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
+import { replyPanelReceipt } from "@/utils/discord/ui/panel";
+import { log } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
+
+const registry = new InteractionRouteRegistry([
+  expressionsInteractionRoute,
+  compactInteractionRoute,
+  conditioningInteractionRoute,
+  configInteractionRoute,
+  contextInteractionRoute,
+  helpInteractionRoute,
+  memoriesInteractionRoute,
+  modelOverrideInteractionRoute,
+  moderationInteractionRoute,
+  nudgeStudioInteractionRoute,
+  personalConfigInteractionRoute,
+  identityConfigInteractionRoute,
+  personalMemoriesInteractionRoute,
+  identityMemoriesInteractionRoute,
+  personalProvidersInteractionRoute,
+  providersInteractionRoute,
+  setupInteractionRoute,
+  statusInteractionRoute,
+  statsInteractionRoute,
+  transferInteractionRoute,
+]);
+
+export function isGlobalRoutableInteraction(interaction: Interaction): interaction is GlobalRoutableInteraction {
+  return interaction.isMessageComponent() || interaction.isModalSubmit();
+}
+
+export async function dispatchGlobalInteraction(
+  client: Client,
+  interaction: GlobalRoutableInteraction,
+): Promise<boolean> {
+  const dispatchStartedAt = Date.now();
+  try {
+    const result = await registry.dispatchDetailed(client, interaction);
+    if (result === "unmatched") {
+      return false;
+    }
+    if (result === "stale-version") {
+      const namespace = interaction.customId.split(":", 1)[0] ?? "panel";
+      const key =
+        namespace === "config"
+          ? "commands.config.panel.outdated_panel"
+          : namespace === "memories"
+            ? "commands.memories.outdated_panel"
+            : namespace === "moderation"
+              ? "commands.moderation.outdated_panel"
+              : namespace === "providers" || namespace === "personal-providers"
+                ? "commands.providers.outdated_panel"
+                : namespace === "personal-memories"
+                  ? "commands.personal.memories.outdated_panel"
+                  : namespace === "personal-config"
+                    ? "commands.personal.config.outdated_panel"
+                    : "general.errors.outdated_panel";
+      const command =
+        namespace === "expr"
+          ? "/expressions manage"
+          : namespace === "personal-providers"
+            ? "/personal providers"
+            : namespace === "personal-memories"
+              ? "/personal memories"
+              : namespace === "personal-config"
+                ? "/personal config"
+                : namespace === "conditioning"
+                  ? "/conditioning remove"
+                  : namespace === "model-overrides"
+                    ? "/model override remove"
+                    : namespace === "transfer"
+                      ? "/import"
+                      : `/${namespace}`;
+      const locale = await resolveUserLocale(interaction);
+      await replyPanelReceipt(interaction, {
+        tone: "warning",
+        heading: localizer(locale, "general.panel_notice.outdated_heading"),
+        detail: localizer(locale, key, { command }),
+      });
+    }
+    return true;
+  } catch (error) {
+    await log.error("Global interaction route failed", error, {
+      errorType: "InteractionRouteError",
+      metadata: {
+        customId: interaction.customId,
+        interactionId: interaction.id,
+        userDiscordId: interaction.user.id,
+        interactionAgeAtDispatchMs: dispatchStartedAt - interaction.createdTimestamp,
+        dispatchDurationMs: Date.now() - dispatchStartedAt,
+        deferred: interaction.deferred,
+        replied: interaction.replied,
+      },
+    });
+
+    try {
+      const locale = await resolveUserLocale(interaction);
+      await replyPanelReceipt(interaction, {
+        tone: "error",
+        heading: localizer(locale, "general.errors.unknown_error_title"),
+        detail: localizer(locale, "general.errors.unknown_error_description"),
+      });
+    } catch (replyError) {
+      log.warn("Global interaction route error reply failed", replyError);
+    }
+    return true;
+  }
+}

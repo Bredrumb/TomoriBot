@@ -41,7 +41,7 @@ export class StreamBufferFlusher {
     state: StreamState,
     metrics: StreamMetrics,
   ): Promise<void> {
-    log.info(`Stream API: Raw chunk received: "${textContent}"`);
+    if (!context.holdResponseText) log.info(`Stream API: Raw chunk received: "${textContent}"`);
 
     const normalizedTextContent = this.deduplicateIncomingTextChunk(textContent, state);
     if (normalizedTextContent !== textContent) {
@@ -117,6 +117,14 @@ export class StreamBufferFlusher {
         state.buffer,
         DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
       );
+
+      // A zero index means every candidate breakpoint would split a markdown table. Hold the
+      // buffer instead, so the table stays whole and the final flush renders it as one image.
+      if (flushIndex <= 0) {
+        log.info("Stream Seg: Deferring oversized buffer flush to keep a markdown table intact");
+        break;
+      }
+
       const segmentToFlush = state.buffer.substring(0, flushIndex);
       const updatedBuffer = state.buffer.substring(flushIndex);
 
@@ -137,6 +145,19 @@ export class StreamBufferFlusher {
         return;
       }
     }
+
+    if (context.holdResponseText && this.deps.segmentProcessor.exceedsHeldRetention(state.buffer, context, state)) {
+      const unflushable = state.buffer;
+      state.buffer = "";
+      await this.deps.segmentProcessor.sendBufferSegment(
+        unflushable,
+        "overflow",
+        textConfig,
+        typingConfig,
+        context,
+        state,
+      );
+    }
   }
 
   public async flushFinalBuffer(
@@ -152,7 +173,8 @@ export class StreamBufferFlusher {
           ? "contains semantic markers"
           : "regular";
 
-      log.info(`Stream Seg: Flushing final buffer content (${blockStatus}): "${state.buffer}"`);
+      if (!context.holdResponseText)
+        log.info(`Stream Seg: Flushing final buffer content (${blockStatus}): "${state.buffer}"`);
 
       if (state.isInsideCodeBlock) {
         log.warn("Stream Seg: Final flush occurred while still inside a code block. The block might be incomplete.");
@@ -254,7 +276,7 @@ export class StreamBufferFlusher {
         segmentToProcess = trimmedSegment;
       }
     }
-    log.info(`Stream Seg: Flushing buffer for function call: "${segmentToProcess}"`);
+    if (!context.holdResponseText) log.info(`Stream Seg: Flushing buffer for function call: "${segmentToProcess}"`);
 
     await this.deps.segmentProcessor.sendBufferSegment(
       segmentToProcess,
@@ -296,7 +318,7 @@ export class StreamBufferFlusher {
   }
 
   private getRecentStreamTextTail(state: StreamState): string {
-    const combined = `${state.accumulatedText}${state.pendingAggregatedText}${state.buffer}`;
+    const combined = `${state.accumulatedText}${state.pendingResponseText ?? ""}${state.pendingAggregatedText}${state.buffer}`;
     if (!combined) {
       return "";
     }

@@ -1,0 +1,358 @@
+---
+title: "Thiết lập: CLIProxyAPI"
+sidebar:
+  label: "CLIProxyAPI"
+  order: 2
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Kết nối TomoriBot với một thượng nguồn được cấp phép thông qua [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), một proxy Chat Completions cục bộ.
+
+:::danger[Tự chịu rủi ro khi dùng proxy tài khoản CLI]
+Việc truy cập qua bên thứ ba bằng tài khoản Codex, Claude Code, Antigravity hoặc tài khoản CLI khác có thể vi phạm điều khoản nhà cung cấp và có nguy cơ bị tạm khóa tài khoản. Gói đăng ký không đồng nghĩa với quyền sử dụng cho bot hoặc API. Hãy xem [hạn chế theo từng nhà cung cấp và lựa chọn API thay thế](/self-hosting/local-endpoints/proxies-and-remote-access/#account-risk) trước khi đăng nhập.
+:::
+
+## 1. Cài đặt CLIProxyAPI
+
+Làm theo [hướng dẫn bắt đầu nhanh](https://help.router-for.me/introduction/quick-start) chính thức. Các [bản phát hành đóng gói](https://github.com/router-for-me/CLIProxyAPI/releases/latest) chứa tệp thực thi chạy sẵn; chọn đúng hệ điều hành và CPU của bạn, giải nén gói và xác minh checksum. Việc build từ bản clone Git là tùy chọn.
+
+## 2. Tạo cấu hình
+
+Cấu hình CLIProxyAPI trước khi khởi động nó. Nếu trình cài đặt đã khởi chạy sẵn một dịch vụ, hãy dừng dịch vụ đó trước.
+
+Tạo tệp `config.yaml` nằm cạnh tệp thực thi (`cli-proxy-api.exe` trên Windows). Có thể dùng thư mục cấu hình riêng nếu muốn; các ví dụ này đặt cả hai tệp cạnh nhau. Thay thế placeholder client key bằng ít nhất 32 byte ngẫu nhiên mã hóa dạng hex hoặc base64 do trình quản lý mật khẩu tạo ra.
+
+```yaml
+config-version: 8
+server:
+  host: "127.0.0.1"
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+access:
+  api-keys:
+    - "REPLACE_WITH_RANDOM_CLIENT_KEY"
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+```
+
+Client key nằm dưới `access.api-keys` xác thực TomoriBot với CLIProxyAPI. Hãy giữ bí mật `config.yaml` cùng các tệp chứng chỉ trong `oauth.auth-dir` và không đưa vào Git. Giới hạn quyền truy cập chỉ cho tài khoản của bạn và tài khoản chạy tiến trình.
+
+Để trống `MANAGEMENT_PASSWORD` và tránh dùng `--password` cũng như giao diện quản lý TUI: chuỗi bí mật quản lý rỗng sẽ giữ cho các route quản lý bị vô hiệu hóa, kể cả phía sau tunnel. Nếu phiên bản của bạn dùng định dạng cấu hình khác, hãy áp dụng các thiết lập này vào tệp `config.example.yaml` đi kèm của bản đó.
+
+## 3. Kết nối thượng nguồn
+
+Chọn cách CLIProxyAPI xác thực với nhà cung cấp model. Cả hai phương thức đều sử dụng cấu hình cơ sở ở trên.
+
+<Tabs syncKey="upstream-auth">
+<TabItem label="Đăng nhập tài khoản (OAuth)">
+
+Chạy lệnh đăng nhập từ thư mục chứa tệp thực thi và `config.yaml`. Các ví dụ dưới đây dùng Antigravity; hãy thay bằng cờ của nhà cung cấp bạn dùng và xem kỹ màn hình chấp thuận trước khi đăng nhập:
+
+| Nhà cung cấp | Cờ đăng nhập |
+|---|---|
+| Antigravity | `--antigravity-login` |
+| Claude | `--claude-login` |
+| Codex | `--codex-login` hoặc `--codex-device-login` |
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml" --antigravity-login
+```
+
+</TabItem>
+</Tabs>
+
+Hoàn tất đăng nhập trên trình duyệt và đợi terminal báo thành công. CLIProxyAPI lưu thông tin xác thực trong `oauth.auth-dir`; thiết lập chỉ dùng OAuth không cần khối API key thượng nguồn. Luôn giữ trình lắng nghe callback OAuth ở máy cục bộ và dùng cùng một đường dẫn cấu hình cho cả đăng nhập lẫn khởi động. Các cờ đăng nhập khác được liệt kê trong `--help` và [hướng dẫn nhà cung cấp upstream](https://help.router-for.me/introduction/quick-start).
+
+</TabItem>
+<TabItem label="API key thượng nguồn">
+
+Đối với API tương thích OpenAI, hãy thêm khối cấp cao nhất này vào `config.yaml` và thay thế URL mẫu, khóa thượng nguồn và ID model:
+
+```yaml
+api-keys:
+  openai-compatibility:
+    - name: "authorized-backend"
+      base-url: "https://api.example.com/v1"
+      keys:
+        - api-key: "REPLACE_WITH_UPSTREAM_KEY"
+      models:
+        - name: "upstream-model-id"
+          alias: "home-chat"
+```
+
+</TabItem>
+</Tabs>
+
+## 4. Khởi động máy chủ
+
+Khởi động máy chủ từ thư mục chứa `config.yaml`. Thay bằng đường dẫn tệp thực thi thực tế hoặc lệnh đã cài đặt nếu cần; giữ `--config` để máy chủ nạp đúng tệp này.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$configPath = (Resolve-Path .\config.yaml).Path
+.\cli-proxy-api.exe --config $configPath
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+./cli-proxy-api --config "$(pwd)/config.yaml"
+```
+
+</TabItem>
+</Tabs>
+
+Giữ máy chủ đang chạy và tiếp tục sang bước 5. Giữ `server.host` ở `127.0.0.1`; không cần thêm ngoại lệ tường lửa cho kết nối đến hay mở port trên router.
+
+## 5. Kết nối TomoriBot
+
+<Tabs syncKey="bot-location">
+<TabItem label="Bot trên máy này">
+
+1. Với bot ngoài môi trường production chạy trên cùng máy tính với CLIProxyAPI, hãy đặt `ALLOW_PRIVATE_NETWORK=127.0.0.1:8317` trong môi trường của TomoriBot rồi khởi động lại bot. Dùng trình lắng nghe cục bộ đã cấu hình ở trên; không cần tunnel.
+2. Chạy `/providers` (người quản lý máy chủ) hoặc `/personal providers` và thêm một endpoint tùy chỉnh `Tương thích OpenAI` với các thiết lập sau:
+
+| Trường | Giá trị |
+|---|---|
+| URL endpoint | `http://127.0.0.1:8317/v1` |
+| Token xác thực | Client key từ `access.api-keys` |
+
+Chọn kết nối đã lưu, thêm một `Model văn bản` bằng ID hoặc alias do CLIProxyAPI cung cấp và xác nhận bot trả lời trên Discord.
+
+URL này giả định bot chạy trực tiếp trên máy chủ vật lý. Trong Docker, `127.0.0.1` trỏ tới chính container đó nên không kết nối tới trình lắng nghe của máy chủ vật lý qua địa chỉ này được. Bot chạy ở chế độ production vẫn yêu cầu đi theo lộ trình bot production lưu trữ riêng.
+
+</TabItem>
+<TabItem label="Bot production lưu trữ riêng">
+
+1. Hoàn tất [Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/) bằng cấu hình engine văn bản và cổng 8317. Môi trường production yêu cầu URL HTTPS công khai và bản ghi DNS công khai.
+2. Chạy `/providers` (người quản lý máy chủ) hoặc `/personal providers` và thêm một endpoint tùy chỉnh `Tương thích OpenAI` với các thiết lập sau:
+
+| Trường | Giá trị |
+|---|---|
+| URL endpoint | Đường dẫn gốc tunnel của bạn, chẳng hạn `https://engine.example.com/v1` |
+| Token xác thực | Client key từ `access.api-keys` |
+
+Chọn kết nối đã lưu, thêm một `Model văn bản` bằng ID hoặc alias do CLIProxyAPI cung cấp và xác nhận bot trả lời trên Discord.
+
+</TabItem>
+</Tabs>
+
+<details>
+<summary>Cách liệt kê các model khả dụng</summary>
+
+Khi CLIProxyAPI đang chạy, mở một cửa sổ terminal khác để liệt kê các ID model của nó. Tắt ghi chép phiên PowerShell hoặc theo dõi lệnh shell trước khi nạp client key. Đóng terminal này khi xong việc.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Chạy lệnh này từ thư mục chứa `config.yaml`; lệnh sẽ đọc client key đầu tiên theo bố cục ở trên.
+
+```powershell
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$models = Invoke-RestMethod "$base/models" -Headers $headers
+$models.data | Select-Object id
+Remove-Variable engineKey, keyMatch, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Khóa được đọc không hiển thị ra màn hình và truyền cho curl qua stdin, giúp khóa không xuất hiện trong danh sách tham số tiến trình.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Khóa được đọc không hiển thị ra màn hình và truyền cho curl qua stdin, giúp khóa không xuất hiện trong danh sách tham số tiến trình.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/models"
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+Danh sách rỗng đồng nghĩa cần cấu hình thượng nguồn. HTTP `401` nghĩa là máy chủ đã phản hồi nhưng từ chối client key.
+
+</details>
+
+## Khắc phục sự cố
+
+| Hiện tượng | Hành động |
+|---|---|
+| `401` | Kiểm tra client key, tách biệt với khóa thượng nguồn. |
+| `404` | Dùng đường dẫn gốc `/v1`, không kèm `/chat/completions`; kiểm tra ID model. |
+| Tham số bị từ chối | Để trống phần ghi đè cửa sổ ngữ cảnh và đặt mức suy luận ở `Tự động`; TomoriBot đã tự động thử lại các lỗi từ chối tham số hợp lệ trước khi bắt đầu xuất dữ liệu. Kiểm tra nhật ký xem có yêu cầu bị hạ cấp hay không trước khi bật công cụ hoặc phụ thuộc vào các điều khiển lấy mẫu. |
+| `403`, trang đăng nhập HTML hoặc lỗi tunnel | Kiểm tra [thiết lập tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Nếu bạn đã bật Cloudflare Access, cần có [thiết lập Access và Caddy tùy chọn](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/); bảng cấu hình Discord không thể tự gửi các header của Access. |
+| Luồng phản hồi bị dừng | Kiểm tra chế độ ngủ của PC, hạn mức thượng nguồn, tình trạng tunnel và các giới hạn luồng trong hướng dẫn Cloudflare. |
+
+Luôn tắt ghi nhật ký yêu cầu và gỡ lỗi trừ khi đang chẩn đoán một lỗi tái lập cục bộ đã ẩn dữ liệu nhạy cảm. Thay mới client key bị rò rỉ trong CLIProxyAPI, trong endpoint đã lưu của TomoriBot và mọi relay tùy chọn đang dùng nó. Thu hồi riêng các thông tin xác thực thượng nguồn bị rò rỉ.
+
+<details>
+<summary>Thu hồi đăng nhập tài khoản</summary>
+
+Thu hồi quyền truy cập trong phần cài đặt tài khoản thượng nguồn, dừng proxy và xóa các tệp chứng chỉ cục bộ của nó. Chỉ xóa tệp không tự động thu hồi token.
+
+</details>
+
+<details>
+<summary>Kiểm tra địa chỉ liên kết cục bộ</summary>
+
+Nếu API cục bộ không truy cập được, hãy kiểm tra địa chỉ liên kết của nó từ một terminal khác trong lúc CLIProxyAPI đang chạy:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+Get-NetTCPConnection -LocalPort 8317 |
+  Select-Object LocalAddress, LocalPort, State, OwningProcess
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+ss -ltnp 'sport = :8317'
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+lsof -nP -iTCP:8317 -sTCP:LISTEN
+```
+
+</TabItem>
+</Tabs>
+
+Chỉ chấp nhận `127.0.0.1`; hãy dừng lại ngay nếu thấy `0.0.0.0`, `::`, `*` hoặc địa chỉ mạng LAN. Kiểm tra các quy tắc tường lửa hiện có (`wf.msc` trên Windows); không mở port đến hay thêm quy tắc chuyển tiếp port trên router. Cơ chế báo cáo trạng thái TCP của Windows đôi khi bỏ sót endpoint vẫn truy cập được, nên truy vấn đã bao gồm mọi trạng thái; bước tra cứu model tùy chọn sẽ kiểm tra khả năng truy cập API.
+
+</details>
+
+<details>
+<summary>Kiểm thử phản hồi cục bộ</summary>
+
+Nếu model không phản hồi được trong Discord, hãy kiểm thử trực tiếp nó trong lúc CLIProxyAPI đang chạy. Tắt ghi chép phiên PowerShell hoặc theo dõi lệnh shell trước khi nạp client key.
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+Chạy lệnh này từ thư mục chứa `config.yaml`; lệnh sẽ đọc client key đầu tiên theo bố cục ở trên.
+
+```powershell
+$keyMatch = [regex]::Match((Get-Content -LiteralPath .\config.yaml -Raw), '(?m)^access:\r?\n  api-keys:\r?\n    - "([A-Za-z0-9+/=_-]+)"[ \t]*\r?$')
+if (!$keyMatch.Success) { throw 'Expected a quoted client key under access.api-keys in config.yaml.' }
+$engineKey = $keyMatch.Groups[1].Value
+$headers = @{ Authorization = "Bearer $engineKey" }
+$base = 'http://127.0.0.1:8317/v1'
+$body = @{
+  model = Read-Host 'Model ID to test'
+  messages = @(@{ role = 'user'; content = 'Reply with hello.' })
+  stream = $false
+} | ConvertTo-Json -Depth 4
+$reply = Invoke-RestMethod "$base/chat/completions" -Method Post -Headers $headers -ContentType 'application/json' -Body $body
+$reply.choices.message.content
+Remove-Variable engineKey, keyMatch, headers
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Khóa được đọc không hiển thị ra màn hình và truyền cho curl qua stdin, giúp khóa không xuất hiện trong danh sách tham số tiến trình.
+
+Thay `REPLACE_WITH_MODEL_ID` bằng ID cần kiểm thử.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
+unset engine_key
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+Khóa được đọc không hiển thị ra màn hình và truyền cho curl qua stdin, giúp khóa không xuất hiện trong danh sách tham số tiến trình.
+
+Thay `REPLACE_WITH_MODEL_ID` bằng ID cần kiểm thử.
+
+```bash
+set +x
+printf 'CLIProxyAPI client key: '
+read -r -s engine_key
+printf '\n'
+base='http://127.0.0.1:8317/v1'
+printf 'header = "Authorization: Bearer %s"\n' "$engine_key" |
+  curl --config - --fail --silent --show-error "$base/chat/completions" \
+    --header 'Content-Type: application/json' \
+    --data '{"model":"REPLACE_WITH_MODEL_ID","messages":[{"role":"user","content":"Reply with hello."}],"stream":false}'
+unset engine_key
+```
+
+</TabItem>
+</Tabs>
+
+Nhận được câu trả lời đã tạo xác nhận việc truy cập thượng nguồn hoạt động. Riêng việc không thấy kết quả truy vấn socket chưa đủ chứng minh API không truy cập được.
+
+</details>

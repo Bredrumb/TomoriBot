@@ -10,17 +10,21 @@ import type {
   ToolResult,
   ToolRegistryInterface,
   ToolExecutionEvent,
-  MCPCapableToolAdapter,
 } from "../types/tool/interfaces";
 import { getGuildMcpManager } from "../utils/mcp/guildMcpManager";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 import {
   getAvailableToolsForContext as getAvailableToolsForContextFromRegistry,
   getAvailableToolsForProvider,
+  isBuiltInToolAvailable,
   getAvailableToolsWithMCP as getAvailableToolsWithMCPFromRegistry,
   type AvailableToolsWithMCP,
   type ToolStateForContext,
 } from "@/tools/availability";
+import { localizer } from "@/utils/text/localizer";
+import { refreshToolExecutionContext } from "@/tools/availability";
+import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 
 const BUILTIN_TOOL_ALIASES: Record<string, string> = {
   remember_this_fact: "create_long_term_memory",
@@ -28,6 +32,29 @@ const BUILTIN_TOOL_ALIASES: Record<string, string> = {
 
 function resolveBuiltInToolAlias(toolName: string): string {
   return BUILTIN_TOOL_ALIASES[toolName] ?? toolName;
+}
+
+function toolNameDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+      current[rightIndex] = Math.min(
+        (previous[rightIndex] ?? 0) + 1,
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+}
+
+function closestToolName(name: string, available: readonly string[]): string | null {
+  return available.reduce<string | null>((closest, candidate) => {
+    if (!closest) return candidate;
+    return toolNameDistance(name, candidate) < toolNameDistance(name, closest) ? candidate : closest;
+  }, null);
 }
 
 function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageIdMap): Record<string, unknown> {
@@ -57,24 +84,19 @@ function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageI
   return resolvedArgs ?? args;
 }
 
-// Re-export ToolContext for external use
 export type { ToolContext } from "../types/tool/interfaces";
 export type { ToolStateForContext } from "@/tools/availability";
 
 /**
  * Central registry for all tools
  * Implements singleton pattern to ensure single source of truth
- * Now includes seamless MCP tool support alongside built-in tools
  */
 class ToolRegistryImpl implements ToolRegistryInterface {
   private tools = new Map<string, Tool>();
   private executionHistory: ToolExecutionEvent[] = [];
   private readonly maxHistorySize = 1000;
-  private mcpAdapters = new Map<string, MCPCapableToolAdapter>();
 
   /**
-   * Register a new tool in the registry
-   * @param tool - The tool to register
    * @throws Error if tool with same name already exists
    */
   registerTool(tool: Tool): void {
@@ -82,7 +104,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       throw new Error(`Tool with name '${tool.name}' is already registered`);
     }
 
-    // Validate tool structure
     this.validateTool(tool);
 
     this.tools.set(tool.name, tool);
@@ -90,7 +111,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Get a tool by its name
    * @param name - Tool name to lookup
    * @returns Tool instance or undefined if not found
    */
@@ -100,10 +120,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Get all tools available for a specific provider and context
    * @param provider - Provider name (e.g., "google", "openai")
    * @param context - Tool context for checking feature flags and permissions
-   * @returns Array of available tools
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[] {
     return getAvailableToolsForProvider(this.tools.values(), provider, context);
@@ -113,8 +131,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Get tools available for context building (only checks feature flags, no Discord permissions)
    * Used when building context instructions where we don't have full Discord context
    * @param provider - Provider name (e.g., "google", "openai")
-   * @param stateForContext - Minimal state with server_id and config for feature flag checking
-   * @returns Array of tools available for this provider and configuration
    */
   getAvailableToolsForContext(provider: string, stateForContext: ToolStateForContext): Tool[] {
     return getAvailableToolsForContextFromRegistry(this.tools.values(), provider, stateForContext);
@@ -124,8 +140,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Get all available tools (built-in + MCP) with feature flag filtering
    * This is the new centralized method that replaces provider-specific filtering
    * @param provider - Provider name (e.g., "google", "openai")
-   * @param stateForContext - Minimal state with server_id and config for feature flag checking
-   * @returns Object containing filtered built-in tools and MCP function names
    */
   async getAvailableToolsWithMCP(
     provider: string,
@@ -136,100 +150,80 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Get all registered tools
-   * @returns Array of all tools in the registry
    */
   getAllTools(): Tool[] {
     return Array.from(this.tools.values());
   }
 
-  /**
-   * Register an MCP-capable tool adapter for a provider
-   * @param adapter - The MCP-capable tool adapter to register
-   */
-  registerMCPAdapter(adapter: MCPCapableToolAdapter): void {
-    const provider = adapter.getProviderName();
-    this.mcpAdapters.set(provider, adapter);
-    log.info(`Registered MCP adapter for provider: ${provider}`);
-  }
-
-  /**
-   * Check if a function name is an MCP function for the given provider
-   * @param functionName - Name of the function to check
-   * @param provider - Provider name
-   * @returns Promise<boolean> - True if this is an MCP function
-   */
-  async isMCPFunction(functionName: string, provider: string): Promise<boolean> {
-    const adapter = this.mcpAdapters.get(provider);
-    if (!adapter) {
-      return false;
-    }
-
-    try {
-      return await adapter.isMCPFunction(functionName);
-    } catch (error) {
-      log.warn(`Error checking if function '${functionName}' is MCP for provider '${provider}':`, error as Error);
-      return false;
-    }
+  getReservedToolNames(): Set<string> {
+    return new Set([...this.tools.keys(), ...Object.keys(BUILTIN_TOOL_ALIASES)]);
   }
 
   /**
    * Check if a tool requires a follow-up generation after execution
-   * Built-in tools check the `requiresFollowUp` property; MCP tools (global + guild) always return true
-   * (all MCP tools are search/fetch and need the model to present results)
-   * @param functionName - Name of the function to check
-   * @param provider - Provider name for MCP adapter lookup
+   * Built-in tools check the `requiresFollowUp` property; guild MCP tools always return true
+   * because the model has to present a remote tool's result
    * @param serverId - Optional internal server_id for guild MCP check
    * @returns Promise<boolean> - True if the tool needs a follow-up generation
    */
-  async requiresFollowUp(functionName: string, provider: string, serverId?: number): Promise<boolean> {
+  async requiresFollowUp(functionName: string, serverId?: number): Promise<boolean> {
     const resolvedFunctionName = resolveBuiltInToolAlias(functionName);
 
-    // 1. Check if it's a global MCP function — all MCP tools require follow-up
-    const isMcp = await this.isMCPFunction(resolvedFunctionName, provider);
-    if (isMcp) {
-      return true;
-    }
-
-    // 2. Check if it's a guild MCP function — also requires follow-up
     if (serverId) {
       try {
-        const isGuildMcp = await getGuildMcpManager().isGuildMCPFunction(serverId, resolvedFunctionName);
+        const isGuildMcp = (await getGuildMcpManager().getGuildMCPRouting(serverId)).routes.has(resolvedFunctionName);
         if (isGuildMcp) return true;
-      } catch {
-        /* fall through */
-      }
+      } catch {}
     }
 
-    // 3. Check built-in tool property
     const tool = this.getTool(resolvedFunctionName);
     return tool?.requiresFollowUp ?? false;
   }
 
   /**
    * Execute a tool by name with given arguments and context
-   * Now supports built-in tools, global MCP, and guild MCP functions seamlessly
-   * @param toolName - Name of the tool/function to execute
-   * @param args - Arguments to pass to the tool
-   * @param context - Execution context
-   * @returns Promise resolving to tool execution result
+   * Supports built-in tools and guild MCP functions
    */
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
-    const resolvedArgs = resolveOpaqueIds(args, context.messageIdMap);
+    const unavailable = (): ToolResult => ({
+      success: false,
+      error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }),
+    });
+    const refreshed = await refreshToolExecutionContext(context);
+    if (!refreshed) return unavailable();
+    context = refreshed;
+    const resolvedArgs =
+      context.preparedToolRequest?.name === resolvedToolName && context.preparedToolRequest.args === args
+        ? args
+        : resolveOpaqueIds(args, context.messageIdMap);
 
-    // 1. Check global MCP first
-    const isMcp = await this.isMCPFunction(resolvedToolName, context.provider);
-    if (isMcp) {
-      return this.executeMCPFunction(resolvedToolName, resolvedArgs, context, startTime);
-    }
-
-    // 2. Check guild MCP
     const serverId = context.tomoriState?.server_id;
     if (serverId) {
       try {
         const guildMcpManager = getGuildMcpManager();
-        const isGuildMcp = await guildMcpManager.isGuildMCPFunction(serverId, resolvedToolName);
+        const routing = await guildMcpManager.getGuildMCPRouting(serverId);
+        const current = await refreshToolExecutionContext(context);
+        if (!current) return unavailable();
+        context = current;
+        const route = routing.routes.get(resolvedToolName);
+        const isGuildMcp = Boolean(route);
+        if (context.isExecutionCancelled?.()) return { success: false };
+        const replacementFamily =
+          route?.config.server_type === "web_search" || route?.config.server_type === "url_fetcher";
+        const replacedBuiltIn =
+          (resolvedToolName === "fetch_url" && routing.replaced.has("url_fetcher")) ||
+          (resolvedToolName === "web_search" && routing.replaced.has("web_search"));
+        if (
+          (replacementFamily && !configToFeatureFlags(context.tomoriState.config).web_search) ||
+          (replacedBuiltIn && !route)
+        ) {
+          return {
+            success: false,
+            error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }),
+          };
+        }
         if (isGuildMcp) {
           log.info(`Executing guild MCP function: ${resolvedToolName} for server ${serverId}`);
           const result = await guildMcpManager.executeGuildMCPFunction(
@@ -240,7 +234,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
           );
           const executionTime = Date.now() - startTime;
 
-          // Record execution event
           this.recordExecution({
             toolName: resolvedToolName,
             provider: context.provider,
@@ -264,104 +257,29 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         }
       } catch (error) {
         log.warn(`Error checking/executing guild MCP function '${resolvedToolName}':`, error as Error);
+        if (!this.getTool(resolvedToolName) || resolvedToolName === "fetch_url" || resolvedToolName === "web_search")
+          return unavailable();
+        // MCP cannot own other built-ins, but flags may have changed during the failed lookup.
+        const current = await refreshToolExecutionContext(context);
+        if (!current) return unavailable();
+        context = current;
       }
     }
 
-    // 3. Execute as built-in tool
     return this.executeBuiltInTool(resolvedToolName, resolvedArgs, context, startTime);
   }
 
-  /**
-   * Execute an MCP function
-   * @param functionName - Name of the MCP function
-   * @param args - Function arguments
-   * @param context - Execution context
-   * @param startTime - Execution start time for metrics
-   * @returns Promise<ToolResult>
-   */
-  private async executeMCPFunction(
-    functionName: string,
-    args: Record<string, unknown>,
-    context: ToolContext,
-    startTime: number,
-  ): Promise<ToolResult> {
-    const adapter = this.mcpAdapters.get(context.provider);
-
-    if (!adapter) {
-      const errorResult: ToolResult = {
-        success: false,
-        error: `No MCP adapter registered for provider '${context.provider}'`,
-      };
-
-      log.error(`MCP function execution failed - no adapter: ${functionName} for provider ${context.provider}`);
-
-      return errorResult;
-    }
-
-    try {
-      log.info(`Executing MCP function: ${functionName} for provider ${context.provider}`);
-
-      // Execute the MCP function through the adapter
-      const result = await adapter.executeMCPFunction(functionName, args, context);
-      const executionTime = Date.now() - startTime;
-
-      // Record execution event
-      const executionEvent: ToolExecutionEvent = {
-        toolName: functionName,
-        provider: context.provider,
-        serverId: context.tomoriState.server_id?.toString() || "unknown",
-        userId: context.userId,
-        parameters: args,
-        result,
-        executionTime,
-        timestamp: new Date(),
-      };
-
-      this.recordExecution(executionEvent);
-
-      if (result.success) {
-        log.success(`MCP function executed successfully: ${functionName} (${executionTime}ms)`);
-      } else {
-        log.warn(`MCP function execution completed with error: ${functionName} - ${result.error} (${executionTime}ms)`);
-      }
-
-      return result;
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      const errorResult: ToolResult = {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-
-      const executionEvent: ToolExecutionEvent = {
-        toolName: functionName,
-        provider: context.provider,
-        serverId: context.tomoriState.server_id?.toString() || "unknown",
-        userId: context.userId,
-        parameters: args,
-        result: errorResult,
-        executionTime,
-        timestamp: new Date(),
-      };
-
-      this.recordExecution(executionEvent);
-
-      log.error(
-        `MCP function execution threw error: ${functionName} for provider ${context.provider} (${executionTime}ms)`,
-        error as Error,
-      );
-
-      return errorResult;
-    }
+  /** Alias and opaque targets must be fixed before reviewing effects. */
+  async prepareToolRequest(toolName: string, args: Record<string, unknown>, context: ToolContext) {
+    return {
+      name: resolveBuiltInToolAlias(toolName),
+      args: resolveOpaqueIds(structuredClone(args), context.messageIdMap),
+    };
   }
 
   /**
-   * Execute a built-in tool
-   * @param toolName - Name of the tool
    * @param args - Tool arguments
-   * @param context - Execution context
    * @param startTime - Execution start time for metrics
-   * @returns Promise<ToolResult>
    */
   private async executeBuiltInTool(
     toolName: string,
@@ -369,53 +287,43 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     context: ToolContext,
     startTime: number,
   ): Promise<ToolResult> {
+    if (context.isExecutionCancelled?.()) return { success: false };
     const tool = this.getTool(toolName);
 
     if (!tool) {
+      // Suggesting a tool this turn cannot run only trades the unknown-name error for an
+      // availability rejection on the next loop iteration.
+      const available = this.getAvailableTools(context.provider, context).map((candidate) => candidate.name);
+      const closest = closestToolName(toolName, available);
       const errorResult: ToolResult = {
         success: false,
-        error: `Tool '${toolName}' not found in registry`,
+        error: `Tool '${toolName}' not found. ${closest ? `Did you mean '${closest}'? ` : ""}Available tools: ${available.join(", ")}`,
       };
 
-      log.error(
+      log.warn(
         `Tool execution failed - tool not found: ${toolName}. Available: ${Array.from(this.tools.keys()).join(", ")}`,
       );
 
       return errorResult;
     }
 
-    // Check if tool is available for this provider
-    // Use context-aware availability check if available, otherwise fall back to basic check
-    const isToolAvailable =
-      "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-        ? tool.isAvailableForContext(context.provider, context)
-        : tool.isAvailableFor(context.provider);
-
-    if (!isToolAvailable) {
-      const errorResult: ToolResult = {
-        success: false,
-        error: `Tool '${toolName}' is not available for provider '${context.provider}'`,
-      };
-
-      log.error(`Tool execution failed - provider not supported: ${toolName} for provider ${context.provider}`);
-
-      return errorResult;
+    if (!isBuiltInToolAvailable(tool, context.provider, context)) {
+      return { success: false, error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }) };
     }
 
     try {
+      if (context.isExecutionCancelled?.()) return { success: false };
       log.info(`Executing built-in tool: ${toolName} (${tool.category}) for provider ${context.provider}`);
 
-      // Execute the tool
       const result = await tool.execute(args, context);
       const executionTime = Date.now() - startTime;
 
-      // Record execution event
       const executionEvent: ToolExecutionEvent = {
         toolName,
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(toolName, args),
         result,
         executionTime,
         timestamp: new Date(),
@@ -442,7 +350,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(toolName, args),
         result: errorResult,
         executionTime,
         timestamp: new Date(),
@@ -459,11 +367,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
   }
 
-  /**
-   * Get execution history for debugging and monitoring
-   * @param limit - Maximum number of entries to return
-   * @returns Array of recent tool execution events
-   */
   getExecutionHistory(limit = 100): ToolExecutionEvent[] {
     return this.executionHistory.slice(-limit).reverse(); // Most recent first
   }
@@ -479,7 +382,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Get registry statistics
-   * @returns Statistics about registered tools and executions
    */
   getStats(): {
     totalTools: number;
@@ -504,8 +406,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       totalExecutions: this.executionHistory.length,
     };
   }
-
-  // Private helper methods
 
   /**
    * Validate tool structure and required properties
@@ -545,17 +445,14 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   private recordExecution(event: ToolExecutionEvent): void {
     this.executionHistory.push(event);
 
-    // Keep history size manageable
     if (this.executionHistory.length > this.maxHistorySize) {
       this.executionHistory = this.executionHistory.slice(-this.maxHistorySize + 100);
     }
   }
 }
 
-// Export singleton instance
 export const ToolRegistry = new ToolRegistryImpl();
 
-// Export convenience functions
 export function registerTool(tool: Tool): void {
   ToolRegistry.registerTool(tool);
 }
@@ -580,25 +477,13 @@ export async function executeTool(
   return ToolRegistry.executeTool(toolName, args, context);
 }
 
-export function registerMCPAdapter(adapter: MCPCapableToolAdapter): void {
-  ToolRegistry.registerMCPAdapter(adapter);
-}
-
-export async function isMCPFunction(functionName: string, provider: string): Promise<boolean> {
-  return ToolRegistry.isMCPFunction(functionName, provider);
-}
-
-export async function requiresFollowUp(functionName: string, provider: string, serverId?: number): Promise<boolean> {
-  return ToolRegistry.requiresFollowUp(functionName, provider, serverId);
+export async function requiresFollowUp(functionName: string, serverId?: number): Promise<boolean> {
+  return ToolRegistry.requiresFollowUp(functionName, serverId);
 }
 
 export async function getAvailableToolsWithMCP(
   provider: string,
   stateForContext: ToolStateForContext,
-): Promise<{
-  builtInTools: Tool[];
-  mcpFunctionNames: string[];
-  totalCount: number;
-}> {
+): Promise<AvailableToolsWithMCP> {
   return ToolRegistry.getAvailableToolsWithMCP(provider, stateForContext);
 }

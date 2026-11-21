@@ -35,12 +35,18 @@ export interface RawDiscordComponent {
   label?: string;
   /** Component description text */
   description?: string;
+  /** Markdown content for modal text displays */
+  content?: string;
   /** Component value (string for text inputs and radio groups; boolean for checkboxes) */
   value?: string | boolean;
   /** Default checked state (for checkbox components, type 23) */
   default?: boolean;
   /** Selected values (for select menus, checkbox groups, and file upload attachment IDs) */
   values?: string[];
+  /** Allowed channel types (for channel select components, type 8) */
+  channel_types?: number[];
+  /** Preselected entities (for user, role, mentionable, and channel selects) */
+  default_values?: Array<{ id: string; type: "user" | "role" | "channel" }>;
   /** Nested component (for type 18 wrappers) */
   component?: RawDiscordComponent;
   /** Child components array (for containers) */
@@ -140,20 +146,6 @@ export interface RawDiscordWebSocketPacket {
       components?: RawDiscordComponent[];
     };
   };
-}
-
-/**
- * Discord.js Client interface extension for internal properties
- * Used for accessing WebSocket manager and other internal features.
- */
-export interface ExtendedDiscordClient {
-  /** WebSocket manager with handlePacket method */
-  ws?: {
-    handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => void;
-    [key: string]: unknown;
-  } & Record<string, unknown>;
-  /** Additional client properties */
-  [key: string]: unknown;
 }
 
 /**

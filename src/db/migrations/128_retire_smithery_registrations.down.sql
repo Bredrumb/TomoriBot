@@ -1,0 +1,4 @@
+-- 128_retire_smithery_registrations (down)
+--
+-- No-op: the up-migration cleared the stored Smithery account keys, and a cleared credential
+-- cannot be restored. Re-enabling the rows without their keys would only start a failure streak.

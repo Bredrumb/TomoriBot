@@ -5,6 +5,7 @@ import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { log } from "@/utils/misc/logger";
 import type { TtsCloneErrorKind, TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
 import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 function isEnabledEnv(value: string | undefined): boolean {
   return value === "true" || value === "1";
@@ -27,35 +28,8 @@ export interface TtsVoiceDesignRequest {
   voiceInstructions?: string;
   /** Empty string for local endpoints that don't require auth. */
   apiKey: string;
-}
-
-export type TtsVoiceMode = "clone" | "voice-design" | "auto";
-
-export function getTtsVoiceMode(endpoint: CustomEndpointRow | null | undefined): TtsVoiceMode {
-  const rawMode = endpoint?.extra_config.voice_mode;
-  return rawMode === "voice-design" || rawMode === "auto" ? rawMode : "clone";
-}
-
-export function isVoiceDesignEndpoint(endpoint: CustomEndpointRow | null | undefined): boolean {
-  return endpoint?.api_style === "tts-clone" && getTtsVoiceMode(endpoint) === "voice-design";
-}
-
-export function isAutoVoiceEndpoint(endpoint: CustomEndpointRow | null | undefined): boolean {
-  return endpoint?.api_style === "tts-clone" && getTtsVoiceMode(endpoint) === "auto";
-}
-
-export function shouldUseVoiceDesignForPersona(
-  endpoint: CustomEndpointRow | null | undefined,
-  voiceDesignPrompt: string | null | undefined,
-  activeVoiceName?: string | null,
-): boolean {
-  if (endpoint?.api_style !== "tts-clone") return false;
-
-  const mode = getTtsVoiceMode(endpoint);
-  if (mode === "voice-design") return true;
-  if (mode !== "auto") return false;
-
-  return Boolean(voiceDesignPrompt?.trim()) && activeVoiceName === "VoiceDesign";
+  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
+  abortSignal?: AbortSignal;
 }
 
 function resolveExtensionFromContentType(contentType: string): string {
@@ -122,11 +96,11 @@ function prepareVoiceDesignText(
  * This is intentionally separate from `ttsCloningAdapter.ts`. Clone models
  * synthesize from a stored speaker sample; voice-design models synthesize from
  * a persona-level natural-language prompt. Sending the prompt as `instruct`
- * makes the JSON body honest and keeps `/speech voice-add` focused on actual
+ * makes the JSON body honest and keeps `/config` focused on actual
  * reference samples.
  */
 export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignRequest): Promise<TtsCloneResult> {
-  const { endpoint, script, designPrompt, voiceInstructions, apiKey } = request;
+  const { endpoint, script, designPrompt, voiceInstructions, apiKey, abortSignal } = request;
   const scriptMarkup = (endpoint.extra_config.script_markup as string | undefined) ?? "plain";
   const { processedScript, captionText } = prepareVoiceDesignText(script, scriptMarkup);
   const cleanedDesignPrompt = designPrompt.trim();
@@ -169,7 +143,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
   let response: Response;
   const requestStartedAt = Date.now();
   log.info(
-    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
+    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.model_name || endpoint.label}" label="${endpoint.label}" url="${endpointUrl}" mode=${endpoint.extra_config.voice_mode ?? "clone"} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
   );
   log.info(
     `[TtsVoiceDesign] Script ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(processedScript)}`,
@@ -182,17 +156,21 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
-      response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: abortController.signal,
-      });
+      response = await fetchUserRemoteUrl(
+        `${endpointUrl}/synthesize`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
+        },
+        getEndpointRemotePolicy(),
+      );
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
-    const isTimeout = error instanceof Error && error.name === "AbortError";
+    const isTimeout = error instanceof Error && error.name === "AbortError" && !abortSignal?.aborted;
     const elapsedMs = Date.now() - requestStartedAt;
     log.warn(
       `[TtsVoiceDesign] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"} after ${elapsedMs}ms`,
@@ -211,11 +189,9 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
       const errorBody = (await response.json()) as { error?: unknown; detail?: unknown };
       const structuredDetail = stringifyErrorDetail(errorBody.error ?? errorBody.detail);
       if (structuredDetail) errorDetails += `: ${structuredDetail}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[TtsVoiceDesign] ${endpointUrl}/synthesize returned error: ${errorDetails}`);
-    return { success: false, errorKind: "request_failed", details: errorDetails };
+    return { success: false, errorKind: "request_failed", details: `HTTP ${response.status}` };
   }
   log.info(
     `[TtsVoiceDesign] /synthesize responded status=${response.status} contentType="${response.headers.get("content-type") ?? "unknown"}" elapsedMs=${Date.now() - requestStartedAt}`,
@@ -229,7 +205,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     return {
       success: false,
       errorKind: "invalid_response",
-      details: `Expected audio/* content-type, got: ${rawContentType}`,
+      details: "The TTS server did not return audio.",
     };
   }
 

@@ -6,10 +6,29 @@
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
-import { formatTimeRemaining } from "@/utils/text/processors/formatters";
-import { parseTimeWithOffset, formatUTCOffset, formatTimeWithOffset } from "../../utils/text/timezoneHelper";
-import { isMatrixBridgeWebhookUsername } from "../../utils/bridges";
-import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
+import {
+  alignReminderToDailyWindow,
+  formatReminderRepetition,
+  parseReminderDailyWindow,
+  parseReminderRepeatLimit,
+  parseRepetitionArgs,
+  toRepetitionColumns,
+} from "@/utils/text/processors/reminderRepetition";
+import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
+import {
+  addMonthsWithOffset,
+  parseTimeWithOffset,
+  formatUTCOffset,
+  formatTimeWithOffset,
+  isValidUtcOffset,
+} from "../../utils/text/timezoneHelper";
+import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
+import { localizer } from "@/utils/text/localizer";
+import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
+import { resolveChannelTarget, resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { MAX_REMINDERS_PER_SERVER, ReminderLimitError } from "@/utils/db/repositories/ServerScheduleRepository";
+import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 
 /**
  * Tool for creating scheduled tasks that trigger messages at specific times
@@ -17,7 +36,7 @@ import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetR
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
-    "Create a scheduled task in a Discord channel. Use this for both user reminders and self tasks: a reminder is just a task that notifies a target user. IMPORTANT: Always set 'repetition_interval_hours' - use 0 for one-time tasks, or 1+ for recurring tasks (e.g., 24 for daily tasks). Use 'self_reminder' for tasks you should execute yourself on a schedule (for example daily summaries or periodic reports). For instant, one-time messages in other channels, use cross_channel_message instead as it sends immediately without scheduling. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' for natural requests like 'in 2 hours' or 'tomorrow'. Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format using the server's configured timezone (set via /config timezone) for specific dates/times. If both are provided, absolute time takes priority. If you omit all time parameters, the task defaults to 1 minute from now.";
+    "Create a scheduled task in a Discord channel. Use this for both user reminders and self tasks: a reminder is just a task that notifies a target user. Set 'repetition_interval_hours' to 0 for a one-time task. To repeat, set one positive interval in minutes, hours, or months. A recurring task can have a delivery count or a cutoff. Minute and hour schedules can also have a daily window. Use 'self_reminder' for tasks you should execute yourself on a schedule (for example daily summaries or periodic reports). For instant, one-time messages in other channels, use cross_channel_message instead as it sends immediately without scheduling. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' for natural requests like 'in 2 hours' or 'tomorrow'. Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format for specific dates/times. Pass the wall-clock time as the user expressed it. By default absolute times are interpreted in the server's configured timezone (set via /server timezone); if the user expressed the time in their own personal timezone (shown in the conversation context), set 'utc_offset' to that timezone's UTC offset and the conversion is handled for you. If both absolute and relative times are provided, absolute time takes priority. Omit all start-time fields unless the user asks for a specific first trigger. Minute and hour schedules then start after one interval. Other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -36,7 +55,12 @@ export class ReminderTool extends BaseTool {
       reminder_time: {
         type: "string",
         description:
-          "OPTIONAL: Absolute time to trigger the task in YYYY-MM-DD_HH:MM format (e.g., '2025-09-05_15:30') using the server's configured timezone. Times are interpreted using the server's timezone setting from /config timezone. Use this for specific dates/times. If provided, this takes priority over 'from now' parameters.",
+          "OPTIONAL: Absolute time to trigger the task in YYYY-MM-DD_HH:MM format (e.g., '2025-09-05_15:30'). Pass the wall-clock time exactly as the user expressed it. Do NOT convert between timezones yourself. Without 'utc_offset', this is interpreted in the server's configured timezone (set via /server timezone). Use this for specific dates/times. If provided, this takes priority over 'from now' parameters.",
+      },
+      utc_offset: {
+        type: "number",
+        description:
+          "OPTIONAL: The UTC offset in hours that 'reminder_time' is expressed in (e.g., 8 for UTC+8, -5 for UTC-5, 5.5 for UTC+5:30). Set this to the target user's personal timezone offset (shown in the conversation context) when they expressed the time in their own local time. If omitted, the server's configured timezone is used. Only meaningful together with 'reminder_time'.",
       },
       minutes_from_now: {
         type: "number",
@@ -56,12 +80,39 @@ export class ReminderTool extends BaseTool {
       months_from_now: {
         type: "number",
         description:
-          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Uses calendar months (30.44 days average).",
+          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
       },
       repetition_interval_hours: {
         type: "number",
         description:
-          "REQUIRED: Set to 0 for one-time tasks. Set to 1 or higher to make the task recurring (repeats every X hours after the first trigger). Example: 24 for daily tasks, 168 for weekly tasks.",
+          "REQUIRED: Set to 0 for one-time tasks. Set to 1 or higher to make the task recurring (repeats every X hours after the first trigger). Example: 24 for daily tasks, 168 for weekly tasks. For minute or calendar month intervals, set this to 0 and use the corresponding interval.",
+      },
+      repetition_interval_months: {
+        type: "number",
+        description:
+          "OPTIONAL: Set to 1 or higher to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly). In months without that day it runs on the last day, then returns to the original day. Requires 'repetition_interval_hours' to be 0.",
+      },
+      repetition_interval_minutes: {
+        type: "number",
+        description: "Repeat every X minutes. Use 0 for a one-time task.",
+      },
+      repeat_count: {
+        type: "number",
+        description:
+          "Number of deliveries left, including the next trigger. Requires recurrence. Use a count or a cutoff.",
+      },
+      repeat_until_time: {
+        type: "string",
+        description: "Last allowed delivery time in YYYY-MM-DD_HH:MM in the server timezone. Requires recurrence.",
+      },
+      daily_window_start_time: {
+        type: "string",
+        description: "Daily start time in the server timezone, such as 05:00 or 5AM. Pair with daily_window_end_time.",
+      },
+      daily_window_end_time: {
+        type: "string",
+        description:
+          "Daily end time in the server timezone, such as 22:00 or 10PM. The window must end on the same day.",
       },
       self_reminder: {
         type: "boolean",
@@ -79,7 +130,6 @@ export class ReminderTool extends BaseTool {
 
   /**
    * Check if reminder tool is available for the given provider
-   * @param _provider - LLM provider name (unused)
    * @returns True if provider supports reminder functionality
    */
   isAvailableFor(_provider: string): boolean {
@@ -87,10 +137,9 @@ export class ReminderTool extends BaseTool {
   }
 
   /**
-   * Context-aware availability check — disabled during non-task reminder-triggered turns
+   * Context-aware availability check: disabled during non-task reminder-triggered turns
    * to prevent the AI from scheduling new reminders while executing an existing one.
    * Self-reminder (task) turns are exempt so tasks can spawn follow-up tasks.
-   * @param _provider - LLM provider name (unused)
    * @param context - Optional tool context containing streaming flags
    */
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
@@ -101,11 +150,8 @@ export class ReminderTool extends BaseTool {
   /**
    * Execute reminder creation
    * @param args - Arguments containing reminder details
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -118,61 +164,34 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Extract arguments
     const reminderPurposeArg = args.reminder_purpose as string;
     const targetUserArg = args.target_user as string | undefined;
     const legacyTargetUserNicknameArg = args.target_user_nickname as string | undefined;
     const legacyTargetUserDiscordIdArg = args.target_user_discord_id as string | undefined;
-    let reminderTimeArg = args.reminder_time as string | undefined;
+    const reminderTimeArg = args.reminder_time as string | undefined;
+    const utcOffsetArg = args.utc_offset as number | undefined;
     const minutesFromNowArg = args.minutes_from_now as number | undefined;
     const hoursFromNowArg = args.hours_from_now as number | undefined;
     const daysFromNowArg = args.days_from_now as number | undefined;
     const monthsFromNowArg = args.months_from_now as number | undefined;
-    let repetitionIntervalHoursArg = args.repetition_interval_hours as number | undefined;
+    const repetitionIntervalHoursArg = args.repetition_interval_hours as number | undefined;
     const selfReminderArg = args.self_reminder as boolean | undefined;
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
 
-    // NovelAI GLM recovery: normalize absolute time format.
-    // GLM may output "2025-09-05 15:30" (space), "2025-09-05T15:30" (ISO), or
-    // "2025/09/05_15:30" (slashes) instead of the expected "YYYY-MM-DD_HH:MM" format.
-    // Normalize common variants before parseTimeWithOffset rejects them.
-    if (reminderTimeArg && typeof reminderTimeArg === "string") {
-      let normalized = reminderTimeArg.trim();
-      // 1. Replace slash date separators with dashes (2025/09/05 → 2025-09-05)
-      normalized = normalized.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, "$1-$2-$3");
-      // 2. Replace space or T between date and time with underscore
-      normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/, "$1_$2");
-      if (normalized !== reminderTimeArg) {
-        log.info(`Reminder tool: Normalized time format "${reminderTimeArg}" → "${normalized}"`);
-        reminderTimeArg = normalized;
-      }
-    }
-
-    // NovelAI GLM recovery: default repetition_interval_hours to 0 (one-time) when missing.
-    // GLM frequently omits this required parameter for simple "remind me in X" requests.
-    // Only for NovelAI — other providers have retries and should be required to explicitly
-    // set this so the model is "conscious" of whether the reminder is one-time or recurring.
-    if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "number") {
-      log.info("Reminder tool: Auto-filling missing repetition_interval_hours with 0 (one-time reminder)");
-      repetitionIntervalHoursArg = 0;
-    }
-
-    // Import database functions and utilities
     const { userRepository, serverScheduleRepository } = await import("@/utils/db/repositories");
     const { sendTaskEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
 
-    // Get server and user context
     const tomoriState = context.tomoriState;
-    const resolvedUserId = context.message?.author?.id || context.userId;
+    const resolvedUserId = resolveTriggererDiscordId(context);
 
     // Matrix relay messages arrive via Discord webhook (author = webhook bot).
     // The webhook bot has no users table record, so loadUserRow returns null.
     // Detect this case so we can relax the requestingUserRow guard below and
     // store created_by_user_id = null (the column is nullable for this reason).
-    const isMatrixRelayRequester =
-      !!context.message?.webhookId && isMatrixBridgeWebhookUsername(context.message?.author?.username ?? "");
+    if (context.message) await verifyMessageWebhook(context.message);
+    const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
 
     const requestingUserRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
     const channelId = context.channel.id;
@@ -182,14 +201,13 @@ export class ReminderTool extends BaseTool {
 
     if (
       !tomoriState ||
-      // Allow null requestingUserRow for Matrix relay webhooks — they have no
+      // Allow null requestingUserRow for Matrix relay webhooks, so they have no
       // users table entry, so created_by_user_id will be stored as null
       (!requestingUserRow && !isMatrixRelayRequester) ||
       (requestingUserRow && !requestingUserRow.user_id) ||
       !tomoriState.server_id ||
       !resolvedUserId
     ) {
-      // Log which specific value is missing for diagnostics
       const missing = [
         !tomoriState && "tomoriState",
         !requestingUserRow && !isMatrixRelayRequester && "requestingUserRow",
@@ -211,7 +229,6 @@ export class ReminderTool extends BaseTool {
     const personaNickname =
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
-    // Validate reminder purpose
     if (typeof reminderPurposeArg !== "string" || !reminderPurposeArg.trim()) {
       return {
         success: false,
@@ -223,7 +240,6 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Validate target user nickname
     const botUserId = context.client.user?.id;
     const isSelfReminder =
       selfReminderArg === true ||
@@ -255,28 +271,23 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Validate repetition interval (0 = one-time, 1+ = recurring)
-    let repetitionIntervalHours: number | null = null;
-    if (typeof repetitionIntervalHoursArg === "number") {
-      if (
-        !Number.isFinite(repetitionIntervalHoursArg) ||
-        !Number.isInteger(repetitionIntervalHoursArg) ||
-        repetitionIntervalHoursArg < 0
-      ) {
-        return {
-          success: false,
-          error: "The 'repetition_interval_hours' must be 0 (for one-time) or an integer >= 1 (for recurring)",
-          data: {
-            status: "reminder_creation_failed_invalid_repeat_interval",
-            reason: "The 'repetition_interval_hours' must be 0 or an integer >= 1.",
-          },
-        };
-      }
-      // Only set repetitionIntervalHours if it's > 0 (recurring)
-      repetitionIntervalHours = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg : null;
+    const repetitionArgs = parseRepetitionArgs(
+      repetitionIntervalHoursArg,
+      args.repetition_interval_months,
+      args.repetition_interval_minutes,
+    );
+    if (!repetitionArgs.ok) {
+      return {
+        success: false,
+        error: repetitionArgs.reason,
+        data: {
+          status: "reminder_creation_failed_invalid_repeat_interval",
+          reason: repetitionArgs.reason,
+        },
+      };
     }
+    const repetition = repetitionArgs.provided ? repetitionArgs.repetition : null;
 
-    // Resolve and validate target channel (optional override)
     let resolvedChannelId = channelId;
     let resolvedChannelLabel = "Current channel";
     if (requestedTargetChannel) {
@@ -320,6 +331,16 @@ export class ReminderTool extends BaseTool {
         };
       }
 
+      if (
+        channelResolution.channel.id !== channelId &&
+        getChannelPrivacyReason(channelResolution.channel, tomoriState.config.private_channel_ids ?? [])
+      ) {
+        return {
+          success: false,
+          error: localizer(context.locale, "tools.execution.private_channel_target"),
+          data: { status: "reminder_creation_failed_private_target" },
+        };
+      }
       resolvedChannelId = channelResolution.channel.id;
       resolvedChannelLabel = channelResolution.displayLabel;
     } else if ("name" in context.channel) {
@@ -332,44 +353,94 @@ export class ReminderTool extends BaseTool {
 
     // Get the server's configured timezone offset (default to 0/UTC if not set)
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
+    const limitResult = parseReminderRepeatLimit(args.repeat_count, args.repeat_until_time, undefined, timezoneOffset);
+    const windowResult = parseReminderDailyWindow(
+      args.daily_window_start_time,
+      args.daily_window_end_time,
+      undefined,
+      timezoneOffset,
+    );
+    if (!limitResult.ok) {
+      return {
+        success: false,
+        error: limitResult.reason,
+        data: { status: "reminder_creation_failed_invalid_args", reason: limitResult.reason },
+      };
+    }
+    if (!windowResult.ok) {
+      return {
+        success: false,
+        error: windowResult.reason,
+        data: { status: "reminder_creation_failed_invalid_args", reason: windowResult.reason },
+      };
+    }
+    const { value: limit } = limitResult;
+    const { value: window } = windowResult;
+    if ((!repetition && (limit || window)) || (repetition?.unit === "months" && window)) {
+      const reason = "Repeat limits require recurrence. Daily windows require a minute or hour interval.";
+      return { success: false, error: reason, data: { status: "reminder_creation_failed_invalid_args", reason } };
+    }
 
     if (reminderTimeArg && typeof reminderTimeArg === "string" && reminderTimeArg.trim()) {
-      // Method 1: Absolute time provided - parse in server's configured timezone
+      // Absolute time: parse in the offset the model labeled the time with (utc_offset),
+      // falling back to the server's configured timezone. The model passes wall-clock time as
+      // spoken and labels the frame instead of converting it, so deterministic code does the
+      // offset arithmetic here.
       timeCalculationMethod = "absolute";
-      finalReminderTime = parseTimeWithOffset(reminderTimeArg.trim(), timezoneOffset);
+
+      // Validate utc_offset only when it will actually be used (absolute path)
+      if (utcOffsetArg !== undefined && !isValidUtcOffset(utcOffsetArg)) {
+        return {
+          success: false,
+          error: `Invalid 'utc_offset' value '${utcOffsetArg}'. It must be a number of hours between ${UTC_OFFSET_MIN} and ${UTC_OFFSET_MAX} (e.g., 8 for UTC+8, -5 for UTC-5).`,
+          data: {
+            status: "reminder_creation_failed_invalid_utc_offset",
+            reason: `Invalid 'utc_offset' value: '${utcOffsetArg}'. Expected a number between ${UTC_OFFSET_MIN} and ${UTC_OFFSET_MAX}.`,
+          },
+        };
+      }
+
+      const effectiveParseOffset = typeof utcOffsetArg === "number" ? utcOffsetArg : timezoneOffset;
+      finalReminderTime = parseTimeWithOffset(reminderTimeArg.trim(), effectiveParseOffset);
       if (!finalReminderTime) {
         return {
           success: false,
-          error: `Invalid reminder time format. Please use YYYY-MM-DD_HH:MM format (e.g., '2025-09-05_15:30') in the server's configured timezone (${formatUTCOffset(timezoneOffset)}). The provided format '${reminderTimeArg}' is invalid.`,
+          error: `Invalid reminder time format. Please use YYYY-MM-DD_HH:MM format (e.g., '2025-09-05_15:30'). Without 'utc_offset', times are interpreted in the server's configured timezone (${formatUTCOffset(timezoneOffset)}). The provided format '${reminderTimeArg}' is invalid.`,
           data: {
             status: "reminder_creation_failed_invalid_time_format",
-            reason: `Invalid reminder time format: '${reminderTimeArg}'. Expected YYYY-MM-DD_HH:MM format in ${formatUTCOffset(timezoneOffset)}.`,
+            reason: `Invalid reminder time format: '${reminderTimeArg}'. Expected YYYY-MM-DD_HH:MM format in ${formatUTCOffset(effectiveParseOffset)}.`,
             provided_time: reminderTimeArg,
             server_timezone: formatUTCOffset(timezoneOffset),
           },
         };
       }
     } else {
-      // Method 2: Relative time parameters - calculate from current time
       const hasRelativeParams =
         (typeof minutesFromNowArg === "number" && minutesFromNowArg > 0) ||
         (typeof hoursFromNowArg === "number" && hoursFromNowArg > 0) ||
         (typeof daysFromNowArg === "number" && daysFromNowArg > 0) ||
         (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0);
 
-      // Default to 1 minute if no time parameters provided (immediate message use case)
-      let effectiveMinutesFromNow = minutesFromNowArg;
-      if (!hasRelativeParams) {
-        effectiveMinutesFromNow = 1;
-        log.info("No time parameters provided for reminder - defaulting to 1 minute from now");
-      }
-
-      // Calculate relative time by adding all "from now" parameters
       timeCalculationMethod = "relative";
-      const currentTime = new Date();
+      const now = new Date();
+      const currentTime = hasRelativeParams ? now : alignReminderToDailyWindow(now, window);
+      const defaultDelayMinutes =
+        repetition?.unit === "hours"
+          ? repetition.interval * 60
+          : repetition?.unit === "minutes"
+            ? repetition.interval
+            : 1;
+      const effectiveMinutesFromNow = hasRelativeParams
+        ? minutesFromNowArg
+        : currentTime > now
+          ? 0
+          : defaultDelayMinutes;
+      const monthShiftedTime =
+        typeof monthsFromNowArg === "number" && monthsFromNowArg > 0
+          ? addMonthsWithOffset(currentTime, monthsFromNowArg, timezoneOffset)
+          : currentTime;
       let totalMilliseconds = 0;
 
-      // Add each time component (convert to milliseconds)
       if (typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0) {
         totalMilliseconds += effectiveMinutesFromNow * 60 * 1000;
       }
@@ -379,17 +450,19 @@ export class ReminderTool extends BaseTool {
       if (typeof daysFromNowArg === "number" && daysFromNowArg > 0) {
         totalMilliseconds += daysFromNowArg * 24 * 60 * 60 * 1000;
       }
-      if (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0) {
-        // Use average month length (30.44 days) for consistency
-        totalMilliseconds += monthsFromNowArg * 30.44 * 24 * 60 * 60 * 1000;
-      }
 
-      finalReminderTime = new Date(currentTime.getTime() + totalMilliseconds);
+      finalReminderTime = new Date(monthShiftedTime.getTime() + totalMilliseconds);
     }
 
+    if (finalReminderTime && validateFutureTime(finalReminderTime)) {
+      finalReminderTime = alignReminderToDailyWindow(finalReminderTime, window);
+    }
     const reminderPurpose = reminderPurposeArg.trim();
+    if (limit && "until" in limit && finalReminderTime && finalReminderTime > limit.until) {
+      const reason = "The repeat cutoff must allow the first scheduled delivery.";
+      return { success: false, error: reason, data: { status: "reminder_creation_failed_invalid_args", reason } };
+    }
 
-    // Validate that the calculated time is in the future (both absolute and relative times)
     if (!finalReminderTime || !validateFutureTime(finalReminderTime)) {
       const timeDisplay =
         timeCalculationMethod === "absolute"
@@ -420,6 +493,9 @@ export class ReminderTool extends BaseTool {
       let actualNicknameInDB = requestedTargetUser || "Tomori";
       let resolvedTargetUserId = "";
       let resolvedTargetUserLabel = actualNicknameInDB;
+      // Target's personal timezone offset (/personal config): used only for the
+      // dual-clock confirmation display, never for time interpretation
+      let targetPersonalOffset: number | null = null;
 
       if (isSelfReminder) {
         resolvedTargetUserId = botUserId as string;
@@ -429,6 +505,7 @@ export class ReminderTool extends BaseTool {
         resolvedTargetUserId = resolvedUserId;
         actualNicknameInDB = requestingUserRow?.user_nickname ?? context.message?.author?.displayName ?? "Unknown";
         resolvedTargetUserLabel = actualNicknameInDB;
+        targetPersonalOffset = requestingUserRow?.timezone_offset ?? null;
         log.info(`Reminder tool: Defaulted missing target_user to invoking user ${resolvedTargetUserId}`);
       } else {
         const userResolution = await resolveUserTarget(requestedTargetUser as string, context);
@@ -464,7 +541,6 @@ export class ReminderTool extends BaseTool {
             `Reminder: Target is a bridge user (${resolvedTargetUserId}), storing display label "${actualNicknameInDB}" without a DB lookup`,
           );
         } else {
-          // Load target user to verify they exist
           const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId);
 
           if (!targetUserRow?.user_id) {
@@ -479,11 +555,11 @@ export class ReminderTool extends BaseTool {
             };
           }
 
-          actualNicknameInDB = targetUserRow.user_nickname;
+          actualNicknameInDB = resolvedTargetUserLabel ?? targetUserRow.user_nickname ?? targetUserRow.user_disc_id;
+          targetPersonalOffset = targetUserRow.timezone_offset ?? null;
         }
       }
 
-      // Create the reminder in the database
       const dbResult = await serverScheduleRepository.addReminder({
         server_id: tomoriState.server_id,
         channel_disc_id: resolvedChannelId,
@@ -491,9 +567,13 @@ export class ReminderTool extends BaseTool {
         user_nickname: actualNicknameInDB, // Use the verified nickname from DB
         reminder_purpose: reminderPurpose,
         reminder_time: finalReminderTime,
-        repetition_interval_hours: repetitionIntervalHours,
+        repetition,
+        recurrenceOptions: limit || window ? { limit, window } : undefined,
         self_reminder: isSelfReminder,
-        created_by_user_id: requestingUserRow?.user_id ?? null,
+        // The creator's personal key pays for the reminder when it fires, so a bystander anchor never becomes it.
+        created_by_user_id: context.borrowsTriggerMessage
+          ? (context.internalUserId ?? null)
+          : (requestingUserRow?.user_id ?? null),
         persona_id: context.tomoriState.persona_id ?? null,
       });
 
@@ -502,43 +582,52 @@ export class ReminderTool extends BaseTool {
           `Reminder created (ID: ${dbResult.reminder_id}): "${reminderPurpose}" for ${actualNicknameInDB} (${resolvedTargetUserId}) at ${finalReminderTime.toISOString()}`,
         );
 
-        // Calculate time remaining for user-friendly display
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
+        // The tool result feeds model context, which stays English; only the embed follows the locale.
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
+        const localizedTimeRemaining = formatLocalizedDuration(timeRemainingMs, context.locale);
 
-        // Send confirmation notice to the channel
         // Format the reminder time in the server's configured timezone
-        const formattedReminderTime = formatTimeWithOffset(finalReminderTime, timezoneOffset, {
+        const timeFormatOptions: Intl.DateTimeFormatOptions = {
           year: "numeric",
           month: "long",
           day: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-        });
+        };
+        const formattedReminderTime = formatTimeWithOffset(
+          finalReminderTime,
+          timezoneOffset,
+          timeFormatOptions,
+          context.locale,
+        );
 
-        const useRecurringTaskEmbed = isSelfReminder && repetitionIntervalHours !== null;
-        const useOneTimeTaskEmbed = isSelfReminder && repetitionIntervalHours === null;
+        const useRecurringTaskEmbed = isSelfReminder && repetition !== null;
+        const useOneTimeTaskEmbed = isSelfReminder && repetition === null;
+        const repeatText = formatReminderRepetition(context.locale, repetition, limit, window, timezoneOffset);
         const reminderPurposeText =
           reminderPurpose.length > 200 ? `${reminderPurpose.substring(0, 197)}...` : reminderPurpose;
-        const reminderTimeText = `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`;
-        const baseDescriptionVars = {
-          user_nickname: actualNicknameInDB,
-          reminder_purpose: reminderPurposeText,
-          reminder_time: reminderTimeText,
-        };
-        const descriptionVars = useRecurringTaskEmbed
-          ? {
-              ...baseDescriptionVars,
-              repetition_interval_hours: repetitionIntervalHours as number,
-            }
-          : baseDescriptionVars;
-
-        // Send the confirmation notice. The expand helper attaches a "Show Full Task"
-        // button when the full purpose exceeds the 200-char truncation threshold,
-        // letting users read the entire purpose ephemerally without channel clutter.
+        // Show both clocks when the target has a personal timezone differing from
+        // the server's, so lets the user immediately spot a mislabeled/misconverted time
+        const reminderTimeText =
+          targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
+            ? localizer(context.locale, "reminders.dual_time_display", {
+                server_time: formattedReminderTime,
+                server_offset: formatUTCOffset(timezoneOffset),
+                user_time: formatTimeWithOffset(
+                  finalReminderTime,
+                  targetPersonalOffset,
+                  timeFormatOptions,
+                  context.locale,
+                ),
+                user_offset: formatUTCOffset(targetPersonalOffset),
+                user_nickname: actualNicknameInDB,
+              })
+            : `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`;
+        // Long purposes receive an expansion button so the full text remains
+        // available ephemerally without adding channel clutter.
         await sendTaskEmbedWithExpand(
-          context.channel,
-          context.locale,
+          context,
           {
             color: useRecurringTaskEmbed ? ColorCode.INFO : ColorCode.SUCCESS,
             titleKey: useRecurringTaskEmbed
@@ -550,33 +639,27 @@ export class ReminderTool extends BaseTool {
               persona_nickname: personaNickname,
             },
             descriptionKey: useRecurringTaskEmbed
-              ? "reminders.recurring_task_set_description"
+              ? "reminders.recurring_task_set_details"
               : useOneTimeTaskEmbed
                 ? "reminders.task_set_description"
                 : "reminders.reminder_set_description",
-            descriptionVars,
+            descriptionVars: {
+              user_nickname: actualNicknameInDB,
+              reminder_purpose: reminderPurposeText,
+              reminder_time: reminderTimeText,
+              repeat_text: repeatText,
+            },
             footerKey: useRecurringTaskEmbed
               ? "reminders.recurring_task_set_footer"
-              : repetitionIntervalHours
-                ? "reminders.reminder_set_footer_recurring"
+              : repetition
+                ? "reminders.recurring_reminder_set_footer"
                 : useOneTimeTaskEmbed
                   ? "reminders.task_set_footer"
                   : "reminders.reminder_set_footer",
-            footerVars: repetitionIntervalHours
-              ? {
-                  time_remaining: timeRemainingStr,
-                  repetition_interval_hours: repetitionIntervalHours,
-                }
-              : {
-                  time_remaining: timeRemainingStr,
-                },
+            footerVars: { time_remaining: localizedTimeRemaining, repeat_text: repeatText },
           },
           reminderPurpose,
-          {
-            webhook: context.webhook,
-            personaUsername: context.personaUsername,
-            personaAvatarUrl: context.personaAvatarUrl,
-          },
+          dbResult.reminder_id === undefined ? undefined : { kind: "task", id: dbResult.reminder_id },
         );
 
         return {
@@ -588,7 +671,10 @@ export class ReminderTool extends BaseTool {
             target_user: resolvedTargetUserLabel,
             reminder_purpose: reminderPurpose,
             reminder_time: finalReminderTime.toISOString(),
-            repetition_interval_hours: repetitionIntervalHours,
+            ...toRepetitionColumns(repetition),
+            repeat_remaining_count: limit && "remaining" in limit ? limit.remaining : null,
+            repeat_until_time: limit && "until" in limit ? limit.until.toISOString() : null,
+            daily_window: window ?? null,
             target_channel: resolvedChannelLabel,
             self_reminder: isSelfReminder,
             time_remaining_ms: timeRemainingMs,
@@ -607,6 +693,16 @@ export class ReminderTool extends BaseTool {
         },
       };
     } catch (error) {
+      if (error instanceof ReminderLimitError) {
+        return {
+          success: false,
+          error: `This server already has ${MAX_REMINDERS_PER_SERVER} pending reminders and tasks. Ask the user to remove some with /scheduled-task remove before adding another.`,
+          data: {
+            status: "reminder_creation_failed_limit",
+            reason: `The server reached its limit of ${MAX_REMINDERS_PER_SERVER} pending reminders.`,
+          },
+        };
+      }
       log.error("Error during reminder creation", error as Error);
       return {
         success: false,

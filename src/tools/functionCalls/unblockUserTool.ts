@@ -3,7 +3,7 @@ import {
   buildFailureResult,
   removePersonaUserBlock,
   resolveDiscordBlockTarget,
-  sendUserUnblockedEmbed,
+  sendUserUnblockedNotice,
 } from "@/tools/functionCalls/userBlockToolShared";
 
 export class UnblockUserTool extends BaseTool {
@@ -73,7 +73,7 @@ export class UnblockUserTool extends BaseTool {
       };
     }
 
-    await sendUserUnblockedEmbed({
+    await sendUserUnblockedNotice({
       context,
       targetDisplayName: target.displayLabel,
       removedBlock: removed,

@@ -1,9 +1,6 @@
-// locales/ja/commands/update.ts
-
 export default {
   update: {
     description: `TomoriBotの最新リリース情報を表示`,
-    title: `TomoriBot {version} リリース！`,
     no_notes: `このバージョンのリリースノートはありません。`,
     footer: `更新情報が古い可能性があります。最新のリリースと更新は \`/support discord\` を確認してください。`,
     fetch_error_title: `最新リリース情報の取得に失敗`,

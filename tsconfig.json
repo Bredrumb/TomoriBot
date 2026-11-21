@@ -3,6 +3,9 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment",
     "strict": true,
     "skipLibCheck": true,
     "noUnusedLocals": true,
@@ -17,5 +20,12 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "src/events/messageCreate/tomoriChat.ts", ".deprecated/formatSource.ts"]
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "src/events/messageCreate/tomoriChat.ts",
+    ".deprecated/formatSource.ts",
+    "tests/**/*"
+  ],
+  "exclude": ["scripts/archived/**"]
 }

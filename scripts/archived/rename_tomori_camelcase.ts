@@ -6,7 +6,7 @@
  *   - targetTomoriId → targetPersonaId
  *
  * Word-boundary regex ensures we don't touch unrelated identifiers
- * (e.g. `TomoriIdentity` or `mytomoriId` would be skipped — neither exists,
+ * (e.g. `TomoriIdentity` or `mytomoriId` would be skipped because neither exists,
  * but the boundary is the safety net).
  *
  * Scope: src/, tests/. Skipped: plans/ (historical), scripts/ (manual review).

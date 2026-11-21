@@ -1,0 +1,112 @@
+---
+title: "02: Admission Check"
+aiGenerated: true
+---
+
+The admission stage decides whether an incoming message proceeds into a generation turn, gets queued
+behind active work, or terminates immediately. It loads early server and persona state required
+for turn planning.
+
+## Flow and ownership
+
+`evaluateChatAdmission()` in `src/utils/chat/admission.ts` inspects each normalized `ChatIncoming`.
+It returns a discriminated `ChatAdmission`: runnable (`"run"`) or non-runnable (`"ignore"`, `"blocked"`,
+`"queued"`, or `"error"`).
+
+```mermaid
+flowchart TD
+  inc["ChatIncoming"] -->|"Suppressed / bot / easter egg?"| ign1["ignore"]
+  inc -->|"Privacy-FULL / blacklisted / scope?"| blk1["blocked"]
+  inc -->|"Sendability checks failed?"| blk2["blocked"]
+  inc --> load["Load early TomoriState & allPersonas"]
+  load -->|"Audio attachment present?"| stt["STT transcription & inline content mutation"]
+  stt --> gate["evaluateAdmissionQueueAndTriggerGate()"]
+  load --> gate
+  gate -->|"Channel locked: natural stop phrasing?"| stop["requestNaturalStopForLockedTurn() → ignore"]
+  gate -->|"Channel locked: eligible same-user follow-up?"| follow["queueFollowUpForLockedTurn() → queued"]
+  gate -->|"Channel locked: eligible trigger & quota?"| busy["enqueueBusyChannelMessage() → queued"]
+  gate -->|"Channel free & trigger matches"| run["RunnableChatAdmission { disposition: run }"]
+```
+
+### Channel scope and DM resolution
+
+Guild channels resolve server scope directly from `guild.id`. DMs have no guild, so TomoriBot maps
+each DM to a synthetic server whose identifier is the human recipient's Discord ID.
+
+`resolveAdmissionChannelScope()` derives this identifier from `DMChannel.recipientId`, which is a property
+of the channel rather than the message author. For automated turns (such as reminders or cross-channel
+boomerangs), `systemTriggerIdentity` from the schedule's database record takes precedence. This ensures
+turns triggered by one of Tomori's own recent messages still resolve the human user's server row.
+
+### Sendability validation
+
+Before loading persona configuration or calling models, guild channels pass three delivery checks:
+
+1. **Permission bits**: verifies `SendMessages` in standard text channels or `SendMessagesInThreads`
+   in thread channels.
+2. **Guild timeout**: checks `member.isCommunicationDisabled()` on the cached bot member. A timed-out bot
+   retains its permission bits in Discord's bitfield, but Discord rejects sends with HTTP error 50013.
+   Checking the cached member avoids a remote API call.
+3. **Recent refusal cache**: checks `getBlockedSendReason()` from `sendFailureCache`. This backstop catches
+   channels where Discord recently refused a send with 50013 or 50001, skipping generations until
+   `SEND_FAILURE_RETRY_MS` expires or a subsequent send succeeds.
+
+### Message-proxy admission
+
+For opted-in users, admission creates a service-scoped expectation before checking the proxy bot's guild presence. A verified repost can then replace the original while it is held. PluralKit attests the exact original; PluralBuddy cannot pair concurrent originals from one host. Verified proxy reposts pass the webhook gate, while persona and Matrix handling require a managed webhook. Privacy, quota, and cooldown checks use the attested host account. See [message-proxy integration](/architecture/integrations/message-proxy/) for matching and queue constraints.
+
+### Persona-authored triggers
+
+A persona's webhook post is posted by the channel's shared managed webhook, so its author ID is never a person. An organic persona-to-persona reply is credited to the person who started the self-reply chain (`getSelfReplyChainOriginUser`); with no recorded originator, admission ignores the message as `persona_chain_without_origin`. A system turn (Natural Nudges, scheduled tasks) that anchors on any webhook post other than a Matrix relay is credited to the bot account instead, and `getTopUsers` leaves the bot off leaderboards. Neither path greets anyone with a reunion note.
+
+`/impersonate persona` resets the cascade budget and records the command invoker before posting,
+so a gateway echo can start a chain even after a restart or an idle period. The Discord message event
+processes the post once; trigger matching and the configured cascade limit still apply.
+The command's ephemeral acknowledgement does not affect attribution of the public persona post.
+
+### Audio transcription
+
+When a message contains audio attachments and voice transcription is enabled,
+`evaluateAudioTranscriptionAdmission()` transcribes the attachment through the sender's personal
+transcription model or the server's target (see [Voice System](/architecture/integrations/voice/)).
+
+In chat mode on supported guild channels, it sends the transcript via a webhook mirroring the user's
+name and avatar. Otherwise, it stores the text in `voiceTranscriptCache`. In both modes, it updates
+`message.content` in place with the transcript text so downstream context builders see the spoken words.
+
+### Admission queue and trigger gating
+
+`evaluateAdmissionQueueAndTriggerGate()` in `src/utils/chat/admissionQueue.ts` evaluates whether the channel
+is currently busy:
+
+- **Channel is locked**:
+  - If the message matches natural stop phrasing, it requests a natural stop via
+    `requestNaturalStopForLockedTurn()` and returns `"ignore"`.
+  - If the message is an eligible conversational follow-up from the same user, it enqueues the message
+    via `queueFollowUpForLockedTurn()`, signals an interrupt to active streaming, and returns `"queued"`.
+  - If the message matches a trigger and passes rate limits and cooldowns, it enqueues the message via
+    `enqueueBusyChannelMessage()` for FIFO replay and returns `"queued"`.
+- **Channel is free**: verifies access rules, advances `updateAutochatCounter()` for qualifying messages in
+  configured counter channels, and evaluates reply criteria. If admitted, the message returns disposition
+  `"run"` and proceeds to the channel lock.
+
+## Constraints and rationale
+
+- **Fail-early resource protection**: sendability checks and user blacklist gates run before STT transcription
+  and model requests, avoiding quota consumption on delivery targets that cannot receive a response.
+- **Author-agnostic DM keys**: relying on channel recipient metadata and `systemTriggerIdentity` rather
+  than message author protects DM state resolution during automated self-replies and reminders.
+- **In-place content mutation**: writing transcribed text into `message.content` lets downstream prompt
+  and memory builders process audio identically to standard text messages.
+- **One reply-target resolution**: `resolveReferencedMessage()` loads the replied-to message once
+  (cache, then REST) and verifies its webhook. The trigger gate and turn planning read that instance
+  from the admission instead of the channel cache, because the capped message cache can evict the
+  target while a turn waits and webhook trust is recorded per message object. A queued message is
+  admitted again when it replays, so it resolves its target afresh.
+
+## Source pointers
+
+- `src/utils/chat/admission.ts`: `evaluateChatAdmission()` and channel scope resolution.
+- `src/utils/chat/admissionQueue.ts`: `evaluateAdmissionQueueAndTriggerGate()` and busy-channel decision tree.
+- `src/utils/discord/stream/sendFailureCache.ts`: refusal tracking preventing wasted generation turns.
+- `src/utils/chat/triggerProcessor.ts`: trigger matching and stop phrasing checks.

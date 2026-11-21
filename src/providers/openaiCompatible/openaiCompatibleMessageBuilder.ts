@@ -1,21 +1,15 @@
+import { isPromptSystemItem } from "@/utils/text/context/promptLayout";
+import { mapWithConcurrency } from "@/utils/async/bounded";
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import type { StructuredContextItem } from "@/types/misc/context";
 import {
   relocateAssistantMediaContextItems,
   relocateAssistantMediaToUserTurns,
 } from "@/providers/utils/strictChatCompat";
+import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
-
-const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
 
 interface BuildOpenAICompatibleMessagesOptions {
   adapterName: string;
@@ -28,6 +22,13 @@ interface BuildOpenAICompatibleMessagesOptions {
     preToolCallTextParts?: Array<Record<string, unknown>>;
   }>;
   seesImages?: boolean;
+  /**
+   * When `true`, every replayed assistant tool-call turn carries a `reasoning_content` key,
+   * falling back to an empty string when nothing was captured. Distinct from the adapter's
+   * capture-side flag: only DeepSeek has been shown to require the key's presence and to accept
+   * an empty value, so other reasoning-capable endpoints keep the capture-only behavior.
+   */
+  requiresReasoningContentReplay?: boolean;
   /**
    * When `false`, the assembled system instruction is injected as the first
    * `"user"` turn instead of a `"system"` role message.  Use this for
@@ -50,10 +51,7 @@ export async function buildOpenAICompatibleMessages(
       .map((part) => part.text)
       .join("\n");
 
-    if (
-      item.role === "system" ||
-      (item.role === "user" && item.metadataTag && SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-    ) {
+    if (isPromptSystemItem(item)) {
       if (itemTextContent) {
         systemInstructionParts.push(itemTextContent);
       }
@@ -65,15 +63,14 @@ export async function buildOpenAICompatibleMessages(
     }
 
     const role = item.role === "user" ? "user" : "assistant";
-    const contentParts: Array<Record<string, unknown>> = [];
-
-    for (const part of item.parts) {
+    const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+      const contentParts: Array<Record<string, unknown>> = [];
       if (part.type === "text") {
         contentParts.push({
           type: "text",
           text: part.text,
         });
-        continue;
+        return contentParts;
       }
 
       if (part.type === "video") {
@@ -83,21 +80,21 @@ export async function buildOpenAICompatibleMessages(
           type: "text",
           text: "[System: A video is attached to this message that this model cannot process.]",
         });
-        continue;
+        return contentParts;
       }
 
       if (part.type !== "image") {
-        continue;
+        return contentParts;
       }
       if (!options.seesImages) {
-        // Image part present but model cannot process it — add a text placeholder
+        // Image part present but model cannot process it, so add a text placeholder
         // so the model is still aware an image was attached. This can happen when
         // context was built with images included for a vision-capable fallback model.
         contentParts.push({
           type: "text",
           text: "[System: An image is attached to this message that this model cannot process.]",
         });
-        continue;
+        return contentParts;
       }
 
       const imagePart = await convertImagePartToOpenAIContentPart(part);
@@ -106,12 +103,14 @@ export async function buildOpenAICompatibleMessages(
         // relocated to a synthetic user turn by relocateAssistantMediaToUserTurns after the loop.
         contentParts.push(imagePart);
       }
-    }
+      return contentParts;
+    });
+    const contentParts = partsByInput.flat();
 
     if (role === "assistant") {
       // Emit the assistant turn with its parts intact. relocateAssistantMediaToUserTurns (run after
       // the dialogue loop) peels any image parts into a synthetic user turn and flattens the
-      // remaining text-only assistant content back to a string — matching the previous output.
+      // remaining text-only assistant content back to a string, so matching the previous output.
       if (contentParts.length > 0) {
         messages.push({
           role,
@@ -137,18 +136,18 @@ export async function buildOpenAICompatibleMessages(
 
   // Relocate media off assistant turns into synthetic user turns (always-on, never gated by a
   // toggle): the assistant role cannot carry media in input history across OpenAI/Anthropic/Gemini
-  // shaped APIs. Runs only over the dialogue turns assembled above — system, tool/function history,
+  // shaped APIs. Runs only over the dialogue turns assembled above: system, tool/function history,
   // and prefill turns are appended afterwards and never carry relocatable media.
   messages = relocateAssistantMediaToUserTurns(messages);
 
   if (systemInstructionParts.length > 0) {
     const systemContent = systemInstructionParts.join("\n\n");
 
-    // 1. Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
+    // Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
     //    turns before forwarding to the underlying model.  When the adapter
     //    signals this via supportsSystemRole: false, inject the instructions
     //    as the first user turn so the model still receives them in-band.
-    // 2. The wrapper preamble mirrors the Gemma in-band injection pattern
+    // The wrapper preamble mirrors the Gemma in-band injection pattern
     //    used in googleStreamAdapter.ts.
     if (options.supportsSystemRole === false) {
       messages.unshift({
@@ -170,8 +169,9 @@ export async function buildOpenAICompatibleMessages(
   }
 
   if (options.functionInteractionHistory && options.functionInteractionHistory.length > 0) {
-    for (const interaction of options.functionInteractionHistory) {
-      const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const usedToolCallIds = new Set<string>();
+    for (const [index, interaction] of options.functionInteractionHistory.entries()) {
+      const toolCallId = resolveToolCallId(interaction.functionCall.id, index, "call", usedToolCallIds);
       const preToolCallContent = (interaction.preToolCallTextParts ?? [])
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.length > 0)
@@ -191,11 +191,19 @@ export async function buildOpenAICompatibleMessages(
           },
         ],
       };
-      if (interaction.functionCall.deepseekReasoningContent) {
-        assistantMessage.reasoning_content = interaction.functionCall.deepseekReasoningContent;
+      // DeepSeek thinking mode rejects a replayed tool-call turn that omits `reasoning_content`
+      // but accepts an empty string, so the key must be present even when nothing was captured.
+      // A turn can legitimately carry none: a degraded retry that drops `thinking` (guarded by
+      // mandatoryBodyKeys) still calls tools, and that reply has no reasoning to capture.
+      const capturedReasoning = interaction.functionCall.deepseekReasoningContent;
+      if (options.requiresReasoningContentReplay) {
+        assistantMessage.reasoning_content = capturedReasoning ?? "";
         log.info(
-          `${options.adapterName}: Preserving DeepSeek reasoning_content for tool '${interaction.functionCall.name}'`,
+          `${options.adapterName}: Replaying ${capturedReasoning?.length ?? 0} chars of reasoning_content for tool '${interaction.functionCall.name}'`,
         );
+      } else if (capturedReasoning) {
+        assistantMessage.reasoning_content = capturedReasoning;
+        log.info(`${options.adapterName}: Preserving reasoning_content for tool '${interaction.functionCall.name}'`);
       }
 
       messages.push(assistantMessage);
@@ -206,13 +214,10 @@ export async function buildOpenAICompatibleMessages(
         content: JSON.stringify(interaction.functionResponse),
       });
 
+      // The function response is already serialized in the role=tool message.
+      // A synthetic user turn is needed only when image metadata must be moved
+      // onto a role that supports image inputs.
       const responseParts: Array<Record<string, unknown>> = [];
-      if (interaction.functionResponse) {
-        responseParts.push({
-          type: "text",
-          text: JSON.stringify(interaction.functionResponse),
-        });
-      }
 
       if (
         options.seesImages &&
@@ -220,12 +225,7 @@ export async function buildOpenAICompatibleMessages(
         interaction.imageMetadata.imageUrls.length > 0
       ) {
         for (const image of interaction.imageMetadata.imageUrls) {
-          responseParts.push({
-            type: "image_url",
-            image_url: {
-              url: image.originalUrl || image.url,
-            },
-          });
+          responseParts.push(await inlineToolResponseImage(image, options.adapterName));
         }
       }
 
@@ -255,8 +255,30 @@ export async function buildOpenAICompatibleMessages(
     }
   }
 
+  if (options.requiresReasoningContentReplay) {
+    stampCurrentTurnReasoningContent(messages);
+  }
+
   log.info(`${options.adapterName}: Assembled ${messages.length} messages`);
   return messages;
+}
+
+/**
+ * DeepSeek's thinking-mode backend treats every assistant message after the last user message as
+ * part of the current turn and 400s when one omits `reasoning_content`, whether or not it carries
+ * `tool_calls` or `prefix: true`. A trailing plain-text assistant turn (a continuation buffered in
+ * `currentTurnModelParts`, or a history that ends on Tomori's own message) has no captured
+ * reasoning, so the empty string is the only value available. Earlier turns are left alone
+ * because the backend ignores their reasoning.
+ */
+function stampCurrentTurnReasoningContent(messages: Array<Record<string, unknown>>): void {
+  const lastUserIndex = messages.findLastIndex((message) => message.role === "user");
+  for (let i = lastUserIndex + 1; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.role === "assistant" && message.reasoning_content === undefined) {
+      message.reasoning_content = "";
+    }
+  }
 }
 
 export function logSanitizedOpenAICompatibleRequest(
@@ -335,7 +357,6 @@ async function convertImagePartToOpenAIContentPart(
   }
 
   try {
-    // Fetch and optimize oversized images for LLM context
     const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
     return {
       type: "image_url",
@@ -348,18 +369,18 @@ async function convertImagePartToOpenAIContentPart(
     if (fallback && fallback !== part.uri) {
       try {
         const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
-        log.info(`OpenAICompatible: Image loaded via fallback CDN URL ${fallback}`);
+        log.info(`OpenAICompatible: Image loaded via fallback CDN`);
         return {
           type: "image_url",
           image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
         };
       } catch (fallbackErr) {
-        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed)`, {
           error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
         });
       }
     } else {
-      log.warn(`Failed to fetch image: ${part.uri}`, {
+      log.warn(`Failed to fetch image`, {
         error: error instanceof Error ? error.message : String(error),
       });
     }

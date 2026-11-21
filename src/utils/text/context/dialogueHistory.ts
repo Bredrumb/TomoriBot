@@ -1,3 +1,4 @@
+import { applyPromptLayoutInserts, type PromptLayoutInsert } from "@/utils/text/context/promptLayout";
 import type { Client } from "discord.js";
 import {
   ContextItemTag,
@@ -5,12 +6,13 @@ import {
   type MediaDescriptor,
   type StructuredContextItem,
 } from "@/types/misc/context";
-import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
-import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyStableHumanizer } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
+import { VERBATIM_TOOL_CALLING_NUDGE, shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import {
   buildMediaAttributionText,
@@ -24,6 +26,15 @@ import {
 import { normalizeCustomEmojisForLlm, splitLeadingSystemBlocks } from "./mentionNormalizer";
 import type { MentionConverter } from "./templates";
 import type { SimplifiedMessageForContext } from "./types";
+import { buildDateSpacer } from "./timeAwareness";
+
+/**
+ * Expanded by the caller's tool macro resolver before use, so the `read_file` instruction appears only
+ * when the turn actually exposes `read_file`. `{filename}` and `{media_id}` are filled afterwards
+ * because a filename is user-controlled and must never be parsed as a conditional or macro.
+ */
+export const DOCUMENT_HINT_TEMPLATE =
+  "[System: A file named `{filename}` is attached (message ID: {media_id}).{{if tool:read_file}} Use {document_tool} with this message ID to read its contents, only if needed.{{else}} Its contents are not available to you right now, so do not guess them.{{/if}}]";
 
 export async function appendDialogueHistoryContext(params: {
   contextItems: StructuredContextItem[];
@@ -34,19 +45,24 @@ export async function appendDialogueHistoryContext(params: {
   tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   channelContextNote?: { note: string; depth: number } | null;
-  mediaContextWindow?: number;
+  reunionNote?: string | null;
+  dateSpacerTemplate?: string | null;
+  /** `DOCUMENT_HINT_TEMPLATE` after tool macro expansion. */
+  documentHintTemplate: string;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
+  triggererDiscordId?: string;
+  triggererFormattedName: string;
+  historyUserLabels?: Map<string, string>;
+  historyPersonaMentionLabels?: Map<string, string>;
   messageIdMap?: MessageIdMap;
   uncensorInputOptions: { unicodeSpacesEnabled: boolean; sanitizeEnabled: boolean };
   convertMentions: MentionConverter;
 }): Promise<void> {
   const totalMessages = params.simplifiedMessageHistory.length;
   const configuredMessageFetchLimit = normalizeMessageFetchLimit(params.tomoriConfig.message_fetch_limit);
-  const requestedMediaWindow = params.mediaContextWindow ?? memoryGuard.getMediaWindow();
-  const effectiveMediaWindow = Math.min(requestedMediaWindow, configuredMessageFetchLimit);
-  const maxExtendBy = Math.max(0, configuredMessageFetchLimit - effectiveMediaWindow);
+  const effectiveMediaWindow = Math.min(memoryGuard.getMediaWindow(), configuredMessageFetchLimit);
   const mediaWindowCutoff = totalMessages - effectiveMediaWindow;
   const renderedImageMessageIds = getRenderedImageMessageIdsWithinWindow(
     params.simplifiedMessageHistory,
@@ -58,31 +74,53 @@ export async function appendDialogueHistoryContext(params: {
     mediaWindowCutoff,
   );
 
-  // Build the ordered list of active context notes.
   // Persona and channel notes are additive (both injected when set).
   // Global note is a fallback used only when neither persona nor channel has one.
   const personaNoteText = params.tomoriState?.context_note?.trim() || null;
   const channelNoteText = params.channelContextNote?.note?.trim() || null;
 
-  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean }> = [];
+  const activeNotes: PromptLayoutInsert[] = [];
+  const noteInsert = (tag: PromptLayoutInsert["tag"], text: string, depth?: number): PromptLayoutInsert => ({
+    tag,
+    depth,
+    items: [
+      {
+        role: "user",
+        parts: [{ type: "text", text: `[System: ${text}]` }],
+        metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
+        messageId: "context_note_injection",
+      },
+    ],
+  });
 
   if (personaNoteText) {
     const depth = params.tomoriState?.context_note_depth ?? 0;
-    activeNotes.push({ text: personaNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+    activeNotes.push(noteInsert("persona_note", personaNoteText, depth));
   }
   if (channelNoteText) {
     const depth = params.channelContextNote?.depth ?? 0;
-    activeNotes.push({ text: channelNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+    activeNotes.push(noteInsert("channel_note", channelNoteText, depth));
   }
   if (activeNotes.length === 0) {
     const globalNoteText = params.tomoriConfig.context_note?.trim() || null;
     if (globalNoteText) {
       const depth = params.tomoriConfig.context_note_depth ?? 0;
-      activeNotes.push({ text: globalNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+      activeNotes.push(noteInsert("global_note", globalNoteText, depth));
     }
+  }
+  if (shouldInjectVerbatimToolCallingNudge(params.tomoriState)) {
+    activeNotes.push(noteInsert("verbatim_nudge", VERBATIM_TOOL_CALLING_NUDGE));
+  }
+  // The reunion note sits above the newest messages rather than directly against
+  // the triggering prompt, so it reads as background awareness instead of an
+  // instruction that outranks whatever the user actually asked for.
+  const reunionNoteText = params.reunionNote?.trim();
+  if (reunionNoteText) {
+    activeNotes.push(noteInsert("reunion_note", reunionNoteText));
   }
 
   const botNameLower = params.botName.toLowerCase();
+  let previousCreatedAt: number | undefined;
   for (const [index, msg] of params.simplifiedMessageHistory.entries()) {
     const isPersonaMessage = msg.authorType === "persona" && !!msg.personaName;
     const isCurrentPersonaMessage = isPersonaMessage && msg.personaName?.toLowerCase() === botNameLower;
@@ -92,25 +130,36 @@ export async function appendDialogueHistoryContext(params: {
         : params.isUserImpersonation || !isCurrentPersonaMessage
           ? "user"
           : "model";
-    const sender: StructuredContextItem["sender"] = {
-      name: msg.personaName ?? msg.authorName,
-      type: msg.authorType,
-    };
+    const sender: StructuredContextItem["sender"] = msg.isSystemNotice
+      ? undefined
+      : {
+          id: String(msg.authorPersonaId ?? msg.authorId),
+          name: msg.personaName ?? msg.authorName,
+          type: msg.authorType,
+        };
 
-    for (const note of activeNotes) {
-      if (!note.emitted && index === note.targetIndex) {
+    if (params.dateSpacerTemplate && previousCreatedAt !== undefined && msg.createdAt !== undefined) {
+      const spacer = buildDateSpacer(
+        previousCreatedAt,
+        msg.createdAt,
+        params.tomoriConfig.timezone_offset,
+        params.dateSpacerTemplate,
+      );
+      if (spacer) {
         pushDialogueHistoryContextItem(
           params.contextItems,
           "user",
-          [{ type: "text", text: `[System: ${note.text}]` }],
-          "context_note_injection",
-          ContextItemTag.CONTEXT_NOTE_INJECTION,
+          [{ type: "text", text: spacer }],
+          `date_spacer_${msg.id}`,
         );
-        note.emitted = true;
       }
     }
+    if (msg.createdAt !== undefined) previousCreatedAt = msg.createdAt;
+
+    applyPromptLayoutInserts(params.contextItems, activeNotes, { index, total: totalMessages });
 
     const parts: ContextPart[] = [];
+    const completionParts: ContextPart[] = [];
     const detachedSystemParts: ContextPart[] = [];
     const mediaDescriptors: MediaDescriptor[] = [];
     const isWithinMediaWindow = index >= mediaWindowCutoff;
@@ -130,7 +179,6 @@ export async function appendDialogueHistoryContext(params: {
       renderedImageMessageIds,
       duplicateImageLastIndex,
       mediaWindowCutoff,
-      maxExtendBy,
     });
 
     const mediaAttributionHint =
@@ -144,9 +192,12 @@ export async function appendDialogueHistoryContext(params: {
       role,
       parts,
       detachedSystemParts,
+      completionParts,
       hasMediaDescriptors: mediaDescriptors.length > 0,
       mediaAttributionHint,
     });
+    appendDocumentHintParts({ ...params, msg, parts });
+    const firstItemIndex = params.contextItems.length;
 
     if (role === "user" && (parts.length > 0 || detachedSystemParts.length > 0 || mediaDescriptors.length > 0)) {
       pushDialogueHistoryContextItem(
@@ -157,23 +208,59 @@ export async function appendDialogueHistoryContext(params: {
         undefined,
         sender,
         mediaDescriptors,
+        msg.combinedMessageIds,
       );
     } else {
-      pushDialogueHistoryContextItem(params.contextItems, "user", detachedSystemParts, msg.id, undefined, sender);
-      pushDialogueHistoryContextItem(params.contextItems, role, parts, msg.id, undefined, sender, mediaDescriptors);
-    }
-  }
-
-  for (const note of activeNotes) {
-    if (!note.emitted) {
       pushDialogueHistoryContextItem(
         params.contextItems,
         "user",
-        [{ type: "text", text: `[System: ${note.text}]` }],
-        "context_note_injection",
-        ContextItemTag.CONTEXT_NOTE_INJECTION,
+        detachedSystemParts,
+        msg.id,
+        undefined,
+        sender,
+        undefined,
+        msg.combinedMessageIds,
+      );
+      pushDialogueHistoryContextItem(
+        params.contextItems,
+        role,
+        parts,
+        msg.id,
+        undefined,
+        sender,
+        mediaDescriptors,
+        msg.combinedMessageIds,
       );
     }
+    for (const item of params.contextItems.slice(firstItemIndex)) {
+      if (item.parts === parts || item.role === role) {
+        item.completionText = completionParts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+      }
+    }
+  }
+
+  applyPromptLayoutInserts(params.contextItems, activeNotes, {
+    index: totalMessages,
+    total: totalMessages,
+    flush: true,
+  });
+}
+
+function appendDocumentHintParts(params: {
+  msg: SimplifiedMessageForContext;
+  parts: ContextPart[];
+  documentHintTemplate: string;
+  messageIdMap?: MessageIdMap;
+}): void {
+  for (const document of params.msg.documentAttachments ?? []) {
+    const sourceMessageId = document.sourceMessageId ?? params.msg.id;
+    const mediaId = params.messageIdMap?.register(sourceMessageId, "media") ?? sourceMessageId;
+    params.parts.push({
+      type: "text",
+      text: params.documentHintTemplate
+        .replace("{media_id}", () => mediaId)
+        .replace("{filename}", () => document.filename),
+    });
   }
 }
 
@@ -189,14 +276,12 @@ function appendMediaDescriptors(
     renderedImageMessageIds: Set<string>;
     duplicateImageLastIndex: Map<string, number>;
     mediaWindowCutoff: number;
-    maxExtendBy: number;
   },
 ): boolean {
   if (!params.isWithinMediaWindow) {
-    const extendByNeeded = Math.min(params.mediaWindowCutoff - params.index, params.maxExtendBy);
-    const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
     for (const attachment of params.msg.imageAttachments) {
       if (attachment.isEmoji) continue;
+      const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
       params.mediaDescriptors.push({
         kind: "image",
         uri: attachment.proxyUrl,
@@ -204,18 +289,17 @@ function appendMediaDescriptors(
         ...(attachment.url !== attachment.proxyUrl && { fallbackUri: attachment.url }),
         mediaId,
         withinWindow: false,
-        extendBy: extendByNeeded,
         filename: attachment.filename,
       });
     }
     for (const attachment of params.msg.videoAttachments) {
+      const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
       params.mediaDescriptors.push({
         kind: "video",
         uri: attachment.isYouTubeLink ? attachment.url : attachment.proxyUrl,
         mimeType: attachment.mimeType,
         mediaId,
         withinWindow: false,
-        extendBy: extendByNeeded,
         isYouTubeLink: attachment.isYouTubeLink,
         filename: attachment.filename,
       });
@@ -235,7 +319,6 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
   const shouldRenderCountedImages = !hasCountedImages || params.renderedImageMessageIds.has(params.msg.id);
   let skippedCountedImageCount = 0;
   let skippedDuplicateImageCount = 0;
-  const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
 
   for (const attachment of params.msg.imageAttachments) {
     if (attachment.isEmoji) continue;
@@ -252,6 +335,7 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
       continue;
     }
 
+    const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
     params.mediaDescriptors.push({
       kind: "image",
       uri: attachment.proxyUrl,
@@ -283,8 +367,8 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
 function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors>[0]): void {
   if (params.msg.videoAttachments.length === 0) return;
 
-  const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
   for (const attachment of params.msg.videoAttachments) {
+    const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
     params.mediaDescriptors.push({
       kind: "video",
       uri: attachment.isYouTubeLink ? attachment.url : attachment.proxyUrl,
@@ -297,6 +381,20 @@ function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors
   }
 }
 
+/**
+ * Register the fetchable Discord message that owns one media attachment.
+ *
+ * Copied reply media carries the referenced source message. Local media and
+ * forwarded snapshots fall back to the current wrapper message.
+ */
+function registerAttachmentMediaId(
+  params: Parameters<typeof appendMediaDescriptors>[0],
+  sourceMessageId?: string,
+): string {
+  const resolvedMessageId = sourceMessageId ?? params.msg.id;
+  return params.messageIdMap?.register(resolvedMessageId, "media") ?? resolvedMessageId;
+}
+
 async function buildMediaAttributionHint(
   params: Parameters<typeof appendDialogueHistoryContext>[0] & {
     msg: SimplifiedMessageForContext;
@@ -304,7 +402,14 @@ async function buildMediaAttributionHint(
     hasVideos: boolean;
   },
 ): Promise<string> {
-  const mediaMessageIds = params.msg.mediaSourceMessageIds ?? [params.msg.id];
+  const mediaMessageIds = [
+    ...new Set([
+      ...params.msg.imageAttachments
+        .filter((attachment) => !attachment.isEmoji)
+        .map((attachment) => attachment.sourceMessageId ?? params.msg.id),
+      ...params.msg.videoAttachments.map((attachment) => attachment.sourceMessageId ?? params.msg.id),
+    ]),
+  ];
   const nonEmojiImageCount = params.msg.imageAttachments.filter((attachment) => !attachment.isEmoji).length;
   const videoCount = params.msg.videoAttachments.length;
   const totalMediaCount = nonEmojiImageCount + videoCount;
@@ -323,10 +428,15 @@ async function buildMediaAttributionHint(
   const thisOrThese = totalMediaCount === 1 ? "This" : "These";
   const wasSent = totalMediaCount === 1 ? "was" : "were";
 
+  // Forwarded media registers the wrapper message's own id (so tools can resolve
+  // it in the current channel), so it would pass the includes() check below.
+  // branch on the source kind first to keep the forwarded attribution wording.
+  if (params.msg.remoteMediaSourceKind === "forwarded") {
+    return `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} attached to the forwarded message described above]`;
+  }
+
   if (!mediaMessageIds.includes(params.msg.id)) {
-    return params.msg.remoteMediaSourceKind === "forwarded"
-      ? `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} attached to the forwarded message described above]`
-      : `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} included in the message being replied to]`;
+    return `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} included in the message being replied to]`;
   }
 
   const resolvedHintAuthorName = await params.convertMentions(
@@ -346,26 +456,68 @@ async function appendTextParts(
     role: "user" | "model";
     parts: ContextPart[];
     detachedSystemParts: ContextPart[];
+    completionParts: ContextPart[];
     hasMediaDescriptors: boolean;
     mediaAttributionHint: string | null;
   },
 ): Promise<void> {
+  const authorLabel =
+    params.msg.authorType === "user"
+      ? (params.historyUserLabels?.get(params.msg.authorId) ??
+        (params.triggererDiscordId === params.msg.authorId && params.triggererFormattedName
+          ? params.triggererFormattedName
+          : params.msg.authorName))
+      : params.msg.authorName;
+
   if (params.msg.content) {
-    const normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+    let normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+    let completionContent = normalizeCustomEmojisForLlm(params.msg.completionContent ?? params.msg.content);
+    if (params.msg.authorPersonaLineageId != null && params.historyPersonaMentionLabels) {
+      normalizedContent = normalizedContent.replace(/<@!?(\d+)>/gu, (mention, targetId: string) => {
+        return params.historyPersonaMentionLabels?.get(`${params.msg.authorPersonaLineageId}:${targetId}`) ?? mention;
+      });
+      completionContent = completionContent.replace(/<@!?(\d+)>/gu, (mention, targetId: string) => {
+        return params.historyPersonaMentionLabels?.get(`${params.msg.authorPersonaLineageId}:${targetId}`) ?? mention;
+      });
+    }
+
+    // The author label is text WE author, so identity macros in it must still resolve: it is
+    //    what tells the model which name owns the turn. Resolved BEFORE the join so the body,
+    //    which is raw prose, can opt out of macro expansion in step 3.
+    const resolvedAuthorLabel = await params.convertMentions(
+      authorLabel,
+      params.client,
+      params.guildId,
+      authorLabel,
+      params.botName,
+      params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "resolve",
+    );
+
     let processedContent: string;
     if (normalizedContent.startsWith("[System:")) {
       const { leadingSystemBlocks, remainingContent } = splitLeadingSystemBlocks(normalizedContent);
       processedContent =
         leadingSystemBlocks.length > 0 && remainingContent
-          ? `${leadingSystemBlocks.join("\n")}\n${params.msg.authorName}: ${remainingContent}`
+          ? `${leadingSystemBlocks.join("\n")}\n${resolvedAuthorLabel}: ${remainingContent}`
           : normalizedContent;
     } else {
-      processedContent = `${params.msg.authorName}: ${normalizedContent}`;
+      processedContent = `${resolvedAuthorLabel}: ${normalizedContent}`;
     }
 
-    if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
-      processedContent = humanizeString(processedContent);
+    if (params.role === "model") {
+      // content is already real, previously-delivered text, so re-rolling the same randomized
+      // comma/emphasis noise on every context build would just re-randomize already-final output
+      // and, since it never lands on the same result twice, defeat provider prompt-prefix caching
+      // for every turn after this one. The stable humanizer keeps only the deterministic
+      // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
+      processedContent = applyStableHumanizer(processedContent, params.tomoriConfig);
     }
+    // Mentions, channel links, and roles still resolve here. Only the identity macros stay
+    //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
+    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user).
+    //    On a model-role line it would also collapse both macros onto the persona's own name.
     processedContent = await params.convertMentions(
       processedContent,
       params.client,
@@ -373,10 +525,27 @@ async function appendTextParts(
       params.msg.authorName,
       params.botName,
       params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "preserve",
     );
     if (!processedContent.startsWith("[System:")) {
       processedContent = applyUncensorInputTransforms(processedContent, params.uncensorInputOptions);
     }
+    const completionText = await params.convertMentions(
+      completionContent
+        ? params.msg.completionSpeaker === false
+          ? completionContent
+          : `${resolvedAuthorLabel}: ${completionContent}`
+        : "",
+      params.client,
+      params.guildId,
+      params.msg.authorName,
+      params.botName,
+      params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "preserve",
+    );
+    params.completionParts.push({ type: "text", text: completionText });
     if (params.mediaAttributionHint) processedContent += `\n${params.mediaAttributionHint}`;
     params.parts.push({ type: "text", text: processedContent });
     if (params.includeTimestamps && params.msg.createdAt) {
@@ -391,10 +560,10 @@ async function appendTextParts(
     params.parts.push({
       type: "text",
       text: await params.convertMentions(
-        buildMediaAttributionText(params.msg, params.msg.authorName),
+        buildMediaAttributionText(params.msg, authorLabel),
         params.client,
         params.guildId,
-        params.msg.authorName,
+        authorLabel,
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
       ),

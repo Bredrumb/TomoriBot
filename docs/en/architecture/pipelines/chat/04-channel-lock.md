@@ -1,0 +1,117 @@
+---
+title: "04: Channel Lock"
+aiGenerated: true
+---
+
+The channel lock enforces single-turn concurrency per Discord channel. It manages the Discord typing
+keepalive indicator, coordinates user interruptions and cancellations, and replays queued messages
+when the lock releases.
+
+## Flow and ownership
+
+`runWithChannelLock()` in `src/utils/chat/channelQueue.ts` wraps turn planning and execution inside a
+per-channel mutex backed by the in-memory `channelLocks` map.
+
+```mermaid
+flowchart TD
+  entry["runWithChannelLock(admission, callback)"] -->|"skipLock === true"| reuse["invoke callback(reuseOuterLock)"]
+  entry -->|"skipLock !== true"| stale["releaseStaleChannelLockIfExpired()"]
+  stale --> acquire["acquireChannelLockForTurn()<br/>sets isLocked, initializes AbortController"]
+  acquire --> cb["callback(lockedTurn, startTyping)<br/>startDiscordTypingKeepalive() (8s cadence)"]
+  cb --> release["finally: releaseChannelLockAndReplayQueue()<br/>stops typing, aborts turn controller"]
+  release -->|"stopContext present"| stop["setImmediate(handleStopResponse)"]
+  release -->|"messageQueue has items"| replay["setImmediate(processQueuedMessage)"]
+```
+
+The first turn starts typing alongside context building and waits for both before generation, so
+the initial typing indicator cannot arrive after the reply. `typing_started` records completion of
+the initial request. After that request settles, the keepalive starts only if the same abort
+controller still owns the lock; queued personas can share a trigger message ID across different
+lock acquisitions. A late interval callback clears only its own timer.
+
+The lock entry also owns a bounded history window for the busy stretch: the active turn and its
+queued replays. Later personas and queued user or persona turns can reuse it. Release preserves the
+window only while handing off to a queued replay; a replay that returns before acquiring the lock
+drops it. Empty-queue release, stale recovery, queue clearing, and `/kill` free the window and its
+gateway change signals. A new trigger from an idle channel always starts with a REST read.
+
+### Mutex acquisition and re-entrancy
+
+When an admitted turn arrives:
+
+- **Re-entrant turns**: calls passing `skipLock=true` (such as empty-response retries) reuse the existing
+  lock entry and its active typing keepalive without acquiring a new lock or resetting timers.
+- **Lock acquisition**: `acquireChannelLockForTurn()` sets `isLocked = true`, records `lockedAt` and
+  `lastProgressAt`, and creates a fresh `AbortController` (`activeTurnAbortController`). The signal is
+  available to executing tools via `ToolContext.abortSignal`.
+- **Stale lock recovery**: `releaseStaleChannelLockIfExpired()` checks whether `lastProgressAt` is older
+  than `CHANNEL_LOCK_TIMEOUT_MS` (180s). If expired, it aborts the active turn controller, fires the
+  stream kill handle, clears queued messages, and resets the lock. Active operations using `runUnderWatchdog`
+  (such as streaming chunks and tool calls) suppress stale-lock recovery because they enforce their own timeouts.
+
+### Reply reactions
+
+Fast regeneration uses the normal chat admission and channel lock. Admission and acquisition
+both reject the request if a turn is active or a replay is pending. After planning, the
+request checks that the reply is still the latest message and that its reaction is still enabled.
+Retry deletes only the text message IDs recorded by delivery for that turn.
+
+### Interruption and cancellation ownership
+
+Channel locks coordinate three forms of turn interruption:
+
+1. **Follow-up interrupts**: `queueFollowUpForLockedTurn()` allows an inbound message from the same user to
+   interrupt an active stream via `StreamOrchestrator.requestFollowUp()`, up to `MAX_FOLLOW_UP_INTERRUPTS` (3).
+   If the active turn is executing a tool (`isInToolCallChain`), the message is enqueued as the latest follow-up
+   without interrupting the stream, protecting tool completion.
+   Both paths preserve the active persona when replaying the follow-up. An incoming impersonation
+   target takes precedence over the active turn's impersonation identity; ordinary follow-ups retain it.
+2. **Natural stops**: `requestNaturalStopForLockedTurn()` captures the message and registers
+   `StreamOrchestrator.requestStop()`. Active streaming halts gracefully and saves the stop context.
+3. **Hard cancellation via `/kill`**: `forceKillChannelStream()` in `src/commands/kill.ts` immediately aborts
+   `activeTurnAbortController` and invokes `activeStreamKill()`, rejecting the streaming race with an error.
+   The `/kill` command also clears pending turns using `clearChannelProcessingQueue()`. Tools that generate
+   media check `abortSignal.aborted` before sending to avoid posting discarded media.
+
+### Release and queue replay
+
+When the turn completes or throws, `releaseChannelLockAndReplayQueue()` executes in a `finally` block:
+
+1. Resets lock metadata, clears `activeStreamKill`, and aborts `activeTurnAbortController`.
+2. Stops the Discord typing keepalive timer.
+3. Checks `StreamOrchestrator.getAndClearStopContext()`. If a natural stop occurred, it schedules
+   `handleStopResponse()` via `setImmediate`.
+4. Pops the next message from the FIFO `messageQueue` and schedules `processQueuedMessage()` via `setImmediate`.
+   The stop callback is scheduled first, but the callbacks are not awaited in sequence. Scheduling
+   order alone does not guarantee that the stop confirmation finishes before queue replay.
+
+## Shard ownership and shutdown
+
+The mutex and its live Discord messages and callbacks stay in the guild's
+[shard owner process](/architecture/subsystems/sharding/). Admission, queue replay, persona queues,
+stop responses, and follow-up requests require configured ownership and safe live leases. DMs map
+to shard 0. Re-entry must still belong to the active outer turn.
+
+Lease uncertainty aborts turns and clears pending replay. Captured owner signals stay aborted after
+lease recovery, so an old continuation cannot dispatch as a new owner. Delivery paths check again
+after awaited preparation and before sending; already dispatched requests cannot be recalled.
+
+Shutdown rejects new turns and discards pending replays while allowing active turns, including valid
+re-entry, up to 25 seconds to finish. It then aborts remaining turns through the existing terminal
+stream-stop path, suppressing cancellation retries and timeout notices. Stats and connection cleanup
+follow the drain; the Discord client remains connected until those phases finish.
+
+## Constraints and rationale
+
+- **Single active turn per channel**: serializing turns prevents race conditions across message sends,
+  webhook delivery, and conversational context ordering.
+- **Asynchronous queue unrolling**: invoking queued replays and stop responses through `setImmediate` prevents
+  call stack growth under heavy traffic.
+- **Tool progress protection**: suppressing stream interrupts while `isInToolCallChain` is true ensures external
+  tool effects finish cleanly before the user's follow-up message processes.
+
+## Source pointers
+
+- `src/utils/chat/channelQueue.ts`: `runWithChannelLock()`, queue storage, typing keepalive, and release logic.
+- `src/commands/kill.ts`: `/kill` command driving stream termination and queue flushing.
+- `src/utils/discord/streamOrchestrator.ts`: stop and follow-up request state management.

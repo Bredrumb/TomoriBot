@@ -2,107 +2,190 @@
 title: "TomoriBot Docs Index"
 ---
 
-This folder is organized by topic. Start with `architecture/` for a high-level orientation, then
-go to `pipelines/` for the authoritative per-stage reference.
+The docs site is organized as an audience gradient: curious visitor → user → self-hoster
+→ contributor → deep-diver. Sidebar order follows that gradient.
 
-## Architecture
+> **Restructure in progress.** Many `introduction/`, `features/`, and `self-hosting/`
+> pages are Phase 1 stubs (frontmatter + placeholder). Prose lands in Phase 2: see
+> `plans/docs-site-restructure.md`.
 
-High-level orientation: what TomoriBot is, how it starts up, and how data is modelled.
+## Introduction (order 1)
 
-- [`architecture/README.md`](./architecture/) — introduction + architecture overview
-- [`architecture/entry-point.md`](./architecture/entry-point) — startup and initialization flow
+The marketing front door: what TomoriBot is and how to start using it.
 
-> Local dev setup moved to [`contributor-guides/getting-started.md`](./contributor-guides/getting-started).
+- [`introduction/README.mdx`](./en/introduction/README.mdx): hero + feature-card deck (Phase 2)
+- [`introduction/quickstart.md`](./en/introduction/quickstart.mdx): invite the public instance or self-host
 
-## Pipelines
+## Features (order 2)
 
-Each pipeline folder has a `README.md` (overview + ASCII flow) and numbered stage files.
-These are the primary reference for contributors and future plugin authors.
+Capability-oriented pages for people *using* TomoriBot. Category pages with sections;
+a section graduates to its own file when it outgrows ~2-3 screens or gains its own setup flow.
 
-- [`pipelines/chat/`](./pipelines/chat/) — message ingress → per-turn execution
-- [`pipelines/context-build/`](./pipelines/context-build/) — preset routing + native context assembly (14 blocks)
-- [`pipelines/tool-loop/`](./pipelines/tool-loop/) — tool-call dispatch loop driven by the generation turn
-- [`pipelines/provider/`](./pipelines/provider/) — stream adapter → chunk normalization → Discord delivery
-- [`pipelines/memory/`](./pipelines/memory/) — STM passive capture + LTM create/update/delete
-- `pipelines/command/` — _(planned; absorbs `subsystems/command-system.md`)_
-- `pipelines/webhook-persona/` — _(planned; absorbs `subsystems/multi-persona.md` identity-swap parts)_
+Pages are bucketed into task-based sub-categories:
 
-## Subsystems
+- [`features/README.mdx`](./en/features/README.mdx): capability tour card grid
+- **Chatting & Personality**:
+  - [`chatting-and-triggers.md`](./en/features/chatting-personality/chatting-and-triggers/)
+  - [`multiple-personas.md`](./en/features/chatting-personality/multiple-personas/)
+  - [`behavior-tweaking.md`](./en/features/chatting-personality/behavior-tweaking/)
+  - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
+- **Knowledge**:
+  - `memory/`
+    - [`long-term-memory.md`](./en/features/knowledge/memory/long-term-memory/)
+    - [`memory-decay.md`](./en/features/knowledge/memory/memory-decay/)
+    - [`documents.md`](./en/features/knowledge/memory/documents/)
+    - [`lorebooks.md`](./en/features/knowledge/memory/lorebooks/)
+    - [`short-term-memory.md`](./en/features/knowledge/memory/short-term-memory/)
+  - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
+  - [`personalization.md`](./en/features/knowledge/personalization/)
+  - [`data-handling.md`](./en/features/knowledge/data-handling/)
+- **Capabilities**:
+  - [`tools-and-extensions/`](./en/features/capabilities/tools-and-extensions/): built-in tools, web search, MCP servers, and tool settings
+  - [`scheduled-tasks.md`](./en/features/capabilities/scheduled-tasks/)
+  - [`media-generation/`](./en/features/capabilities/media-generation/): image, video, and voice generation
+- **Setup & Administration**:
+  - [`providers-and-models.md`](./en/features/setup-administration/providers-and-models/)
+  - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)
+  - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
+  - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
+- **Integrations**:
+  - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
+  - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
+  - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
+  - [`novelai.md`](./en/features/integrations/novelai/)
+- [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
-Supporting services that pipelines depend on. Not pipelines themselves — these expose surfaces
-rather than sequenced stages.
+## Self-Hosting (order 3)
 
-- [`subsystems/database-schema.md`](./subsystems/database-schema)
-- [`subsystems/event-system.md`](./subsystems/event-system)
-- [`subsystems/command-system.md`](./subsystems/command-system)
-- [`subsystems/tool-system.md`](./subsystems/tool-system)
-- [`subsystems/status-command.md`](./subsystems/status-command)
-- [`subsystems/prompt-snapshot.md`](./subsystems/prompt-snapshot)
-- [`subsystems/utils.md`](./subsystems/utils)
-- [`subsystems/localization.md`](./subsystems/localization)
-- [`subsystems/security.md`](./subsystems/security)
-- [`subsystems/caching.md`](./subsystems/caching)
-- [`subsystems/cooldowns.md`](./subsystems/cooldowns)
-- [`subsystems/video-generation.md`](./subsystems/video-generation)
-- [`subsystems/thinking-level.md`](./subsystems/thinking-level)
-- [`subsystems/logit-bias.md`](./subsystems/logit-bias)
-- [`subsystems/strict-chat-completion.md`](./subsystems/strict-chat-completion) — role-alternation / prefix-completion toggles + always-on media relocation
-- [`subsystems/multi-persona.md`](./subsystems/multi-persona) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
-- [`subsystems/persona-presets.md`](./subsystems/persona-presets) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
+Running your own instance: core install plus every optional module. You don't need the
+source open to follow these.
 
-## Integrations
+- [`self-hosting/README.md`](./en/self-hosting/README.md): requirements + module directory
+- [`self-hosting/setup-wizard.mdx`](./en/self-hosting/setup-wizard.mdx): guided `bun run setup`
+- [`self-hosting/manual-setup.mdx`](./en/self-hosting/manual-setup.mdx): manual procedure for technical users
+- [`self-hosting/docker-compose.mdx`](./en/self-hosting/docker-compose.mdx): containerized local bot + database
+- [`self-hosting/local-endpoints/`](./en/self-hosting/local-endpoints/README.mdx): self-hosted endpoints hub
+  - [`local-endpoints/setup-local-llm.mdx`](./en/self-hosting/local-endpoints/setup-local-llm.mdx)
+  - [`local-endpoints/setup-local-system-one.mdx`](./en/self-hosting/local-endpoints/setup-local-system-one.mdx)
+  - [`local-endpoints/setup-comfyui.md`](./en/self-hosting/local-endpoints/setup-comfyui.md)
+  - [`local-endpoints/setup-searxng.mdx`](./en/self-hosting/local-endpoints/setup-searxng.mdx)
+  - [`local-endpoints/setup-crawl4ai.mdx`](./en/self-hosting/local-endpoints/setup-crawl4ai.mdx)
+  - [`local-endpoints/text-to-speech/`](./en/self-hosting/local-endpoints/text-to-speech/README.mdx): local TTS engines
+    - [`comparison.md`](./en/self-hosting/local-endpoints/text-to-speech/comparison.md): empirical benchmarks, audio sample playback, and speed comparisons
+    - [`MOSS-TTS`](./en/self-hosting/local-endpoints/text-to-speech/moss.mdx): experimental clone and voice-design auto endpoint
+  - [`local-endpoints/speech-to-text/`](./en/self-hosting/local-endpoints/speech-to-text/README.mdx): local STT engines
+  - [`local-endpoints/proxies-and-remote-access/`](./en/self-hosting/local-endpoints/proxies-and-remote-access/README.md): proxy setup and authenticated remote connections
+    - [`setup-chatmock.md`](./en/self-hosting/local-endpoints/proxies-and-remote-access/setup-chatmock.md)
+    - [`setup-cliproxyapi.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/setup-cliproxyapi.mdx)
+    - [`cloudflare-tunnel.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel.mdx)
+    - [`cloudflare-access-and-caddy.mdx`](./en/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy.mdx)
+- [`self-hosting/maintenance.md`](./en/self-hosting/maintenance.md): maintenance scripts, updating, backups/restore
+- [`self-hosting/local-monitoring.md`](./en/self-hosting/local-monitoring.md)
+- [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
+- [`self-hosting/mcp-servers/`](./en/self-hosting/mcp-servers/README.md): OAuth sign-in, local MCP endpoints, and MCP prose-linting helpers
+  - [`mcp-sign-in.md`](./en/self-hosting/mcp-servers/mcp-sign-in.md): set `TOMORI_PUBLIC_BASE_URL` so admins can add MCP servers that need sign-in
+  - [`setup-local-mcp.md`](./en/self-hosting/mcp-servers/setup-local-mcp.md)
+  - [`setup-slop-guard.md`](./en/self-hosting/mcp-servers/setup-slop-guard.md)
 
-- Matrix:
-  - [`integrations/matrix/bridge.md`](./integrations/matrix/bridge)
-- Discord platform capabilities:
-  - [`integrations/discord/message-components-v2.md`](./integrations/discord/message-components-v2)
-  - [`integrations/discord/modal-input-components.md`](./integrations/discord/modal-input-components)
-- SillyTavern:
-  - [`integrations/sillytavern/card-support.md`](./integrations/sillytavern/card-support)
-  - [`integrations/sillytavern/preset-system.md`](./integrations/sillytavern/preset-system)
-- NovelAI:
-  - [`integrations/novelai/tool-calling.md`](./integrations/novelai/tool-calling)
-  - [`integrations/novelai/limitations.md`](./integrations/novelai/limitations)
-  - [`integrations/novelai/inpainting.md`](./integrations/novelai/inpainting)
-- Voice (all audio I/O):
-  - [`integrations/voice/README.md`](./integrations/voice/README)
-  - [`integrations/voice/tts/`](./integrations/voice/tts/)
-  - [`integrations/voice/stt/`](./integrations/voice/stt/)
+## Contributing (order 4)
 
-## Contributor Guides
-
-Code-contribution guides — for extending or modifying the bot with the source open.
-Start at [`contributor-guides/development-tasks.md`](./contributor-guides/development-tasks)
-for the task index and coding conventions, and
-[`contributor-guides/getting-started.md`](./contributor-guides/getting-started) for local dev setup.
+Code-contribution guides: for extending or modifying the bot with the source open.
+Start at [`contributing/development-tasks.md`](./en/contributing/development-tasks.md) for the
+task index and coding conventions, and
+[`contributing/getting-started.md`](./en/contributing/getting-started.md) for local dev setup.
 
 Per-task guides:
 
-- [`contributor-guides/adding-slash-command.md`](./contributor-guides/adding-slash-command)
-- [`contributor-guides/adding-event-handler.md`](./contributor-guides/adding-event-handler)
-- [`contributor-guides/adding-builtin-tool.md`](./contributor-guides/adding-builtin-tool)
-- [`contributor-guides/adding-feature-flag-tool.md`](./contributor-guides/adding-feature-flag-tool)
-- [`contributor-guides/adding-db-column.md`](./contributor-guides/adding-db-column)
-- [`contributor-guides/adding-new-provider.md`](./contributor-guides/adding-new-provider)
-- [`contributor-guides/adding-locale.md`](./contributor-guides/adding-locale)
-- [`contributor-guides/adding-persona-preset.md`](./contributor-guides/adding-persona-preset)
+- [`contributing/extending/slash-command.md`](./en/contributing/extending/slash-command.md)
+- [`contributing/policies/command-archetypes.md`](./en/contributing/policies/command-archetypes.md): which kind of command or panel to build
+- [`contributing/extending/panel.md`](./en/contributing/extending/panel.md): building a panel, or adding a button or select to one
+- [`contributing/extending/event-handler.md`](./en/contributing/extending/event-handler.md)
+- [`contributing/extending/builtin-tool.md`](./en/contributing/extending/builtin-tool.md)
+- [`contributing/extending/feature-flag-tool.md`](./en/contributing/extending/feature-flag-tool.md)
+- [`contributing/extending/setup-module.md`](./en/contributing/extending/setup-module.md)
+- [`contributing/extending/db-column.md`](./en/contributing/extending/db-column.md)
+- [`contributing/extending/new-provider.md`](./en/contributing/extending/new-provider.md)
+- [`contributing/localization/new-locale.md`](./en/contributing/localization/new-locale.md): locale codes, UI strings, protocol keys, intent packs, seed descriptions, and the gate sequence
+- [`contributing/localization/docs-site.md`](./en/contributing/localization/docs-site.md): publishing translated pages and READMEs, and their link rules
+- [`contributing/extending/persona-preset.md`](./en/contributing/extending/persona-preset.md)
+- [`contributing/extending/participant-extension.md`](./en/contributing/extending/participant-extension.md)
+- [`contributing/extending/env-variable.md`](./en/contributing/extending/env-variable.md)
+- [`contributing/policies/comments.md`](./en/contributing/policies/comments.md): durable comments and the advisory policy audit
+- [`contributing/policies/panel-prose-and-layout.md`](./en/contributing/policies/panel-prose-and-layout.md): text width, markers, and structure inside a panel
+- [`contributing/policies/raw-sql.md`](./en/contributing/policies/raw-sql.md): keeping raw SQL in the repository layer
+- [`contributing/localization/docs-authoring.md`](./en/contributing/localization/docs-authoring.md): docs routes, frontmatter, sidebar, cards, and asset conventions
+- [`contributing/policies/dependency-security.md`](./en/contributing/policies/dependency-security.md): dependency overrides, patches, and audit exceptions
 
 Testing your changes:
 
-- [`contributor-guides/testing-db-changes.md`](./contributor-guides/testing-db-changes)
-- [`contributor-guides/testing-chat-changes.md`](./contributor-guides/testing-chat-changes)
+- [`contributing/testing/db-changes.md`](./en/contributing/testing/db-changes.md)
+- [`contributing/testing/chat-changes.md`](./en/contributing/testing/chat-changes.md)
+- [`contributing/testing/module-mocks.md`](./en/contributing/testing/module-mocks.md): leak-safe Bun module mocks
+- [`contributing/testing/maintainable-tests.md`](./en/contributing/testing/maintainable-tests.md): test patterns to avoid, with the reason for each
 
-## User Guides
+## Architecture (order 5)
 
-Self-hosting and operation guides — for running your own instance, no source required.
+Code-level reference for deep-divers and plugin authors.
 
-- [`user-guides/setup-searxng.md`](./user-guides/setup-searxng)
-- [`user-guides/setup-crawl4ai.md`](./user-guides/setup-crawl4ai)
-- [`user-guides/setup-chatmock.md`](./user-guides/setup-chatmock)
-- [`user-guides/local-monitoring.md`](./user-guides/local-monitoring)
-- [`user-guides/local-grafana-setup.md`](./user-guides/local-grafana-setup)
-- [`user-guides/safe-migration.md`](./user-guides/safe-migration)
+- [`architecture/README.md`](./en/architecture/README.md): code-level overview
+- [`architecture/entry-point.md`](./en/architecture/entry-point.md): startup and initialization flow
 
-## Wiki
+### Pipelines
 
-- [`wiki/refactor-record.md`](./wiki/refactor-record) — Historical record of the plugin-architecture-prerequisite refactor (Phases 1–5.5e): module restructuring, behavioral verification, DB layer reorganization, and cache invalidation ownership.
+Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and numbered stage files.
+
+- [`architecture/pipelines/chat/`](./en/architecture/pipelines/chat/README.mdx): message ingress → per-turn execution
+- [`architecture/pipelines/context-build/`](./en/architecture/pipelines/context-build/README.md): preset routing + native context assembly
+- [`architecture/pipelines/tool-loop/`](./en/architecture/pipelines/tool-loop/README.md): tool-call dispatch loop
+- [`architecture/pipelines/provider/`](./en/architecture/pipelines/provider/README.md): stream adapter → chunk normalization → Discord delivery
+- [`architecture/pipelines/memory/`](./en/architecture/pipelines/memory/README.md): STM passive capture + LTM create/update/delete
+
+### Subsystems
+
+Supporting services that pipelines depend on.
+
+- [`architecture/subsystems/sharding.md`](./en/architecture/subsystems/sharding.md): shard topology, process ownership, coordination, shutdown, and per-shard health
+
+- [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
+- [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
+  caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
+
+### Integrations
+
+- [`architecture/integrations/`](./en/architecture/integrations/README.md): Discord platform, Matrix bridge,
+  NovelAI text limitations and inpainting, SillyTavern, and voice pipeline internals
+- [`architecture/integrations/message-proxy.md`](./en/architecture/integrations/message-proxy/): proxy routing and identity contract
+- [`architecture/integrations/pluralkit.md`](./en/architecture/integrations/pluralkit/): PluralKit adapter behavior
+
+### Cloud
+
+Production infrastructure on cloud provider services (Azure, AWS, GCP).
+
+These pages live on the `release` branch under `docs/en/wiki/cloud/`, next to the `terraform/` and
+`deploy/` trees they document. A `main` checkout omits them so a self-hoster's clone carries only
+the bot. Read one without switching branches:
+
+```bash
+git show release:docs/en/wiki/cloud/azure/azure-production-deployment.md
+```
+
+## Meet Tomori (order 6)
+
+The persona gallery: a card deck introducing each of Tomori's "sisters" (the default
+personas TomoriBot ships with). Card sources: `src/db/seed/catalog/personas/*`.
+
+- [`meet-tomori/README.mdx`](./en/meet-tomori/README.mdx): hero + sister card deck (stub)
+- [`meet-tomori/rose.md`](./en/meet-tomori/rose/): Default Tomori, the eldest
+- [`meet-tomori/zaya.md`](./en/meet-tomori/zaya/): Prideful Tomori, the former esports champion
+- [`meet-tomori/aphel.md`](./en/meet-tomori/aphel/): Gloomy Tomori, the exhausted advisor
+- [`meet-tomori/lilya.md`](./en/meet-tomori/lilya/): Shy Tomori, the youngest
+- [`meet-tomori/nerine.md`](./en/meet-tomori/nerine/): Loyal Tomori, the discontinued model
+- [`meet-tomori/locke.md`](./en/meet-tomori/locke/): Unhinged Tomori, planned (replaces Temari)
+
+## Wiki (hidden)
+
+Reachable only via in-page links: not shown in the sidebar.
+
+- [`wiki/production-tuning.md`](./en/wiki/production-tuning.md): deep operational tuning, container sizing, and incident recovery
+- [`wiki/refactor-record.md`](./en/wiki/refactor-record.md): module ownership and links to current architecture
+- [`wiki/threat-models.md`](./en/wiki/threat-models.md): security threat models

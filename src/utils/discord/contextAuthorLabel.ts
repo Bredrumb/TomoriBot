@@ -2,10 +2,11 @@ import type { GuildMember, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
-import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { log } from "@/utils/misc/logger";
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 
 type ResolveContextAuthorLabelOptions = {
   guildId?: string | null;
@@ -29,33 +30,21 @@ export async function resolveContextAuthorLabel(
   options: ResolveContextAuthorLabelOptions = {},
 ): Promise<string> {
   const guildId = options.guildId ?? message.guildId;
-  const webhookName = message.webhookId ? stripBridgePrefix(message.author.username) : null;
+  const trustedWebhook = await verifyMessageWebhook(message);
+  const webhookName = trustedWebhook ? stripBridgePrefix(message.author.username) : message.author.username;
 
   if (message.webhookId) {
-    if (guildId && guildId !== "DM") {
+    if (trustedWebhook && guildId && guildId !== "DM") {
       try {
         const personas = await getCachedAllPersonas(guildId);
         const personaByNickname = new Map(
           personas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
         );
-        const renderModifierSource = webhookName
-          ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
-          : null;
-        const matchedPersona = webhookName
-          ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
-          : undefined;
-        if (renderModifierSource) {
-          return renderModifierSource.displayName;
-        }
-        if (matchedPersona?.persona_nickname) {
-          // Clean-named sprite messages carry no "(sprite)" suffix in the
-          // webhook name; recover the decorated label from the persisted mapping.
-          const spriteDisplayName = await resolveSpriteMessageDisplayName(
-            message.id,
-            matchedPersona.persona_id,
-            matchedPersona.persona_nickname,
-          );
-          return spriteDisplayName ?? matchedPersona.persona_nickname;
+        if (webhookName) {
+          const resolvedPersona = await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname);
+          if (resolvedPersona) {
+            return resolvedPersona.displayName;
+          }
         }
       } catch (error) {
         log.warn("Failed to resolve persona name for webhook-authored boomerang context message", error);

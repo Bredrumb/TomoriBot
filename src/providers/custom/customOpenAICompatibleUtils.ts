@@ -1,20 +1,27 @@
+import { buildExampleJsonFromSchema } from "@/providers/utils/structuredOutput";
+import { readStructuredResponse } from "@/providers/utils/structuredReview";
 import { CUSTOM_PROVIDER_PLACEHOLDER_API_KEY, normalizeCustomApiUrl } from "@/providers/custom/customStreamAdapter";
 import { logSanitizedOpenAICompatibleRequest } from "@/providers/openaiCompatible/openaiCompatibleMessageBuilder";
 import type { ProviderImageInput } from "@/types/provider/featureInterfaces";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
+import { readProviderErrorBody, redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
+import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
-export type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
 export type CustomMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: string | CustomContentPart[] };
 
 export interface CustomChatCompletionResponse {
+  usage?: unknown;
   choices?: Array<{
     message?: {
       content?: unknown;
+      refusal?: unknown;
     };
   }>;
 }
@@ -37,7 +44,7 @@ export function buildCustomHeaders(apiKey: string): Record<string, string> {
   return headers;
 }
 
-export async function buildCustomUserContent(
+async function buildCustomUserContent(
   userPrompt: string,
   images?: ProviderImageInput[],
 ): Promise<string | CustomContentPart[]> {
@@ -98,6 +105,8 @@ export async function callCustomChatCompletions(params: {
   body: Record<string, unknown>;
   logLabel: string;
   messagesForLog?: Array<Record<string, unknown>>;
+  abortSignal?: AbortSignal;
+  privateOutput?: boolean;
 }): Promise<
   { success: true; data: CustomChatCompletionResponse } | { success: false; error: CustomChatCompletionError }
 > {
@@ -117,11 +126,16 @@ export async function callCustomChatCompletions(params: {
   }
 
   try {
-    const response = await fetchUserRemoteUrl(normalizeCustomApiUrl(params.endpointUrl), {
-      method: "POST",
-      headers: buildCustomHeaders(params.apiKey),
-      body: JSON.stringify(params.body),
-    });
+    const response = await fetchUserRemoteUrl(
+      normalizeCustomApiUrl(params.endpointUrl),
+      {
+        method: "POST",
+        headers: buildCustomHeaders(params.apiKey),
+        body: JSON.stringify(params.body),
+        signal: params.abortSignal,
+      },
+      getEndpointRemotePolicy(),
+    );
 
     if (!response.ok) {
       return {
@@ -129,14 +143,19 @@ export async function callCustomChatCompletions(params: {
         error: {
           status: response.status,
           statusText: response.statusText,
-          errorBody: await response.text(),
+          errorBody: params.privateOutput
+            ? await readProviderErrorBody(response, params.apiKey)
+            : await response.text(),
         },
       };
     }
 
     return {
       success: true,
-      data: (await response.json()) as CustomChatCompletionResponse,
+      data: (await readStructuredResponse(
+        { apiKey: params.apiKey, model: "", systemPrompt: "", userPrompt: "", privateOutput: params.privateOutput },
+        response,
+      )) as CustomChatCompletionResponse,
     };
   } catch (error) {
     return {
@@ -144,7 +163,9 @@ export async function callCustomChatCompletions(params: {
       error: {
         status: 0,
         statusText: "Request failed",
-        errorBody: error instanceof Error ? error.message : String(error),
+        errorBody: params.privateOutput
+          ? "Request failed"
+          : redactProviderDetail(error instanceof Error ? error.message : String(error), params.apiKey),
       },
     };
   }
@@ -172,56 +193,6 @@ export function extractCustomResponseText(messageContent: unknown): string {
     .map((part) => part.text)
     .join("")
     .trim();
-}
-
-export function buildExampleJsonFromSchema(schema: unknown): unknown {
-  if (!schema || typeof schema !== "object") {
-    return {};
-  }
-
-  const record = schema as Record<string, unknown>;
-
-  if ("const" in record) {
-    return record.const;
-  }
-
-  if (Array.isArray(record.enum) && record.enum.length > 0) {
-    return record.enum[0];
-  }
-
-  if (Array.isArray(record.anyOf) && record.anyOf.length > 0) {
-    return buildExampleJsonFromSchema(record.anyOf[0]);
-  }
-
-  const schemaType = record.type;
-  if (schemaType === "object") {
-    const properties =
-      record.properties && typeof record.properties === "object" ? (record.properties as Record<string, unknown>) : {};
-    const example: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(properties)) {
-      example[key] = buildExampleJsonFromSchema(value);
-    }
-    return example;
-  }
-
-  if (schemaType === "array") {
-    return [buildExampleJsonFromSchema(record.items)];
-  }
-
-  if (schemaType === "integer" || schemaType === "number") {
-    const minimum = typeof record.minimum === "number" && Number.isFinite(record.minimum) ? record.minimum : 0;
-    return minimum;
-  }
-
-  if (schemaType === "boolean") {
-    return false;
-  }
-
-  if (schemaType === "string") {
-    return "<string>";
-  }
-
-  return {};
 }
 
 export function buildSchemaSteeredSystemPrompt(
@@ -279,25 +250,41 @@ export function parseCustomJsonResponse(text: string): unknown {
 
   try {
     return JSON.parse(cleanedText);
-  } catch {
-    // Continue to fallback extraction attempts below.
-  }
+  } catch {}
 
   const fencedMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {
-    return JSON.parse(fencedMatch[1]);
+    // Not every candidate below is valid JSON, so each is tried in turn rather than
+    // returning (and throwing past the remaining candidates) on the first match.
+    try {
+      return JSON.parse(fencedMatch[1]);
+    } catch {}
   }
 
   const firstBracket = cleanedText.indexOf("[");
   const lastBracket = cleanedText.lastIndexOf("]");
   if (firstBracket !== -1 && lastBracket > firstBracket) {
-    return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    try {
+      return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    } catch {}
   }
 
   const firstBrace = cleanedText.indexOf("{");
   const lastBrace = cleanedText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+    try {
+      return JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  // A response cut off by max_tokens never reaches a closing brace, so every attempt
+  // above fails. Repairing the tail from the first brace recovers whatever fields
+  // finished instead of discarding an otherwise-complete object.
+  if (firstBrace !== -1) {
+    const repaired = tryRepairIncompleteJson(cleanedText.slice(firstBrace));
+    if (repaired) {
+      return repaired;
+    }
   }
 
   throw new Error("Invalid JSON response from custom endpoint.");

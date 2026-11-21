@@ -1,13 +1,13 @@
 /**
- * Regression harness — LlmRepository domain.
+ * Regression harness: LlmRepository domain.
  *
  * Covers: loadAvailableLlms, loadLlmById, loadLlmByProviderAndCodename,
  * getLlmsByIds, loadSmartestModel, loadUniqueProviders.
  *
  * LLM rows come from the typed catalog (src/db/seed/catalog/models.ts), seeded by
- * initializeDatabase — no fixture insertion needed.
+ * initializeDatabase: no fixture insertion needed.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -15,14 +15,13 @@ import { DB_TESTS_AVAILABLE, setupTestDb } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   beforeAll(async () => {
-    await setupTestDb(); // Seed data is applied here — LLMs are seeded from the catalog by initializeDatabase
+    await setupTestDb(); // Seed data is applied here: LLMs are seeded from the catalog by initializeDatabase
   });
 
   it("loadAvailableLlms returns at least one non-deprecated model", async () => {
     const llms = await llmModelRepo.loadAvailableLlms();
     if (!llms) throw new Error("loadAvailableLlms returned null");
     expect(llms.length).toBeGreaterThan(0);
-    // All returned rows should be non-deprecated (includeDeprecated defaults to false)
     expect(llms.every((l) => !l.is_deprecated)).toBe(true);
   });
 
@@ -35,7 +34,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
 
   it("loadLlmById returns a known LLM", async () => {
     const allLlms = await llmModelRepo.loadAvailableLlms();
-    if (!allLlms?.[0]) throw new Error("No seeded LLMs found");
+    if (!allLlms?.[0] || allLlms[0].llm_id === undefined) throw new Error("No seeded LLMs found");
     const firstId = allLlms[0].llm_id;
 
     const llm = await llmModelRepo.loadById(firstId);
@@ -51,7 +50,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   it("getLlmsByIds returns multiple LLMs", async () => {
     const allLlms = await llmModelRepo.loadAvailableLlms();
     if (!allLlms) throw new Error("No seeded LLMs found");
-    const ids = allLlms.slice(0, 2).map((l) => l.llm_id);
+    const ids = allLlms.slice(0, 2).map((l) => {
+      if (l.llm_id === undefined) throw new Error("Seeded LLM row is missing llm_id");
+      return l.llm_id;
+    });
 
     const results = await llmModelRepo.getLlmsByIds(ids);
     expect(results).toHaveLength(ids.length);
@@ -76,7 +78,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
 
     const provider = providers[0];
     const smartest = await llmModelRepo.loadSmartestModel(provider);
-    // May be null if no is_smartest=true row exists for this provider — that is valid
+    // May be null if no is_smartest=true row exists for this provider. that is valid
     if (smartest !== null) {
       expect(smartest.llm_provider).toBe(provider);
     }
@@ -88,5 +90,68 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
     // Unique constraint: no duplicates
     const unique = [...new Set(providers)];
     expect(unique.length).toBe(providers.length);
+  });
+
+  // Pricing mirror: the stat cost surfaces join llms in SQL and cannot read the live
+  // OpenRouter cache, so a null price silently renders as $0.00 rather than as an error.
+  describe("OpenRouter pricing mirror", () => {
+    const SCOPED_CODENAME = "tomori-test/priced-scoped-model";
+    const caps = {
+      hasTools: true,
+      seesImages: false,
+      seesVideos: false,
+      seesYoutube: false,
+      supportsStructuredOutput: true,
+    };
+
+    it("upsertScopedLlm persists the rate it was registered with", async () => {
+      const id = await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, "openrouter", {
+        inputPerMillion: 0.25,
+        outputPerMillion: 0.75,
+      });
+      expect(id).not.toBeNull();
+
+      const row = await llmModelRepo.loadByProviderAndCodename("openrouter", SCOPED_CODENAME);
+      expect(row?.input_price_per_million).toBe(0.25);
+      expect(row?.output_price_per_million).toBe(0.75);
+    });
+
+    it("re-registering without a rate keeps the stored price", async () => {
+      await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, "openrouter", null);
+
+      const row = await llmModelRepo.loadByProviderAndCodename("openrouter", SCOPED_CODENAME);
+      expect(row?.input_price_per_million).toBe(0.25);
+      expect(row?.output_price_per_million).toBe(0.75);
+    });
+
+    it("syncOpenrouterPrices writes live rates and is idempotent", async () => {
+      const prices = new Map([[SCOPED_CODENAME, { inputPerMillion: 0.5, outputPerMillion: 1.5 }]]);
+
+      expect(await llmModelRepo.syncOpenrouterPrices(prices)).toBe(1);
+      // Second pass must report zero drift, so the count stays a meaningful signal and
+      // unchanged rows keep their updated_at.
+      expect(await llmModelRepo.syncOpenrouterPrices(prices)).toBe(0);
+
+      const row = await llmModelRepo.loadByProviderAndCodename("openrouter", SCOPED_CODENAME);
+      expect(row?.input_price_per_million).toBe(0.5);
+      expect(row?.output_price_per_million).toBe(1.5);
+    });
+
+    it("syncOpenrouterPrices leaves same-codename rows of other providers alone", async () => {
+      const firstParty = await llmModelRepo.loadByProviderAndCodename("deepseek", "deepseek-v4-pro");
+      if (!firstParty) throw new Error("Expected the seeded first-party deepseek-v4-pro row");
+
+      await llmModelRepo.syncOpenrouterPrices(
+        new Map([["deepseek-v4-pro", { inputPerMillion: 999, outputPerMillion: 999 }]]),
+      );
+
+      const after = await llmModelRepo.loadByProviderAndCodename("deepseek", "deepseek-v4-pro");
+      expect(after?.input_price_per_million).toBe(firstParty.input_price_per_million ?? null);
+      expect(after?.output_price_per_million).toBe(firstParty.output_price_per_million ?? null);
+    });
+
+    it("syncOpenrouterPrices treats an empty map as a no-op", async () => {
+      expect(await llmModelRepo.syncOpenrouterPrices(new Map())).toBe(0);
+    });
   });
 });

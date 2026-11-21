@@ -1,12 +1,38 @@
+import { storedCredentialUsageContext } from "@/utils/security/apiKeyRetention";
+import {
+  findProviderRequestDeniedError,
+  reportProviderUsage,
+  withProviderUsageContext,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  getProviderOptions,
+  type ProviderOptionCredentials,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
 import type {
+  DecisionInput,
+  DecisionModelOption,
+  DecisionModelReference,
+  DecisionResult,
+  DecisionApiStyle,
   GeneratePresetParams,
   PresetGenerationResult,
   CompactConversationResult,
-  CompactRoleplayResult,
   ProviderCompactSummaryRequest as ProviderCapabilityCompactSummaryRequest,
   ProviderPresetGenerationRequest as ProviderCapabilityPresetGenerationRequest,
   StructuredOutputResult,
 } from "@/types/provider/featureInterfaces";
+import { decisionModelReferenceSchema } from "@/types/provider/featureInterfaces";
+import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
+import { loadCustomConnectionCredential } from "@/utils/provider/customEndpointService";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { decryptApiKey } from "@/utils/security/crypto";
+import { decisionTrace, reportDecisionFailure, validDecisionInput } from "@/providers/utils/decisions";
 import {
   buildExpressionResponseSchema,
   type ExpressionBatchResult,
@@ -24,7 +50,224 @@ import {
   resolveConversationCompactionCapability,
   resolvePresetGenerationCapability,
   resolveStructuredOutputCapability,
+  resolveDecisionsCapability,
 } from "@/utils/provider/providerCapabilityResolver";
+
+export interface DecisionExecutionRequest extends DecisionInput {
+  scope: ProviderOptionScope;
+  reference: DecisionModelReference | null;
+  slot?: "decision" | "nudge-checker";
+  credentialProvider?: string;
+  credentials?: ProviderOptionCredentials;
+}
+
+/** The Decision models `callDecisionsForProvider` accepts for a scope, so pickers offer exactly what it will call. */
+export async function loadDecisionModelsForScope(
+  scope: OpenRouterModelScope,
+  providerOption?: string,
+): Promise<DecisionModelOption[]> {
+  const registered = providerOption
+    ? [findProviderOption(providerOption)].filter((option) => option !== undefined)
+    : getProviderOptions();
+  const eligible = [];
+  for (const option of registered) {
+    if (option.capabilities.includes("decision") && (await option.availability(scope)).eligible) eligible.push(option);
+  }
+  const models = await llmModelRepo.loadDecisionModelOptions(
+    scope,
+    eligible.map((option) => option.catalogProvider),
+  );
+  if (!eligible.length) return providerOption ? [] : models;
+  const owned = providerOption ? [] : await llmModelRepo.loadDecisionModelOptions(scope);
+  const admitted = [];
+  for (const model of models) {
+    if (owned.some((entry) => entry.model.decision_model_id === model.model.decision_model_id)) {
+      admitted.push(model);
+      continue;
+    }
+    for (const option of eligible) {
+      if (
+        option.catalogProvider === model.model.provider &&
+        (await option.selection.validateModel?.({
+          scope,
+          capability: "decision",
+          modelCodename: model.model.codename,
+        }))
+      ) {
+        admitted.push(model);
+        break;
+      }
+    }
+  }
+  return admitted;
+}
+
+export async function callDecisionsForProvider(request: DecisionExecutionRequest): Promise<DecisionResult> {
+  const correlationId = crypto.randomUUID();
+  const startedAt = Date.now();
+  if (!request.reference) return { status: "unavailable", reason: "not-selected", correlationId, errorLogged: false };
+  if (!decisionModelReferenceSchema.safeParse(request.reference).success || !validDecisionInput(request)) {
+    return { status: "invalid-input", correlationId, errorLogged: false };
+  }
+  const reference = request.reference;
+  let apiStyle: DecisionApiStyle =
+    reference.provider === "google"
+      ? "google-decisions"
+      : reference.provider === "openrouter"
+        ? "openrouter-decisions"
+        : "system-one";
+  const trace = () => ({ reference, apiStyle, correlationId });
+  const cancelled = (): DecisionResult => {
+    decisionTrace(trace(), "cancelled", { questionCount: request.questions.length, elapsedMs: Date.now() - startedAt });
+    return { status: "cancelled", correlationId, errorLogged: false };
+  };
+  if (request.abortSignal?.aborted) return cancelled();
+  let usageContext: ProviderUsageContext | undefined;
+  let resolvingCredentials = true;
+  try {
+    const requestedOwner = request.credentialProvider ?? request.credentials?.usageContext?.credentialProvider;
+    const owner = requestedOwner
+      ? findProviderOption(requestedOwner)
+      : findProviderOptionByActiveProvider(reference.provider, request.scope, request.slot ?? "decision");
+    let credentials: ProviderOptionCredentials | null = null;
+    if (requestedOwner && !owner)
+      return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    if (owner) {
+      const registered = await llmModelRepo.loadDecisionModelOptions(request.scope, [owner.catalogProvider]);
+      if (
+        !registered.some(
+          (option) =>
+            option.reference.provider === reference.provider &&
+            option.reference.modelId === reference.modelId &&
+            option.reference.registrationId === reference.registrationId &&
+            option.reference.customEndpointId === reference.customEndpointId,
+        )
+      )
+        return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+      if (
+        owner.catalogProvider !== reference.provider ||
+        !owner.capabilities.includes("decision") ||
+        !owner.selection.resolveCredentials
+      )
+        return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+      credentials = await owner.selection.resolveCredentials({
+        scope: request.scope,
+        capability: "decision",
+        modelId: reference.modelId,
+        previous: request.credentials,
+      });
+      if (!credentials) return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+      usageContext = credentials.usageContext;
+    } else if (request.credentials) {
+      return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    }
+    resolvingCredentials = false;
+    const options = await loadDecisionModelsForScope(request.scope, owner?.value);
+    const selected = options.find(
+      (option) =>
+        option.reference.provider === reference.provider &&
+        option.reference.modelId === reference.modelId &&
+        option.reference.registrationId === reference.registrationId &&
+        option.reference.customEndpointId === reference.customEndpointId,
+    );
+    if (!selected) return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    const custom = parseCustomProvider(reference.provider);
+    const connection = custom ? await llmProviderRepo.loadCustomEndpointConnectionById(custom.connectionId) : null;
+    if (
+      custom &&
+      (!connection ||
+        connection.capability !== "decision" ||
+        (request.scope.kind === "server"
+          ? connection.server_id !== request.scope.ownerId || connection.user_id != null
+          : connection.user_id !== request.scope.ownerId || connection.server_id != null) ||
+        (connection.api_style !== "system-one" && connection.api_style !== "openai-decisions"))
+    ) {
+      return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    }
+    if (connection?.api_style === "system-one" || connection?.api_style === "openai-decisions")
+      apiStyle = connection.api_style;
+    const failureContext = {
+      errorType: "DecisionOperationFailed",
+      metadata: {
+        operation: "decision-request",
+        stage: "resolution",
+        category: "credentials",
+        provider: custom ? "custom" : reference.provider,
+        apiStyle,
+        modelId: reference.modelId,
+        registrationId: reference.registrationId,
+        customEndpointId: reference.customEndpointId,
+        correlation: correlationId,
+        elapsedMs: Date.now() - startedAt,
+      },
+    };
+    const nativeConfig =
+      connection || credentials
+        ? null
+        : request.scope.kind === "server"
+          ? await llmProviderRepo.loadSavedProviderConfig(request.scope.ownerId, reference.provider)
+          : await llmProviderRepo.loadUserSavedProviderConfig(request.scope.ownerId, reference.provider);
+    let apiKey: string | null = credentials?.apiKey ?? null;
+    try {
+      if (connection) {
+        const stored = await loadCustomConnectionCredential(connection, failureContext);
+        apiKey = stored?.apiKey ?? null;
+        usageContext = stored?.usageContext;
+      } else if (!credentials) {
+        apiKey = nativeConfig?.api_key
+          ? await decryptApiKey(nativeConfig.api_key, nativeConfig.key_version, failureContext)
+          : null;
+        if (apiKey && nativeConfig?.api_key && reference.provider !== "vertex") {
+          usageContext = await storedCredentialUsageContext(nativeConfig.api_key, apiKey);
+        }
+      }
+    } catch {
+      // Credential decryption reports its safe cause with the operation context before throwing.
+      return { status: "failed", category: "credentials", correlationId, errorLogged: true };
+    }
+    if (request.abortSignal?.aborted) return cancelled();
+    if (!apiKey && (!connection || connection.requires_auth)) {
+      return await reportDecisionFailure(trace(), "credentials", "resolution", startedAt);
+    }
+    const capability = await resolveDecisionsCapability(custom ? "custom" : reference.provider);
+    if (!capability) return { status: "unavailable", reason: "unsupported", correlationId, errorLogged: false };
+    const result = await withProviderUsageContext(usageContext, async () =>
+      capability.callDecisions({
+        ...request,
+        reference,
+        correlationId,
+        model: selected.model.codename,
+        inputTokenLimit: selected.model.input_token_limit,
+        apiStyle,
+        apiKey,
+        endpointUrl: connection?.endpoint_url,
+        onUsage: (usage) => {
+          reportProviderUsage(usageContext, {
+            modelCodename: selected.model.codename,
+            costUsd: usage.costUsd,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+          });
+          request.onUsage?.(usage);
+        },
+      }),
+    );
+    const denied =
+      result.status === "failed"
+        ? findProviderRequestDeniedError(result.cause, usageContext)
+        : result.status === "denied"
+          ? findProviderRequestDeniedError(result.error, usageContext)
+          : null;
+    return denied ? { status: "denied", error: denied, correlationId, errorLogged: false } : result;
+  } catch (error) {
+    const denied = resolvingCredentials
+      ? findProviderRequestDeniedError(error)
+      : findProviderRequestDeniedError(error, usageContext);
+    if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
+    if (request.abortSignal?.aborted) return cancelled();
+    return await reportDecisionFailure(trace(), "unexpected", "execution", startedAt);
+  }
+}
 
 export interface ProviderPresetGenerationRequest {
   providerName: string;
@@ -34,6 +277,7 @@ export interface ProviderPresetGenerationRequest {
   locale: string;
   toolContext?: ToolContext;
   maxToolRounds?: number;
+  onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
 }
 
 export interface ProviderCompactSummaryRequest extends ProviderCapabilityCompactSummaryRequest {
@@ -49,6 +293,7 @@ export interface ProviderExpressionInitializationRequest {
   userPrompt: string;
   images: Array<{ url: string; name: string }>;
   temperature?: number;
+  onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
 }
 
 export interface ProviderHistoryExtractionRequest {
@@ -60,6 +305,7 @@ export interface ProviderHistoryExtractionRequest {
   userPrompt: string;
   temperature?: number;
   maxOutputTokens?: number;
+  onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
 }
 
 export async function generatePresetForProvider(
@@ -80,6 +326,7 @@ export async function generatePresetForProvider(
     tomoriState: request.tomoriState,
     toolContext: request.toolContext,
     maxToolRounds: request.maxToolRounds,
+    onUsage: request.onUsage,
   };
 
   return await capability.generatePreset(capabilityRequest);
@@ -96,19 +343,6 @@ export async function generateConversationSummaryForProvider(
   }
 
   return await capability.generateConversationSummary(request);
-}
-
-export async function generateRoleplaySummaryForProvider(
-  request: ProviderCompactSummaryRequest,
-): Promise<CompactRoleplayResult> {
-  const capability = await resolveConversationCompactionCapability(request.providerName);
-  if (!capability) {
-    return {
-      error: `Roleplay compaction is not implemented for provider ${request.providerName}.`,
-    };
-  }
-
-  return await capability.generateRoleplaySummary(request);
 }
 
 export async function callExpressionInitializationForProvider(
@@ -132,19 +366,36 @@ export async function callExpressionInitializationForProvider(
       images: request.images,
       temperature: request.temperature,
       schemaName: "expression_batch_result",
+      ...(request.providerName === "deepseek" ? { thinkingLevel: "none" } : {}),
+      onUsage: request.onUsage,
     },
     buildExpressionResponseSchema(),
     ExpressionBatchResultSchema,
   );
 }
 
+/**
+ * Outcome of a single history-extraction window.
+ *
+ * Distinguishes a genuine empty result (`ok: true` with zero entries) from a real
+ * failure, so callers can tell "this window held nothing worth extracting" apart from
+ * "the model/provider could not produce structured output". Collapsing both into an
+ * empty array is what previously surfaced provider errors as "No Facts Extracted".
+ */
+export type HistoryExtractionOutcome =
+  /** `discarded` counts entries the model returned that could not be validated. */
+  | { ok: true; entries: HistoryMemoryEntry[]; discarded: number }
+  /** `unsupported`: provider exposes no structured-output capability at all. `failed`: the call itself errored. */
+  | { ok: false; reason: "unsupported" | "failed"; error: string; cause?: Error };
+
 export async function extractHistoryWindowForProvider(
   request: ProviderHistoryExtractionRequest,
-): Promise<HistoryMemoryEntry[]> {
+): Promise<HistoryExtractionOutcome> {
   const capability = await resolveStructuredOutputCapability(request.providerName);
   if (!capability) {
-    log.warn(`History extraction is not implemented for provider ${request.providerName}.`);
-    return [];
+    const error = `History extraction is not implemented for provider ${request.providerName}.`;
+    log.warn(error);
+    return { ok: false, reason: "unsupported", error };
   }
 
   const responseSchema = buildHistoryExtractionResponseSchema();
@@ -157,14 +408,21 @@ export async function extractHistoryWindowForProvider(
     temperature: request.temperature,
     maxOutputTokens: request.maxOutputTokens,
     schemaName: "history_extraction_result",
+    onUsage: request.onUsage,
   };
 
   const result = await capability.callStructuredJSON(structuredRequest, responseSchema, HistoryExtractionResultSchema);
 
   if (result.success) {
-    return result.data.memories;
+    if (result.data.discarded > 0) {
+      log.warn(
+        `History extraction (${request.providerName}) discarded ${result.data.discarded} malformed ` +
+          `entries, keeping ${result.data.memories.length}.`,
+      );
+    }
+    return { ok: true, entries: result.data.memories, discarded: result.data.discarded };
   }
 
   log.warn(`History extraction failed (${request.providerName}): ${result.error}`);
-  return [];
+  return { ok: false, reason: "failed", error: result.error, cause: result.cause };
 }

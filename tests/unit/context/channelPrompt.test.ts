@@ -4,8 +4,6 @@ import type { AssembledServerConfig } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { DEFAULT_SYSTEM_PROMPT, buildPromptContextItems } from "@/utils/text/context/templates";
 
-// ─── Test helpers ───────────────────────────────────────────────────────────
-
 const SERVER_PROMPT = "SERVER SYSTEM PROMPT";
 const CHANNEL_PROMPT = "CHANNEL-SCOPED PROMPT";
 const PERSONA_PROMPT = "PERSONA PROMPT";
@@ -19,7 +17,7 @@ function makeParams(overrides: {
   systemPrompt?: string | null;
   channelPromptOverride?: { prompt: string; mode: "append" | "replace" } | null;
   personaPrompt?: string | null;
-  suppressDefaultSystemPrompt?: boolean;
+  presetOwnsSystemPrompt?: boolean;
 }) {
   return {
     client: {} as Client,
@@ -34,7 +32,7 @@ function makeParams(overrides: {
     personaPrompt: overrides.personaPrompt ?? null,
     isUserImpersonation: false,
     impersonatedIdentityName: null,
-    suppressDefaultSystemPrompt: overrides.suppressDefaultSystemPrompt ?? false,
+    presetOwnsSystemPrompt: overrides.presetOwnsSystemPrompt ?? false,
     toolPromptMacroResolver: { expand: async (text: string) => text },
     convertMentions: async (text: string) => text,
   };
@@ -49,8 +47,6 @@ function textForTag(items: StructuredContextItem[], tag: ContextItemTag): string
     .map((p) => p.text)
     .join("");
 }
-
-// ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("buildPromptContextItems — per-channel prompt override", () => {
   test("no override: system-prompt slot holds the server prompt; no channel block", async () => {
@@ -101,16 +97,24 @@ describe("buildPromptContextItems — per-channel prompt override", () => {
     expect(items.some((i) => i.metadataTag === ContextItemTag.SYSTEM_CHANNEL_PROMPT)).toBe(false);
   });
 
-  test("replace survives even when the default would be suppressed (preset path)", async () => {
+  test("an active preset drops the stored server prompt and the default", async () => {
+    for (const systemPrompt of [SERVER_PROMPT, null]) {
+      const items = await buildPromptContextItems(makeParams({ systemPrompt, presetOwnsSystemPrompt: true }));
+
+      expect(items.some((i) => i.metadataTag === ContextItemTag.SYSTEM_HUMANIZER_RULES)).toBe(false);
+    }
+  });
+
+  test("replace survives even when the preset owns the system prompt", async () => {
     const items = await buildPromptContextItems(
       makeParams({
-        systemPrompt: null,
-        suppressDefaultSystemPrompt: true,
+        systemPrompt: SERVER_PROMPT,
+        presetOwnsSystemPrompt: true,
         channelPromptOverride: { prompt: CHANNEL_PROMPT, mode: "replace" },
       }),
     );
 
-    // Replace must not be dropped by the suppress flag — it supplies the slot content.
+    // Replace must not be dropped by the suppress flag: it supplies the slot content.
     expect(textForTag(items, ContextItemTag.SYSTEM_HUMANIZER_RULES)).toBe(CHANNEL_PROMPT);
   });
 
@@ -127,5 +131,18 @@ describe("buildPromptContextItems — per-channel prompt override", () => {
       expect(textForTag(items, ContextItemTag.SYSTEM_PERSONA_PROMPT)).toBe(PERSONA_PROMPT);
       expect(textForTag(items, ContextItemTag.SYSTEM_PERSONALITY)).toBe("bullet one\nbullet two");
     }
+  });
+
+  test("omits prompt items that become empty after macro expansion", async () => {
+    const params = makeParams({
+      systemPrompt: "{{if capability:self_teaching}}memory instructions{{/if}}",
+      personaPrompt: "{{if capability:self_teaching}}persona instructions{{/if}}",
+    });
+    params.tomoriAttributes = ["{{if capability:self_teaching}}attribute{{/if}}"];
+    params.toolPromptMacroResolver = { expand: async () => "" };
+
+    const items = await buildPromptContextItems(params);
+
+    expect(items).toEqual([]);
   });
 });

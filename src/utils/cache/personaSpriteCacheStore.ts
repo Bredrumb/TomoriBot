@@ -1,12 +1,10 @@
+import { z } from "zod";
+import { broadcastInvalidation, registerInvalidation, invalidationDatabaseId } from "@/utils/cache/invalidationBus";
 import type { PersonaSpriteRow } from "@/types/db/schema";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
+import { clearPersonaAppearances, invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 
-const parsedCacheTtlMinutes = Number.parseInt(
-  process.env.PERSONA_SPRITE_CACHE_TTL_MINUTES || process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10",
-  10,
-);
-const CACHE_TTL_MINUTES =
-  Number.isFinite(parsedCacheTtlMinutes) && parsedCacheTtlMinutes > 0 ? parsedCacheTtlMinutes : 10;
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 const personaSpriteCache = new Map<number, { sprites: PersonaSpriteRow[]; expiresAt: number }>();
 
@@ -31,12 +29,22 @@ export function setPersonaSpriteCache(personaId: number, sprites: PersonaSpriteR
 
 export function invalidatePersonaSpriteCache(personaId: number): void {
   personaSpriteCache.delete(personaId);
+  invalidatePersonaAppearance(personaId);
+  broadcastInvalidation("personaSprite", [[String(personaId)]]);
 }
 
 export function clearPersonaSpriteCache(): void {
   personaSpriteCache.clear();
+  clearPersonaAppearances();
 }
 
 export function getPersonaSpriteCacheSize(): number {
   return personaSpriteCache.size;
 }
+
+registerInvalidation(
+  "personaSprite",
+  z.tuple([invalidationDatabaseId]),
+  ([persona]) => invalidatePersonaSpriteCache(persona),
+  clearPersonaSpriteCache,
+);

@@ -9,13 +9,14 @@
  *
  * Usage:
  *   bun run check-seed-catalogs
+ *   bun run check-seed-catalogs --defer-drift-review
  *   bun run scripts/checks/checkSeedCatalogs.ts
  */
 import { readFileSync } from "node:fs";
 import { personaSections } from "../../src/db/seed/catalog/personas";
 import { validateNaiPresets } from "../../src/db/seed/catalog/naiSeed";
 import { validatePersonas } from "../../src/db/seed/catalog/personaSeed";
-import { validateModels } from "../../src/db/seed/catalog/modelSeed";
+import { validateModelDriftReview, validateModels } from "../../src/db/seed/catalog/modelSeed";
 import { validateSystemPrompts } from "../../src/db/seed/catalog/systemPromptSeed";
 
 function validateStartupSeedOrder(): string[] {
@@ -24,11 +25,10 @@ function validateStartupSeedOrder(): string[] {
     new URL("../../src/utils/db/initializeDatabase.ts", import.meta.url),
     "utf8",
   );
+  const runtimeDatabaseSource = readFileSync(new URL("../../src/init/database.ts", import.meta.url), "utf8");
   const expectedCalls = [
     "await seedModelsFromCatalog(client);",
     "await seedPersonasFromCatalog(client);",
-    "await seedPersonaSpritesFromCatalog(client);",
-    "await seedPersonaAvatarsFromCatalog(client);",
     "await seedSystemPromptsFromCatalog(client);",
     "await seedNaiPresetsFromCatalog(client);",
   ];
@@ -47,8 +47,16 @@ function validateStartupSeedOrder(): string[] {
     previousIndex = index;
   }
 
+  const spriteIndex = runtimeDatabaseSource.indexOf("seedPersonaSpritesFromCatalog(client)");
+  const avatarIndex = runtimeDatabaseSource.indexOf("seedPersonaAvatarsFromCatalog(client)");
+  if (spriteIndex === -1 || avatarIndex === -1 || avatarIndex < spriteIndex) {
+    errors.push("Runtime preset sprite seed must run before the preset avatar seed");
+  }
+
   if (initializeDatabaseSource.includes("executeSqlDirectory(")) {
-    errors.push("initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding");
+    errors.push(
+      "initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding",
+    );
   }
 
   return errors;
@@ -86,10 +94,24 @@ function validatePresetSprites(): string[] {
   return errors;
 }
 
+/** A reference beside the avatar would be picked up as the avatar, because the avatar seed takes the first image in `avatarPath`. */
+function validatePresetCharacterReferences(): string[] {
+  return personaSections.flatMap((section) =>
+    section.rows
+      .filter((persona) => persona.characterReference !== undefined && !persona.characterReference.includes("/"))
+      .map((persona) => `persona_presets/${persona.name}: characterReference must sit in a subfolder of avatarPath`),
+  );
+}
+
+// CI defers drift review to its last step so a drift PR still runs lifecycle and tests first.
+const deferDriftReview = process.argv.includes("--defer-drift-review");
+
 const violations = [
   ...validateModels(),
+  ...(deferDriftReview ? [] : validateModelDriftReview()),
   ...validatePersonas(),
   ...validatePresetSprites(),
+  ...validatePresetCharacterReferences(),
   ...validateSystemPrompts(),
   ...validateNaiPresets(),
   ...validateStartupSeedOrder(),

@@ -22,7 +22,7 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [{ type: "text", text: "Hi there" }, inlineImagePart("AAA")],
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ];
 
@@ -52,7 +52,7 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [inlineImagePart("AAA"), inlineImagePart("BBB")],
-        sender: { name: "Tomori", type: "persona" },
+        sender: { id: "Tomori", name: "Tomori", type: "persona" },
       },
     ];
 
@@ -82,13 +82,13 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       {
         role: "model",
         parts: [{ type: "text", text: "Aki: first" }, inlineImagePart("AAA")],
-        sender: { name: "Aki", type: "persona" },
+        sender: { id: "Aki", name: "Aki", type: "persona" },
       },
       { role: "user", parts: [{ type: "text", text: "next" }] },
       {
         role: "model",
         parts: [inlineImagePart("BBB")],
-        sender: { name: "Ren", type: "persona" },
+        sender: { id: "Ren", name: "Ren", type: "persona" },
       },
     ];
 
@@ -151,5 +151,194 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       { role: "user", content: "hi" },
       { role: "assistant", content: "Sure, " },
     ]);
+  });
+
+  it.each([
+    "completed",
+    "review_rejected",
+  ])("pairs a %s tool result once without a duplicate user turn", async (status) => {
+    const functionResponse = {
+      functionResponse: {
+        name: "fetch_url",
+        response: { result: { status } },
+      },
+    };
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+    });
+
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(messages[1]?.content).toBe(JSON.stringify(functionResponse));
+    const calls = messages[0]?.tool_calls;
+    if (!Array.isArray(calls)) throw new Error("Expected paired tool calls");
+    expect(messages[1]?.tool_call_id).toBe((calls[0] as Record<string, unknown>)?.id);
+  });
+
+  it("inlines tool-returned images and corrects a misleading MIME label", async () => {
+    const pngBytes = Buffer.from("89504e470d0a1a0a00000000", "hex");
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "web_search", args: { query: "birds" } },
+          functionResponse: { functionResponse: { name: "web_search", response: { result: "sent" } } },
+          imageMetadata: {
+            imageUrls: [
+              {
+                url: `data:image/jpeg;base64,${pngBytes.toString("base64")}`,
+                mimeType: "image/jpeg",
+                originalUrl: "https://media.discordapp.net/proxy-image.jpg",
+              },
+            ],
+            totalSent: 1,
+            totalValidated: 1,
+          },
+        },
+      ],
+      seesImages: true,
+    });
+
+    expect(messages).toHaveLength(3);
+    expect(messages[2]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "image_url",
+          image_url: { url: `data:image/png;base64,${pngBytes.toString("base64")}` },
+        },
+      ],
+    });
+  });
+
+  it("replaces a tool-returned GIF instead of sending it to the provider", async () => {
+    const gifBytes = Buffer.from("GIF89a");
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "web_search", args: { query: "animation" } },
+          functionResponse: { functionResponse: { name: "web_search", response: { result: "sent" } } },
+          imageMetadata: {
+            imageUrls: [
+              {
+                url: `data:image/jpeg;base64,${gifBytes.toString("base64")}`,
+                mimeType: "image/jpeg",
+              },
+            ],
+            totalSent: 1,
+            totalValidated: 1,
+          },
+        },
+      ],
+      seesImages: true,
+    });
+
+    expect(messages[2]).toEqual({
+      role: "user",
+      content: "[System: A GIF returned by the tool is not supported by this endpoint.]",
+    });
+  });
+});
+
+describe("buildOpenAICompatibleMessages — reasoning_content replay", () => {
+  const functionResponse = { functionResponse: { name: "get_weather", response: { result: "ok" } } };
+
+  async function buildToolReplay(
+    deepseekReasoningContent: string | undefined,
+    requiresReasoningContentReplay: boolean,
+  ): Promise<Array<Record<string, unknown>>> {
+    return await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "get_weather", args: {}, deepseekReasoningContent },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+      requiresReasoningContentReplay,
+    });
+  }
+
+  it("emits an empty reasoning_content when replay is required but nothing was captured", async () => {
+    // DeepSeek 400s on an omitted key but accepts "", and a degraded retry that dropped
+    // `thinking` produces a tool call with no reasoning to capture.
+    const messages = await buildToolReplay(undefined, true);
+
+    expect(messages[0]).toHaveProperty("reasoning_content");
+    expect(messages[0]?.reasoning_content).toBe("");
+  });
+
+  it("replays captured reasoning verbatim when replay is required", async () => {
+    const messages = await buildToolReplay("thought about the weather", true);
+
+    expect(messages[0]?.reasoning_content).toBe("thought about the weather");
+  });
+
+  it("omits reasoning_content entirely for endpoints that do not require the replay", async () => {
+    const messages = await buildToolReplay(undefined, false);
+
+    expect(messages[0]).not.toHaveProperty("reasoning_content");
+  });
+
+  describe("trailing plain assistant turn", () => {
+    const textItem = (role: "user" | "model", text: string): StructuredContextItem => ({
+      role,
+      parts: [{ type: "text", text }],
+    });
+
+    async function buildTrailingTurn(requiresReasoningContentReplay: boolean) {
+      return await buildOpenAICompatibleMessages({
+        adapterName: "TestAdapter",
+        contextItems: [
+          textItem("model", "earlier reply"),
+          textItem("user", "Juno: hello"),
+          textItem("model", "Tomori: I am here"),
+        ],
+        currentTurnModelParts: [],
+        seesImages: false,
+        requiresReasoningContentReplay,
+      });
+    }
+
+    it("stamps an empty reasoning_content on assistant turns after the last user turn only", async () => {
+      const messages = await buildTrailingTurn(true);
+
+      expect(messages[0]).not.toHaveProperty("reasoning_content");
+      expect(messages.at(-1)).toMatchObject({ role: "assistant", reasoning_content: "" });
+    });
+
+    it("stamps a buffered currentTurnModelParts continuation", async () => {
+      const messages = await buildOpenAICompatibleMessages({
+        adapterName: "TestAdapter",
+        contextItems: [textItem("user", "Juno: hello")],
+        currentTurnModelParts: [{ text: "partial reply" }],
+        seesImages: false,
+        requiresReasoningContentReplay: true,
+      });
+
+      expect(messages.at(-1)).toMatchObject({ role: "assistant", content: "partial reply", reasoning_content: "" });
+    });
+
+    it("leaves the trailing turn untouched for endpoints that do not require the replay", async () => {
+      const messages = await buildTrailingTurn(false);
+
+      expect(messages.at(-1)).not.toHaveProperty("reasoning_content");
+    });
   });
 });

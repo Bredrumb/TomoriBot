@@ -4,8 +4,8 @@ import { log } from "@/utils/misc/logger";
  * Discord API error codes that are expected during normal interaction lifecycle
  * and should be silently ignored rather than logged as warnings.
  *
- * - 10062: Unknown Interaction — the 3-second reply token has expired
- * - 40060: Interaction has already been acknowledged — a double-ack race
+ * - 10062: Unknown Interaction: the 3-second reply token has expired
+ * - 40060: Interaction has already been acknowledged: a double-ack race
  */
 const EXPECTED_DISCORD_CODES = new Set([10062, 40060]);
 

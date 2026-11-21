@@ -1,0 +1,276 @@
+---
+title: "設定：Crawl4AI"
+sidebar:
+  label: "Crawl4AI"
+  order: 5
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+使用本機[Crawl4AI](https://github.com/unclecode/crawl4ai)伺服器，將大量使用JavaScript的網頁渲染為乾淨的Markdown供TomoriBot使用。
+
+內建的`fetch_url`工具預設使用輕量級的`safe_http`引擎。Crawl4AI新增了一個選用的無頭Playwright瀏覽器，在將Markdown回傳給bot之前先執行用戶端指令碼並擷取頁面內容。
+
+由於Crawl4AI會在TomoriBot受保護的HTTP用戶端之外跟隨重新導向，因此只有在允許私人網路擷取時才能使用它，這需要在任何`RUN_ENV`中都設定`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。該設定也會讓`fetch_url`讀取localhost與區域網路頁面，因此請僅在成員皆受信任的執行個體上啟用。
+
+:::caution[TomoriBot能檢查與不能檢查的範圍]
+在要求Crawl4AI開啟網址之前，TomoriBot會拒絕主機名稱無法解析，或解析為雲端中繼資料位址的網址。但它無法控制瀏覽器接下來的行為：Crawl4AI會自行重新解析網域名稱、跟隨重新導向並載入圖片與指令碼。TomoriBot的全時啟用中繼資料封鎖機制不涵蓋這些請求。
+
+固定映像檔（`unclecode/crawl4ai:0.9.4`）會讓其瀏覽器透過自身的代理發送請求，該代理會在每次請求與重新導向時封鎖私人、回環與中繼資料位址。請保持`CRAWL4AI_ALLOW_INTERNAL_URLS`未設定：將其設為`true`會關閉該代理，包含中繼資料封鎖。
+:::
+
+Crawl4AI 0.9.4在接受來自其容器外部的連線前需要API權杖。請產生一組隨機權杖（例如使用`openssl rand -hex 32`或`docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`），並在下方每條設定路徑的`.env`中將其儲存為`CRAWL4AI_TOKEN`。沒有它時容器雖可啟動，但TomoriBot無法連線並會改回使用`safe_http`。
+
+選擇設定路徑：
+
+### 選項A：Docker Compose（當TomoriBot在Docker中執行時）
+
+若你使用存放庫的Docker Compose堆疊執行TomoriBot，請使用此路徑。首先在`.env`中設定`CRAWL4AI_BASE_URL=http://crawl4ai:11235/`、`CRAWL4AI_TOKEN`與`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
+
+接著執行以下指令啟動：
+
+```sh
+docker compose --profile fetch-crawl4ai up -d
+```
+
+這會在TomoriBot的Docker網路上連同Crawl4AI容器一起啟動Compose堆疊。Compose會將`CRAWL4AI_TOKEN`作為`CRAWL4AI_API_TOKEN`傳遞給容器，而TomoriBot會將其作為Bearer權杖傳送。連接埠11235僅發布在`127.0.0.1`上供本機除錯；TomoriBot本身透過Docker網路進行連線。
+
+若你是直接使用`bun run dev`執行TomoriBot，請改用下方的獨立Docker路徑。
+
+若你也想要SearXNG，請串接設定檔：
+
+```sh
+docker compose --profile searxng --profile fetch-crawl4ai up -d
+```
+
+---
+
+### 選項B：獨立Docker（執行`bun run dev`時）
+
+首先在`.env`中設定`CRAWL4AI_BASE_URL=http://localhost:11235/`、`CRAWL4AI_TOKEN`與`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`，讓bot連線到發布在`127.0.0.1`上的容器連接埠。
+
+接著不要直接執行`bun run dev`啟動TomoriBot，改用`bun run launch --crawl4ai`。它會自動處理容器生命週期，並在啟動bot前等待伺服器就緒。若缺少`CRAWL4AI_TOKEN`，它會報錯並停止：
+
+```sh
+bun run launch --crawl4ai
+```
+
+若你也想要SearXNG：
+
+```sh
+bun run launch --searxng --crawl4ai
+```
+
+如果你偏好自行管理容器，請將`CRAWL4AI_BASE_URL=http://localhost:11235/`保留在`.env`中，並使用儲存在`CRAWL4AI_API_TOKEN`中的對應權杖啟動容器，避免將秘密資訊留在shell紀錄中：
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+$secureToken = Read-Host -Prompt "Crawl4AI token (match CRAWL4AI_TOKEN)" -AsSecureString
+$env:CRAWL4AI_API_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+try {
+  docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+    -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+} finally {
+  Remove-Item Env:\CRAWL4AI_API_TOKEN -ErrorAction SilentlyContinue
+}
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+read -r -s -p "Crawl4AI token (match CRAWL4AI_TOKEN): " CRAWL4AI_API_TOKEN
+echo
+CRAWL4AI_API_TOKEN="$CRAWL4AI_API_TOKEN" docker run -d --name crawl4ai \
+  -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+unset CRAWL4AI_API_TOKEN
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+```bash
+printf 'Crawl4AI token (match CRAWL4AI_TOKEN): '
+read -r -s CRAWL4AI_API_TOKEN
+echo
+CRAWL4AI_API_TOKEN="$CRAWL4AI_API_TOKEN" docker run -d --name crawl4ai \
+  -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN unclecode/crawl4ai:0.9.4
+unset CRAWL4AI_API_TOKEN
+```
+
+</TabItem>
+</Tabs>
+
+當容器就緒後（`docker ps`顯示`(healthy)`），再執行`bun run dev`。
+
+---
+
+### 選項C：無瀏覽器渲染伺服器
+
+讓`CRAWL4AI_BASE_URL`保持未設定。`fetch_url`工具會使用受保護的`safe_http`引擎。
+
+---
+
+## 啟動順序
+
+TomoriBot在啟動後的第一次`fetch_url`呼叫時會探測伺服器健康狀態，並將結果快取60秒。若首次探測時容器尚未就緒，bot在接下來一分鐘內都會將它視為不可用。
+
+使用獨立Docker時，請先啟動Crawl4AI容器再啟動TomoriBot。`bun run launch --crawl4ai`已經為你處理好這一點。
+
+### 首次設定
+
+1. 啟動容器並等待`docker ps`顯示`(healthy)`：
+   ```sh
+   docker ps
+   ```
+2. 在啟動TomoriBot前確認API有回應：
+   <Tabs syncKey="operating-system">
+   <TabItem label="Windows">
+
+   ```powershell
+   Invoke-RestMethod http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   <TabItem label="Linux">
+
+   ```bash
+   curl -fsS http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   <TabItem label="Mac">
+
+   ```bash
+   curl -fsS http://127.0.0.1:11235/health
+   ```
+
+   </TabItem>
+   </Tabs>
+3. 針對外部網址執行一次快速的驗證爬取冒煙測試（透過stdin或環境變數傳遞權杖，而非命令列引數）：
+   <Tabs syncKey="operating-system">
+   <TabItem label="Windows">
+
+   ```powershell
+   $secureToken = Read-Host -Prompt "Crawl4AI token" -AsSecureString
+   $token = [System.Net.NetworkCredential]::new("", $secureToken).Password
+   try {
+     $headers = @{ Authorization = "Bearer $token" }
+     Invoke-RestMethod http://127.0.0.1:11235/md -Method Post -Headers $headers `
+       -ContentType "application/json" -Body '{"url":"https://example.com","f":"fit"}'
+   } finally {
+     Remove-Variable token -ErrorAction SilentlyContinue
+   }
+   ```
+
+   </TabItem>
+   <TabItem label="Linux">
+
+   ```bash
+   read -r -s -p "Crawl4AI token: " CRAWL4AI_TEST_TOKEN
+   echo
+   printf 'header = "Authorization: Bearer %s"\n' "$CRAWL4AI_TEST_TOKEN" | \
+     curl -fsS --config - -X POST http://127.0.0.1:11235/md \
+       -H "Content-Type: application/json" \
+       -d '{"url":"https://example.com","f":"fit"}'
+   unset CRAWL4AI_TEST_TOKEN
+   ```
+
+   </TabItem>
+   <TabItem label="Mac">
+
+   ```bash
+   printf 'Crawl4AI token: '
+   read -r -s CRAWL4AI_TEST_TOKEN
+   echo
+   printf 'header = "Authorization: Bearer %s"\n' "$CRAWL4AI_TEST_TOKEN" | \
+     curl -fsS --config - -X POST http://127.0.0.1:11235/md \
+       -H "Content-Type: application/json" \
+       -d '{"url":"https://example.com","f":"fit"}'
+   unset CRAWL4AI_TEST_TOKEN
+   ```
+
+   </TabItem>
+   </Tabs>
+4. 使用上方設定路徑對應的值，在`.env`中設定`CRAWL4AI_BASE_URL`。
+5. 啟動TomoriBot（`bun run dev`或`docker compose up`）。
+
+### 從`latest`升級
+
+既有的`crawl4ai`容器會保留建立它時使用的映像檔，因此`docker start`不會升級它。請先移除它一次，然後重新使用你的設定路徑：
+
+```sh
+docker rm -f crawl4ai
+```
+
+若使用Compose，`docker compose --profile fetch-crawl4ai up -d`會從固定映像檔重新建立容器。
+
+### 重新啟動後恢復運作
+
+若先前的容器已經存在，請使用`docker start`取代`docker run`以避免命名衝突：
+
+```sh
+docker start crawl4ai
+docker ps
+```
+
+接著照常啟動TomoriBot。重新啟動`bun run dev`會重設記憶體中的健康狀態快取，因此只要容器先就緒，就能立即選用正確的引擎。
+
+---
+
+## Cookie注入
+
+Crawl4AI支援注入瀏覽器層級的Cookie，讓無頭瀏覽器在擷取頁面時處於已登入狀態。這對於需要工作階段才能檢視內容的網站很有幫助（例如付費牆新聞、私人論壇、需要登入的儀表板）。
+
+`safe_http`備援不支援Cookie注入。Cookie僅在Crawl4AI作用中時套用。
+
+:::note[機器人偵測限制]
+Cookie注入可繞過登入牆，但無法繞過bot指紋辨識。採用積極反機器人偵測的網站（特別是Twitter/X）會透過Canvas或WebGL指紋辨識偵測無頭Playwright，即使持有有效工作階段Cookie仍會回傳空白頁面。Cookie注入在僅透過身分驗證把關的網站上效果良好。
+:::
+
+### 取得你的Cookie
+
+1. 開啟瀏覽器並登入目標網站。
+2. 開啟開發人員工具（`F12`）> `Application`分頁 > `Storage` > `Cookies` > 選取該網站的網域。
+3. 複製每個所需Cookie的`Value`（通常是工作階段權杖；請確認網站的Cookie名稱）。
+
+### Crawl4AI設定
+
+在`.env`中將`CRAWL4AI_COOKIES_JSON`設為JSON陣列：
+
+```dotenv
+CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":".example.com"}]
+```
+
+設定此項目後，`fetch_url`會自動從`/md`端點切換為搭配`browser_config.cookies`的`/crawl`。`/md`不支援Cookie注入。
+
+### Cookie物件欄位
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `name` | 是 | Cookie名稱 |
+| `value` | 是 | Cookie值 |
+| `domain` | 否 | 網域範圍（例如`.x.com`）。建議填寫以確保正確性。 |
+| `path` | 否 | 路徑範圍。省略時預設為`/`。 |
+
+:::caution[保護工作階段權杖]
+Cookie值屬於敏感資訊，請像密碼一樣妥善保管。它們能授予帳號的完整工作階段存取權。切勿將`.env`提交至版本控制。
+:::
+
+---
+
+## 環境變數
+
+| 變數 | 預設值 | 說明 |
+|---|---|---|
+| `CRAWL4AI_BASE_URL` | 未設定 | 設定後啟用Crawl4AI：TomoriBot會優先嘗試它，並在離線或擷取失敗時改回使用`safe_http`。除非設定`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`，否則會被忽略。在Docker Compose中使用`http://crawl4ai:11235/`，直接在電腦上執行TomoriBot時使用`http://localhost:11235/`。 |
+| `CRAWL4AI_TOKEN` | 未設定 | 必填的Bearer權杖。必須與Crawl4AI容器上的`CRAWL4AI_API_TOKEN`相符，否則容器會拒絕外部連線。 |
+| `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AI與其他URL擷取引擎的個別引擎請求逾時時間。 |
+| `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 單次擷取呼叫在需要接續讀取前回傳的最多字元數。 |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 在任何`RUN_ENV`中啟用Crawl4AI皆須設定此項。同時允許`fetch_url`讀取localhost、區域網路與其他私人位址，包含純HTTP連線。雲端中繼資料位址仍會保持封鎖。 |
+| `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AI `/md`篩選模式。`fit`會為LLM保留較乾淨的Markdown；`fetch_url(..., raw=true)`可依個別請求覆寫此設定。 |

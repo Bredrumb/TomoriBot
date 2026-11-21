@@ -1,26 +1,47 @@
+import { createMemoryRecall, type MemoryRecallOutcome } from "@/utils/text/context/memoryRecall";
+import { startQueryRetrieval } from "@/utils/text/context/queryRetrieval";
+import { isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
+import { orderNativePromptBlocks, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
+import { buildLorebookContextItems } from "@/modules/lorebooks/runtime/contextItems";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import { appendDialogueHistoryContext } from "./dialogueHistory";
-import { convertMentions } from "./mentionNormalizer";
+import { appendDialogueHistoryContext, DOCUMENT_HINT_TEMPLATE } from "./dialogueHistory";
+import { convertMentions as convertMentionsBase, type MentionMemo } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
-import { buildUsersInConversationContextItem } from "./participants";
+import { buildParticipantContextItems } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
 import { buildServerEmojiContextItem, buildServerStickerContextItem } from "./serverAssets";
 import { buildServerInfoContextItem } from "./serverInfo";
-import { buildConditioningContextItem, buildPromptContextItems, buildSampleDialogueContextItems } from "./templates";
+import {
+  buildConditioningContextItem,
+  buildPromptContextItems,
+  buildSampleDialogueContextItems,
+  type MentionConverter,
+} from "./templates";
+import { buildVerbatimToolDefinitionsContextItem } from "./toolDefinitions";
 import type { BuildContextParams } from "./types";
+import { SPACER_TEMPLATE } from "./timeAwareness";
 
 export type NativeBuildContextResult = {
+  memoryRecall?: MemoryRecallOutcome;
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Saved dialogue-item depth preserves spacer and directive counting (0 = tail). */
+  nudgeInjectionDepth?: number;
+  /** Fresh STM and saved non-negative depths bypass preset buckets for downstream positional insertion. */
+  memoryInjectionItems?: StructuredContextItem[];
+  /** Saved dialogue-item depth is compared with the tail slot after history assembly. */
+  memoryInjectionDepth?: number;
 };
 
 /**
@@ -32,58 +53,115 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverName,
     serverDescription,
     simplifiedMessageHistory,
-    userList,
+    preparedParticipantContext,
     channelName,
     channelId,
     parentChannelId,
     client,
     triggererName,
+    triggererFormattedName,
+    historyUserLabels,
+    historyPersonaMentionLabels,
+    triggererAddressTerm,
     tomoriNickname,
     tomoriAttributes,
-    publicPersonaAttributes,
     tomoriConfig,
     channelPromptOverride,
     channelContextNote,
+    reunionNote,
     personaPrompt,
     personaLineageId,
     triggererUserId,
     isDMChannel = false,
-    mediaContextWindow,
     snapshot,
     preloadedEmojis,
     preloadedStickers,
+    preloadedCustomExpressions,
     isUserImpersonation = false,
     impersonatedUserId,
+    shortTermMemoryUserId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
-    matrixUsers,
-    syntheticUsers,
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
-    suppressDefaultSystemPrompt = false,
+    deliberateToolAllowedNames,
+    presetOwnsSystemPrompt = false,
     messageIdMap,
   } = params;
+
+  const mentionMemo: MentionMemo = new Map();
+  const convertMentions: MentionConverter = (
+    text,
+    mentionClient,
+    serverId,
+    userName,
+    botName,
+    personalMemoriesEnabled,
+    mentionSnapshot,
+    identityMacroMode,
+  ) =>
+    convertMentionsBase(
+      text,
+      mentionClient,
+      serverId,
+      userName,
+      botName,
+      personalMemoriesEnabled,
+      mentionSnapshot,
+      identityMacroMode,
+      {
+        userFormatted: triggererFormattedName,
+        userTerm: triggererAddressTerm,
+      },
+      mentionMemo,
+      preparedParticipantContext.requestScope,
+    );
 
   const contextItems: StructuredContextItem[] = [];
   const tailDirectives: string[] = [];
   const lowerPriorityTailDirectives: string[] = [];
-  let sameChannelMemoryDirective: string | undefined;
+  let nudgeItem: StructuredContextItem | undefined;
+  let nudgeInjectionDepth = 2;
+  let memoryInjectionItems: StructuredContextItem[] | undefined;
+  let memoryInjectionDepth = -1;
   let uncensorDirective: string | undefined;
   const botName = tomoriNickname;
   const impersonatedMember =
     isUserImpersonation && impersonatedUserId
       ? client.guilds.cache.get(guildId)?.members.cache.get(impersonatedUserId)
       : null;
+  // The naming-aware label comes first so the "Imitate" instruction matches the speaker labels in the
+  // history; the Discord names are only a fallback when no label could be resolved.
   const impersonatedIdentityName =
-    impersonatedMember?.displayName || impersonatedMember?.user.displayName || impersonatedUserNickname || null;
+    impersonatedUserNickname || impersonatedMember?.displayName || impersonatedMember?.user.displayName || null;
   const uncensorInputOptions = {
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
+  const memoryDemand = Promise.withResolvers<boolean>();
+  const retrieval = startQueryRetrieval(
+    { tomoriState, simplifiedMessageHistory, triggererUserId },
+    {
+      enabled: isMemoryDecayEnabled(),
+      demand: memoryDemand.promise,
+    },
+  );
+  const memoryRecall = createMemoryRecall(retrieval, memoryDemand.resolve);
+  const documentItemPromise = buildServerDocumentContextItem({
+    retrieval,
+    tomoriState,
+    channelId,
+    parentChannelId,
+  }).catch((error: unknown) => {
+    log.warn("Failed to add server document context", error);
+    return null;
+  });
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
+    capabilities: resolvePromptCapabilityValues(tomoriConfig, Boolean(tomoriState?.llm?.has_tools)),
+    deliberateToolAllowedNames,
     stateForContext:
       tomoriState?.server_id && tomoriState.llm
         ? {
@@ -94,6 +172,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
             nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
             video_model_id: tomoriState.config.video_model_id,
             config: {
+              emoji_usage_enabled: tomoriConfig.emoji_usage_enabled,
               sticker_usage_enabled: tomoriConfig.sticker_usage_enabled,
               web_search_enabled: tomoriConfig.web_search_enabled,
               self_teaching_enabled: tomoriConfig.self_teaching_enabled,
@@ -102,11 +181,18 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
               videogen_enabled: tomoriConfig.videogen_enabled,
               voice_message_enabled: tomoriConfig.voice_message_enabled,
               user_blocking_enabled: tomoriConfig.user_blocking_enabled,
+              user_info_updates_enabled: tomoriConfig.user_info_updates_enabled,
               thread_creation_enabled: tomoriConfig.thread_creation_enabled,
+              conditioning_interactions_enabled: tomoriConfig.conditioning_interactions_enabled,
+              dice_rolling_enabled: tomoriConfig.dice_rolling_enabled,
+              danbooru_enabled: tomoriConfig.danbooru_enabled,
             },
           }
         : undefined,
   });
+  const dateSpacerTemplate =
+    tomoriConfig.time_awareness_enabled !== false ? await toolPromptMacroResolver.expand(SPACER_TEMPLATE) : null;
+  const documentHintTemplate = await toolPromptMacroResolver.expand(DOCUMENT_HINT_TEMPLATE);
   const explicitLongTermMemoryIntent =
     explicitLongTermMemoryIntentOverride ??
     hasExplicitLongTermMemoryIntent(
@@ -119,14 +205,13 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       guildId,
       botName,
       tomoriAttributes,
-      publicPersonaAttributes,
       tomoriConfig,
       channelPromptOverride,
       personaPrompt,
       isUserImpersonation,
       impersonatedIdentityName,
       impersonatedUserPrompt,
-      suppressDefaultSystemPrompt,
+      presetOwnsSystemPrompt,
       snapshot,
       toolPromptMacroResolver,
       convertMentions,
@@ -155,6 +240,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       botName,
       tomoriConfig,
       personaUserBlocks,
+      toolPromptMacroResolver,
     }),
   );
 
@@ -167,14 +253,15 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   if (!isUserImpersonation) {
     const serverMemoryItem = await buildServerMemoryContextItem({
+      memoryRecall,
       tomoriState,
       guildId,
       serverName,
       isDMChannel,
       botName,
       personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
-      conversationCorpus,
-      channelName,
+      channelId,
+      parentChannelId,
       channelMemoryEnabled: tomoriConfig.channel_memory_enabled,
       client,
       convertMentions,
@@ -210,6 +297,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       tomoriConfig,
       tomoriState,
       preloadedStickers,
+      preloadedCustomExpressions,
       toolPromptMacroResolver,
       convertMentions,
     }),
@@ -217,19 +305,24 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   await appendOptionalItem(
     contextItems,
     buildPersonaSpriteContextItem({
+      client,
+      guildId,
       tomoriState,
+      tomoriConfig,
       botName,
       isUserImpersonation,
+      snapshot,
+      convertMentions,
     }),
   );
-  await appendOptionalItem(
-    contextItems,
-    buildUsersInConversationContextItem({
+  contextItems.push(
+    ...(await buildParticipantContextItems({
+      memoryRecall,
       client,
       guildId,
       channelName,
       channelId,
-      userList,
+      participantSeeds: preparedParticipantContext.discoveryPlan.seeds,
       triggererName,
       botName,
       personaLineageId,
@@ -239,20 +332,32 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedUserId,
       impersonatedIdentityName,
-      matrixUsers,
-      syntheticUsers,
-      publicPersonaAttributes,
+      matrixUsers: preparedParticipantContext.matrixUsers,
+      syntheticUsers: preparedParticipantContext.syntheticUsers,
+      messageProxyUsers: preparedParticipantContext.messageProxyUsers,
+      publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
+      preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
+      referencedUserIds: preparedParticipantContext.referencedUserIds,
+      profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
+      requestScope: preparedParticipantContext.requestScope,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,
       convertMentions,
-    }),
+    })),
   );
 
   try {
-    const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+    const actualTriggeringUserId =
+      impersonatedUserId ?? shortTermMemoryUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+    // Per-server master switch (migration 054): when STM is disabled we no longer skip the
+    // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
+    // cadence nudge are suppressed): but existing STM content STILL surfaces so admins can
+    // curate it by hand via `/persona stm edit` and crude messages remain visible. The
+    // nudge suppression now lives inside buildShortTermMemoryContext (gated on the same
+    // switch), and the write tool gates itself in updateShortTermMemoryTool.
     if (actualTriggeringUserId) {
-      const { memoryItems, createPromptText } = await buildShortTermMemoryContext({
+      const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
         currentChannelId: channelId,
         currentServerId: guildId,
@@ -264,19 +369,49 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         isUserImpersonation,
         explicitLongTermMemoryIntent,
         toolPromptMacroResolver,
-        currentParentChannelId: parentChannelId,
         convertMentions,
       });
-      contextItems.push(...memoryItems);
-      sameChannelMemoryDirective = createPromptText;
+      nudgeItem = stmResult.nudgeItem;
+      nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
+      memoryInjectionDepth = stmResult.memoryInjectionDepth;
+      if (memoryInjectionDepth >= 0 || stmResult.memoryItems.some((item: PromptLayoutItem) => item[STM_TAIL_SLOT])) {
+        // Deferred content bypasses preset buckets so the tail slot and saved item depth can be compared after history assembly.
+        memoryInjectionItems = stmResult.memoryItems;
+      } else {
+        contextItems.push(...stmResult.memoryItems);
+      }
     }
   } catch (error) {
     log.warn("Failed to build short-term memory context", error);
   }
 
+  // Verbatim schemas stay above history because their contents follow tool configuration.
   await appendOptionalItem(
     contextItems,
-    buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId, channelName }),
+    buildVerbatimToolDefinitionsContextItem({
+      tomoriState,
+      userId: triggererUserId,
+      contextItems,
+      isUserImpersonation,
+    }),
+  );
+  const recallPromise = memoryRecall.finish();
+  await appendOptionalItem(contextItems, documentItemPromise);
+  const recall = await recallPromise;
+  if (recall.item) contextItems.push(recall.item);
+  contextItems.push(
+    ...(await buildLorebookContextItems({
+      tomoriState,
+      recentMessages: simplifiedMessageHistory.map((message) => message.content ?? ""),
+      channelId,
+      parentChannelId,
+      channelScopeEnabled: tomoriConfig.channel_memory_enabled,
+      client,
+      guildId,
+      botName,
+      personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
+      convertMentions,
+    })),
   );
   await appendConditioningContext({
     contextItems,
@@ -286,6 +421,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     botName,
     personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
     isUserImpersonation,
+    convertMentions,
   });
   contextItems.push(
     ...(await buildSampleDialogueContextItems({
@@ -310,10 +446,16 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     tomoriConfig,
     tomoriState,
     channelContextNote,
-    mediaContextWindow,
+    reunionNote,
+    dateSpacerTemplate,
+    documentHintTemplate,
     includeTimestamps,
     isUserImpersonation,
     impersonatedUserId,
+    triggererDiscordId: snapshot?.triggererUserRow?.user_disc_id,
+    triggererFormattedName,
+    historyUserLabels,
+    historyPersonaMentionLabels,
     messageIdMap,
     uncensorInputOptions,
     convertMentions,
@@ -324,10 +466,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       `Imitate ${impersonatedIdentityName || "User"}, start your message with ${impersonatedIdentityName || "User"}:`,
     );
   }
-  if (sameChannelMemoryDirective) {
-    lowerPriorityTailDirectives.push(sameChannelMemoryDirective);
-  }
-
   const uncensorInjectionText = buildUncensorInjectionText({
     injectionEnabled: tomoriConfig.uncensor_injection_enabled,
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
@@ -340,8 +478,20 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     if (strippedText) uncensorDirective = strippedText;
   }
 
+  orderNativePromptBlocks(contextItems);
+
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
-  return { contextItems, tailDirectives, lowerPriorityTailDirectives, uncensorDirective };
+  return {
+    memoryRecall: recall.outcome,
+    contextItems,
+    tailDirectives,
+    lowerPriorityTailDirectives,
+    uncensorDirective,
+    nudgeItem,
+    nudgeInjectionDepth,
+    memoryInjectionItems,
+    memoryInjectionDepth,
+  };
 }
 
 async function appendOptionalItem(
@@ -360,6 +510,7 @@ async function appendConditioningContext(params: {
   botName: string;
   personalMemoriesEnabled: boolean;
   isUserImpersonation: boolean;
+  convertMentions: MentionConverter;
 }): Promise<void> {
   if (
     params.isUserImpersonation ||
@@ -381,7 +532,7 @@ async function appendConditioningContext(params: {
       personalMemoriesEnabled: params.personalMemoriesEnabled,
       rewardEnabled: params.tomoriState.reward_conditioning_enabled,
       punishEnabled: params.tomoriState.punish_conditioning_enabled,
-      convertMentions,
+      convertMentions: params.convertMentions,
     });
 
     if (conditioningItem) {

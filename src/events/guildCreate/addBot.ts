@@ -1,44 +1,47 @@
 import { log, ColorCode } from "../../utils/misc/logger";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
-import type { Client, Guild } from "discord.js";
+import { DiscordAPIError, RESTJSONErrorCodes, type Client, type Guild } from "discord.js";
 import { findBestChannel } from "@/utils/discord/eventHelper";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
 /**
  * Sends welcome message when bot joins a new guild.
  * Shows setup instructions or welcome back message based on existing data.
- * @param client - The Discord client instance
  * @param guild - The guild the bot joined
- * @returns Promise<void>
  */
 const handler = async (client: Client, guild: Guild): Promise<void> => {
   try {
     log.info(`Bot joined new server: ${guild.name} (${guild.id})`);
 
-    // 1. Check if server exists in database via repository
     const serverId = await serverRepository.loadServerIdByDiscId(guild.id);
 
-    // 2. Check if Tomori exists if server found via repository
     let tomoriExists = false;
     if (serverId) {
       const personas = await personaRepository.loadServerPersonaSummaries(serverId);
       tomoriExists = personas !== null && personas.length > 0;
     }
 
-    // 3. Try to send to system channel first, fallback to best channel
     const serverLocale = guild.preferredLocale;
+    const welcomeEmbedOptions = {
+      titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
+      descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
+      descriptionVars: {
+        legalNotice: legalNoticeSuffix(serverLocale, "general.legal.policy_reference"),
+      },
+      color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
+    };
     let channel = guild.systemChannel;
     let sentSuccessfully = false;
 
-    // Try sending to system channel if it exists
-    if (channel) {
+    if (
+      channel &&
+      guild.members.me &&
+      channel.permissionsFor(guild.members.me)?.has(["ViewChannel", "SendMessages", "EmbedLinks"])
+    ) {
       try {
-        await sendStandardEmbed(channel, serverLocale, {
-          titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
-          descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
-          color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
-        });
+        await sendStandardEmbed(channel, serverLocale, welcomeEmbedOptions);
         sentSuccessfully = true;
         log.success(`Sent welcome message to system channel ${channel.name} in ${guild.name}`);
       } catch (_error) {
@@ -46,23 +49,26 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
       }
     }
 
-    // Fallback to best channel if system channel failed or doesn't exist
     if (!sentSuccessfully) {
       channel = await findBestChannel(guild, client);
       if (!channel) {
-        log.error(`No suitable text channel found in guild ${guild.name} (${guild.id})`);
+        log.metric("guild_welcome_skipped", { reason: "no_sendable_channel" });
+        log.warn(`No suitable text channel found in guild ${guild.name} (${guild.id})`);
         return;
       }
 
-      await sendStandardEmbed(channel, serverLocale, {
-        titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
-        descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
-        color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
-      });
+      await sendStandardEmbed(channel, serverLocale, welcomeEmbedOptions);
 
       log.success(`Sent welcome message to fallback channel ${channel.name} in ${guild.name}`);
     }
   } catch (error) {
+    if (
+      error instanceof DiscordAPIError &&
+      (error.code === RESTJSONErrorCodes.MissingAccess || error.code === RESTJSONErrorCodes.MissingPermissions)
+    ) {
+      log.warn(`Guild ${guild.id} denied the welcome message channel`, error);
+      return;
+    }
     log.error(`Error handling guild join for ${guild.id}:`, error);
   }
 };

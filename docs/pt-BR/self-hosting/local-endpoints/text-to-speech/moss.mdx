@@ -1,0 +1,66 @@
+---
+title: "MOSS-TTS"
+aiGenerated: true
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Avalie a clonagem de voz e o design de voz em linguagem natural localmente por meio de um endpoint de fala unificado usando o [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS).
+
+O modelo padrão de clonagem de 4B e o VoiceGenerator de 1,7B alternam na memória da GPU quando o modo de voz muda, de modo que a primeira solicitação após uma troca leva mais tempo. O modelo de clonagem de 8B requer mais VRAM.
+
+## Configuração
+
+Execute os comandos a partir da raiz do repositório do TomoriBot usando Python 3.12 (as instruções de Windows e Linux abaixo visam um driver compatível com CUDA 12.8):
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+python -m venv servers\tts\moss\.venv
+servers\tts\moss\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 "moss-tts[torch-runtime] @ git+https://github.com/OpenMOSS/MOSS-TTS.git"
+python -m pip install -r servers\tts\moss\requirements.txt
+python servers\tts\moss\prefetch_models.py
+python servers\tts\moss\server.py
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+No Linux ou WSL2:
+
+```bash
+python3.12 -m venv servers/tts/moss/.venv
+source servers/tts/moss/.venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 "moss-tts[torch-runtime] @ git+https://github.com/OpenMOSS/MOSS-TTS.git"
+python -m pip install -r servers/tts/moss/requirements.txt
+python servers/tts/moss/prefetch_models.py
+python servers/tts/moss/server.py
+```
+
+</TabItem>
+<TabItem label="Mac">
+
+**Sem testes e não recomendado para hospedagem local no Mac.** O `OpenMOSS/MOSS-TTS` upstream visa GPUs CUDA 12.8. Sem CUDA, o wrapper faz fallback para `cpu` em `float32`; rodar o modelo de clonagem de 4B e o VoiceGenerator de 1,7B em `float32` exige mais de 20 GB de memória unificada, as camadas upstream com `trust_remote_code=True` não são verificadas no Apple MPS neste repositório, e a geração lenta pode atingir `TTS_SYNTHESIZE_TIMEOUT_MS`. Execute o MOSS-TTS em um host CUDA Linux ou Windows atrás de um [túnel remoto autenticado](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/), ou use [VoxCPM2](/self-hosting/local-endpoints/text-to-speech/voxcpm2/) ou [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/) localmente no Mac.
+
+</TabItem>
+</Tabs>
+
+O comando de pré-download baixa o modelo de clonagem, o VoiceGenerator e os tokenizadores de áudio para o cache do Hugging Face antes de iniciar o servidor. Se o espaço em disco for limitado, defina `HF_HOME` para uma partição maior. Para baixar apenas um modelo, passe `--mode clone` ou `--mode voice-design`.
+
+O endpoint padrão é `http://127.0.0.1:8018`. Execute `bun run launch --moss` para iniciar o servidor junto com o TomoriBot. O modo Automático pré-aquece o modelo de clonagem a partir do cache local. Defina `MOSS_TTS_WARM_MODE=voice-design` para pré-aquecer o VoiceGenerator, ou `MOSS_TTS_WARM_MODE=none` para inicialização sob demanda (lazy). Verifique `GET /health` para consultar `warm_mode`, `active_mode` e `model_id` ativos. O wrapper usa `trust_remote_code=True` do Hugging Face, portanto revise o código upstream antes de atualizar.
+
+## Registrar no TomoriBot
+
+Em `/providers`, escolha `+ Adicionar Novo Endpoint Personalizado`, defina Compatibilidade de API como `Clone de TTS` (`tts-clone`) e use a URL do endpoint `http://127.0.0.1:8018`. Adicione um modelo de Fala com `Modo de Fonte de Voz` definido como `Automático` e `Estilo de Marcação de Script` definido como `Simples`. Ative-o em `/config` > Modelos > Trocar Modelos.
+
+Para clonagem de voz, envie um clipe de referência limpo em `/config` > Modelos > Parâmetros TTS e Vozes e atribua-o em Persona > Voz. Clipes de áudio mais curtos e limpos produzem os resultados mais consistentes. Para design de voz, salve uma descrição em linguagem natural em Persona > Voz. Observe que o MOSS-VoiceGenerator foi projetado para inglês e chinês. Embora o modelo de clonagem de 4B suporte japonês, tags explícitas de idioma melhoram a clareza da síntese.
+
+O adaptador de clonagem do TomoriBot não envia tags de idioma automaticamente. Para uso com um único idioma, defina `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (ou `English`, `Chinese`, etc.) antes de iniciar o servidor. Chamadas manuais a `/synthesize` podem passar `language` diretamente.
+
+O servidor lê seu próprio ambiente de shell; configurações no `.env` do bot não se aplicam a um terminal Python iniciado de forma independente.
+
+Para executar o modelo de 8B em hardware com grande memória, defina `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` antes do pré-download. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE` e `MOSS_TTS_MAX_NEW_TOKENS` são configuráveis em `.env.optional.example`. Aumente `TTS_SYNTHESIZE_TIMEOUT_MS` no TomoriBot se trocas de modelo ou execução na CPU causarem estouros de tempo limite.

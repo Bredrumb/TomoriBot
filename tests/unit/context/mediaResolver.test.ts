@@ -1,40 +1,33 @@
-import { describe, expect, test } from "bun:test";
-import type { AssembledServerConfig, LlmRow, TomoriState } from "@/types/db/schema";
+import { describe, expect, spyOn, test } from "bun:test";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import type { Tool } from "@/types/tool/interfaces";
+import type { LlmRow, TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
+// A blind OpenRouter model, so `resolveEffectiveMediaCapabilities` takes its base-capability path
+// instead of consulting the live OpenRouter catalog.
 function makeLlm(overrides: Partial<LlmRow>): LlmRow {
-  return {
-    llm_id: 1,
+  return createLlmRow({
     llm_provider: "openrouter",
     llm_codename: "test-model",
-    is_scoped_registration: false,
-    is_smartest: false,
-    is_default: false,
-    is_reasoning: false,
-    is_deprecated: false,
-    is_free: false,
-    has_tools: true,
     sees_images: false,
     sees_videos: false,
-    sees_youtube: false,
-    is_uncensored: false,
-    supports_structoutput: false,
-    strict_role_alternation: false,
-    supports_prefix_completion: false,
     ...overrides,
-  };
+  });
 }
 
 function makeState(overrides: { seesImages?: boolean; seesVideos?: boolean; hasVisionTool?: boolean }): TomoriState {
-  const llm = makeLlm({
-    sees_images: overrides.seesImages ?? false,
-    sees_videos: overrides.seesVideos ?? false,
-  });
-  return {
-    server_id: 1,
-    llm,
+  return createPersona({
+    llm: makeLlm({
+      sees_images: overrides.seesImages ?? false,
+      sees_videos: overrides.seesVideos ?? false,
+    }),
     vision_llm: overrides.hasVisionTool ? makeLlm({ llm_id: 2, sees_images: true }) : undefined,
+    // `resolveMediaForModel` forwards these capability flags and model pointers to the prompt
+    // macro resolver, and the guidance text below is asserted verbatim, so the fixture keeps its
+    // all-off set rather than the shared defaults that enable most tool families.
     config: {
       diffusion_model_id: null,
       nai_diffusion_model_id: null,
@@ -47,8 +40,9 @@ function makeState(overrides: { seesImages?: boolean; seesVideos?: boolean; hasV
       videogen_enabled: false,
       voice_message_enabled: false,
       thread_creation_enabled: false,
-    } as AssembledServerConfig,
-  } as TomoriState;
+      danbooru_enabled: false,
+    },
+  });
 }
 
 function imageItem(overrides: Partial<StructuredContextItem> = {}): StructuredContextItem {
@@ -125,13 +119,26 @@ describe("resolveMediaForModel", () => {
   });
 
   test("emits analyze_image guidance for blind in-window images when a vision tool is configured", async () => {
-    const resolved = await resolveMediaForModel([imageItem()], makeState({ hasVisionTool: true }));
-
-    expect(resolved[0].parts[0]).toEqual({
-      type: "text",
-      text: "[System: This message (ID: media_1) contains an image. Do not guess the image contents. Use the `analyze_image` tool with this media ID only if the user explicitly asks about the image or if unseen visual details are necessary to answer correctly. The media ID can also be used with tools that accept media references.]",
+    const availability = spyOn(ToolRegistry, "getAvailableToolsWithMCP").mockResolvedValue({
+      builtInTools: [{ name: "analyze_image" } as Tool],
+      mcpFunctionNames: [],
+      totalCount: 1,
     });
-    expect(resolved[0].parts[1].type).toBe("text");
+    try {
+      const resolved = await resolveMediaForModel([imageItem()], makeState({ hasVisionTool: true }));
+      expect(resolved[0].parts[0]).toEqual({
+        type: "text",
+        text: "[System: This message (ID: media_1) contains an image. Do not guess the image contents. Use the `analyze_image` tool with this media ID only if the user explicitly asks about the image or if unseen visual details are necessary to answer correctly. The media ID can also be used with tools that accept media references.]",
+      });
+      expect(resolved[0].parts[1].type).toBe("text");
+
+      const scoped = await resolveMediaForModel([imageItem()], makeState({ hasVisionTool: true }), ["web_search"]);
+      const scopedText = scoped[0].parts[0].type === "text" ? scoped[0].parts[0].text : "";
+      expect(scopedText).not.toContain("analyze_image");
+      expect(scopedText).toContain("media_1");
+    } finally {
+      availability.mockRestore();
+    }
   });
 
   test("emits plain blind-model guidance when no vision tool is configured", async () => {
@@ -139,7 +146,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_1) contains an image. Current model cannot see images, please do not describe or claim to see the image contents. The media ID can still be used with tools that accept media references.]",
+      text: '[System: This message (ID: media_1) contains an image. Current model cannot see images, please do not describe or claim to see the image contents. If you need to see images, tell the user to setup `/model vision` or to use a different model with the "vision" capability. The media ID can still be used with tools that accept media references.]',
     });
   });
 
@@ -153,7 +160,7 @@ describe("resolveMediaForModel", () => {
     expect(resolved[0].parts[1].type).toBe("text");
   });
 
-  test("uses the increase_media_context hint for viewable out-of-window media", async () => {
+  test("points at the reply escape hatch for viewable out-of-window media", async () => {
     const base = [
       imageItem({
         parts: [{ type: "text", text: "Alice: old photo" }],
@@ -164,7 +171,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "image/png",
             mediaId: "media_4",
             withinWindow: false,
-            extendBy: 7,
             filename: "old.png",
           },
         ],
@@ -175,12 +181,12 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_4) contained 1 image - use increase_media_context with extend_by=7 to view]",
+      text: "[System: This message (ID: media_4) contained 1 image, but it is outside the current media context window. Ask the user to reply to that message if you need to see it. The media ID can still be used with tools that accept media references.]",
     });
     expect(resolved[0].parts[1]).toEqual({ type: "text", text: "Alice: old photo" });
   });
 
-  test("uses the increase_media_context hint for viewable out-of-window videos", async () => {
+  test("points at the reply escape hatch for viewable out-of-window videos", async () => {
     const base = [
       videoItem({
         parts: [{ type: "text", text: "Alice: old clip" }],
@@ -191,7 +197,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "video/mp4",
             mediaId: "media_9",
             withinWindow: false,
-            extendBy: 3,
             filename: "old.mp4",
           },
         ],
@@ -202,7 +207,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_9) contained 1 video - use increase_media_context with extend_by=3 to view]",
+      text: "[System: This message (ID: media_9) contained 1 video, but it is outside the current media context window. Ask the user to reply to that message if you need to see it. The media ID can still be used with tools that accept media references.]",
     });
     expect(resolved[0].parts[1]).toEqual({ type: "text", text: "Alice: old clip" });
   });
@@ -218,7 +223,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "image/png",
             mediaId: "media_8",
             withinWindow: false,
-            extendBy: 4,
             filename: "old.png",
           },
         ],
@@ -246,7 +250,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "video/mp4",
             mediaId: "media_9",
             withinWindow: false,
-            extendBy: 3,
             filename: "old.mp4",
           },
         ],
@@ -284,7 +287,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_10) contains a GIF. Current model cannot see images, please do not describe or claim to see the image contents. The media ID can still be used with tools that accept media references.]",
+      text: '[System: This message (ID: media_10) contains a GIF. Current model cannot see images, please do not describe or claim to see the image contents. If you need to see images, tell the user to setup `/model vision` or to use a different model with the "vision" capability. The media ID can still be used with tools that accept media references.]',
     });
   });
 

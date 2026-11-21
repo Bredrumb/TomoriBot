@@ -1,0 +1,64 @@
+---
+title: "Text-to-Speech (Engine cục bộ)"
+sidebar:
+  label: "Tổng quan"
+  groupLabel: "Text-to-Speech"
+  order: 6
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Tạo tin nhắn thoại tự nhiên và lời nói của nhân vật trực tiếp trên máy của bạn mà không phải trả phí cho mỗi ký tự hoặc truyền âm thanh tới API giọng nói của bên thứ ba.
+
+TomoriBot coi giọng nói như một tính năng endpoint tùy chỉnh. Các engine cục bộ chạy bên ngoài bot dưới dạng máy chủ HTTP và triển khai `POST /synthesize`; các engine nhân bản nhận văn bản kèm theo mẫu âm thanh tham chiếu đã cấu hình, trong khi các engine có khả năng VoiceDesign cũng có thể nhận hướng dẫn bằng ngôn ngữ tự nhiên.
+
+## Các engine khả dụng
+
+<CardGrid>
+  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="Nhân bản giọng nói tiếng Anh với tag sự kiện. Turbo là mặc định; Nano và Standard là các biến thể tùy chọn." />
+  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="TTS cục bộ đa ngôn ngữ với các chế độ nhân bản và VoiceDesign." />
+  <LinkCard title="MOSS-TTS" href="/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="Endpoint tự động dùng thử: nhân bản giọng nói đa ngôn ngữ 4B hoặc thiết kế giọng nói tiếng Anh/tiếng Trung được mô tả bằng văn bản." />
+  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="Nhân bản giọng nói tập trung vào tiếng Nhật và VoiceDesign với markup emoji Unicode để kiểm soát cảm xúc." />
+  <LinkCard title="Fish Audio S2 Pro" href="/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="Nhân bản giọng nói đa ngôn ngữ chất lượng cao với các điều khiển biểu cảm trong ngoặc chi tiết. Mặc định là trọng số BF16 chính thức, với checkpoint INT8 tùy chọn cho các GPU nhỏ hơn." />
+  <LinkCard title="VoxCPM2" href="/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="TTS 30 ngôn ngữ với Voice Design, nhân bản âm thanh tham chiếu, Ultimate Cloning hỗ trợ bản ghi văn bản và kiểm soát ngữ điệu bằng ngôn ngữ tự nhiên." />
+  <LinkCard title="CosyVoice 3" href="/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="Nhân bản đa ngôn ngữ zero-shot và cross-lingual 0.5B với hướng dẫn ngữ điệu bằng ngôn ngữ tự nhiên." />
+  <LinkCard title="So sánh engine TTS" href="/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="Thời gian tổng hợp thực nghiệm, trình phát mẫu âm thanh và so sánh tốc độ trên tất cả 7 engine." />
+</CardGrid>
+
+## Luồng thiết lập
+
+1. Chọn một engine từ các thẻ ở trên và thiết lập wrapper của nó từ `servers/tts/`.
+2. Trong `/providers`, chọn `Thêm endpoint tùy chỉnh mới` và sử dụng API Compatibility `tts-clone`.
+3. Chọn endpoint đã lưu và sử dụng dropdown model của nó để thêm model `Giọng nói`, `Chế độ nguồn giọng đọc` và `Kiểu định dạng kịch bản`.
+4. Mở `/config` > `Model` > `Chuyển đổi model` và chọn endpoint dưới mục `TTS (Voice Design)` hoặc `TTS (Sao chép giọng đọc)`. Các endpoint `Tự động` sẽ kích hoạt cả hai lựa chọn; xóa một lựa chọn vẫn giữ nguyên lựa chọn còn lại.
+
+Để biết các nhà cung cấp giọng nói được lưu trữ trên đám mây và tùy chọn cá nhân, hãy xem [Giọng nói: TTS & STT](/features/capabilities/media-generation/tts-and-stt/).
+
+## Truy cập mạng
+{/* anchor: network-access */}
+
+Mọi máy chủ TTS cục bộ đều mặc định liên kết với `127.0.0.1`. Với bot production được lưu trữ riêng, hãy giữ cấu hình liên kết này và làm theo [cấu hình TTS trong hướng dẫn Cloudflare Tunnel](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/). Đăng ký URL tunnel HTTPS của nó (không kèm `/v1`), chọn `tts-clone` và để trống token xác thực trừ khi bạn đã thêm cổng xác thực. Cấu hình này cho phép kiểm tra trạng thái và tổng hợp giọng nói cho cả sao chép giọng đọc lẫn thiết kế giọng nói (Voice Design). Các kết nối văn bản và ComfyUI vẫn có thể hoạt động song song với giọng nói.
+
+Với bot ngoài môi trường production chạy trong Docker hoặc trên mạng LAN tin cậy, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` và đăng ký địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`. Hãy giới hạn quyền truy cập cổng bằng tường lửa của máy chủ và cấu hình `ALLOW_PRIVATE_NETWORK` trong TomoriBot để cho phép máy chủ và cổng đó.
+
+Mỗi máy chủ đọc biến cổng riêng (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), nên nhiều máy chủ có thể chạy cùng lúc từ một `.env`. `bun run launch` truyền `.env` cho các máy chủ mà nó khởi động; một máy chủ được khởi động thủ công chỉ đọc môi trường shell của nó.
+
+Các máy chủ không có xác thực: bất kỳ ai kết nối được trực tiếp hoặc qua tunnel đều có thể chạy tổng hợp giọng nói trên GPU của bạn. Hãy xem mục [rủi ro đã biết](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-tunnel/#known-risks) trong hướng dẫn tunnel trước khi chấp nhận chia sẻ không xác thực. [Access và Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) là tùy chọn bổ sung nếu bạn muốn có bước kiểm tra xác thực riêng. Chỉ liên kết ra ngoài loopback trên mạng bạn tin cậy.
+
+## Giọng nói của persona
+
+Để nhân bản giọng nói, hãy tải lên một mẫu âm thanh rõ ràng, đơn giọng trong `/config` > `Model` > `Tham số & Giọng đọc TTS`, sau đó gán mẫu đó trong `Persona` > `Giọng nói`. Hãy kiểm tra hướng dẫn của engine để biết độ dài clip được khuyến nghị và yêu cầu bản chép lời.
+
+TomoriBot chấp nhận các mẫu âm thanh lên đến 130 giây và chuyển đổi chúng thành WAV đơn âm (mono). Giới hạn dung lượng tải lên mặc định là 10 MB; `SPEECH_SAMPLE_MAX_MB` có thể thay đổi giá trị này. Một định dạng nén như FLAC có thể giúp clip dài vừa vặn với dung lượng giới hạn.
+
+Đối với các engine hỗ trợ thiết kế giọng nói, hãy lưu mô tả giọng nói trong `Persona` > `Giọng nói`. Một persona có thể có cả mô tả và mẫu âm thanh; mức ưu tiên `Chế độ nguồn giọng đọc` sẽ chọn nguồn khả dụng nào để thử trước. Xem hướng dẫn của từng engine để biết các chế độ và kiểu định dạng kịch bản được hỗ trợ.
+
+Bật tin nhắn thoại trong `/config` > Permissions, sau đó yêu cầu một persona gửi tin nhắn thoại hoặc sử dụng `/generate voice-message` để dùng thử.

@@ -1,20 +1,39 @@
 import type { Client, GuildTextBasedChannel } from "discord.js";
-import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
+import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCache";
+import { fetchParticipantMember, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
 import { formatChannelReferenceLabel } from "@/utils/discord/targetResolver";
 import { log } from "@/utils/misc/logger";
 import { normalizeCustomEmojisForLlm, replaceTemplateVariables } from "@/utils/text/processors/mentionProcessor";
 
-const mentionCache = new Map<string, string>();
+export type MentionMemo = Map<string, Promise<string | null>>;
 const DISCORD_CHANNEL_LINK_TEST_PATTERN =
   /https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(?:@me|\d{17,19})\/\d{17,19}(?:\/\d{17,19})?/i;
 const DISCORD_CHANNEL_LINK_REPLACE_PATTERN =
   /https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(?:@me|\d{17,19})\/(\d{17,19})(?:\/(\d{17,19}))?/gi;
 
-function needsConversion(text: string): boolean {
+/**
+ * Controls whether `convertMentions` expands identity macros.
+ *
+ * - `"resolve"`: expand them into names. Correct for text *we* author: system prompt sections,
+ *   persona attributes, sample dialogues, stored memories, and tool/function-call output. These
+ *   deliberately store a late-bound reference so one row renders correctly for any persona,
+ *   nickname, or target user.
+ * - `"preserve"`: leave them literal. Correct for raw prose we did not author: Discord message
+ *   bodies, whether typed by a human or emitted by the model. Expanding those rewrites what was
+ *   actually said, and for a model-role line collapses BOTH macros onto the persona name (the
+ *   author label and the bot nickname are the same string there).
+ */
+export type IdentityMacroMode = "resolve" | "preserve";
+
+function needsConversion(text: string, identityMacroMode: IdentityMacroMode): boolean {
   return (
     /<[@#][!&]?\d{17,19}>/.test(text) ||
     DISCORD_CHANNEL_LINK_TEST_PATTERN.test(text) ||
-    /(?:\{\{(?:bot|char|user)\}\}|\{(?:bot|char|user)\})/i.test(text)
+    (identityMacroMode === "resolve" &&
+      /(?:\{\{(?:bot|char|user|user_formatted|user_term)\}\}|\{(?:bot|char|user|user_formatted|user_term)\})/i.test(
+        text,
+      ))
   );
 }
 
@@ -44,6 +63,11 @@ export function splitLeadingSystemBlocks(content: string): {
 
 /**
  * Converts Discord mentions, channel links, roles, and `{user}`/`{bot}` placeholders into LLM-safe labels.
+ *
+ * Mention/channel/role resolution always runs. Identity-macro expansion is gated by
+ * `identityMacroMode`: see {@link IdentityMacroMode} for which text belongs in which mode.
+ *
+ * @param identityMacroMode - Whether to expand `{bot}`/`{char}`/`{user}`. Defaults to `"resolve"`.
  */
 export async function convertMentions(
   text: string,
@@ -53,13 +77,15 @@ export async function convertMentions(
   tomoriNickname?: string,
   personalMemoriesEnabled?: boolean,
   snapshot?: import("@/types/misc/context").RequestSnapshot,
+  identityMacroMode: IdentityMacroMode = "resolve",
+  identityValues?: { userFormatted?: string; userTerm?: string },
+  mentionMemo: MentionMemo = new Map(),
+  requestScope?: ParticipantRequestScope,
 ): Promise<string> {
   const normalizedText = normalizeDiscordChannelLinks(text);
-  if (!needsConversion(text)) {
+  if (!needsConversion(text, identityMacroMode)) {
     return normalizedText;
   }
-
-  mentionCache.clear();
 
   let currentTomoriNickname = tomoriNickname;
   if (!currentTomoriNickname) {
@@ -82,61 +108,58 @@ export async function convertMentions(
     const replacements = await Promise.all(
       mentionsData.map(async ({ match, id }) => {
         if (match.startsWith("<@")) {
-          const cachedName = mentionCache.get(id);
-          if (cachedName) return `${cachedName}`;
-          try {
-            if (client.user && id === client.user.id && currentTomoriNickname) {
-              const guild = serverId === "DM" ? null : client.guilds.cache.get(serverId);
-              const member = guild
-                ? (guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null)))
-                : null;
-              const displayName = member?.displayName?.trim() || currentTomoriNickname;
-              mentionCache.set(id, displayName);
-              return `${displayName}`;
-            }
+          const key = `${serverId}:${id}`;
+          let resolution = mentionMemo.get(key);
+          if (!resolution) {
+            resolution = (async () => {
+              try {
+                if (client.user && id === client.user.id && currentTomoriNickname) {
+                  const guild = serverId === "DM" ? null : client.guilds.cache.get(serverId);
+                  const member = guild ? await fetchParticipantMember(guild, id, requestScope) : null;
+                  const displayName = member?.displayName?.trim() || currentTomoriNickname;
+                  return `${displayName}`;
+                }
 
-            const isTriggererId = snapshot?.triggererUserRow?.user_disc_id === id;
-            const isUserBlacklisted = isTriggererId
-              ? (snapshot?.isTriggererBlacklisted ?? false)
-              : await userRepository.isBlacklisted(serverId, id);
-            const userData = isTriggererId ? snapshot?.triggererUserRow : await userRepository.loadByDiscordId(id);
-            const serverPersonalizationDisabled = personalMemoriesEnabled === false;
+                const isTriggererId = snapshot?.triggererUserRow?.user_disc_id === id;
+                const isUserBlacklisted = isTriggererId
+                  ? (snapshot?.isTriggererBlacklisted ?? false)
+                  : await getCachedBlacklistStatus(serverId, id);
+                const userData = isTriggererId ? snapshot?.triggererUserRow : await getCachedUserRow(id);
+                const serverPersonalizationDisabled = personalMemoriesEnabled === false;
 
-            if (!isUserBlacklisted && !serverPersonalizationDisabled && userData?.user_nickname) {
-              mentionCache.set(id, userData.user_nickname);
-              return `${userData.user_nickname}`;
-            }
+                if (!isUserBlacklisted && !serverPersonalizationDisabled && userData?.user_nickname) {
+                  return `${userData.user_nickname}`;
+                }
 
-            const guild = serverId === "DM" ? null : client.guilds.cache.get(serverId);
-            const member = guild
-              ? (guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null)))
-              : null;
-            const serverNickname = member?.nickname ?? null;
+                const guild = serverId === "DM" ? null : client.guilds.cache.get(serverId);
+                const member = guild ? await fetchParticipantMember(guild, id, requestScope) : null;
+                const serverNickname = member?.nickname ?? null;
 
-            if (serverNickname) {
-              mentionCache.set(id, serverNickname);
-              return `${serverNickname}`;
-            }
+                if (serverNickname) {
+                  return `${serverNickname}`;
+                }
 
-            const username = member?.user.username ?? null;
-            if (username) {
-              mentionCache.set(id, username);
-              return `${username}`;
-            }
+                const username = member?.user.username ?? null;
+                if (username) {
+                  return `${username}`;
+                }
 
-            const user = client.users.cache.get(id) || (await client.users.fetch(id).catch(() => null));
-            if (user) {
-              mentionCache.set(id, user.username);
-              return `${user.username}`;
-            }
-          } catch (error) {
-            log.error(`Error resolving nickname for user ${id} in convertMentions:`, error, {
-              errorType: "MentionResolutionError",
-              metadata: { userIdToResolve: id, guildDiscordId: serverId },
-            });
+                const user = client.users.cache.get(id) || (await client.users.fetch(id).catch(() => null));
+                if (user) {
+                  return `${user.username}`;
+                }
+              } catch (error) {
+                log.error(`Error resolving nickname for user ${id} in convertMentions:`, error, {
+                  errorType: "MentionResolutionError",
+                  metadata: { userIdToResolve: id, guildDiscordId: serverId },
+                });
+              }
+              log.warn(`Could not resolve user mention: ${match}`);
+              return null;
+            })();
+            mentionMemo.set(key, resolution);
           }
-          log.warn(`Could not resolve user mention: ${match}`);
-          return match;
+          return (await resolution) ?? match;
         }
 
         if (match.startsWith("<#")) {
@@ -192,10 +215,14 @@ export async function convertMentions(
     }
   }
 
-  result = replaceTemplateVariables(result, {
-    bot: currentTomoriNickname,
-    user: triggererName || "User",
-  });
+  if (identityMacroMode === "resolve") {
+    result = replaceTemplateVariables(result, {
+      bot: currentTomoriNickname,
+      user: triggererName || "User",
+      user_formatted: identityValues?.userFormatted,
+      user_term: identityValues?.userTerm,
+    });
+  }
 
   return result;
 }

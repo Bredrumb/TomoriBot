@@ -1,7 +1,7 @@
 /**
  * Vertex AI provider metadata and capability flags
  *
- * Feature parity with Google AI Studio — all helpers accept an optional
+ * Feature parity with Google AI Studio: all helpers accept an optional
  * pre-built GoogleGenAI client, so Vertex passes its ADC client through.
  *
  * liveTokenCounting is backed by the same Google tokenizer: the ADC client
@@ -23,6 +23,7 @@ export const vertexProviderInfo: ProviderInfo = {
   supportsVideos: true,
   apiFamily: "google-genai",
   featureSupport: {
+    decisions: false,
     imageGeneration: "chat-completion",
     videoGeneration: "none",
     embeddings: true,

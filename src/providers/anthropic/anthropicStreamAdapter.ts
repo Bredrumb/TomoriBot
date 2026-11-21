@@ -12,9 +12,17 @@
  * - SSE uses named events: content_block_start, content_block_delta, etc.
  */
 
+import { applyAnthropicCacheBreakpoints, relocateCacheContextItems } from "@/providers/utils/anthropicCache";
+import { buildTargetedAttempt, extractRejectedParams } from "@/providers/utils/paramDegradation";
+import { mapWithConcurrency } from "@/utils/async/bounded";
+import { resolveToolCallId } from "@/providers/utils/toolCallIds";
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
+import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import {
+  formatProviderErrorCodeForDisplay,
+  isProviderTimeoutMessage,
+} from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
@@ -23,12 +31,13 @@ import {
   assistantMediaRelocationNotice,
   CONVERSATION_START_USER_TEXT,
   ensureLeadingUserTurn,
+  isSystemInstructionContextItem,
   mergeConsecutiveSameRole,
   type NormalizableMessage,
   providerRequiresAlternation,
-  relocateAssistantMediaContextItems,
 } from "../utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { parseAccumulatedToolArguments } from "../utils/toolCallArguments";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
@@ -90,9 +99,6 @@ type AnthropicContentBlock =
   | AnthropicToolResultBlock
   | AnthropicThinkingBlock;
 
-/**
- * Anthropic message format
- */
 interface AnthropicMessage {
   role: "user" | "assistant";
   content: string | AnthropicContentBlock[];
@@ -102,14 +108,11 @@ interface AnthropicMessage {
  * Accumulated tool call data across streaming chunks
  */
 interface AccumulatedToolCall {
-  id: string;
+  id?: string;
   name: string;
   argumentsJson: string;
 }
 
-/**
- * SSE event types from Anthropic's streaming API
- */
 type AnthropicSseEventType =
   | "message_start"
   | "content_block_start"
@@ -131,29 +134,13 @@ interface ParsedSseEvent {
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
-// Tags that should be extracted to the top-level system parameter
-const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
 
 export class AnthropicStreamAdapter extends BaseStreamAdapter {
-  // Accumulators for tool calls across streaming chunks (per-stream instance)
   private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
-  // Accumulator for thinking text across streaming chunks
   private thinkingAccumulator = "";
-  // Track current content block index for tool call accumulation
   private currentContentBlockIndex = -1;
-  // Final stop reason from message_delta
   private stopReason: string | null = null;
-  // Usage stats from message_start and message_delta
-  private inputTokens = 0;
-  private outputTokens = 0;
+  private usage: Record<string, unknown> = {};
 
   constructor() {
     super({
@@ -167,20 +154,17 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * Initialize and start the streaming process with Anthropic's Messages API
    */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
-    // 1. Reset instance accumulators for this stream
     this.toolCallAccumulator.clear();
     this.thinkingAccumulator = "";
     this.currentContentBlockIndex = -1;
     this.stopReason = null;
-    this.inputTokens = 0;
-    this.outputTokens = 0;
+    this.usage = {};
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
-    // 2. Assemble context into Anthropic message format.
-    //    Strict role alternation is resolved from the active llms column (D4 column-is-truth);
+    // Strict role alternation is resolved from the active llms column (D4 column-is-truth);
     //    providerRequiresAlternation("anthropic") is the request-time safety net that keeps it
-    //    ON even if a row were mis-seeded.
+    //    ON even if a row were mis-seeded, so a mis-seeded row can never emit an invalid body.
     const enforceAlternation =
       providerRequiresAlternation("anthropic") || (context.tomoriState.llm?.strict_role_alternation ?? false);
     const { systemPrompt, messages } = await this.assembleAnthropicContext(
@@ -189,13 +173,13 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       context.functionInteractionHistory,
       anthropicConfig.seesImages ?? true,
       enforceAlternation,
+      config.model,
     );
 
     log.info(
       `AnthropicStreamAdapter: Assembled ${messages.length} messages, system prompt: ${systemPrompt?.length ?? 0} chars`,
     );
 
-    // 3. Build request body
     const requestBody: Record<string, unknown> = {
       model: config.model,
       max_tokens: config.maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS,
@@ -203,12 +187,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       messages,
     };
 
-    // 4. Add system prompt as top-level parameter (not in messages)
+    // Add system prompt as top-level parameter (not in messages)
     if (systemPrompt) {
       requestBody.system = systemPrompt;
     }
 
-    // 5. Add tools if present in config
     if (config.tools && Array.isArray(config.tools) && config.tools.length > 0) {
       requestBody.tools = config.tools;
     }
@@ -225,7 +208,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       requestBody.output_config = thinkingRequest.output_config;
     }
 
-    // 6. Add sampling parameters when thinking mode does not suppress them
+    // Add sampling parameters when thinking mode does not suppress them
     if (!thinkingRequest.omitSampling) {
       const samplingSelection = selectAnthropicSamplingParams({
         temperature: config.temperature,
@@ -252,7 +235,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 8. Add stop sequences for speaker guard
     const stopSequences = buildProviderStopStrings({
       providerName: "anthropic",
       model: config.model,
@@ -265,136 +247,141 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       log.info(`AnthropicStreamAdapter: Added stop sequences`);
     }
 
-    // 9. Handle output prefill (assistant prefix)
-    if (context.outputPrefill?.trim()) {
-      // Anthropic supports assistant prefill natively by adding an assistant message
-      const prefill = context.outputPrefill.trim();
-      messages.push({
-        role: "assistant",
-        content: prefill,
-      });
-      log.info(`AnthropicStreamAdapter: Added prefill assistant message (${prefill.length} chars)`);
-    }
-
     log.info(`AnthropicStreamAdapter: Starting stream for model ${config.model}, max_tokens ${requestBody.max_tokens}`);
 
-    // 10. Log sanitized request for debugging (mirrors Google provider pattern)
-    this.logSanitizedRequest(requestBody);
+    if (!context.holdResponseText) this.logSanitizedRequest(requestBody);
 
-    // 11. Make the HTTP request
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "x-api-key": config.apiKey,
       "anthropic-version": ANTHROPIC_API_VERSION,
     };
 
-    const response = await fetch(ANTHROPIC_MESSAGES_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: context.abortSignal,
-    });
+    let activeBody = requestBody;
+    let cacheDegraded = false;
+    const degradeCache = (message: string, status?: number): boolean => {
+      if (cacheDegraded || !extractRejectedParams(message, activeBody).includes("cache_control")) return false;
+      const attempt = buildTargetedAttempt(activeBody, ["cache_control"]);
+      log.warn("Anthropic request retry with degraded payload", { label: attempt.label, status });
+      activeBody = attempt.body;
+      cacheDegraded = true;
+      return true;
+    };
+    requestLoop: while (true) {
+      const response = await fetch(ANTHROPIC_MESSAGES_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(activeBody),
+        signal: context.abortSignal,
+      });
 
-    // 12. Handle non-streaming errors (HTTP level)
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorData: unknown;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { message: errorText };
-      }
-
-      log.error(`AnthropicStreamAdapter: HTTP ${response.status} error: ${errorText}`);
-
-      const anthropicError = new Error(JSON.stringify({ error: errorData }));
-      Object.assign(anthropicError, { statusCode: response.status });
-      yield this.createProviderErrorChunk(anthropicError);
-      return;
-    }
-
-    // 13. Parse SSE stream
-    if (!response.body) {
-      throw new Error("Anthropic response body is null");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let pendingEventType: string | null = null;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+      if (!response.ok) {
+        const errorText = await response.text();
+        if (degradeCache(errorText, response.status)) continue;
+        let errorData: unknown;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
         }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        log.warn(`AnthropicStreamAdapter: HTTP ${response.status} error: ${errorText}`);
 
-        for (const line of lines) {
-          const trimmedLine = line.trim();
+        const anthropicError = new Error(JSON.stringify({ error: errorData }));
+        Object.assign(anthropicError, { statusCode: response.status });
+        yield this.createProviderErrorChunk(anthropicError, context);
+        return;
+      }
 
-          // Skip empty lines and comments
-          if (!trimmedLine || trimmedLine.startsWith(":")) {
-            continue;
+      if (!response.body) {
+        throw new Error("Anthropic response body is null");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let pendingEventType: string | null = null;
+      let completed = false;
+      let committed = false;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            completed = true;
+            break;
           }
 
-          // Track event type
-          if (trimmedLine.startsWith("event:")) {
-            pendingEventType = trimmedLine.slice(6).trim();
-            continue;
-          }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-          // Process data line (requires preceding event type)
-          if (trimmedLine.startsWith("data:")) {
-            const dataStr = trimmedLine.slice(5).trim();
-            if (!dataStr) {
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+
+            if (!trimmedLine || trimmedLine.startsWith(":")) {
               continue;
             }
 
-            try {
-              const parsed = JSON.parse(dataStr);
-              const sseEvent: ParsedSseEvent = {
-                eventType: (pendingEventType || parsed.type) as AnthropicSseEventType,
-                data: parsed,
-              };
-              pendingEventType = null;
+            if (trimmedLine.startsWith("event:")) {
+              pendingEventType = trimmedLine.slice(6).trim();
+              continue;
+            }
 
-              yield {
-                data: sseEvent,
-                provider: "anthropic",
-              };
-            } catch (_parseErr) {
-              log.warn(`AnthropicStreamAdapter: Failed to parse SSE data: ${dataStr.substring(0, 100)}`);
+            // Process data line (requires preceding event type)
+            if (trimmedLine.startsWith("data:")) {
+              const dataStr = trimmedLine.slice(5).trim();
+              if (!dataStr) {
+                continue;
+              }
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                const sseEvent: ParsedSseEvent = {
+                  eventType: (pendingEventType || parsed.type) as AnthropicSseEventType,
+                  data: parsed,
+                };
+                pendingEventType = null;
+                if (sseEvent.eventType === "error" && !committed && degradeCache(dataStr)) continue requestLoop;
+                if (sseEvent.eventType !== "ping" && sseEvent.eventType !== "error") committed = true;
+
+                yield {
+                  data: sseEvent,
+                  provider: "anthropic",
+                };
+              } catch (_parseErr) {
+                log.warn(`AnthropicStreamAdapter: Failed to parse SSE data: ${dataStr.substring(0, 100)}`);
+              }
             }
           }
         }
-      }
 
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        const remaining = buffer.trim();
-        if (remaining.startsWith("data:")) {
-          const dataStr = remaining.slice(5).trim();
-          try {
-            const parsed = JSON.parse(dataStr);
-            yield {
-              data: {
-                eventType: (pendingEventType || parsed.type) as AnthropicSseEventType,
-                data: parsed,
-              } satisfies ParsedSseEvent,
-              provider: "anthropic",
-            };
-          } catch {
-            // Ignore parse errors on final buffer
+        if (buffer.trim()) {
+          const remaining = buffer.trim();
+          if (remaining.startsWith("data:")) {
+            const dataStr = remaining.slice(5).trim();
+            try {
+              const parsed = JSON.parse(dataStr);
+              const eventType = (pendingEventType || parsed.type) as AnthropicSseEventType;
+              if (eventType === "error" && !committed && degradeCache(dataStr)) continue;
+              yield {
+                data: {
+                  eventType,
+                  data: parsed,
+                } satisfies ParsedSseEvent,
+                provider: "anthropic",
+              };
+            } catch {}
           }
         }
+      } finally {
+        // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
+        // connection. A consumer that stops iterating this generator early would otherwise leak them.
+        if (!completed) {
+          await reader.cancel().catch(() => undefined);
+        }
       }
-    } finally {
-      reader.releaseLock();
+      return;
     }
   }
 
@@ -421,14 +408,12 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     switch (eventType) {
       case "message_start": {
-        // Extract usage info from message start
-        const msgData = data as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } };
+        const msgData = data as { message?: { usage?: Record<string, unknown> } };
         if (msgData.message?.usage) {
-          this.inputTokens = msgData.message.usage.input_tokens ?? 0;
-          this.outputTokens = msgData.message.usage.output_tokens ?? 0;
-          metadata.inputTokens = this.inputTokens;
+          this.usage = { ...msgData.message.usage };
+          metadata.inputTokens = this.usage.input_tokens;
+          metadata.usage = { ...this.usage };
         }
-        // No text to emit, but track metadata
         return { type: "text", content: "", thoughts: [], metadata };
       }
 
@@ -440,9 +425,8 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         this.currentContentBlockIndex = blockData.index ?? -1;
 
         if (blockData.content_block?.type === "tool_use") {
-          // Initialize tool call accumulator
           this.toolCallAccumulator.set(this.currentContentBlockIndex, {
-            id: blockData.content_block.id || `tool_${this.currentContentBlockIndex}`,
+            id: typeof blockData.content_block.id === "string" ? blockData.content_block.id : undefined,
             name: blockData.content_block.name || "",
             argumentsJson: "",
           });
@@ -450,11 +434,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
             `AnthropicStreamAdapter: Tool use block started: ${blockData.content_block.name} (index ${this.currentContentBlockIndex})`,
           );
         } else if (blockData.content_block?.type === "thinking") {
-          // Initialize thinking accumulator
           this.thinkingAccumulator = blockData.content_block.thinking || "";
         }
 
-        // No text to emit for block start
         return { type: "text", content: "", thoughts: [], metadata };
       }
 
@@ -476,23 +458,19 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
         const delta = deltaData.delta;
 
-        // Handle text content
         if (delta.type === "text_delta" && delta.text) {
           return { type: "text", content: delta.text, thoughts: [], metadata };
         }
 
-        // Handle tool call argument fragments
         if (delta.type === "input_json_delta" && delta.partial_json) {
           const blockIdx = deltaData.index ?? this.currentContentBlockIndex;
           const accumulated = this.toolCallAccumulator.get(blockIdx);
           if (accumulated) {
             accumulated.argumentsJson += delta.partial_json;
           }
-          // No text to emit during accumulation
           return { type: "text", content: "", thoughts: [], metadata };
         }
 
-        // Handle thinking content
         if (delta.type === "thinking_delta" && delta.thinking) {
           this.thinkingAccumulator += delta.thinking;
           thoughts.push({ kind: "raw", content: delta.thinking });
@@ -504,26 +482,25 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
 
       case "content_block_stop": {
-        // Finalize any accumulated tool call for this block
         const blockStopData = data as { index?: number };
         const blockIdx = blockStopData.index ?? this.currentContentBlockIndex;
         const accumulated = this.toolCallAccumulator.get(blockIdx);
 
         if (accumulated?.name) {
-          // Parse accumulated arguments
-          let parsedArgs: Record<string, unknown> = {};
-          try {
-            if (accumulated.argumentsJson) {
-              parsedArgs = JSON.parse(accumulated.argumentsJson);
-            }
-          } catch (parseErr) {
-            log.warn(`AnthropicStreamAdapter: Failed to parse tool arguments for ${accumulated.name}: ${parseErr}`);
-          }
+          const { args: parsedArgs, truncated: argumentsTruncated } = parseAccumulatedToolArguments({
+            adapterName: "AnthropicStreamAdapter",
+            toolName: accumulated.name,
+            rawArguments: accumulated.argumentsJson,
+          });
 
           const functionCall: FunctionCall = {
+            id: accumulated.id,
             name: accumulated.name,
             args: parsedArgs,
           };
+          if (argumentsTruncated) {
+            functionCall.argumentsTruncated = true;
+          }
 
           log.info(
             `AnthropicStreamAdapter: Tool call finalized: ${accumulated.name} (id: ${accumulated.id}) args: ${JSON.stringify(parsedArgs)}`,
@@ -543,7 +520,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       case "message_delta": {
         const msgDelta = data as {
           delta?: { stop_reason?: string; stop_sequence?: string };
-          usage?: { output_tokens?: number };
+          usage?: Record<string, unknown>;
         };
 
         if (msgDelta.delta?.stop_reason) {
@@ -551,13 +528,13 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           metadata.stopReason = this.stopReason;
         }
 
-        if (msgDelta.usage?.output_tokens) {
-          this.outputTokens = msgDelta.usage.output_tokens;
-          metadata.outputTokens = this.outputTokens;
+        if (msgDelta.usage) {
+          // Preserve start counts because delta usage is cumulative and may omit input or cache fields.
+          this.usage = { ...this.usage, ...msgDelta.usage };
+          metadata.outputTokens = this.usage.output_tokens;
+          metadata.usage = { ...this.usage };
         }
 
-        // If stop_reason indicates tool_use but we haven't emitted the function call yet,
-        // check if there's a pending accumulated tool call
         if (this.stopReason === "tool_use") {
           // The function call should have been emitted by content_block_stop
           // Just signal completion here
@@ -589,7 +566,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         const errorData = data as { error?: { type?: string; message?: string } };
         const error = errorData.error;
 
-        log.error(`AnthropicStreamAdapter: Stream error: ${error?.type} - ${error?.message}`);
+        log.warn(`AnthropicStreamAdapter: Stream error: ${error?.type} - ${error?.message}`);
 
         return {
           type: "error",
@@ -613,23 +590,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Extract function call from accumulated data.
-   * Called after the stream ends to get the final function call if stop_reason is tool_use.
-   */
-  extractFunctionCall(_chunk: RawStreamChunk): FunctionCall | null {
-    // Function calls are emitted directly via processChunk during content_block_stop,
-    // so we return null here. The StreamOrchestrator handles function calls from
-    // processChunk output rather than from this method.
-    return null;
-  }
-
-  /**
    * Convert provider-specific errors into normalized ProviderError format
    */
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Try to parse Anthropic error structure
     let anthropicError: { type?: string; message?: string } | null = null;
     let statusCode: number | undefined;
 
@@ -645,16 +610,12 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
             anthropicError = parsed;
           }
         }
-      } catch {
-        // Not JSON, use raw message
-      }
+      } catch {}
     }
 
-    // Also check for direct HTTP error objects
     const httpError = error as { statusCode?: number; status?: number };
     statusCode = httpError.statusCode ?? httpError.status;
 
-    // Map Anthropic error types to normalized ProviderError
     const errorType = anthropicError?.type;
     let providerErrorType: ProviderError["type"] = "api_error";
     let retryable = false;
@@ -689,7 +650,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         retryable = true;
         break;
       default:
-        // Fall back to HTTP status code mapping
         if (statusCode === 401 || statusCode === 403) {
           providerErrorType = "api_error";
           retryable = false;
@@ -699,7 +659,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         } else if (statusCode === 503) {
           providerErrorType = "provider_overloaded";
           retryable = true;
-        } else if (statusCode === 504 || statusCode === 408) {
+        } else if (statusCode === 504 || statusCode === 408 || isProviderTimeoutMessage(errorMessage)) {
           providerErrorType = "timeout";
           retryable = true;
         }
@@ -720,35 +680,22 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * Create provider-specific error description for display in embeds
    */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    const errorCode = error.code;
-    let message = error.userMessage;
+    const errorCode = formatProviderErrorCodeForDisplay(error.code);
     const isTemperatureTopPConflict =
-      errorCode === "invalid_request_error" &&
+      error.code === "invalid_request_error" &&
       typeof error.userMessage === "string" &&
       error.userMessage.includes("`temperature` and `top_p` cannot both be specified");
 
+    let message: string;
     if (isTemperatureTopPConflict) {
       message = localizer(locale, "genai.anthropic.temperature_top_p_conflict_message");
+    } else {
+      const messageKey = `genai.anthropic.${errorCode}_default_message`;
+      message = localizer(locale, messageKey);
+      if (message === messageKey) message = localizer(locale, "genai.anthropic.unknown_default_message");
     }
 
-    if (!message) {
-      // Fall back to locale-based messages
-      const messageKey = errorCode ? `genai.anthropic.${errorCode}_default_message` : null;
-
-      if (messageKey) {
-        message = localizer(locale, messageKey);
-      }
-
-      if (!message || message === messageKey) {
-        message = localizer(locale, "genai.anthropic.unknown_default_message");
-      }
-    }
-
-    if (errorCode) {
-      return `Error Code ${errorCode}: ${message}`;
-    }
-
-    return message || null;
+    return error.code ? `Error Code ${errorCode}: ${message}` : message;
   }
 
   /**
@@ -766,14 +713,15 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     }>,
     seesImages: boolean = true,
     enforceAlternation: boolean = true,
-  ): Promise<{ systemPrompt: string | null; messages: AnthropicMessage[] }> {
+    model?: string,
+  ): Promise<{ systemPrompt: string | AnthropicTextBlock[] | null; messages: AnthropicMessage[] }> {
     const messages: AnthropicMessage[] = [];
-    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
+    const { items: relocatedContextItems, boundaryIndex } = relocateCacheContextItems(contextItems);
     const systemParts: string[] = [];
+    let boundaryMessage: AnthropicMessage | undefined;
 
-    // 1. Process context items
-    for (const item of relocatedContextItems) {
-      // Extract text from parts array
+    for (const [itemIndex, item] of relocatedContextItems.entries()) {
+      if (itemIndex === boundaryIndex + 1 && boundaryIndex >= 0) boundaryMessage = messages.at(-1);
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
         itemTextContent = item.parts
@@ -783,20 +731,15 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
 
       // Check if this should go to system prompt (top-level parameter)
-      if (
-        item.role === "system" ||
-        (item.role === "user" && item.metadataTag && SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-      ) {
+      if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) {
           systemParts.push(itemTextContent);
         }
       } else if (item.role === "user" || item.role === "model") {
-        // Dialogue items → messages array
         const role = item.role === "user" ? ("user" as const) : ("assistant" as const);
-        const contentBlocks: AnthropicContentBlock[] = [];
-        const pendingBotImageBlocks: AnthropicImageBlock[] = [];
-
-        for (const part of item.parts) {
+        const partsByInput = await mapWithConcurrency(item.parts, 4, async (part) => {
+          const contentBlocks: AnthropicContentBlock[] = [];
+          const pendingBotImageBlocks: AnthropicImageBlock[] = [];
           if (part.type === "text") {
             contentBlocks.push({
               type: "text",
@@ -808,10 +751,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
             if (!seesImages) {
               log.info(`AnthropicStreamAdapter: Skipping image (model doesn't support images)`);
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
-            // Handle inlineData (from peekProfilePicture etc.)
             if ("inlineData" in part && part.inlineData) {
               const inlineData = part.inlineData as { mimeType: string; data: string };
               if (inlineData.mimeType && inlineData.data) {
@@ -824,10 +766,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                   },
                 });
               }
-              continue;
+              return { contentBlocks, pendingBotImageBlocks };
             }
 
-            // Handle URI-based images
             if (part.uri && part.mimeType) {
               try {
                 let base64Data: string;
@@ -839,10 +780,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
                     finalMimeType = dataUriMatch[1];
                     base64Data = dataUriMatch[2];
                   } else {
-                    continue;
+                    return { contentBlocks, pendingBotImageBlocks };
                   }
                 } else {
-                  // Fetch and optimize remote image
                   const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
                   base64Data = optimized.data;
                   finalMimeType = optimized.mimeType;
@@ -859,16 +799,18 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
                 log.info(`AnthropicStreamAdapter: Added image to ${role} message`);
               } catch (imgErr) {
-                log.warn(`AnthropicStreamAdapter: Failed to process image: ${part.uri}`, {
+                log.warn(`AnthropicStreamAdapter: Failed to process image`, {
                   error: imgErr instanceof Error ? imgErr.message : String(imgErr),
                 });
               }
             }
           }
           // Note: video not supported by Anthropic, skip silently
-        }
+          return { contentBlocks, pendingBotImageBlocks };
+        });
+        const contentBlocks = partsByInput.flatMap((parts) => parts.contentBlocks);
+        const pendingBotImageBlocks = partsByInput.flatMap((parts) => parts.pendingBotImageBlocks);
 
-        // Add message with content blocks
         if (contentBlocks.length > 0 || pendingBotImageBlocks.length > 0) {
           if (role === "assistant") {
             // Anthropic doesn't allow images in assistant messages.
@@ -914,15 +856,17 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 2. Add function interaction history in Anthropic format
-    if (functionInteractionHistory && functionInteractionHistory.length > 0) {
-      for (const interaction of functionInteractionHistory) {
-        const toolUseId = `toolu_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    if (boundaryIndex === relocatedContextItems.length - 1) boundaryMessage = messages.at(-1);
+    const systemMessage = { role: "system", content: systemParts.length > 0 ? systemParts.join("\n\n") : "" };
+    if (model) applyAnthropicCacheBreakpoints(model, systemMessage, messages, boundaryMessage);
 
-        // Assistant message with tool_use content block
+    if (functionInteractionHistory && functionInteractionHistory.length > 0) {
+      const usedToolCallIds = new Set<string>();
+      for (const [index, interaction] of functionInteractionHistory.entries()) {
+        const toolUseId = resolveToolCallId(interaction.functionCall.id, index, "toolu", usedToolCallIds);
+
         const assistantContentBlocks: AnthropicContentBlock[] = [];
 
-        // Include pre-tool-call text if present
         if (interaction.preToolCallTextParts && interaction.preToolCallTextParts.length > 0) {
           const preText = interaction.preToolCallTextParts
             .map((part) => (part as { text?: string }).text)
@@ -946,7 +890,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           content: assistantContentBlocks,
         });
 
-        // User message with tool_result content block
         const userContentBlocks: AnthropicContentBlock[] = [
           {
             type: "tool_result",
@@ -955,7 +898,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           },
         ];
 
-        // Include images from tool results
         if (interaction.imageMetadata?.imageUrls && interaction.imageMetadata.imageUrls.length > 0 && seesImages) {
           for (const img of interaction.imageMetadata.imageUrls) {
             try {
@@ -985,7 +927,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 3. Append current turn model parts as assistant prefill
+    // Append current turn model parts as assistant prefill
     if (currentTurnModelParts.length > 0) {
       const prefillText = currentTurnModelParts
         .map((part) => (part as { text?: string }).text)
@@ -998,16 +940,16 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 4. Enforce strict user/assistant alternation by merging consecutive same-role messages and
-    //    prepending a leading user turn when needed. Delegated to the shared strict-chat helpers
-    //    so behavior is identical to the previous private implementation. Gated by the resolved
-    //    flag (always ON for anthropic via the safety net, so this is byte-identical).
+    // Merging consecutive same-role messages and prepending a leading user turn is delegated
+    //    to the shared strict-chat helpers, so a fix there reaches every adapter that needs
+    //    it. The resolved flag gates the merge and is always ON for anthropic via the safety
+    //    net, so this stays byte-identical to the inline implementation it replaced.
     const mergedMessages = enforceAlternation ? this.enforceStrictAlternation(messages) : messages;
 
     log.info(`AnthropicStreamAdapter: Assembled ${mergedMessages.length} messages (after alternation merge)`);
 
     return {
-      systemPrompt: systemParts.length > 0 ? systemParts.join("\n\n") : null,
+      systemPrompt: (systemMessage.content || null) as string | AnthropicTextBlock[] | null,
       messages: mergedMessages,
     };
   }
@@ -1018,10 +960,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * shared {@link mergeConsecutiveSameRole} / {@link ensureLeadingUserTurn} helpers.
    */
   private enforceStrictAlternation(messages: AnthropicMessage[]): AnthropicMessage[] {
-    // 1. Merge same-role runs (shared helper operates on the neutral message shape).
     const merged = mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]);
 
-    // 2. Prepend a synthetic user turn when the conversation would otherwise start with assistant.
+    // Prepend a synthetic user turn when the conversation would otherwise start with assistant.
     const withLeading = ensureLeadingUserTurn(merged, () => ({
       role: "user",
       content: CONVERSATION_START_USER_TEXT,
@@ -1081,7 +1022,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * Assemble context into Anthropic message format for non-streaming use cases
    * (e.g. token counting probe in /tool estimate cost).
    *
-   * @param contextItems - Structured context items from contextBuilder
    * @param seesImages - Whether the model accepts image inputs
    * @returns Assembled system prompt and messages array ready for the Anthropic API
    */
@@ -1097,7 +1037,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       providerRequiresAlternation("anthropic"),
     );
     return {
-      system: systemPrompt ?? "",
+      system: typeof systemPrompt === "string" ? systemPrompt : "",
       messages: messages as unknown as Array<Record<string, unknown>>,
     };
   }

@@ -1,0 +1,167 @@
+---
+title: "Multi-Persona System"
+aiGenerated: true
+---
+
+The multi-persona subsystem manages server-scoped character identities, coordinating one main persona and multiple alter personas. It governs identity persistence, single-owner trigger routing, sequential reply queuing, and webhook-based chat rendering while sharing conversation history and server configuration.
+
+Official bundled presets follow a copy-on-write pointer model described in [Persona Presets](/architecture/subsystems/persona-presets/).
+
+## Data model and ownership
+
+Persona identity and behavior are stored across four core tables:
+
+### `personas`
+
+Each row defines a persona identity in a server:
+
+- `is_alter`: `false` for the main persona; `true` for alter personas.
+- `webhook_avatar_url`: Stored avatar reference. In production this is an object storage URL. In non-production environments it references a local file under `data/avatars/`. For unforked preset pointers, this is `NULL` and resolves the shared catalog URL live.
+- `applied_avatar_hash`: For main preset pointers, the content hash last applied to the Discord guild member avatar by the background reconciler.
+- `persona_lineage_id`: Scopes memory, conditioning history, and prompt inspection. Derived from preset lineage on creation, but preserved independently during pointer materialization.
+
+### `persona_configs`
+
+Holds per-persona behavior settings:
+
+- `trigger_words`: Array of trigger strings for the persona.
+- `humanizer_*_enabled`: Optional per-persona override of the five humanizer toggles. The columns are set together or all NULL (NULL inherits the server), enforced by `persona_configs_humanizer_override_complete`. When set, state loading overlays them onto the persona's assembled configuration so providers and stream buffers see persona-scoped humanization without call-site awareness.
+
+### `persona_sprites`
+
+Stores named avatar variations selected by generated render modifiers:
+
+- `sprite_name`: Display label presented in prompt instructions.
+- `sprite_key`: Normalized key for case-insensitive lookup.
+- `avatar_url`: Object storage URL or local development asset path.
+- `usage_instructions`: Guidance injected into the prompt describing when to adopt the sprite.
+- `is_identity`: When `true`, renders the decorated `sprite (SourcePersona)` username directly in Discord (DID alter style). When `false`, renders the clean persona nickname.
+
+Pointer personas resolve sprites live from `preset_sprites` via `PersonaSpriteRepository.listForPersona()`. Materializing a persona copies these rows by reference.
+
+### `reminders`
+
+Stores scheduled reminder tasks:
+
+- `persona_id`: Identifies the persona that created the reminder. Delivery runs with that persona's identity, falling back to the main persona if the creating persona was deleted.
+
+## Triggering and routing
+
+### Direct routing
+
+Incoming messages route through these priorities:
+
+- **Direct bot replies**: Replying to a message sent by the bot user routes to the main persona.
+- **Webhook replies**: `webhookIdentity.ts` verifies the webhook ID against the managed webhook cache or repository for that guild and channel before matching a persona nickname. Threads use the parent channel's registration. A temporary user-impersonation webhook is never persisted, so it is trusted from the in-memory relay cache (24 hours) when its guild and channel match, which means replies to its messages stop triggering after a restart or the TTL. Copied render names resolve only after this check. A failed lookup grants no persona identity.
+- **Bot mentions**: Mentioning the bot routes to the main persona.
+- **Explicit trigger words**: Matching strings in `persona_configs.trigger_words` activate the matching personas.
+
+Direct replies and mentions can combine with trigger words in the same message, scheduling multiple personas to respond.
+
+### Single-owner trigger resolution
+
+Because official character presets include the shared base name (`tomori`), pointer personas resolving triggers live would all match the same name simultaneously. `PersonaRepository.applyTriggerWordOwnership()` prevents collisions by assigning single ownership whenever a server's persona set is assembled:
+
+1. **Main persona**: Reserves the locale's base trigger words from `getAllBaseTriggerWords()`, preventing alter personas from claiming the bot's core name.
+2. **Alters in creation order**: Evaluated in ascending `persona_id` order. The oldest alter claims contested words; later alters drop them.
+
+This deduplication runs at read time, so routing remains consistent across imports, materialization, and preset updates.
+
+### Turn queuing and cascade limits
+
+When an incoming message triggers multiple personas:
+
+- `planChatTurns` in `src/utils/chat/turnPlanner.ts` identifies all matching personas.
+- The first persona executes immediately.
+- `queueAdditionalPersonaTurns()` in `src/utils/chat/personaQueue.ts` serializes subsequent personas by inserting them at the front of the channel lock queue (`queuePersonaJobsAtFront`). Personas respond consecutively before newer user messages in the queue.
+
+To prevent uncontrolled cascades, `server_chat_configs.cascade_limit` (default 3) and `match_limit` (default 3) constrain activations:
+
+- **First trigger free**: The initial persona activation in a trigger session does not consume the cascade budget.
+- **Shared counter**: All subsequent automatic triggers in the session (multi-persona co-matches or persona-to-persona chain mentions) increment a channel-scoped counter.
+- **Bypass**: Slash commands (`isManuallyTriggered = true`) and stop responses bypass the cascade counter.
+- **Session reset**: The counter resets when a real user sends a message or after 30 minutes of inactivity (`SELF_REPLY_CHAIN_TTL_MS`).
+- **Streaming interrupts**: If an incoming message carries an explicit trigger for a different persona while a stream is active, it bypasses follow-up mode and queues as a separate turn.
+
+## Context isolation and participant profiles
+
+Multi-persona turns within the same request share sanitized visible history through `prepareParticipantContext()`:
+
+- A `ParticipantRequestScope` attached to `LockedChatTurn` memoizes discovery for equivalent sanitized
+  inputs. Changed history gets a separate entry; each preparation call recomposes the active persona
+  and hydrates its profiles. Queued persona jobs can acquire a fresh lock and scope.
+- The active persona is excluded from public participant profiles.
+- Co-responders and personas referenced by trigger text in visible history are injected into conversation participants with their public attributes and physical appearance tags.
+- Private attributes remain visible only to their owning persona.
+- Tool loops and function-call histories remain strictly isolated per persona turn.
+
+## Rendering and delivery
+
+Main and alter personas use different Discord delivery mechanisms:
+
+```mermaid
+flowchart LR
+  turn["Incoming Turn"] -->|"Main Persona"| main["Discord Bot User<br/>(Guild Member Nickname)"]
+  turn -->|"Alter Persona"| alter["Managed Parent-Channel Webhook Pool"]
+  alter --> user["Username: persona nickname or sprite label"]
+  alter --> avatar["AvatarURL: S3 URL / local asset / shared preset"]
+```
+
+### Webhook delivery
+
+Managed identity sends share a pool of up to four webhooks per parent channel, including the primary
+`TomoriBot Multi-Persona` webhook. Threads share that pool and pass their own `threadId` when posting.
+`dispatchWebhookWithIdentity()` holds the parent-channel lock through local-avatar selection and
+sending, including a reply notice and its following message. It returns the selected webhook ID and
+delivered identity. Callers record that delivered identity and resolve later edits or deletes by
+the message's authoring webhook ID. HTTPS overrides bypass avatar coordination. Tool notices,
+generated media, welcome and reminder posts, thought logs, native voice, and expressions use the
+same dispatcher. Native voice builds its REST request from the selected webhook and delivered
+identity; expressions retain their single-attempt transport to prevent duplicate posts.
+
+- **Identity overrides**: HTTPS avatars travel as per-message overrides. Local avatars reuse a slot with an exact image fingerprint or PATCH the least recently used slot. If the predicted PATCH wait exceeds five seconds, dispatch creates a slot with the image when capacity allows. Creation leaves two of Discord's 15 channel slots free. If creation fails or capacity is exhausted, the message keeps the intended username and shows Discord's generic avatar. Matrix relay messages always specify that generic avatar.
+- **Restoration**: Each restored slot must match its stored guild and parent channel. Its avatar assignment remains known only when the fetched Discord avatar hash matches storage. Restoring a pool slot keeps the primary cache entry intact, and retained slots preserve access to historic messages.
+- **Historic identity resolution**: Admission, reply attribution, context assembly, history import, and queued persona routing use verified managed webhook identity. The bot's own direct messages retain the main persona identity. Matrix relay prefixes are trusted only on a managed webhook, and cached user impersonation only on a webhook registered in the relay cache for that guild and channel. Foreign webhooks keep a generic webhook identity in history and cannot start natural persona jobs or gain their quota/cooldown exemptions. Managed cascades keep their originating user's metering. `getReplyContextAuthorName()` strips bridge prefixes only on verified sources. Direct bot messages use the available member display name, so later nickname changes can affect reconstructed attribution.
+
+### Copied rendering and sprites
+
+A persona can render lines with sprite avatars or copied identities using leading modifier syntax:
+
+```text
+SourcePersona (target): message
+```
+
+Resolution follows this sequence:
+
+1. **Sprite match**: Matches `persona_sprites.sprite_key` on the active persona. Ordinary sprites (`is_identity = false`) render the clean persona nickname in Discord; identity sprites (`is_identity = true`) render `sprite (SourcePersona)`. To prevent Discord from grouping consecutive messages under the first avatar, alternating messages fall back to decorated usernames. Delivered mappings are recorded in `persona_sprite_messages` so context rebuilding restores model-facing labels.
+2. **Copied identity**: Resolves `target` against known personas and conversation users, rendering `target (SourcePersona)` with the target's avatar. A nested `SourcePersona (Target (sprite)):` label copies one of another persona's sprites, rendering `Target (sprite) (SourcePersona)` with the sprite avatar; an unknown sprite falls back to the target's base look. The sprite stays in the username instead of `persona_sprite_messages`, so context rebuilding recovers the label from the name alone.
+3. **Plain output**: Unmatched modifiers are stripped before delivery.
+
+### Tool posts and notices
+
+Tool results, galleries, dice rolls, replies, mentions, and persona notices go through `sendPersonaPost`. It
+resolves the invoking persona's base or committed appearance, selects the bot or managed webhook route,
+and records one delivery receipt. A main persona keeps bot delivery unless it has a committed sprite or
+generic avatar; an alter always uses the managed pool. An uncertain POST is never reposted as the bot.
+Surfaces with no persona context, such as slash command replies and system error notices, keep their
+explicit author.
+
+### Stickers
+
+Expressions resolve the invoking persona's committed appearance, including main-persona sprites and
+identity sprites after tool-only turns. Webhooks post native stickers as their CDN preview URL. Only a
+definite Discord refusal permits a native bot-sticker fallback; custom expressions keep their selected
+author. A bot fallback records the actual bot identity and preserves an alter's own appearance memory.
+An unconfirmed send blocks further delivery for that turn.
+
+## Source pointers
+
+- `src/utils/db/repositories/PersonaRepository.ts`: Persona loading, configuration caching, and single-owner trigger deduction (`applyTriggerWordOwnership`).
+- `src/utils/chat/turnPlanner.ts`: Turn evaluation and trigger matching.
+- `src/utils/chat/personaQueue.ts`: Front-of-queue serialization (`queueAdditionalPersonaTurns`).
+- `src/utils/text/participants/preparation.ts`: Turn-scoped participant discovery and public profile filtering.
+- `src/utils/discord/webhookManager.ts`: Shared channel webhook lifecycle and delivery.
+- `src/utils/discord/webhook/personaPost.ts`: Shared persona author, committed appearance, and delivery receipt.
+- `src/utils/discord/webhook/toolPersonaDelivery.ts`: Tool-context adapter for shared persona delivery.
+- `src/utils/discord/webhookReply.ts`: Historic author identity recovery (`getReplyContextAuthorName`).
+- `src/utils/discord/renderModifierParser.ts`: Sprite and copied-identity syntax parsing.

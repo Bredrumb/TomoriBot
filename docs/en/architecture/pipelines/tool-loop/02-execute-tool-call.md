@@ -1,0 +1,154 @@
+---
+title: "02: Execute Tool Call"
+aiGenerated: true
+---
+
+`executeToolCall` validates, gates, and dispatches a single tool call from the provider. It returns a
+discriminated outcome indicating whether to restart the turn with enriched context, abort execution,
+or record a history entry and continue the tool chain.
+
+## Gating and dispatch flow
+<!-- anchor: gating-and-dispatch-flow -->
+
+When the provider emits `function_call`, the stage processes the call through an ordered
+sequence of validation and safety gates before invoking the registry:
+
+1. **Payload validation:**
+   The stage verifies that `streamResult.data` contains a valid tool name. If the payload is missing
+   or lacks a name, it logs an error and returns `{ kind: "abort", status: "error" }`.
+
+2. **Stop request check:**
+   The stage inspects `StreamOrchestrator` for pending stop requests. If a user issued `/kill`, it
+   returns `{ kind: "abort", status: "stopped_by_user" }`. With Response Drafting On, a follow-up
+   interrupts review and prevents further dispatch. Off clears that flag and continues the tool chain;
+   the follow-up message remains queued.
+
+3. **Truncated arguments refusal:**
+   Adapter-flagged truncated arguments are refused before dispatch. Partial keys could delete stored
+   state in replacement-style tools. A synthetic failure history entry allows a complete retry.
+
+4. **Deliberate tool mode allowlist gate:**
+   Deliberate mode blocks names outside the trigger-admitted allowlist and returns a synthetic failure
+   directly to the model.
+
+5. **Registry execution under watchdog:**
+   The stage marks the channel's active tool name via `setChannelActiveToolName` and runs
+   `ToolRegistry.executeTool` under `runUnderWatchdog`. Dispatch races against a per-tool timeout
+   (`TOOL_EXECUTION_TIMEOUT_MS`, default 300 s) and the turn-level kill signal (`turnAbortSignal`).
+   A plain timeout yields `{ success: false }`, allowing the model to handle the failure; a kill
+   signal returns `{ kind: "abort", status: "stopped_by_user" }`. The active tool name is cleared
+   in the `finally` block when the race settles. Tools that do not honor abort can continue their
+   external work after the caller stops awaiting them. A timeout does not roll back their effects.
+
+## Actual request review
+
+Response Drafting On calls `ToolRegistry.prepareToolRequest` after admission checks. It resolves
+aliases, message identities and MCP defaults before the private reviewer sees the detached request
+that execution will receive. Built-in availability and permission checks precede paid review;
+dispatch retains its own checks. Review itself runs only with `Tool Calls` checked in `Content to Check`
+(`ResponseReviewState.reviewItems` contains `tools`). Requests are prepared even when review is
+disabled, so successful identities are reused below. Off computes the identity only and executes the
+call as written; it reuses just the calls an earlier invocation of the turn completed (fallback or key
+rotation), not repeats within one invocation.
+
+Pass dispatches that request once, including its public tool output while ordinary response prose
+remains held. The tool delivery adapter forwards cancellation and terminal delivery state without
+copying the prose hold. Expressions follow the same checkpoint before sending. Rejection returns `review_rejected` history with
+`actionExecuted: false`, correction eligibility and concise findings. It adds no failed-tool notice
+or execution statistic. The author proposes one call per pass, so a request with several parts
+reaches the reviewer as several calls. The reviewer judges each as one part of the request and sees
+earlier calls of the turn with their actual outcomes, rejections included.
+
+Exact rejected identities remain blocked. A rejection opens one correction for its normalized name,
+spent by the next proposal of that name. A later, different proposal of the same tool is reviewed on
+its own, because one request often needs several calls of one tool; a changed retry that ignores the
+findings is the reviewer's to reject. Two corrections and eight detailed tool reviews bound the
+logical turn. A request blocked after the author was already told no correction remains ends the
+turn through the held-response path rather than spending author passes up to the iteration cap.
+These limits remain separate from response review and survive fallback.
+
+Successful identical requests reuse recorded outcomes, including after a response revision.
+Unavailability ends review for the turn but preserves prior rejections, and changed forms of a
+rejected tool stay blocked because nothing can approve them. New independent requests
+after exhaustion use ordinary tool rules. Cancellation is checked after review and asynchronous
+discovery, and before MCP transport. Already-started tools retain their own cancellation support.
+The normalized adapter interface dispatches one call at a time; approval covers only that actual call.
+
+Internal prose-checker ownership follows the
+[generation review lifecycle](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
+
+## Expression delivery and side effects
+<!-- anchor: expression-delivery-and-side-effects -->
+
+Tool execution coordinates several turn-level side effects:
+
+- **Expression delivery:** If a tool returns a `stickerSelection` payload (used by expression tools),
+  the stage calls `deliverExpression` immediately. Expression delivery enforces a strict single-expression
+  allowance per persona turn via `ChatTurnContext.expressionDelivery`. A repeated call returns
+  `sticker_already_sent` without posting to Discord. If an earlier send timed out or was unconfirmed,
+  delivery stops for the whole turn before further tool calls, response review, key rotation, or model
+  fallback. The shared terminal state survives provider-context rebuilding.
+  Successful delivery marks `responseDelivered = true`, which allows a sticker-only turn to settle
+  as `completed` rather than failing as an empty response.
+- **Usage tracking:** Successful non-blocked tool calls record a `tool_used` metric in `statRepository`
+  for non-DM channels.
+- **Diagnostic notices:** Failed tool calls emit a hidden thought-log notice containing redacted
+  arguments unless their Discord delivery is unconfirmed. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
+  notice recording the matched trigger pattern. On a turn that keeps its conversation quiet (a nudge,
+  a reminder, or a random trigger), progress notices skip the conversation and post their full card
+  to the thought log instead. Hidden image planning and persona generation suppress progress notices.
+- **One-shot memory guard:** A successful `update_short_term_memory` call sets
+  `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the
+  same turn.
+
+## Return outcomes
+<!-- anchor: return-outcomes -->
+
+The stage returns one of three outcome kinds:
+
+1. **`{ kind: "restart" }`:**
+   Triggered when `handleEnhancedContextRestart` consumes a `context_restart_*` payload. The outer
+   loop resets error counters and continues without recording a tool history entry.
+2. **`{ kind: "abort", status }`:**
+   Triggered on malformed payloads, cancellation stops, or aborted expression sends. The outer loop
+   exits immediately with the specified turn status.
+3. **`{ kind: "history", historyEntry, ... }`:**
+   Standard completion. The stage packages the call and response into a `ToolHistoryEntry`.
+   Visible text streamed before the tool call is converted into `preToolCallTextParts` on the history
+   entry, and the outer loop clears `accumulatedModelParts` so trailing prefill does not duplicate
+   already-delivered text.
+
+## Successful and failed result payloads
+<!-- anchor: successful-and-failed-result-payloads -->
+
+A successful history response carries `result` and, when the tool returned one, `message`. `result`
+is the tool's `data`; a tool that returns no data stores `{ "status": "completed" }`. `message` sits
+beside `result`, so a payload object with its own `message` field keeps that field. The normal history
+entry, the reusable outcome recorded for later attempts, and a context-restart entry retained for
+review all use the same builder. The next provider call, a replacement attempt that reuses the
+outcome, and a revised reply therefore see both fields. Internal delivery fields (`responseDelivered`,
+`endTurn`, `stickerSelection`) stay out of the response.
+
+With Response Drafting On, an enhanced-context restart is also appended to review function history
+with this payload, so a later revision and the next provider call see the restart data and its
+message. The loop still passes the raw tool data to `handleEnhancedContextRestart`, so control fields
+such as `type` and `enhanced_context_item` retain their meaning. Off omits the restart call from
+history because the injected context replaces it.
+
+A failed call stores `{ status: "tool_execution_failed", reason, tool_name, code, suggested_actions }`.
+Provider-backed media tools supply a classified reason, a safe provider code, and localized recovery
+guidance selected from the same tips as the error UI. The classifier reads the provider's message
+before its HTTP status, because providers answer an exhausted balance with 429 and tools report safety
+or model refusals as invalid requests. A missing ComfyUI model file is the one reason that names a
+value: the filename the workflow sent, never text from the endpoint. Other failures retain the tool's message or
+error, with `tool_error` when no code is available and an empty guidance list when none is supplied.
+The normal tool loop and hidden image agent use the same failure builder. Internal data and raw
+provider responses are not copied into model history.
+
+## Source pointers
+<!-- anchor: source-pointers -->
+
+- `src/utils/chat/toolLoop.ts`: `executeToolCall`, `buildPreToolCallTextParts`, `buildSuccessfulFunctionResponse`, `emitFailedToolCallThoughtLog`.
+- `src/tools/toolRegistry.ts`: `ToolRegistry.executeTool`.
+- `src/utils/chat/expressionDelivery.ts`: `deliverExpression`, `buildExpressionToolResult`.
+- `src/types/tool/interfaces.ts`: `ToolContext`, `ToolResult`.

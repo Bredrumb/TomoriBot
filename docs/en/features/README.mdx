@@ -1,0 +1,81 @@
+---
+title: "Features"
+sidebar:
+  label: "Overview"
+  groupLabel: "Features"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Each card links to a full guide, you can also view a summary of each feature within Discord using the `/help` command.
+
+## Chatting & Personality
+
+<CardGrid>
+  <LinkCard title="Chatting & Triggers" href="/features/chatting-personality/chatting-and-triggers/"
+    description="Learn how TomoriBot decides when to reply." />
+  <LinkCard title="Multiple Personas" href="/features/chatting-personality/multiple-personas/"
+    description="Have multiple characters in your server; all have their own memories, goals, and settings." />
+  <LinkCard title="Natural Nudges" href="/features/chatting-personality/natural-nudges/"
+    description={'Personas can start or join conversations on their own without getting mentioned, like a "human" would.'} />
+  <LinkCard title="Behavior Tweaking" href="/features/chatting-personality/behavior-tweaking/"
+    description="Capabilities and high-value config: what TomoriBot is allowed to do and how she generates." />
+</CardGrid>
+
+## Knowledge
+
+<CardGrid>
+  <LinkCard title="Memory" href="/features/knowledge/memory/long-term-memory/"
+    description="How TomoriBot stores information about users, other personas, and servers she's in." />
+  <LinkCard title="Inside The Prompt" href="/features/knowledge/inside-the-prompt/"
+    description="Learn the contents of TomoriBot's context when generating a reply." />
+  <LinkCard title="Personalization" href="/features/knowledge/personalization/"
+    description="Setting your own providers (BYOK), timezone, prompts, personal spotlight, and privacy." />
+  <LinkCard title="Data Handling" href="/features/knowledge/data-handling/"
+    description="What your data in TomoriBot contains, and how to export, import, and delete it." />
+</CardGrid>
+
+## Capabilities
+
+<CardGrid>
+  <LinkCard title="Tools & Extensions" href="/features/capabilities/tools-and-extensions/built-in-tools/"
+    description="Built-in tools, web search, MCP servers, and deliberate tool mode." />
+  <LinkCard title="Scheduled Tasks" href="/features/capabilities/scheduled-tasks/"
+    description="One-time and recurring reminders and self-tasks (just ask her)." />
+  <LinkCard title="Media Generation" href="/features/capabilities/media-generation/image-generation/"
+    description="Generate images, short videos, and spoken voice messages directly in chat." />
+</CardGrid>
+
+## Setup & Administration
+
+<CardGrid>
+  <LinkCard title="Providers & Models" href="/features/setup-administration/providers-and-models/"
+    description="API keys per cloud provider and custom endpoint registration." />
+  <LinkCard title="Server Moderation" href="/features/setup-administration/server-moderation/"
+    description="Whitelists, blacklists, and quotas to cap API costs and scope which channels or roles personas can use." />
+  <LinkCard title="Age-Restricted Commands" href="/features/setup-administration/age-restricted-commands/"
+    description="`/nsfw` command category behind Discord's age gate." />
+  <LinkCard title="Stats & Insights" href="/features/setup-administration/stats-and-insights/"
+    description="Usage tracking and shareable infographic cards." />
+</CardGrid>
+
+## Integrations
+
+<CardGrid>
+  <LinkCard title="Matrix Bridge" href="/features/integrations/matrix-bridge/"
+    description="Link a Matrix room to a Discord channel and chat from either side." />
+  <LinkCard title="SillyTavern Support" href="/features/integrations/sillytavern-support/"
+    description="Import SillyTavern prompt presets, character cards, and lorebooks." />
+  <LinkCard title="Message-Proxy Support" href="/features/integrations/message-proxy-support/"
+    description="Support for PluralKit and PluralBuddy proxied messages, with per-member identity and personal memories." />
+  <LinkCard title="NovelAI" href="/features/integrations/novelai/"
+    description="Text models, sampling presets, context rules, and anime image generation." />
+</CardGrid>
+
+## Reference
+
+<CardGrid>
+  <LinkCard title="Command Reference" href="/features/command-reference/"
+    description="Every slash command in one grouped, searchable table." />
+</CardGrid>

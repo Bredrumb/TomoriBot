@@ -1,8 +1,21 @@
 import type { Client } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { PersonaUserBlockRow, ServerEmojiRow, ServerStickerRow, AssembledServerConfig } from "@/types/db/schema";
+import type {
+  CustomExpressionRow,
+  AssembledServerConfig,
+  PersonaUserBlockRow,
+  ServerEmojiRow,
+  ServerStickerRow,
+} from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
+import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
+
+export type MessageProxyConversationUser = {
+  serviceId: string;
+  displayName: string;
+  senderDiscId: string;
+};
 
 /**
  * Simplified message structure received from tomoriChat.ts.
@@ -13,8 +26,13 @@ export type SimplifiedMessageForContext = {
   authorId: string;
   authorName: string;
   authorType: "user" | "persona";
+  isSystemNotice?: boolean;
   personaName?: string | null;
+  authorPersonaId?: number | null;
+  authorPersonaLineageId?: number | null;
   content: string | null;
+  completionContent?: string;
+  completionSpeaker?: false;
   createdAt?: number;
   mediaSourceMessageIds?: string[];
   remoteMediaSourceKind?: "reply" | "forwarded";
@@ -30,6 +48,8 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isEmoji?: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
   videoAttachments: Array<{
     url: string;
@@ -37,7 +57,26 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isYouTubeLink: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
+  /**
+   * Text-readable file attachments. Kept structured rather than as hint text in `content`
+   * because the `read_file` hint must follow the turn's tool list, which is decided after
+   * history is simplified.
+   */
+  documentAttachments?: Array<{
+    filename: string;
+    /** Discord message that `read_file` should fetch for this attachment. */
+    sourceMessageId?: string;
+  }>;
+};
+
+export type PublicPersonaProfile = {
+  personaId: number;
+  personaName: string;
+  attributes: string[];
+  imageAppearanceTags: string[];
 };
 
 /** Shared parameter type for both the routing wrapper and native context builder. */
@@ -46,23 +85,22 @@ export interface BuildContextParams {
   serverName: string;
   serverDescription: string | null;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
-  userList: string[];
+  preparedParticipantContext: PreparedParticipantContext;
   channelDesc: string | null;
   channelName: string;
   channelId: string;
-  /** Parent channel ID when `channelId` is a thread — used for private/RP channel inheritance. */
+  /** Parent channel ID when `channelId` is a thread: used for private/RP channel inheritance. */
   parentChannelId?: string | null;
   client: Client;
   triggererName: string;
+  triggererFormattedName: string;
+  triggererAddressTerm: string;
+  historyUserLabels?: Map<string, string>;
+  historyPersonaMentionLabels?: Map<string, string>;
   triggererUserId?: number;
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
-  publicPersonaAttributes?: Array<{
-    personaId: number;
-    personaName: string;
-    attributes: string[];
-  }>;
   tomoriConfig: AssembledServerConfig;
   /**
    * Per-channel system prompt override resolved at the call site (null when none).
@@ -78,41 +116,56 @@ export interface BuildContextParams {
    * only used when neither persona nor channel has one set.
    */
   channelContextNote?: { note: string; depth: number } | null;
+  /** Precomputed one-shot reunion note body. Null disables injection. */
+  reunionNote?: string | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;
-  mediaContextWindow?: number;
   snapshot?: RequestSnapshot;
   preloadedEmojis?: ServerEmojiRow[] | null;
   preloadedStickers?: ServerStickerRow[] | null;
+  preloadedCustomExpressions?: CustomExpressionRow[] | null;
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
+  /** Whose short-term memory to read when it is not the trigger message's author, such as a Ping User target. */
+  shortTermMemoryUserId?: string;
   impersonatedUserNickname?: string;
   impersonatedUserPrompt?: string | null;
-  /** Matrix bridge users: Matrix user ID -> stripped display name. */
-  matrixUsers?: Map<string, string>;
-  /** Synthetic participants surfaced as user-like entries. */
-  syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   /** Active persona-scoped user mutes/blocks for the responding persona. */
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;
   explicitLongTermMemoryIntent?: boolean;
+  /** Per-turn tool names retained by Deliberate Tool Mode; undefined means no scoped filtering. */
+  deliberateToolAllowedNames?: readonly string[] | null;
   /**
-   * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
-   * Set by the routing wrapper when a SillyTavern preset is active and no custom
-   * `/sysprompt` has been configured — the preset fully controls the system prompt.
+   * Set by the routing wrapper while a SillyTavern preset is active: the stored server
+   * `system_prompt` and the `DEFAULT_SYSTEM_PROMPT` fallback are both skipped, so the preset
+   * fully controls the system prompt. A replace-mode channel prompt still fills the slot.
    */
-  suppressDefaultSystemPrompt?: boolean;
-  /** Opaque message ID map — caller creates, context builder populates. */
+  presetOwnsSystemPrompt?: boolean;
+  /** Opaque message ID map: caller creates, context builder populates. */
   messageIdMap?: MessageIdMap;
 }
 
 /** Return type for both buildContext variants. */
 export type BuildContextResult = {
+  memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
+  nativeContextItems?: StructuredContextItem[];
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  nudgeInjectionDepth?: number;
+  /**
+   * STM content block deferred for positional injection (only when the server's
+   * content depth is >= 0; otherwise the block is already inline in `contextItems`).
+   */
+  memoryInjectionItems?: StructuredContextItem[];
+  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  memoryInjectionDepth?: number;
   /** Populated map of opaque keys -> real Discord message IDs. */
   messageIdMap: MessageIdMap;
 };

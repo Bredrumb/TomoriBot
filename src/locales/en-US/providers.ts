@@ -1,36 +1,61 @@
-// locales/en-US/providers.ts
-
 export default {
   genai: {
+    tool_failure: {
+      endpoint_blocked: `This host does not allow requests to this endpoint's address.`,
+      content_blocked: `The provider rejected this tool request through its content filter.`,
+      authentication: `The provider rejected the credentials used for this tool request.`,
+      quota: `The provider refused this tool request because a quota or billing limit was reached.`,
+      rate_limit: `The provider received too many requests and refused this tool request.`,
+      timeout: `The provider did not complete this tool request before the timeout.`,
+      provider_overloaded: `The provider is temporarily unavailable or overloaded.`,
+      invalid_request: `The provider could not accept the parameters for this tool request.`,
+      malformed_response: `The provider returned an invalid or incomplete response to this tool request.`,
+      missing_voice: `The selected voice is no longer available from the provider.`,
+      missing_sample: `No voice sample is configured for this request.`,
+      sample_read_failed: `The stored voice sample could not be read.`,
+      script_too_long: `The voice script exceeds the selected speech model's length limit.`,
+      cancelled: `This tool request was cancelled.`,
+      model_error: `The provider rejected the selected model for this tool request.`,
+      model_files_missing: `The generation server does not have these configured model files installed: {models}.`,
+      not_configured: `No usable provider is configured for this tool.`,
+      balance_exhausted: `The provider account used for this tool request has run out of credit.`,
+      credit_limit: `The provider account cannot cover the requested output length.`,
+      context_length: `This tool request exceeds the selected model's context limit.`,
+      provider_error: `The provider failed to complete this tool request.`,
+    },
     generic_error_title: `Generation Error`,
-    generic_error_description: `{error_message}`,
-    generic_error_footer: `Please run \`/tool refresh\` and then try again. If the issue persists, please report it through \`/support discord\`.`,
     error_stream_timeout_title: `Connection Timeout`,
-    error_stream_timeout_description: `If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use \`/tool refresh\` to refresh the context history.`,
+    error_stream_timeout_description: `If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use \`/refresh\` to refresh the context history.`,
     empty_response_title: `Empty Response`,
-    empty_response_description: `I received an empty response from the AI, use \`/tool refresh\` if this issue persists.`,
+    empty_response_description: `I received an empty response from the AI, use \`/refresh\` if this issue persists.`,
     max_iterations_title: `Thinking Loop`,
-    max_iterations_streaming_description: `I got stuck in a thinking loop and couldn't complete the request, use \`/tool refresh\` if this issue persists.`,
+    max_iterations_streaming_description: `I got stuck in a thinking loop and couldn't complete the request, use \`/refresh\` if this issue persists.`,
     still_working_title: `Still Working...`,
-    still_working_description: `This task is taking more steps than usual. Use \`/bot kill\` if you think I'm stuck.`,
-    nai_tool_retry_exhausted_title: `Tool Error`,
-    nai_tool_retry_exhausted_description: `A tool failed multiple times and couldn't complete the request. Please try again or use \`/tool refresh\` if this issue persists.`,
+    still_working_description: `This task is taking more steps than usual. Use \`/kill\` if you think I'm stuck.`,
     tool_error_loop_title: `Tool Error Loop`,
-    tool_error_loop_description: `I kept running into tool errors and couldn't complete the request. Try rephrasing or use \`/tool refresh\` if this issue persists.`,
+    tool_error_loop_description: `I kept running into tool errors and couldn't complete the request. Try rephrasing or use \`/refresh\` if this issue persists.`,
     fallback_used_title: `Fallback Model Used`,
-    fallback_used_description: `\`{success_model}\` was used instead of {chain}`,
     fallback_used_details_description: `Fallback slot {slot} answered with \`{success_model}\` after these earlier failures:
 {failure_list}`,
-    fallback_used_failure_line: `{index}. {model} errored with {error_code}`,
+    fallback_used_failure_line: `{index}. {model} errored with {error_detail}`,
     fallback_used_details_button: `Fallback Used`,
-    fallback_used_hide_footer: `Hide this and reroute details to thought logs with \`/config notice-embeds visibility\``,
+    fallback_used_personal_opt_out_footer: `Stop the server's model from covering your personal provider's failures in \`/personal config\` > Models > Fallbacks`,
+    markdown_table: {
+      show_button: `Show Markdown`,
+      source_expired_title: `Table Source Expired`,
+      source_expired: `That table's markdown is no longer cached, so I can't show the source anymore.`,
+      source_attached: `This table is too long to show inline, so here it is as a file:`,
+    },
     no_response_title: `No Response`,
-    no_response_description: `I didn't respond - this may be due to an empty response or timeout from the AI.`,
+    log_channel_chat_notice_title: `Chat Is Off in the Log Channel`,
+    log_channel_chat_notice_description: `This channel is set as the log channel, so I don't reply to messages here. To chat here, clear or change it in \`/config\` > Channels > Logs.`,
     thought_log: {
       title: `Thought Log`,
       description: `Source: {source_line}`,
       personal_attribution: `Generated via {user_mention}'s personal {provider} configuration.`,
       personal_attribution_title: `Personal Provider Attribution`,
+      randomizer_attribution: `Model randomizer: answered by {model}.`,
+      randomizer_attribution_title: `Model Randomizer Attribution`,
       summary_field: `Thought Summary`,
       raw_field: `Raw Thoughts`,
       fetched_content_field: `Fetched Content`,
@@ -43,38 +68,108 @@ export default {
       reply_context_description: `{message_url}`,
       reply_context_footer: `Replying to {user} • {message_url}`,
     },
-    text_quota_exceeded_title: `🔴 Text Quota Exceeded`,
+    text_quota_exceeded_title: `Text Quota Exceeded`,
     text_quota_exceeded_description: `You have reached your text generation quota. {reset_info}`,
     text_user_quota_exceeded_description: `You have reached your daily text generation quota. {reset_info}`,
     text_serverwide_quota_exceeded_description: `This server has reached its text generation quota for this period. {reset_info}`,
     text_quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
     text_quota_resets_in_days: `Quota resets in {days} day(s).`,
-    text_quota_exceeded_footer: `This quota is configured by this server's managers via \`/server quota\`.`,
+    text_quota_exceeded_footer: `This quota is configured by this server's managers via \`/moderation\`.`,
+    text_quota_unavailable_title: `Text Quota Unavailable`,
+    text_quota_unavailable_description: `I could not check this server's text generation quota right now. Please try again in a moment.`,
     stream: {
       response_stopped_title: `Response Interrupted`,
-      response_stopped_description: `The response was interrupted for the following reason: {reason}. Make sure that content sent is not too large for the AI provider to handle. Run \`/tool refresh\` to clear conversation content.`,
+      response_stopped_description: `The response was interrupted for the following reason: {reason}. Make sure that content sent is not too large for the AI provider to handle. Run \`/refresh\` to clear conversation content.`,
       streaming_failed_description: `An issue while trying to stream the response.`,
+      error_footer_server_provider: `Source: {provider} • This error came from the server's AI provider, not TomoriBot.`,
+      error_footer_dm_provider: `Source: {provider} • This error came from the AI provider, not TomoriBot.`,
+      error_footer_personal_provider: `Source: {provider} (Personal) • This error came from your personal AI provider, not TomoriBot.`,
+      error_footer_tomoribot: `Source: TomoriBot • This is an internal TomoriBot error, not your AI provider.`,
       provider_error_interaction: `Stream response blocked/stopped. Reason: {reason}.`,
-      api_error_title: `🔴 Provider API Error`,
-      api_error_tip: `Please verify your API key and try again. If this error persists, report through \`/support discord\``,
-      rate_limit_title: `🟡 Provider Rate Limit Exceeded`,
-      rate_limit_title_all_rotation_keys: `🟡 Provider Rate Limit Exceeded (All Rotation Keys)`,
-      rate_limit_tip: `Please wait a few minutes before trying again. If you have multiple personal keys, consider \`/config api-key rotation\`.`,
-      model_fallback_hint: `For better resilience, you can configure model failover with \`/model fallback\`.`,
-      content_blocked_title: `🔴️ Provider Content Filter`,
-      content_blocked_tip: `Tip: You can turn on \`/nsfw jailbreaks\` to help prevent this error. You may also check messages (\`/tool refresh\`), memories/config (\`/memory personal export\`, \`/memory server export\`, \`/server config export\`), blacklist problematic members (\`/server user-blacklist add\`), or switch provider (\`/model\`)`,
-      timeout_title: `🟡️ Provider Request Timeout`,
-      timeout_tip: `Try shortening your message or try again`,
-      provider_overloaded_title: `🔴 Provider Overloaded`,
-      provider_overloaded_tip: `Provider is currently experiencing unexpectedly high usage, please try again later or swap to a different provider`,
-      flush_limit_title: `🟡️ Response Length Limit Reached`,
-      flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/bot respond\` to manually continue the response if needed.`,
-      inactivity_timeout_title: `🟡️ Response Timed Out`,
+      api_error_title: `Provider API Error`,
+      privacy_error_title: `Provider Privacy Settings`,
+      model_error_title: `Model Configuration Error`,
+      model_error_description: `The selected model was rejected by the provider. Check the configured model name and switch to one of the provider's supported model IDs.`,
+      rate_limit_title: `Provider Rate Limit Exceeded`,
+      rate_limit_title_all_rotation_keys: `Provider Rate Limit Exceeded (All Rotation Keys)`,
+      content_blocked_title: `Provider Content Filter`,
+      timeout_title: `Provider Request Timeout`,
+      provider_overloaded_title: `Provider Overloaded`,
+      provider_overloaded_description: `The provider is currently overloaded or temporarily unavailable`,
+      connection_refused_description: `The connection to the provider was refused. Check that its endpoint is running and its address is correct.`,
+      context_length_title: `Message Too Long for This Model`,
+      credit_limit_title: `Not Enough Provider Credits`,
+      balance_exhausted_title: `Provider Account Out of Credit`,
+      endpoint_blocked_title: `Endpoint Not Allowed`,
+      flush_limit_title: `Response Length Limit Reached`,
+      flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/respond\` to manually continue the response if needed.`,
+      inactivity_timeout_title: `Response Timed Out`,
       inactivity_timeout_description: `The AI provider stopped responding and the connection timed out. This can happen when the provider is overloaded or experiencing issues. Please try again.`,
+      first_token_timeout_description: `The AI provider accepted the request but never started replying, so the connection timed out. Its queue is likely backed up. Please try again, or switch to a less busy model.`,
+    },
+    error_detail: {
+      button: `Show Full Error`,
+      title: `Full Provider Error`,
+      manage_server_only: `Only members with \`Manage Server\` can view the full error.`,
+      personal_only: `This error came from a personal provider, so only its owner can view the full error.`,
+    },
+    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
+    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
+    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
+    tips: {
+      title: `💡 What you can do`,
+      button: `What You Can Do`,
+      revise_tool_request: `Review the tool's input and try again with a revised request.`,
+      check_tool_configuration: `Check the model and configuration selected for this tool.`,
+      check_provider_quota: `Check the provider's quota and billing status before retrying.`,
+      wait_and_retry: `Please wait a few minutes before trying again.`,
+      api_key_rotation: `If this server has multiple keys, select the provider in \`/providers\` to manage its rotation pool.`,
+      model_fallback: `Add backup models with \`/config\` > Models > Fallbacks & Randomizer for better resilience.`,
+      model_fallback_personal: `Add backup models with \`/personal config\` for better resilience.`,
+      openrouter_free_models: `Register more free models from the [OpenRouter free model list](https://openrouter.ai/models?max_price=0&output_modalities=text) with \`/providers\`.`,
+      openrouter_free_models_personal: `Register more free models from the [OpenRouter free model list](https://openrouter.ai/models?max_price=0&output_modalities=text) with \`/personal providers\`.`,
+      openrouter_models: `Browse the [OpenRouter model list](https://openrouter.ai/models), register a model with \`/providers\`, then switch with \`/config\` > Models > Switch Models.`,
+      openrouter_models_personal: `Browse the [OpenRouter model list](https://openrouter.ai/models), register a model with \`/personal providers\`, then switch with \`/personal config\`.`,
+      choose_supported_model: `Choose a supported model ID with \`/config\` > Models > Switch Models or your custom endpoint settings.`,
+      choose_supported_model_personal: `Choose a supported model ID with \`/personal config\` or your custom endpoint settings.`,
+      verify_api_key: `Double-check this server's API key, then try again.`,
+      verify_api_key_personal: `Double-check your personal API key with \`/personal providers\`, then try again.`,
+      endpoint_not_allowed: `Switch to a public HTTPS endpoint with \`/providers\`, or ask whoever runs this host whether a local server can be allowed.`,
+      endpoint_not_allowed_personal: `Switch to a public HTTPS endpoint with \`/personal providers\`, or ask whoever runs this host whether a local server can be allowed.`,
+      verify_api_key_expiry: `NVIDIA NIM keys expire, and NVIDIA refuses an expired key with the same error as a mistyped one. Check its expiry on [build.nvidia.com](https://build.nvidia.com) and generate a new key if it has lapsed.`,
+      nvidia_register_free_model: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
+      nvidia_register_free_model_personal: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/personal providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
+      google_free_tier_daily: `This API key used up Gemini's free requests for today. They reset at midnight Pacific time.`,
+      google_free_tier_minute: `This API key is sending requests faster than Gemini's free plan allows. Wait a minute and try again.`,
+      google_credential_type: `This looks like an OAuth or service account token. The \`google\` provider needs a plain API key from [Google AI Studio](https://aistudio.google.com/apikey); use the \`vertex\` provider for Google Cloud credentials.`,
+      openrouter_privacy_settings: `Adjust your "Data Policy" settings at [OpenRouter Privacy Settings](https://openrouter.ai/settings/privacy) to allow this model, or choose a different model.`,
+      openrouter_fund_account: `Add at least 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
+      reduce_output_tokens: `Lower the reply length cap with \`/config\` > Models > Samplers & Parameters (output tokens) to free up room for chat history.`,
+      reduce_output_tokens_personal: `Lower the reply length cap with \`/personal config\` (output tokens) to free up room for chat history.`,
+      openrouter_add_credits: `Add credits at [OpenRouter Credits](https://openrouter.ai/settings/credits), or lower the reply length with \`/config\` > Models > Samplers & Parameters (output tokens).`,
+      openrouter_add_credits_personal: `Add credits at [OpenRouter Credits](https://openrouter.ai/settings/credits), or lower the reply length with \`/personal config\` (output tokens).`,
+      top_up_provider_balance: `Your API key is valid, but the account behind it has run out of credit. Top it up with your provider, then try again. Shortening the message or lowering the reply length will not help here.`,
+      deepseek_top_up: `Add funds on the [DeepSeek top-up page](https://platform.deepseek.com/top_up).`,
+      adjust_parameters: `Use \`/config\` > Models > Samplers & Parameters and adjust either **Temperature** or **Top P** to ensure only one is sent.`,
+      adjust_parameters_personal: `Use \`/personal config\` and adjust either **Temperature** or **Top P** to ensure only one is sent.`,
+      switch_model_provider: `Switch to a different model or provider with \`/config\` > Models > Switch Models or \`/providers\`.`,
+      switch_model_provider_personal: `Switch with \`/personal config\`, or update the provider in \`/personal providers\`.`,
+      disable_personal_text_override: `This request error was from your [personal provider](https://docs.tomoribot.app/en/features/knowledge/personalization/#your-own-providers). Update it in \`/personal providers\` or select a working model with \`/personal config\`.`,
+      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
+      support_server: `Visit the [Official Support Server](https://discord.gg/bjCfHm9QsB) for assistance.`,
+      shorten_message: `Try shortening your message, then send it again.`,
+      refresh_context: `Clear the conversation context with \`/refresh\`.`,
+      provider_overloaded_wait: `The provider is under heavy load right now. Try again shortly or switch providers.`,
+      nsfw_jailbreaks: `Turn on \`/nsfw jailbreaks\` to help prevent this filter.`,
+      review_messages: `Review recent messages, or clear them with \`/refresh\`.`,
+      review_memories: `Check your memories and config (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
+      blacklist_member: `Blacklist a problematic member with \`/moderation\`.`,
+      use_personal_providers: `Use your own [personal provider](https://docs.tomoribot.app/en/features/knowledge/personalization/#your-own-providers) with \`/personal providers\` so your requests do not count toward this server's quota.`,
     },
     google: {
       "400_default_message": `There was an error in your request format`,
       "400_billing_default_message": `Billing is required for this service`,
+      "401_default_message": `Your Google credentials were rejected. Make sure you're using an API key from Google AI Studio`,
       "403_default_message": `Your API key doesn't have the required permissions. Please ensure you're using your own legally obtained API key from Google AI Studio`,
       "404_default_message": `A referenced resource could not be found`,
       "429_default_message": `You've sent too many requests too quickly`,
@@ -83,11 +178,28 @@ export default {
       content_blocked_default_message: `Your content was blocked by safety filters`,
       unknown_default_message: `An unexpected error occurred`,
     },
+    vertex: {
+      config_error_message: `Vertex AI could not read this provider's settings. Enter the key as \`project-id::location\` in \`/providers\`.`,
+      auth_error_message: `Vertex AI could not authenticate. Whoever hosts TomoriBot needs to set up Google Cloud Application Default Credentials (\`gcloud auth application-default login\`, or \`GOOGLE_APPLICATION_CREDENTIALS\`).`,
+    },
     vertexexpress: {
       "403_predict_permission_message": `This key can't call Vertex AI Express models. Use an Express-mode key, or use the separate \`vertex\` provider for full Google Cloud projects.`,
     },
     novelai: {
-      "400_default_message": `Invalid request format or parameters`,
+      tokenizer_setup:
+        "NovelAI tokenizers are missing or invalid. Ask the bot host to run `bun run setup:tokenizers` and restart TomoriBot.",
+      input_complexity:
+        "This prompt contains too much text or an unusually long unbroken word. Shorten it and try again.",
+      context_overflow:
+        "The persona, minimum examples, and recent conversation exceed this model's context window. Shorten them or choose a model with a larger window.",
+      subscription_unavailable: "NovelAI subscription information could not be loaded. Try again shortly.",
+      subscription_inactive: "This NovelAI key has no active subscription.",
+      model_tier: "This NovelAI subscription does not include the selected text model.",
+      xialong_opus:
+        "Xialong requires an active NovelAI Opus subscription. Use an Opus key or select another text model.",
+      continuation_exhausted:
+        "NovelAI ended before producing a complete reply within the output budget. Try again or increase the configured output length.",
+      "400_default_message": `Invalid request format or parameters. Please ensure you inputted the correct API key.`,
       "400_trial_message": `Your trial account requires recaptcha verification for generations. API access requires a paid NovelAI subscription. Please upgrade your account at https://novelai.net/`,
       "401_default_message": `Your NovelAI API key is invalid or expired`,
       "402_default_message": `You don't have enough Anlas credits`,
@@ -98,18 +210,14 @@ export default {
     },
     openrouter: {
       "404_privacy_policy_error": `**Privacy Policy Restriction**
-The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.
-
-**To fix this:**
-1. Visit https://openrouter.ai/settings/privacy
-2. Adjust your "Data Policy" settings to allow this model
-3. Or select a different model that matches your privacy preferences`,
+The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.`,
       "400_default_message": `Invalid request sent to OpenRouter`,
       "401_default_message": `Your OpenRouter API key is invalid or expired`,
       "402_default_message": `Your OpenRouter account has insufficient credits`,
       "403_default_message": `Access denied: check your OpenRouter account settings`,
       "408_default_message": `The OpenRouter request timed out`,
       "429_default_message": `OpenRouter rate limit exceeded, please wait before retrying`,
+      "429_free_models_message": `OpenRouter rate limit exceeded for free models.`,
       "500_default_message": `OpenRouter encountered an internal server error`,
       "502_default_message": `The upstream AI provider is temporarily unavailable`,
       "503_default_message": `The upstream AI model is currently overloaded`,
@@ -117,42 +225,88 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     anthropic: {
-      "400_default_message": `Invalid request to Anthropic API. Try a different model or reduce context length.`,
+      "400_default_message": `Invalid request to Anthropic API.`,
       "401_default_message": `Your Anthropic API key is invalid. Please check your key at console.anthropic.com`,
       "403_default_message": `Your Anthropic API key does not have permission for this operation.`,
-      "404_default_message": `The requested Anthropic model could not be found. Try switching models with \`/model text\`.`,
+      "404_default_message": `The requested Anthropic model could not be found.`,
       "429_default_message": `Anthropic rate limit exceeded. Please wait a moment and try again.`,
       "500_default_message": `Anthropic returned an internal server error.`,
       "503_default_message": `Anthropic is currently unavailable or overloaded.`,
-      temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent. Use \`/config parameters\` and adjust either **Temperature** or **Top P** for that provider.`,
+      temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent.`,
       unknown_default_message: `An unexpected error occurred while communicating with Anthropic.`,
     },
+    custom: {
+      "402_default_message": `Your account with this endpoint has insufficient balance`,
+      PRIVATE_NETWORK_BLOCKED_default_message: `This host does not allow requests to this endpoint's address.`,
+      REDIRECT_CREDENTIALS_WITHHELD_default_message: `This endpoint redirected to a different address, so TomoriBot did not send its API key there. Whoever manages this endpoint in \`/providers\` can fix it by changing its URL to the final address the server redirects to.`,
+      unknown_default_message: `An unexpected error occurred`,
+    },
+    deepseek: {
+      "402_default_message": `Your DeepSeek account has insufficient balance`,
+      unknown_default_message: `An unexpected error occurred`,
+    },
+    zai: {
+      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
+      "429_balance_default_message": `Your Z.ai account has insufficient balance`,
+      "429_plan_access_default_message": `Your Z.ai subscription plan does not include access to this model`,
+      unknown_default_message: `An unexpected error occurred`,
+    },
     nvidia: {
-      "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA. Try switching models with \`/model text\`.`,
+      "401_default_message": `NVIDIA did not recognize this key. Check that it was copied in full, including its \`nvapi-\` prefix.`,
+      "403_default_message": `NVIDIA refused this key. It may be mistyped, expired, or missing inference access on its account.`,
+      "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA.`,
+      "500_default_message": `The NVIDIA backend serving this model failed. This is usually transient, so try again in a moment. If it keeps failing, whoever hosts TomoriBot can read NVIDIA's full report in the bot logs.`,
+      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
+      // parameter. Asserting this cause on every 500 previously sent users to change settings the
+      // failing payload never carried.
+      "500_parameter_default_message": `NVIDIA rejected one or more request parameters for this model. In \`/config\` > Models > Samplers & Parameters, set unsupported samplers such as \`min_p\` to \`0\` and clear saved \`logit_bias\` entries.`,
+      unknown_default_message: `An unexpected error occurred`,
     },
     self_teach: {
-      server_memory_learned_title: `🧠 {persona_nickname} Learned Something New!`,
-      server_memory_learned_description: `A server memory has been saved:
-\`{memory_content}\``,
-      server_memory_updated_title: `📝 {persona_nickname} Updated a Memory!`,
-      server_memory_updated_description: `A server memory has been updated:
-\`{memory_content}\``,
-      server_memory_deleted_title: `🗑️ {persona_nickname} Deleted a Memory!`,
-      server_memory_deleted_description: `A server memory has been deleted:
-\`{memory_content}\``,
-      personal_memory_learned_title: `💡 {persona_nickname} Learned Something New about {user_nickname}!`,
-      personal_memory_learned_description: `A personal memory about {user_nickname} has been saved:
-\`{memory_content}\``,
-      personal_memory_updated_title: `📝 {persona_nickname} Updated a Memory about {user_nickname}!`,
-      personal_memory_updated_description: `A personal memory about {user_nickname} has been updated:
-\`{memory_content}\``,
-      personal_memory_deleted_title: `🗑️ {persona_nickname} Deleted a Memory about {user_nickname}!`,
-      personal_memory_deleted_description: `A personal memory about {user_nickname} has been deleted:
-\`{memory_content}\``,
-      server_memory_footer: `Server managers can manage this memory using \`/memory server\`.`,
-      personal_memory_footer_manage: `You can manage your personal memories using \`/memory personal\`.`,
-      personal_memory_footer_personalization_disabled: `This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here. Use \`/memory personal export\` to view it. You can opt out with \`/personal privacy\`.`,
-      personal_memory_footer_user_blacklisted: `This memory was saved, but the user in question is currently blacklisted from personalization features on this server, so it will not have an immediate effect here. Use \`/memory personal export\` to view it. You can opt out with \`/personal privacy\`.`,
+      memory_forgotten_description: `Forgot a dormant memory to make room:
+\`\`\`
+{forgotten_content}
+\`\`\``,
+      memory_saved_with_eviction_content: `Saved:
+{memory_content}
+
+Forgotten:
+{forgotten_content}`,
+      server_memory_learned_title: `🧠 {persona_nickname} learned something new!`,
+      server_memory_learned_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** has been saved:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_updated_title: `📝 {persona_nickname} updated a memory!`,
+      server_memory_updated_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** has been updated:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_deleted_title: `🗑️ {persona_nickname} deleted a memory!`,
+      server_memory_deleted_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** has been deleted:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_learned_title: `💡 {persona_nickname} learned something new about {user_nickname}!`,
+      personal_memory_learned_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** about {user_nickname} has been saved:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_updated_title: `📝 {persona_nickname} updated a memory about {user_nickname}!`,
+      personal_memory_updated_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** about {user_nickname} has been updated:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_deleted_title: `🗑️ {persona_nickname} deleted a memory about {user_nickname}!`,
+      personal_memory_deleted_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/long-term-memory/)** about {user_nickname} has been deleted:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_footer: `Server managers can manage this memory using \`/memories\`.`,
+      personal_memory_footer_manage: `You can manage your personal memories using \`/personal memories\`.`,
+      personal_memory_footer_personalization_disabled: `This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here. Use \`/export personal memories\` to view it. You can opt out with \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted:
+        "This memory was saved, but the user in question is blacklisted on this server, so I ignore them here and it will not have an effect. Use `/export personal memories` to view it. You can opt out with `/personal config`.",
       expand_memory_button: `Show Full Memory`,
       expand_memory_title: `Full Memory Content`,
     },

@@ -1,5 +1,4 @@
 import { AttachmentBuilder, type Message } from "discord.js";
-import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type {
   SpriteMessageRecordInfo,
@@ -7,16 +6,20 @@ import type {
   TextProcessingConfig,
   TypingSimulationConfig,
 } from "@/types/stream/types";
-import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
+import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS, getMessageSplitMode } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import { renderMarkdownTableToPng } from "@/utils/image/markdownTableRenderer";
+import { attachShowMarkdownCollector, createShowMarkdownButtonRow } from "@/utils/discord/markdownTableButton";
+import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCore";
 import { setCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
 import { extractMarkdownTableSegments, MARKDOWN_TABLE_ATTACHMENT_PREFIX } from "@/utils/text/markdownTable";
 import { chunkMessage } from "@/utils/text/processors/chunkProcessor";
-import { humanizeString } from "@/utils/text/processors/formatters";
-import { PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
+import { applyStableHumanizer, humanizeString } from "@/utils/text/processors/formatters";
 import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
+
+type DeliveryChunk = { content: string; diagnosticReason: ChatSendReason };
 
 export type BufferedDeliveryBoundary =
   | "code_open"
@@ -33,6 +36,8 @@ export type StreamDeliveryOptions = {
   accumulatedTextPrefix?: string;
   /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
   spriteRecord?: SpriteMessageRecordInfo;
+  /** The persona's base appearance under an identity override, which is not a copied identity. */
+  isNeutralAppearance?: boolean;
 };
 
 type StreamMessageDeliveryDependencies = {
@@ -85,10 +90,10 @@ export class StreamMessageDelivery {
     state.pendingAggregatedText = "";
     state.pendingAggregateJoinNextWithBlankLine = false;
 
-    const messageChunks = chunkMessage(aggregatedText, HumanizerDegree.NONE, textConfig.maxMessageLength).map((chunk) =>
-      chunk.replaceAll(PREFILL_WHITESPACE_SENTINEL, ""),
-    );
-    const finalMessageChunks = messageChunks.filter((chunk) => chunk.trim());
+    const messageChunks = chunkMessage(aggregatedText, "lines", textConfig.maxMessageLength);
+    const finalMessageChunks = messageChunks
+      .filter((chunk) => chunk.trim())
+      .map((chunk) => applyStableHumanizer(chunk, textConfig.humanizer));
     if (!finalMessageChunks.length) {
       return;
     }
@@ -96,7 +101,19 @@ export class StreamMessageDelivery {
     log.info(
       `Stream Aggregate: Flushing ${aggregatedText.length} chars as ${finalMessageChunks.length} Discord message(s)`,
     );
-    await this.sendChunksImmediate(finalMessageChunks, context, state);
+    await this.sendChunksImmediate(
+      finalMessageChunks.map((content, index) => ({
+        content,
+        diagnosticReason:
+          index === 0
+            ? "stream_segment"
+            : aggregatedText.length > textConfig.maxMessageLength
+              ? "length_split"
+              : "formatting_split",
+      })),
+      context,
+      state,
+    );
   }
 
   public async flushHeldOrphanPunctuation(
@@ -151,6 +168,7 @@ export class StreamMessageDelivery {
     const sentMessage = await this.sendSinglePayload(
       {
         files: [attachment],
+        components: [createShowMarkdownButtonRow(context.locale)],
         allowedMentions: {
           parse: [],
           repliedUser: false,
@@ -158,6 +176,8 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        isNeutralAppearance: options?.isNeutralAppearance,
+        diagnosticReason: "table_attachment",
       },
       tableMarkdown,
       context,
@@ -165,7 +185,23 @@ export class StreamMessageDelivery {
     );
 
     if (sentMessage) {
+      // Cache first: the collector reads the source back out of the cache on every press,
+      // so the entry must exist before the button can be clicked.
       setCachedRenderedMarkdownTable(sentMessage.id, tableMarkdown.trim());
+
+      // A webhook-authored message can only be edited through the webhook that sent it, so
+      // hand the collector whichever webhook actually delivered this table, plus the thread
+      // id a parent-channel webhook needs to address a message posted inside a thread.
+      // A sprite render can put the main persona on the webhook path without ever populating
+      // `context.webhook`, so resolve it lazily in that case; the lookup is cached.
+      const authoringWebhook = sentMessage.webhookId
+        ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)) ?? undefined)
+        : undefined;
+      const threadId =
+        "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
+          ? context.channel.id
+          : undefined;
+      attachShowMarkdownCollector(sentMessage, context.locale, authoringWebhook, threadId);
     }
   }
 
@@ -189,22 +225,42 @@ export class StreamMessageDelivery {
       await this.flushAggregatedTextBuffer(textConfig, context, state);
     }
 
-    const rawMessageChunks = chunkMessage(segment, textConfig.humanizerDegree, textConfig.maxMessageLength).map(
-      (chunk) => chunk.replaceAll(PREFILL_WHITESPACE_SENTINEL, ""),
+    const rawMessageChunks = chunkMessage(
+      segment,
+      getMessageSplitMode(textConfig.humanizer),
+      textConfig.maxMessageLength,
     );
     if (!rawMessageChunks.length) return;
 
-    const finalMessageChunks: string[] = [];
-    for (let chunk of rawMessageChunks) {
-      const originalChunk = chunk;
-      if (textConfig.humanizerDegree === HumanizerDegree.HEAVY) {
-        chunk = humanizeString(chunk);
-        if (chunk !== originalChunk) {
-          log.info(`Stream Send: Humanized (D3) from "${originalChunk}" to "${chunk}"`);
+    const finalMessageChunks: DeliveryChunk[] = [];
+    for (const [chunkIndex, chunk] of rawMessageChunks.entries()) {
+      const chunkReason: ChatSendReason =
+        chunkIndex === 0
+          ? "stream_segment"
+          : segment.length > textConfig.maxMessageLength
+            ? "length_split"
+            : "formatting_split";
+      const { humanizer_lowercase_enabled: lowercase, humanizer_punctuation_split_enabled: punctuation } =
+        textConfig.humanizer;
+      if (lowercase || punctuation) {
+        // A humanizer flush becomes a real extra entry here, so it goes out as its own sent
+        // message (with typing simulation in between) rather than a linebreak inside one message.
+        const humanizedPieces = humanizeString(chunk, { lowercase, punctuation });
+        if (humanizedPieces.length > 1 || humanizedPieces[0] !== chunk) {
+          log.info(`Stream Send: Humanized from "${chunk}" to ${JSON.stringify(humanizedPieces)}`);
         }
+        for (const [pieceIndex, piece] of humanizedPieces.entries()) {
+          if (piece.trim()) {
+            finalMessageChunks.push({
+              content: piece,
+              diagnosticReason: pieceIndex === 0 ? chunkReason : "humanizer_split",
+            });
+          }
+        }
+        continue;
       }
       if (chunk.trim()) {
-        finalMessageChunks.push(chunk);
+        finalMessageChunks.push({ content: chunk, diagnosticReason: chunkReason });
       }
     }
     if (!finalMessageChunks.length) return;
@@ -226,7 +282,7 @@ export class StreamMessageDelivery {
   }
 
   private async sendChunksWithTyping(
-    chunks: string[],
+    chunks: DeliveryChunk[],
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
@@ -238,7 +294,7 @@ export class StreamMessageDelivery {
     }
 
     const firstChunk = chunks[0];
-    await this.sendSingleMessage(firstChunk, context, state, options);
+    await this.sendSingleMessage(firstChunk.content, context, state, options, firstChunk.diagnosticReason);
 
     for (let i = 1; i < chunks.length; i++) {
       if (this.deps.hasStopRequest(context.channel.id)) {
@@ -247,9 +303,12 @@ export class StreamMessageDelivery {
       }
 
       const chunkToSend = chunks[i];
-      let typingTime = Math.min(chunkToSend.length * typingConfig.baseSpeedMsPerChar, typingConfig.maxTypingTimeMs);
+      let typingTime = Math.min(
+        chunkToSend.content.length * typingConfig.baseSpeedMsPerChar,
+        typingConfig.maxTypingTimeMs,
+      );
       typingTime = Math.max(typingTime, typingConfig.minVisibleDurationMs);
-      if (chunkToSend.includes("```")) {
+      if (chunkToSend.content.includes("```")) {
         typingTime = Math.max(typingTime, typingConfig.minVisibleDurationMs * 1.25);
       }
 
@@ -260,10 +319,16 @@ export class StreamMessageDelivery {
         return;
       }
 
-      await this.sendSingleMessage(chunkToSend, context, state, {
-        ...options,
-        accumulatedTextPrefix: undefined,
-      });
+      await this.sendSingleMessage(
+        chunkToSend.content,
+        context,
+        state,
+        {
+          ...options,
+          accumulatedTextPrefix: undefined,
+        },
+        chunkToSend.diagnosticReason,
+      );
 
       if (i < chunks.length - 1 && typingConfig.randomPauseEnabled) {
         const pauseCancelled = await this.addThinkingPauseInterruptible(typingConfig, context);
@@ -276,7 +341,7 @@ export class StreamMessageDelivery {
   }
 
   private async sendChunksImmediate(
-    chunks: string[],
+    chunks: DeliveryChunk[],
     context: StreamContext,
     state: StreamState,
     options?: StreamDeliveryOptions,
@@ -287,10 +352,16 @@ export class StreamMessageDelivery {
         return;
       }
 
-      await this.sendSingleMessage(chunk, context, state, {
-        ...options,
-        accumulatedTextPrefix: index === 0 ? options?.accumulatedTextPrefix : undefined,
-      });
+      await this.sendSingleMessage(
+        chunk.content,
+        context,
+        state,
+        {
+          ...options,
+          accumulatedTextPrefix: index === 0 ? options?.accumulatedTextPrefix : undefined,
+        },
+        chunk.diagnosticReason,
+      );
     }
   }
 
@@ -299,6 +370,7 @@ export class StreamMessageDelivery {
     context: StreamContext,
     state: StreamState,
     options?: StreamDeliveryOptions,
+    diagnosticReason: ChatSendReason = "stream_segment",
   ): Promise<void> {
     await this.sendSinglePayload(
       {
@@ -306,6 +378,8 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        isNeutralAppearance: options?.isNeutralAppearance,
+        diagnosticReason,
       },
       content,
       context,

@@ -12,18 +12,21 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
 import { getNvidiaToolAdapter } from "@/providers/nvidia/nvidiaToolAdapter";
 import { NVIDIA_CHAT_COMPLETIONS_URL } from "@/providers/nvidia/nvidiaConstants";
-import { sanitizeSampleDialogueText } from "@/providers/google/presetGenerator";
 import {
   buildPresetResponseSchema,
   buildPresetPrompt,
   extractResponseText,
+  extractPresetGenerationFields,
   buildToolErrorResult,
+  PRESET_SCHEMA_MISS_CODES,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
   type PresetContentPart,
   type PresetMessage,
   type PresetToolCall,
 } from "@/providers/utils/presetCommon";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
-/** Options for NVIDIA NIM preset generation. */
 interface NvidiaPresetGenerationOptions {
   model: string;
   temperature?: number;
@@ -74,10 +77,7 @@ function buildNvidiaPresetSystemPrompt(): string {
 /**
  * Generate preset data from user prompts using the NVIDIA NIM API.
  *
- * @param apiKey - Decrypted NVIDIA API key
- * @param params - Generation parameters (character info, instructions, image)
  * @param _locale - User's locale (reserved for future error localisation)
- * @param options - NVIDIA-specific options (model, tools, temperature)
  * @returns Generated preset or a typed error result
  */
 export async function generatePresetFromPromptNvidia(
@@ -95,7 +95,7 @@ export async function generatePresetFromPromptNvidia(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build the initial user message content (text + optional image)
+  // Build the initial user message content (text + optional image)
   const contentParts: PresetContentPart[] = [{ type: "text", text: buildPresetPrompt(params) }];
 
   if (params.imageBase64 && params.imageMimeType) {
@@ -115,16 +115,15 @@ export async function generatePresetFromPromptNvidia(
   // on each request when in json_object fallback mode
   const messages: PresetMessage[] = [{ role: "user", content: userContent }];
 
-  // 2. Try json_schema first; fall back to json_object once if unsupported
   type FormatMode = "json_schema" | "json_object";
   let formatMode: FormatMode = "json_schema";
   let formatFallbackDone = false;
 
   const maxToolRounds = options.maxToolRounds ?? 3;
   let toolRounds = 0;
+  const maxOutputTokens = resolvePresetGenerationMaxOutputTokens({ configured: params.maxOutputTokens });
 
   while (true) {
-    // 3. Build the response format object based on current mode
     const responseFormat =
       formatMode === "json_schema"
         ? {
@@ -137,7 +136,6 @@ export async function generatePresetFromPromptNvidia(
           }
         : { type: "json_object" };
 
-    // 4. Prepend schema-steered system prompt for json_object fallback mode
     const requestMessages: PresetMessage[] =
       formatMode === "json_object"
         ? [{ role: "system", content: buildNvidiaPresetSystemPrompt() }, ...messages]
@@ -147,7 +145,7 @@ export async function generatePresetFromPromptNvidia(
       model: options.model,
       messages: requestMessages,
       temperature: options.temperature ?? 1.0,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       response_format: responseFormat,
       stream: false,
     };
@@ -157,7 +155,6 @@ export async function generatePresetFromPromptNvidia(
       body.tool_choice = "auto";
     }
 
-    // 5. Send the request
     const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -170,7 +167,7 @@ export async function generatePresetFromPromptNvidia(
     if (!response.ok) {
       const errorBody = await response.text();
 
-      // 5a. Fall back to json_object if json_schema is not supported by this model
+      // Fall back to json_object if json_schema is not supported by this model
       if (
         !formatFallbackDone &&
         formatMode === "json_schema" &&
@@ -194,7 +191,7 @@ export async function generatePresetFromPromptNvidia(
         },
       });
       return {
-        error: `NVIDIA request failed (${response.status}): ${response.statusText}`,
+        error: `NVIDIA request failed (HTTP ${response.status}).`,
         errorType: "CONNECTION",
       };
     }
@@ -216,7 +213,6 @@ export async function generatePresetFromPromptNvidia(
       };
     }
 
-    // 6. Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -269,9 +265,11 @@ export async function generatePresetFromPromptNvidia(
           }
         }
 
-        const convertedResult = nvidiaAdapter.convertResult(
-          toolResult ?? buildToolErrorResult("Tool execution failed"),
-        );
+        if (!toolResult?.success) {
+          return { error: "Persona web search failed.", errorType: "MODEL_ERROR", failureStage: "web_search" };
+        }
+
+        const convertedResult = nvidiaAdapter.convertResult(toolResult);
         const resultContent =
           typeof convertedResult.content === "string"
             ? convertedResult.content
@@ -287,7 +285,7 @@ export async function generatePresetFromPromptNvidia(
       continue;
     }
 
-    // 7. Extract and parse the final JSON response
+    // Extract and parse the final JSON response
     const responseText = extractResponseText(message.content);
     if (!responseText) {
       return {
@@ -296,59 +294,23 @@ export async function generatePresetFromPromptNvidia(
       };
     }
 
-    let parsedResponse: {
-      attribute_list?: string[];
-      sample_dialogues_in?: string[];
-      sample_dialogues_out?: string[];
-    };
-
-    try {
-      parsedResponse = JSON.parse(responseText);
-    } catch (parseError) {
-      log.error("NVIDIA preset generation JSON parse failed", parseError as Error);
+    const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
+      log.error("NVIDIA preset generation response could not be parsed", parseError),
+    );
+    if (!decoded.ok) {
+      log.error(`NVIDIA preset generation rejected: ${decoded.failure.code}`);
       return {
-        error: "Invalid JSON response from NVIDIA.",
-        errorType: "INVALID_JSON",
+        error: PRESET_SCHEMA_MISS_CODES.includes(decoded.failure.code)
+          ? presetGenerationFailureMessage(decoded.failure)
+          : "Invalid JSON response from NVIDIA.",
+        errorType: presetGenerationFailureErrorType(decoded.failure),
       };
     }
-
-    if (!parsedResponse.attribute_list || !parsedResponse.sample_dialogues_in || !parsedResponse.sample_dialogues_out) {
-      return {
-        error: "Generated character data is incomplete. Please try again.",
-        errorType: "INVALID_JSON",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-      return {
-        error: "Generated attribute list must contain exactly 6 items. Please try again.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 user inputs.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 character responses.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-    const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
     const preset = {
       tomori_nickname: params.characterName,
       trigger_words: [params.characterName],
-      attribute_list: parsedResponse.attribute_list,
-      sample_dialogues_in: sanitizedDialoguesIn,
-      sample_dialogues_out: sanitizedDialoguesOut,
+      ...decoded.preset,
     };
 
     log.success(`NVIDIA preset generation successful for ${params.characterName}`);

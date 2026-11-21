@@ -18,17 +18,20 @@ import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type { StreamingContext } from "../tool/interfaces";
 import type { ProviderError } from "../stream/interfaces";
+import type { SpriteShownEntry } from "../stream/types";
+import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "openai-compatible" | "anthropic";
 
 /** LLM generation parameters that providers may support via DB config. */
 export type SupportedParam = SupportedParamValue;
 
-export type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
+type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
 
-export type VideoGenerationStyle = "chat-completion" | "none";
+type VideoGenerationStyle = "chat-completion" | "none";
 
-export interface ProviderFeatureSupport {
+interface ProviderFeatureSupport {
+  decisions: boolean;
   imageGeneration: ImageGenerationStyle;
   videoGeneration: VideoGenerationStyle;
   embeddings: boolean;
@@ -63,9 +66,12 @@ export type StreamStopReason =
   | "speaker_guard"
   | "send_message_limit"
   | "flush_limit"
+  | "channel_deleted"
+  | "missing_access"
+  | "pending_response_limit"
   | "unknown";
 
-export type ThoughtLogKind = "summary" | "raw";
+type ThoughtLogKind = "summary" | "raw";
 
 export interface ThoughtLogEntry {
   kind: ThoughtLogKind;
@@ -75,6 +81,7 @@ export interface ThoughtLogEntry {
 export interface ThoughtLogPayload {
   summary?: string;
   raw?: string;
+  iterations?: Array<{ summary?: string; raw?: string }>;
   /** Formatted text content fetched via the fetch MCP tool, rendered as code blocks in thought-log embeds. */
   fetchedContent?: string;
   firstReplyUrl?: string;
@@ -84,9 +91,6 @@ export interface ThoughtLogPayload {
   servingProvider?: string;
 }
 
-/**
- * Generic stream response result
- */
 export interface StreamResult {
   status:
     | "completed"
@@ -97,13 +101,33 @@ export interface StreamResult {
     | "empty_response"
     | "follow_up_interrupt";
   data?: unknown | Error; // Function call data or error details
+  providerFailureReported?: boolean;
+  pendingResponse?: import("@/types/stream/pendingResponse").PendingStreamResponse;
   accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
+  /** Discord ID of the first message this segment delivered. */
+  firstMessageId?: string;
   /** Extracted <details> block body text (with <summary> stripped), for routing to STM. */
   detailsContent?: string;
   stopReason?: StreamStopReason; // Specific stop source for debugging/logging
   thoughtLog?: ThoughtLogPayload; // Reasoning/thought text captured separately from visible output
-  /** NAI GLM-4.6: incomplete trailing sentence dropped by sentenceTrailingBuffer, available for prompt continuation on retry */
-  naiContinuationPrefill?: string;
+  /**
+   * Sprite labels delivered during this stream segment, in render order (one entry
+   * per delivered sprite message, so repeats are kept). Surfaced from StreamState so
+   * the post-turn stat recorder can attribute `sprite_shown` / `sprite_emotion` to the
+   * triggerer's user scope (the stream layer itself has no internal user id). Each
+   * entry carries `isIdentity` so identity sprites are excluded from `sprite_emotion`.
+   * Omitted when empty.
+   */
+  spritesShown?: SpriteShownEntry[];
+  /**
+   * Real, provider-reported token usage for this stream segment, normalized by
+   * the orchestrator from the adapter's native usage shape. Present only when
+   * the provider surfaced usage (OpenRouter, OpenAI-compatible, Anthropic,
+   * Gemini); absent for providers that report no usage, in which case the
+   * post-turn recorder falls back to the character estimate. One segment per
+   * tool-loop request, so a turn's true usage is the sum across segments.
+   */
+  usage?: TokenUsage;
 }
 
 /**
@@ -128,6 +152,7 @@ export interface ProviderInfo {
   displayName: string;
   aliases?: string[]; // Optional aliases for provider name (e.g., ["gemini"] for "google")
   supportedModels: string[];
+  defaultVisionModel?: string;
   requiresApiKey: boolean;
   supportsStreaming: boolean;
   supportsFunctionCalling: boolean;
@@ -145,8 +170,15 @@ export interface ProviderInfo {
  * Function call representation (provider-agnostic)
  */
 export interface FunctionCall {
+  id?: string;
   name: string;
   args?: Record<string, unknown>;
+  /**
+   * True when the provider's argument payload was truncated and the arguments here were
+   * recovered from an incomplete stream. They hold only the keys that arrived whole, so a
+   * dispatcher must not treat them as the call the model intended to make.
+   */
+  argumentsTruncated?: boolean;
   /**
    * Optional thought signature for providers that require it (e.g., Gemini).
    * Encoded as base64 when present.
@@ -199,9 +231,20 @@ export interface LLMProvider {
   /**
    * Validate an API key by making a test request
    * @param apiKey - The API key to validate
+   * @param ownerDiscordId - The guild (the user in DMs) or personal user the key is being saved for, for providers that gate owners.
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
-  validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
+  validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
+
+  /**
+   * Looks a text model up in the provider's own catalog before it is registered.
+   * @returns False only when the provider answered that it does not serve `codename`; null when
+   *          the lookup could not answer, which registration treats as unchecked.
+   */
+  checkTextModel?(apiKey: string, codename: string): Promise<boolean | null>;
+
+  /** {@link checkTextModel} for an image model, offered only where the same catalog serves image models. */
+  checkImageModel?(apiKey: string, codename: string): Promise<boolean | null>;
 
   /**
    * Create a localized provider-specific error description for user-facing embeds.
@@ -212,17 +255,13 @@ export interface LLMProvider {
   /**
    * Get available tools/functions based on Tomori's configuration
    * @param tomoriState - The current Tomori state with configuration
-   * @returns Array of tool configurations specific to this provider
    */
-  getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
+  getTools(tomoriState: TomoriState, streamingContext?: StreamingContext): Promise<Array<Record<string, unknown>>>;
 
   /**
    * Stream LLM response directly to a Discord channel
    * @param channel - The Discord text channel or thread to send messages to
-   * @param client - The Discord client instance
-   * @param tomoriState - The current Tomori state
    * @param config - Provider-specific configuration
-   * @param contextItems - An array of structured context items for the LLM
    * @param currentTurnModelParts - Accumulated model parts for the current turn
    * @param emojiStrings - Optional array of emoji strings for cleaning
    * @param functionInteractionHistory - Optional function calling history
@@ -234,7 +273,6 @@ export interface LLMProvider {
    * @param personaAvatarUrl - Optional avatar URL for current persona (used with webhook)
    * @param personaUsername - Optional username override for current persona (used with webhook)
    * @param prefixStrippingName - Optional name used for prefix stripping (may differ from personaUsername for user impersonation)
-   * @returns Promise<StreamResult> - The outcome of the streaming operation
    */
   streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
@@ -262,16 +300,13 @@ export interface LLMProvider {
   ): Promise<StreamResult>;
 
   /**
-   * Get the default model for this provider
    * @returns Promise<string> - The default model codename
    */
   getDefaultModel(): Promise<string>;
 
   /**
    * Convert provider-specific configuration from TomoriState
-   * @param tomoriState - The current Tomori state
    * @param apiKey - The decrypted API key
-   * @returns Provider-specific configuration object
    */
   createConfig(tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig>;
 }
@@ -281,9 +316,12 @@ export interface LLMProvider {
  */
 export abstract class BaseLLMProvider implements LLMProvider {
   abstract getInfo(): ProviderInfo;
-  abstract validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
+  abstract validateApiKey(apiKey: string, ownerDiscordId?: string): Promise<ApiKeyValidationResult>;
   abstract formatErrorDescription(error: ProviderError, locale: string): string | null;
-  abstract getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
+  abstract getTools(
+    tomoriState: TomoriState,
+    streamingContext?: StreamingContext,
+  ): Promise<Array<Record<string, unknown>>>;
   abstract streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

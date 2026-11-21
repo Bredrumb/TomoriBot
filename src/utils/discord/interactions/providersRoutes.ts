@@ -1,0 +1,1440 @@
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
+import { getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
+import {
+  ComponentType,
+  MessageFlags,
+  PermissionsBitField,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type InteractionEditReplyOptions,
+  type ModalSubmitInteraction,
+  type StringSelectMenuInteraction,
+} from "discord.js";
+import type { CustomEndpointCapability } from "@/types/db/schema";
+import type { PanelReceipt } from "@/types/discord/panel";
+import type {
+  EndpointProviderPanelEntry,
+  ProviderPanelCapabilitySection,
+  ProviderPanelModel,
+} from "@/types/discord/providerPanel";
+import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
+import {
+  beginPanelInteraction,
+  deliverGuardedPanel,
+  performPanelAction,
+  validateAndFallbackPanelPayload,
+} from "@/utils/discord/interactions/panelController";
+import { createNonce } from "@/utils/discord/panelRouteTokens";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import {
+  PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
+  PROVIDERS_ROUTE_NAMESPACE,
+  PROVIDERS_ROUTE_VERSION,
+  parseProvidersPanelRoute,
+  type ProvidersRouteNamespace,
+} from "@/utils/discord/providersPanelCatalog";
+import {
+  PROVIDERS_ADD_ENDPOINT_VALUE,
+  PROVIDERS_ADD_PROVIDER_VALUE,
+  buildAddProviderModal,
+  buildAddProviderModalFieldId,
+  buildAddEndpointModal,
+  buildAddEndpointModalFieldId,
+  buildProvidersPanelPayload,
+  buildProviderModelModal,
+  buildProviderModelModalFieldId,
+  buildEditProviderModal,
+  buildEditProviderModalFieldId,
+  buildEditEndpointModal,
+  buildEditEndpointModalFieldId,
+  offeredChatCompatFlags,
+  parseModelSelectionValue,
+  providersEntriesPerPage,
+  type EditEndpointModalContext,
+  type ProviderModelModalDefaults,
+  type ProvidersPanelPage,
+  UNLOAD_DURING_COMFYUI_BEHAVIOR,
+} from "@/utils/discord/ui/providersPanel";
+import {
+  findProviderOption,
+  providerOptionActionOption,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
+import { buildPanelContainer, replyPanelReceipt } from "@/utils/discord/ui/panel";
+import { getDefaultImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
+import { getDefaultSpeechEndpointSettings } from "@/utils/provider/customSpeechEndpointSettings";
+import { resolveCuratedImageSupports } from "@/utils/provider/providerImageCapabilities";
+import {
+  showRoutedRawModal,
+  takeRawModalCheckboxGroupValues,
+  takeRawModalFileUpload,
+  takeRawModalSelectValue,
+} from "@/utils/discord/ui/modals";
+import {
+  providerPanelOperations,
+  type AddServerProviderResult,
+  type AddCustomEndpointConnectionResult,
+  type LoadedProviderPanelScope,
+  type SaveProviderModelResult,
+  type EditProviderResult,
+  type EditEndpointResult,
+  type RemoveProviderEntryResult,
+} from "@/utils/provider/providerPanelOperations";
+import { resolveProviderPanelAction } from "@/constants/panelActions";
+import { recordPanelActionStat, type RecordPanelActionInput } from "@/utils/stats/panelActionMetrics";
+import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
+import { safeDownload } from "@/utils/security/safeDownload";
+import { localizer } from "@/utils/text/localizer";
+
+export interface ProvidersRouteDependencies {
+  resolveScope(
+    interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+    forceRefresh?: boolean,
+  ): Promise<LoadedProviderPanelScope | null>;
+  operations: Pick<
+    typeof providerPanelOperations,
+    | "addServerProvider"
+    | "addCustomEndpointConnection"
+    | "saveProviderModel"
+    | "editServerProvider"
+    | "editServerEndpoint"
+    | "removeServerProviderEntry"
+  >;
+  recordAction(input: RecordPanelActionInput): void;
+  createNonce(): string;
+  showAddProviderModal(interaction: StringSelectMenuInteraction, locale: string, nonce: string): Promise<void>;
+  takeProvider(interactionId: string, nonce: string): string | undefined;
+  showAddEndpointModal(interaction: StringSelectMenuInteraction, locale: string, nonce: string): Promise<void>;
+  takeApiStyle(interactionId: string, nonce: string): string | undefined;
+  showModelModal(
+    interaction: StringSelectMenuInteraction,
+    locale: string,
+    entryKind: "provider" | "endpoint",
+    entryKey: string,
+    capability: Parameters<typeof buildProviderModelModal>[3],
+    editingModelId: number | null,
+    nonce: string,
+    defaults?: ProviderModelModalDefaults,
+  ): Promise<void>;
+  takeModelFlags(interactionId: string, nonce: string): string[] | undefined;
+  takeImageSupports(interactionId: string, nonce: string): string[] | undefined;
+  takeImageRequestFormat(interactionId: string, nonce: string): string | undefined;
+  takeCompatFlags(interactionId: string, nonce: string): string[] | undefined;
+  takeVoiceMode(interactionId: string, nonce: string): string | undefined;
+  takeScriptMarkup(interactionId: string, nonce: string): string | undefined;
+  takeSupportsInstruct(interactionId: string, nonce: string): string[] | undefined;
+  takeWorkflow(interactionId: string, nonce: string): ReturnType<typeof takeRawModalFileUpload>;
+  loadWorkflow(url: string): Promise<Record<string, unknown> | null>;
+  showProviderEditModal(
+    interaction: ButtonInteraction,
+    locale: string,
+    provider: string,
+    rotationKeyCount: number,
+    nonce: string,
+  ): Promise<void>;
+  showEndpointEditModal(
+    interaction: ButtonInteraction,
+    locale: string,
+    context: EditEndpointModalContext,
+    nonce: string,
+  ): Promise<void>;
+  takeEndpointBehavior(interactionId: string, nonce: string): string[] | undefined;
+  takeDeleteRotation(interactionId: string, nonce: string): string | undefined;
+  takeDecisionAction(interactionId: string, nonce: string): string | undefined;
+}
+
+export interface ProvidersRouteConfiguration {
+  namespace: ProvidersRouteNamespace;
+  authorize(interaction: GlobalRoutableInteraction | ChatInputCommandInteraction): boolean;
+  includeBrave: boolean;
+  allowRotation: boolean;
+}
+
+const enabledProviderActions = new Set<"model" | "edit" | "remove">(["model", "edit", "remove"]);
+const enabledPersonalProviderActions = new Set<"model" | "edit" | "remove">(["model", "edit", "remove"]);
+
+function actionsForNamespace(namespace: ProvidersRouteNamespace | undefined) {
+  return namespace === PERSONAL_PROVIDERS_ROUTE_NAMESPACE ? enabledPersonalProviderActions : enabledProviderActions;
+}
+
+function isAuthorized(interaction: GlobalRoutableInteraction | ChatInputCommandInteraction): boolean {
+  return !interaction.guildId || (interaction.memberPermissions?.has("ManageGuild") ?? false);
+}
+
+function terminalPayload(locale: string, key: string): InteractionEditReplyOptions {
+  return validateAndFallbackPanelPayload(
+    {
+      components: [buildPanelContainer([{ type: ComponentType.TextDisplay, content: localizer(locale, key) }])],
+      flags: MessageFlags.IsComponentsV2,
+    },
+    locale,
+  );
+}
+
+async function replyProvidersUnavailable(interaction: GlobalRoutableInteraction, locale: string): Promise<void> {
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(terminalPayload(locale, "commands.providers.unavailable"));
+    return;
+  }
+  await replyPanelReceipt(interaction, {
+    tone: "warning",
+    heading: localizer(locale, "general.panel_notice.unavailable_heading"),
+    detail: localizer(locale, "commands.providers.unavailable"),
+  });
+}
+
+function providersNotSetupKey(interaction: {
+  guildId: string | null;
+}): "commands.providers.not_setup" | "commands.providers.not_setup_dm" {
+  return interaction.guildId ? "commands.providers.not_setup" : "commands.providers.not_setup_dm";
+}
+
+async function defaultResolveScope(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+  forceRefresh = false,
+): Promise<LoadedProviderPanelScope | null> {
+  return providerPanelOperations.loadServerProviderPanelScope(interaction.guildId ?? interaction.user.id, forceRefresh);
+}
+
+async function defaultResolvePersonalScope(
+  interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
+): Promise<LoadedProviderPanelScope | null> {
+  return providerPanelOperations.loadPersonalProviderPanelScope(
+    interaction.user.id,
+    interaction.guildId ?? interaction.user.id,
+  );
+}
+
+function changedReceipt(locale: string): PanelReceipt {
+  return {
+    tone: "info",
+    heading: localizer(locale, "commands.providers.changed_receipt"),
+    detail: localizer(locale, "commands.providers.changed_receipt_detail"),
+  };
+}
+
+function removeReceipt(locale: string, result: RemoveProviderEntryResult): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(locale, "commands.providers.removed_receipt"),
+      detail: localizer(locale, "commands.providers.removed_receipt_detail", { name: result.displayName }),
+    };
+  }
+  const detail =
+    result.status === "active"
+      ? "commands.providers.remove_active"
+      : result.status === "not-found"
+        ? "commands.providers.changed_receipt_detail"
+        : "commands.providers.write_failed";
+  return {
+    tone: result.status === "not-found" ? "info" : "error",
+    heading: localizer(locale, "commands.providers.remove_failed"),
+    detail: localizer(locale, detail),
+  };
+}
+
+function removalEntryId(route: { entryKind: "provider" | "endpoint" | "brave"; entryKey: string }): string {
+  return route.entryKind === "brave" ? "brave" : `${route.entryKind}:${route.entryKey}`;
+}
+
+/** Derived from the resolver rather than restated, so a registry change cannot leave this behind. */
+type ProviderPanelScopeKind = Parameters<typeof resolveProviderPanelAction>[0];
+
+function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: ProviderPanelScopeKind): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(
+        locale,
+        result.updated ? "commands.providers.provider_updated" : "commands.providers.provider_added",
+      ),
+      detail: localizer(locale, "commands.providers.provider_added_detail", {
+        provider: result.displayName,
+        model: result.modelName ?? localizer(locale, "commands.providers.not_applicable"),
+      }),
+    };
+  }
+  const detailKey: Record<Exclude<AddServerProviderResult["status"], "success" | "novelai-unavailable">, string> = {
+    "invalid-key": "commands.providers.invalid_key",
+    "unsupported-provider": "commands.providers.unsupported_provider",
+    "validation-failed": "commands.providers.validation_failed",
+    "no-balance": "commands.providers.validation_no_balance",
+    "host-restricted": "commands.providers.host_restricted",
+    "vertex-config-invalid": "commands.providers.vertex_config_invalid",
+    "missing-model": "commands.providers.missing_default_model",
+    "write-failed": "commands.providers.write_failed",
+  };
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.add_provider_failed"),
+    detail: localizer(
+      locale,
+      result.status === "novelai-unavailable" ? result.descriptionKey : detailKey[result.status],
+    ),
+    // The operation status is already the machine-readable cause, so the metric key can name it
+    // exactly instead of falling back to the route namespace.
+    reason: `provider_add_${result.status}`,
+    action: resolveProviderPanelAction(scopeKind, "provider.add"),
+  };
+}
+
+function endpointUnreachableDetail(locale: string, result: { reason: string; credentialsWithheld: boolean }): string {
+  if (result.credentialsWithheld) return localizer(locale, "commands.providers.endpoint_redirect_credentials_withheld");
+  return localizer(locale, "commands.providers.endpoint_unreachable", {
+    reason: escapeDiscordMarkdown(result.reason.replace(/\s+/g, " ").trim().slice(0, 300)),
+  });
+}
+
+function addEndpointReceipt(
+  locale: string,
+  result: AddCustomEndpointConnectionResult,
+  scopeKind: ProviderPanelScopeKind,
+): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(locale, "commands.providers.endpoint_added"),
+      detail: localizer(locale, "commands.providers.endpoint_added_detail", { label: result.label }),
+    };
+  }
+  if (result.status === "unreachable") {
+    return {
+      tone: "error",
+      heading: localizer(locale, "commands.providers.add_endpoint_failed"),
+      detail: endpointUnreachableDetail(locale, result),
+      reason: "endpoint_add_unreachable",
+      action: resolveProviderPanelAction(scopeKind, "endpoint.add"),
+    };
+  }
+  const keys: Record<Exclude<AddCustomEndpointConnectionResult["status"], "success" | "unreachable">, string> = {
+    "invalid-label": "commands.providers.endpoint_invalid_label",
+    "invalid-style": "commands.providers.endpoint_invalid_style",
+    "already-exists": "commands.providers.endpoint_already_exists",
+    "label-url-conflict": "commands.providers.endpoint_label_url_conflict",
+    "write-failed": "commands.providers.write_failed",
+  };
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.add_endpoint_failed"),
+    detail: localizer(locale, keys[result.status]),
+    reason: `endpoint_add_${result.status}`,
+    action: resolveProviderPanelAction(scopeKind, "endpoint.add"),
+  };
+}
+
+function modelReceipt(
+  locale: string,
+  result: SaveProviderModelResult,
+  scopeKind: ProviderPanelScopeKind,
+): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(
+        locale,
+        result.removed ? "commands.providers.decision_removed" : "commands.providers.model_added",
+      ),
+      detail: localizer(
+        locale,
+        result.removed ? "commands.providers.decision_removed_detail" : "commands.providers.model_added_detail",
+        {
+          model: result.codeName,
+        },
+      ),
+    };
+  }
+  if (result.status === "provider-denied") {
+    const copy = getProviderRequestFailureCopy(result.denied, locale);
+    return {
+      tone: "error",
+      heading: localizer(locale, copy.titleKey),
+      detail: copy.description,
+      reason: "model_save_provider_denied",
+      action: resolveProviderPanelAction(scopeKind, "model.save"),
+    };
+  }
+  const keys: Record<Exclude<SaveProviderModelResult["status"], "success" | "provider-denied">, string> = {
+    "invalid-model": "commands.providers.model_invalid",
+    "unsupported-capability": "commands.providers.model_unsupported",
+    "not-found": "commands.providers.model_not_found",
+    "already-available": "commands.providers.model_already_available",
+    "write-failed": "commands.providers.write_failed",
+  };
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.model_save_failed"),
+    detail: localizer(locale, keys[result.status]),
+    reason: `model_save_${result.status}`,
+    action: resolveProviderPanelAction(scopeKind, "model.save"),
+  };
+}
+
+function providerEditReceipt(
+  locale: string,
+  result: EditProviderResult,
+  scopeKind: ProviderPanelScopeKind,
+): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(locale, "commands.providers.provider_edit_saved"),
+      detail: localizer(locale, "commands.providers.provider_edit_saved_detail", {
+        changes: result.changed.join(", "),
+      }),
+    };
+  }
+  if (result.status === "unchanged") {
+    return {
+      tone: "info",
+      heading: localizer(locale, "commands.providers.provider_edit_unchanged"),
+      detail: localizer(locale, "commands.providers.provider_edit_unchanged_detail"),
+    };
+  }
+  const keys: Record<Exclude<EditProviderResult["status"], "success" | "unchanged" | "novelai-unavailable">, string> = {
+    "invalid-key": "commands.providers.invalid_key",
+    "invalid-combination": "commands.providers.provider_edit_invalid_combination",
+    "not-found": "commands.providers.model_not_found",
+    "validation-failed": "commands.providers.validation_failed",
+    "host-restricted": "commands.providers.host_restricted",
+    "vertex-config-invalid": "commands.providers.vertex_config_invalid",
+    "write-failed": "commands.providers.write_failed",
+  };
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.change_failed"),
+    detail: localizer(locale, result.status === "novelai-unavailable" ? result.descriptionKey : keys[result.status]),
+    reason: `provider_edit_${result.status}`,
+    action: resolveProviderPanelAction(scopeKind, "provider.edit"),
+  };
+}
+
+function endpointEditReceipt(
+  locale: string,
+  result: EditEndpointResult,
+  scopeKind: ProviderPanelScopeKind,
+): PanelReceipt {
+  if (result.status === "success") {
+    return {
+      tone: "success",
+      heading: localizer(locale, "commands.providers.endpoint_edit_saved"),
+      detail: localizer(locale, "commands.providers.endpoint_edit_saved_detail", { label: result.label }),
+    };
+  }
+  if (result.status === "unchanged") {
+    return {
+      tone: "info",
+      heading: localizer(locale, "commands.providers.endpoint_edit_unchanged"),
+      detail: localizer(locale, "commands.providers.endpoint_edit_unchanged_detail"),
+    };
+  }
+  if (result.status === "unreachable") {
+    return {
+      tone: "error",
+      heading: localizer(locale, "commands.providers.change_failed"),
+      detail: endpointUnreachableDetail(locale, result),
+      reason: "endpoint_edit_unreachable",
+      action: resolveProviderPanelAction(scopeKind, "endpoint.edit"),
+    };
+  }
+  const keys: Record<Exclude<EditEndpointResult["status"], "success" | "unchanged" | "unreachable">, string> = {
+    "invalid-label": "commands.providers.endpoint_invalid_label",
+    "not-found": "commands.providers.model_not_found",
+    "write-failed": "commands.providers.write_failed",
+    "handoff-unsupported": "commands.providers.endpoint_behavior_unsupported",
+  };
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.change_failed"),
+    detail: localizer(locale, keys[result.status]),
+    reason: `endpoint_edit_${result.status}`,
+    action: resolveProviderPanelAction(scopeKind, "endpoint.edit"),
+  };
+}
+
+/**
+ * Chooses the image capability defaults a model modal opens with, or omits them entirely.
+ *
+ * A custom endpoint stores its declaration on the endpoint row and can only inpaint through ComfyUI. A
+ * curated model stores its own columns and inherits its provider's defaults until it declares otherwise;
+ * a provider whose image path ignores these flags yields no section at all.
+ */
+function imageModalDefaults(
+  capability: CustomEndpointCapability,
+  entryKind: "provider" | "endpoint",
+  entryKey: string,
+  section: ProviderPanelCapabilitySection,
+  editing: ProviderPanelModel | undefined,
+): Pick<ProviderModelModalDefaults, "image"> {
+  if (capability !== "image") return {};
+
+  if (entryKind === "endpoint") {
+    return {
+      image: {
+        supports: editing?.imageSettings ?? getDefaultImageEndpointSupports(section.apiStyle ?? "openai-compatible"),
+        allowInpaint: section.apiStyle === "comfyui",
+        ...(section.apiStyle === "openai-compatible" ? { requestFormat: editing?.imageRequestFormat ?? "images" } : {}),
+      },
+    };
+  }
+
+  const supports = editing?.imageSettings ?? resolveCuratedImageSupports(entryKey);
+  return supports ? { image: { supports, allowInpaint: true } } : {};
+}
+
+function speechModalDefaults(
+  capability: CustomEndpointCapability,
+  section: ProviderPanelCapabilitySection,
+  editing: ProviderPanelModel | undefined,
+): Pick<ProviderModelModalDefaults, "speech"> {
+  if (capability !== "speech" || !section.apiStyle) return {};
+
+  // Only a `tts-clone` server implements the clone/VoiceDesign/Auto split; `isVoiceDesignEndpoint`
+  // requires that api style, so offering it for the ElevenLabs preset would store a dead value.
+  const apiStyle = section.apiStyle ?? "tts-clone";
+  return {
+    speech: {
+      settings: editing?.speechSettings ?? getDefaultSpeechEndpointSettings(apiStyle),
+      allowVoiceMode: apiStyle === "tts-clone",
+    },
+  };
+}
+
+function endpointEditContext(scope: LoadedProviderPanelScope, connectionId: number): EditEndpointModalContext | null {
+  const entry = scope.data.entries.find(
+    (candidate) => candidate.kind === "endpoint" && candidate.connectionIds.includes(connectionId),
+  );
+  if (!entry || entry.kind !== "endpoint") return null;
+  return {
+    connectionId: entry.connectionIds[0] ?? connectionId,
+    label: entry.displayName,
+    endpointUrl: entry.connectionDetails[0]?.endpointUrl ?? "",
+    apiStyles: [...new Set(entry.connectionDetails.map((detail) => detail.apiStyle))],
+    isPreset: entry.isPreset,
+    vramHandoffEnabled: endpointVramHandoffState(entry),
+  };
+}
+
+/** Undefined when the group has no text connection, matching when the edit modal offers the option. */
+function endpointVramHandoffState(entry: EndpointProviderPanelEntry): boolean | undefined {
+  const textDetails = entry.connectionDetails.filter((detail) => detail.capability === "text");
+  if (entry.isPreset || textDetails.length === 0) return undefined;
+  return textDetails.some((detail) => detail.vramHandoff !== null);
+}
+
+async function loadWorkflowJson(url: string): Promise<Record<string, unknown> | null> {
+  const result = await safeDownload(url, {
+    maxSizeMB: IMPORT_LIMITS.MAX_DATA_IMPORT_SIZE_MB,
+    timeoutMs: 10_000,
+  });
+  if (!result.success || !result.buffer) return null;
+  try {
+    const parsed: unknown = JSON.parse(result.buffer.toString("utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function unavailableScope(scope: LoadedProviderPanelScope): LoadedProviderPanelScope {
+  return { ...scope, data: { readStatus: "unavailable", entries: [], initialEntryId: null } };
+}
+
+function readUnavailableReceipt(locale: string): PanelReceipt {
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.providers.change_failed"),
+    detail: localizer(locale, "commands.providers.unavailable"),
+  };
+}
+
+function rangeForEntry(scope: LoadedProviderPanelScope, entryId: string | undefined): number {
+  const index = entryId ? scope.data.entries.findIndex((entry) => entry.id === entryId) : -1;
+  return index < 0 ? 0 : Math.floor(index / providersEntriesPerPage(scope.data.optionActions?.length ?? 0));
+}
+
+function canManageServer(interaction: GlobalRoutableInteraction | ChatInputCommandInteraction): boolean {
+  return interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild) ?? false;
+}
+
+function providerOptionScope(
+  scope: LoadedProviderPanelScope,
+  interaction: GlobalRoutableInteraction,
+): ProviderOptionScope {
+  const personal = scope.scopeKind === "personal";
+  return {
+    kind: personal ? "personal" : "server",
+    ownerId: scope.ownerId ?? scope.state?.server_id ?? 0,
+    discordId: personal ? interaction.user.id : (interaction.guildId ?? interaction.user.id),
+    state: scope.state ?? null,
+  };
+}
+
+const REGISTRATION_FAILURE_STATUSES: ReadonlySet<string> = new Set(["validation-failed", "no-balance", "unreachable"]);
+
+async function addRegistrationFailureCopy(
+  receipt: PanelReceipt,
+  interaction: GlobalRoutableInteraction,
+  locale: string,
+  scope: LoadedProviderPanelScope,
+  eligible: boolean,
+): Promise<PanelReceipt> {
+  if (!eligible) return receipt;
+  const keys = await withProviderOptionCopy([], {
+    surface: "registration_failed",
+    managedProvider: null,
+    userDiscId: interaction.user.id,
+    serverId: scope.state?.server_id,
+    credentialScope: scope.scopeKind === "personal" ? "personal" : "server",
+  });
+  if (!keys.length) return receipt;
+  const copy = keys.map((key) => localizer(locale, key));
+  return { ...receipt, metadata: [receipt.metadata, ...copy].filter(Boolean).join(" ") };
+}
+
+function repaint(
+  interaction: GlobalRoutableInteraction,
+  locale: string,
+  scope: LoadedProviderPanelScope,
+  page: ProvidersPanelPage,
+  rangeIndex?: number,
+  receipt?: PanelReceipt,
+): Promise<unknown> {
+  return deliverGuardedPanel(
+    interaction,
+    buildProvidersPanelPayload({
+      locale,
+      entries: scope.data.entries,
+      initialEntryId: scope.data.initialEntryId,
+      readStatus: scope.data.readStatus,
+      page,
+      rangeIndex,
+      receipt,
+      enabledActions: actionsForNamespace(scope.routeNamespace),
+      routeNamespace: scope.routeNamespace,
+      footerCommand: scope.footerCommand,
+      optionActions: scope.data.optionActions,
+      optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+      viewerId: interaction.user.id,
+      canManageServer: canManageServer(interaction),
+    }),
+    { locale, receipt },
+  );
+}
+
+export function createProvidersInteractionRoute(
+  overrides: Partial<ProvidersRouteDependencies> = {},
+  configuration: ProvidersRouteConfiguration = {
+    namespace: PROVIDERS_ROUTE_NAMESPACE,
+    authorize: isAuthorized,
+    includeBrave: true,
+    allowRotation: true,
+  },
+): GlobalInteractionRoute {
+  const dependencies: ProvidersRouteDependencies = {
+    resolveScope: defaultResolveScope,
+    operations: providerPanelOperations,
+    recordAction: (input) => {
+      void recordPanelActionStat(input);
+    },
+    createNonce,
+    showAddProviderModal: (interaction, locale, nonce) =>
+      showRoutedRawModal(
+        interaction,
+        buildAddProviderModal(locale, nonce, configuration.namespace, configuration.includeBrave),
+      ),
+    takeProvider: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildAddProviderModalFieldId("provider", nonce)),
+    showAddEndpointModal: (interaction, locale, nonce) =>
+      showRoutedRawModal(interaction, buildAddEndpointModal(locale, nonce, configuration.namespace)),
+    takeApiStyle: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildAddEndpointModalFieldId("api-style", nonce)),
+    showModelModal: (interaction, locale, entryKind, entryKey, capability, editingModelId, nonce, defaults) =>
+      showRoutedRawModal(
+        interaction,
+        buildProviderModelModal(
+          locale,
+          entryKind,
+          entryKey,
+          capability,
+          editingModelId,
+          nonce,
+          defaults,
+          configuration.namespace,
+        ),
+      ),
+    takeModelFlags: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("flags", nonce)),
+    takeImageSupports: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("image-supports", nonce)),
+    takeImageRequestFormat: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("image-request-format", nonce)),
+    takeCompatFlags: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("compat", nonce)),
+    takeEndpointBehavior: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildEditEndpointModalFieldId("behavior", nonce)),
+    takeVoiceMode: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("voice-mode", nonce)),
+    takeScriptMarkup: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("script-markup", nonce)),
+    takeSupportsInstruct: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("supports-instruct", nonce)),
+    takeWorkflow: (interactionId, nonce) =>
+      takeRawModalFileUpload(interactionId, buildProviderModelModalFieldId("workflow", nonce)),
+    loadWorkflow: loadWorkflowJson,
+    showProviderEditModal: (interaction, locale, provider, rotationKeyCount, nonce) =>
+      showRoutedRawModal(
+        interaction,
+        buildEditProviderModal(
+          locale,
+          provider,
+          rotationKeyCount,
+          nonce,
+          configuration.namespace,
+          configuration.allowRotation,
+        ),
+      ),
+    showEndpointEditModal: (interaction, locale, context, nonce) =>
+      showRoutedRawModal(interaction, buildEditEndpointModal(locale, context, nonce, configuration.namespace)),
+    takeDecisionAction: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("decision-action", nonce)),
+    takeDeleteRotation: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildEditProviderModalFieldId("delete-rotation", nonce)),
+    ...overrides,
+  };
+
+  return {
+    namespace: configuration.namespace,
+    version: PROVIDERS_ROUTE_VERSION,
+    async execute(_client, interaction, parsed): Promise<void> {
+      const route = parseProvidersPanelRoute(parsed, configuration.namespace);
+      if (!route) throw new Error(`Malformed providers panel route: ${interaction.customId}`);
+
+      if ((route.action === "select" || route.action === "model-select") && !interaction.isStringSelectMenu()) {
+        throw new Error("Providers select route requires a String Select interaction");
+      }
+      if (
+        (route.action === "add-submit" ||
+          route.action === "endpoint-submit" ||
+          route.action === "model-submit" ||
+          route.action === "edit-provider-submit" ||
+          route.action === "edit-endpoint-submit") &&
+        !interaction.isModalSubmit()
+      ) {
+        throw new Error(`Providers ${route.action} route requires a modal submission`);
+      }
+      if (
+        route.action !== "select" &&
+        route.action !== "model-select" &&
+        route.action !== "add-submit" &&
+        route.action !== "endpoint-submit" &&
+        route.action !== "model-submit" &&
+        route.action !== "edit-provider-submit" &&
+        route.action !== "edit-endpoint-submit" &&
+        !interaction.isButton()
+      ) {
+        throw new Error(`Providers ${route.action} route requires a button interaction`);
+      }
+
+      if (route.action === "select") {
+        const selectedValue = (interaction as StringSelectMenuInteraction).values[0];
+        if (selectedValue === PROVIDERS_ADD_PROVIDER_VALUE) {
+          if (!configuration.authorize(interaction)) {
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
+            });
+            return;
+          }
+          const nonce = dependencies.createNonce();
+          await dependencies.showAddProviderModal(interaction as StringSelectMenuInteraction, route.locale, nonce);
+          return;
+        }
+        if (selectedValue === PROVIDERS_ADD_ENDPOINT_VALUE) {
+          if (!configuration.authorize(interaction)) {
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
+            });
+            return;
+          }
+          const nonce = dependencies.createNonce();
+          await dependencies.showAddEndpointModal(interaction as StringSelectMenuInteraction, route.locale, nonce);
+          return;
+        }
+        const optionAction = providerOptionActionOption(selectedValue);
+        if (optionAction) {
+          if (!configuration.authorize(interaction)) {
+            await replyPanelReceipt(interaction, {
+              tone: "error",
+              heading: localizer(route.locale, "general.errors.permission_denied_title"),
+              detail: localizer(route.locale, "general.errors.permission_denied_description"),
+            });
+            return;
+          }
+          const handled = await optionAction.panel?.handleAction?.("select", {
+            locale: route.locale,
+            interaction,
+            loadSelection: async () => {
+              const loaded = await dependencies.resolveScope(interaction, false);
+              return loaded ? { scope: providerOptionScope(loaded, interaction) } : null;
+            },
+            canManageServer: canManageServer(interaction),
+          });
+          if (handled) return;
+          await replyProvidersUnavailable(interaction, route.locale);
+          return;
+        }
+      }
+
+      if (route.action === "edit-provider-open") {
+        if (!configuration.authorize(interaction)) {
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
+          });
+          return;
+        }
+        const option = findProviderOption(route.provider);
+        if (option) {
+          const entryId = `provider:${option.value}`;
+          const handled = await option.panel?.handleAction?.("edit", {
+            locale: route.locale,
+            interaction,
+            entryId,
+            loadSelection: async () => {
+              const loaded = await dependencies.resolveScope(interaction, false);
+              const entry = loaded?.data.entries.find((candidate) => candidate.id === entryId);
+              return loaded && entry ? { scope: providerOptionScope(loaded, interaction), entry } : null;
+            },
+            canManageServer: canManageServer(interaction),
+          });
+          if (handled) return;
+          await replyProvidersUnavailable(interaction, route.locale);
+          return;
+        }
+        const nonce = dependencies.createNonce();
+        await dependencies.showProviderEditModal(
+          interaction as ButtonInteraction,
+          route.locale,
+          route.provider,
+          route.rotationKeyCount,
+          nonce,
+        );
+        return;
+      }
+
+      if (route.action === "edit-endpoint-open") {
+        if (!configuration.authorize(interaction)) {
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
+          });
+          return;
+        }
+        const scope = await dependencies.resolveScope(interaction, false);
+        const context = scope ? endpointEditContext(scope, route.connectionId) : null;
+        if (!scope || scope.data.readStatus !== "fresh" || !context) {
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+            detail: localizer(route.locale, "commands.providers.unavailable"),
+          });
+          return;
+        }
+        const nonce = dependencies.createNonce();
+        await dependencies.showEndpointEditModal(interaction as ButtonInteraction, route.locale, context, nonce);
+        return;
+      }
+
+      if (route.action === "model-select") {
+        if (!configuration.authorize(interaction)) {
+          await replyPanelReceipt(interaction, {
+            tone: "error",
+            heading: localizer(route.locale, "general.errors.permission_denied_title"),
+            detail: localizer(route.locale, "general.errors.permission_denied_description"),
+          });
+          return;
+        }
+        const selection = parseModelSelectionValue((interaction as StringSelectMenuInteraction).values[0]);
+        if (!selection) {
+          throw new Error("Malformed provider model selection");
+        }
+        // The modal is this interaction's acknowledgement, so the scope read must be the cached one
+        // Edit Endpoint already relies on. The selector is disabled unless the panel is fresh, so a
+        // stale read here means the panel outlived its data.
+        const modelScope = await dependencies.resolveScope(interaction, false);
+        const entry = modelScope?.data.entries.find(
+          (candidate) => candidate.id === `${route.entryKind}:${route.entryKey}`,
+        );
+        // A panel opened before a capability stopped being exposed can still carry its option, and
+        // the write would fail with `unsupported-capability` or `not-found` after the modal closed.
+        const section =
+          entry && entry.kind !== "brave"
+            ? entry.capabilities.find(
+                (candidate) =>
+                  candidate.capability === selection.capability && candidate.availability !== "unavailable",
+              )
+            : undefined;
+        if (!modelScope || modelScope.data.readStatus !== "fresh" || !section) {
+          await replyPanelReceipt(interaction, {
+            tone: "warning",
+            heading: localizer(route.locale, "general.panel_notice.unavailable_heading"),
+            detail: localizer(route.locale, "commands.providers.unavailable"),
+          });
+          return;
+        }
+        const editing = selection.editingModelId
+          ? section.models.find(
+              (candidate) => candidate.id === selection.editingModelId && candidate.isCustomRegistration,
+            )
+          : undefined;
+        const nonce = dependencies.createNonce();
+        await dependencies.showModelModal(
+          interaction as StringSelectMenuInteraction,
+          route.locale,
+          route.entryKind,
+          route.entryKey,
+          selection.capability,
+          selection.editingModelId,
+          nonce,
+          {
+            ...(route.entryKind === "endpoint" && (selection.capability === "image" || selection.capability === "video")
+              ? { apiStyle: section.apiStyle }
+              : {}),
+            codeName: editing?.codeName,
+            text: editing?.textSettings,
+            decision: editing?.decisionSettings,
+            ...imageModalDefaults(selection.capability, route.entryKind, route.entryKey, section, editing),
+            ...speechModalDefaults(selection.capability, section, editing),
+          },
+        );
+        return;
+      }
+
+      const selectedProvider =
+        route.action === "add-submit" ? dependencies.takeProvider(interaction.id, route.nonce) : undefined;
+      const selectedApiStyle =
+        route.action === "endpoint-submit" ? dependencies.takeApiStyle(interaction.id, route.nonce) : undefined;
+      const removeDecisionModel =
+        route.action === "model-submit" &&
+        route.capability === "decision" &&
+        Boolean(route.editingModelId) &&
+        dependencies.takeDecisionAction(interaction.id, route.nonce) === "delete";
+      const selectedModelFlags =
+        route.action === "model-submit" ? (dependencies.takeModelFlags(interaction.id, route.nonce) ?? []) : [];
+      const selectedImageSupports =
+        route.action === "model-submit" ? dependencies.takeImageSupports(interaction.id, route.nonce) : undefined;
+      const selectedImageRequestFormat =
+        route.action === "model-submit" ? dependencies.takeImageRequestFormat(interaction.id, route.nonce) : undefined;
+      const selectedCompatFlags =
+        route.action === "model-submit" ? dependencies.takeCompatFlags(interaction.id, route.nonce) : undefined;
+      const selectedVoiceMode =
+        route.action === "model-submit" ? dependencies.takeVoiceMode(interaction.id, route.nonce) : undefined;
+      const selectedScriptMarkup =
+        route.action === "model-submit" ? dependencies.takeScriptMarkup(interaction.id, route.nonce) : undefined;
+      const selectedInstructValues =
+        route.action === "model-submit" ? dependencies.takeSupportsInstruct(interaction.id, route.nonce) : undefined;
+      const workflowAttachment =
+        route.action === "model-submit" ? dependencies.takeWorkflow(interaction.id, route.nonce) : undefined;
+      const selectedEndpointBehavior =
+        route.action === "edit-endpoint-submit"
+          ? (dependencies.takeEndpointBehavior(interaction.id, route.nonce) ?? [])
+          : [];
+      const deleteRotation =
+        route.action === "edit-provider-submit"
+          ? dependencies.takeDeleteRotation(interaction.id, route.nonce) === "delete"
+          : false;
+
+      const scope = await beginPanelInteraction(interaction, {
+        authorize: () => configuration.authorize(interaction),
+        onDenied: () =>
+          interaction.editReply(terminalPayload(route.locale, "general.errors.permission_denied_description")),
+        load: () =>
+          dependencies.resolveScope(
+            interaction,
+            route.action === "retry" ||
+              route.action === "model-submit" ||
+              route.action === "edit-provider-submit" ||
+              route.action === "edit-endpoint-submit" ||
+              route.action === "remove-confirm",
+          ),
+        onMissing: () => interaction.editReply(terminalPayload(route.locale, providersNotSetupKey(interaction))),
+      });
+      if (!scope) return;
+
+      if (
+        (route.action === "add-submit" ||
+          route.action === "endpoint-submit" ||
+          route.action === "model-submit" ||
+          route.action === "edit-provider-submit" ||
+          route.action === "edit-endpoint-submit" ||
+          route.action === "remove-confirm") &&
+        scope.data.readStatus !== "fresh"
+      ) {
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          route.action === "model-submit"
+            ? { kind: "entry", entryId: `${route.entryKind}:${route.entryKey}` }
+            : { kind: "entry" },
+          0,
+          readUnavailableReceipt(route.locale),
+        );
+        return;
+      }
+
+      if (route.action === "add-submit") {
+        const modal = interaction as ModalSubmitInteraction;
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.addServerProvider({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              actorDiscId: interaction.user.id,
+              ...scope,
+              provider: selectedProvider ?? "",
+              apiKey: modal.fields.getTextInputValue(buildAddProviderModalFieldId("api-key", route.nonce)),
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "provider.add"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        const keyRejected = REGISTRATION_FAILURE_STATUSES.has(action.result.status);
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
+          action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
+          await addRegistrationFailureCopy(
+            addReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            keyRejected && selectedProvider !== "brave",
+          ),
+        );
+        return;
+      }
+
+      if (route.action === "remove-prompt" || route.action === "remove-cancel" || route.action === "remove-confirm") {
+        const entryId = removalEntryId(route);
+        const entry = scope.data.entries.find((candidate) => candidate.id === entryId);
+        if (!entry) {
+          await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+          return;
+        }
+        if (route.action === "remove-prompt") {
+          await repaint(interaction, route.locale, scope, { kind: "remove", entryId }, rangeForEntry(scope, entryId));
+          return;
+        }
+        if (route.action === "remove-cancel") {
+          await repaint(interaction, route.locale, scope, { kind: "entry", entryId }, rangeForEntry(scope, entryId));
+          return;
+        }
+        if (scope.data.readStatus !== "fresh") {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            { kind: "entry", entryId },
+            rangeForEntry(scope, entryId),
+            readUnavailableReceipt(route.locale),
+          );
+          return;
+        }
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.removeServerProviderEntry({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              ...scope,
+              entry,
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "entry.remove"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        const nextEntryId = nextScope.data.initialEntryId ?? nextScope.data.entries[0]?.id;
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          { kind: "entry", entryId: nextEntryId },
+          nextEntryId ? rangeForEntry(nextScope, nextEntryId) : 0,
+          removeReceipt(route.locale, action.result),
+        );
+        return;
+      }
+      if (route.action === "endpoint-submit") {
+        const modal = interaction as ModalSubmitInteraction;
+        const field = (name: "label" | "url" | "auth-token") =>
+          modal.fields.getTextInputValue(buildAddEndpointModalFieldId(name, route.nonce));
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.addCustomEndpointConnection({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              ...scope,
+              label: field("label"),
+              endpointUrl: field("url"),
+              apiStyle: selectedApiStyle as never,
+              authToken: field("auth-token"),
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "endpoint.add"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
+          action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
+          await addRegistrationFailureCopy(
+            addEndpointReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+          ),
+        );
+        return;
+      }
+      if (route.action === "edit-provider-submit") {
+        const modal = interaction as ModalSubmitInteraction;
+        const entryId = route.provider === "brave" ? "brave" : `provider:${route.provider}`;
+        if (!scope.data.entries.some((entry) => entry.id === entryId)) {
+          await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+          return;
+        }
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.editServerProvider({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              actorDiscId: interaction.user.id,
+              ...scope,
+              provider: route.provider,
+              apiKey: modal.fields.getTextInputValue(buildEditProviderModalFieldId("api-key", route.nonce)),
+              rotationKey:
+                route.provider === "brave" || !configuration.allowRotation
+                  ? ""
+                  : modal.fields.getTextInputValue(buildEditProviderModalFieldId("rotation-key", route.nonce)),
+              deleteRotationKeys: deleteRotation,
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "provider.edit"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          { kind: "entry", entryId },
+          rangeForEntry(nextScope, entryId),
+          await addRegistrationFailureCopy(
+            providerEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status) && route.provider !== "brave",
+          ),
+        );
+        return;
+      }
+      if (route.action === "edit-endpoint-submit") {
+        const modal = interaction as ModalSubmitInteraction;
+        const entryId = `endpoint:${route.connectionId}`;
+        const entry = scope.data.entries.find((candidate) => candidate.id === entryId);
+        if (!entry || entry.kind !== "endpoint") {
+          await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+          return;
+        }
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.editServerEndpoint({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              ...scope,
+              entryId,
+              label: entry.isPreset
+                ? entry.displayName
+                : modal.fields.getTextInputValue(buildEditEndpointModalFieldId("label", route.nonce)),
+              endpointUrl: entry.isPreset
+                ? ""
+                : modal.fields.getTextInputValue(buildEditEndpointModalFieldId("url", route.nonce)),
+              authToken: modal.fields.getTextInputValue(buildEditEndpointModalFieldId("auth-token", route.nonce)),
+              // Re-derived from the entry rather than the submission: a group that gained or lost its
+              // text connection since the modal opened must not have its stored value rewritten.
+              unloadDuringComfyUi:
+                endpointVramHandoffState(entry) === undefined
+                  ? undefined
+                  : selectedEndpointBehavior.includes(UNLOAD_DURING_COMFYUI_BEHAVIOR),
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "endpoint.edit"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          { kind: "entry", entryId },
+          rangeForEntry(nextScope, entryId),
+          await addRegistrationFailureCopy(
+            endpointEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+          ),
+        );
+        return;
+      }
+      if (route.action === "model-submit") {
+        const modal = interaction as ModalSubmitInteraction;
+        const entryId = `${route.entryKind}:${route.entryKey}`;
+        const entry = scope.data.entries.find((candidate) => candidate.id === entryId);
+        const target = route.editingModelId
+          ? entry && entry.kind !== "brave"
+            ? entry.capabilities
+                .find((section) => section.capability === route.capability)
+                ?.models.find((model) => model.id === route.editingModelId && model.isCustomRegistration)
+            : undefined
+          : undefined;
+        if (!entry || (route.editingModelId && !target)) {
+          await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+          return;
+        }
+        // Re-derived rather than inferred from the submission: a panel can outlive the answer, and a
+        // flag this provider never offered must keep its stored value instead of being written false.
+        const offeredCompat = offeredChatCompatFlags(route.entryKind, route.entryKey);
+        const resolveCompatFlag = (flag: string, stored: boolean | undefined): boolean =>
+          offeredCompat.includes(flag as (typeof offeredCompat)[number])
+            ? (selectedCompatFlags?.includes(flag) ?? false)
+            : (stored ?? false);
+        const workflow = workflowAttachment ? await dependencies.loadWorkflow(workflowAttachment.url) : undefined;
+        if (workflowAttachment && !workflow) {
+          await repaint(interaction, route.locale, scope, { kind: "entry", entryId }, rangeForEntry(scope, entryId), {
+            tone: "error",
+            heading: localizer(route.locale, "commands.providers.model_save_failed"),
+            detail: localizer(route.locale, "commands.providers.model_workflow_invalid"),
+          });
+          return;
+        }
+        const rawNumCtx =
+          route.entryKind === "endpoint" && (route.capability === "text" || route.capability === "decision")
+            ? modal.fields.getTextInputValue(buildProviderModelModalFieldId("num-ctx", route.nonce)).trim()
+            : "";
+        const numCtx = rawNumCtx ? Number(rawNumCtx) : null;
+        const action = await performPanelAction(
+          () =>
+            dependencies.operations.saveProviderModel({
+              serverDiscId: interaction.guildId ?? interaction.user.id,
+              ...scope,
+              entryId,
+              capability: route.capability,
+              codeName: modal.fields.getTextInputValue(buildProviderModelModalFieldId("code-name", route.nonce)).trim(),
+              editingModelId: route.editingModelId ?? undefined,
+              removeDecisionModel,
+              numCtx: rawNumCtx ? (Number.isSafeInteger(numCtx) ? numCtx : Number.NaN) : null,
+              hasTools: selectedModelFlags.includes("tools"),
+              seesImages: selectedModelFlags.includes("images"),
+              supportsStructOutput: selectedModelFlags.includes("structured"),
+              strictRoleAlternation: resolveCompatFlag("strict-roles", target?.textSettings?.strictRoleAlternation),
+              supportsPrefixCompletion: resolveCompatFlag("prefix", target?.textSettings?.supportsPrefixCompletion),
+              supportsAssistantPrefill: resolveCompatFlag("prefill", target?.textSettings?.supportsAssistantPrefill),
+              verbatimToolCalling: resolveCompatFlag("verbatim-tools", target?.textSettings?.verbatimToolCalling),
+              imageSupportValues: route.capability === "image" ? selectedImageSupports : undefined,
+              imageRequestFormat: route.capability === "image" ? selectedImageRequestFormat : undefined,
+              speechVoiceMode: route.capability === "speech" ? selectedVoiceMode : undefined,
+              speechScriptMarkup: route.capability === "speech" ? selectedScriptMarkup : undefined,
+              speechInstructValues: route.capability === "speech" ? selectedInstructValues : undefined,
+              workflow: workflow ?? undefined,
+            }),
+          () => dependencies.resolveScope(interaction, true),
+        );
+        const nextScope = action.state ?? unavailableScope(scope);
+        if (action.result.status === "success" && scope.state) {
+          dependencies.recordAction({
+            action: resolveProviderPanelAction(scope.scopeKind, "model.save"),
+            serverId: scope.state.server_id,
+            userDiscId: interaction.user?.id ?? "",
+          });
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          nextScope,
+          { kind: "entry", entryId },
+          rangeForEntry(nextScope, entryId),
+          modelReceipt(route.locale, action.result, scope.scopeKind),
+        );
+        return;
+      }
+
+      if (route.action === "retry") {
+        await repaint(interaction, route.locale, scope, { kind: "entry" });
+        return;
+      }
+      if (route.action === "range-open" || route.action === "range-page") {
+        const rangeIndex = route.action === "range-page" ? route.rangeIndex : 0;
+        const entry = scope.data.entries[rangeIndex * providersEntriesPerPage(scope.data.optionActions?.length ?? 0)];
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          {
+            kind: "entry",
+            entryId: entry?.id,
+          },
+          rangeIndex,
+        );
+        return;
+      }
+      if (route.action === "range-cancel") {
+        await repaint(interaction, route.locale, scope, { kind: "entry" });
+        return;
+      }
+      if (route.action === "range") {
+        const entry =
+          scope.data.entries[route.rangeIndex * providersEntriesPerPage(scope.data.optionActions?.length ?? 0)];
+        await repaint(interaction, route.locale, scope, { kind: "entry", entryId: entry?.id }, route.rangeIndex);
+        return;
+      }
+      if (route.action === "model-open" || route.action === "model-close" || route.action === "model-range") {
+        const entryId = `${route.entryKind}:${route.entryKey}`;
+        const entry = scope.data.entries.find((candidate) => candidate.id === entryId);
+        if (!entry) {
+          await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+          return;
+        }
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          {
+            kind: "entry",
+            entryId,
+            modelRangeIndex: route.action === "model-range" ? route.rangeIndex : 0,
+          },
+          rangeForEntry(scope, entryId),
+        );
+        return;
+      }
+
+      const selectedValue = (interaction as StringSelectMenuInteraction).values[0];
+      const entry = scope.data.entries.find((candidate) => candidate.id === selectedValue);
+      if (!entry) {
+        await repaint(interaction, route.locale, scope, { kind: "entry" }, 0, changedReceipt(route.locale));
+        return;
+      }
+      await repaint(
+        interaction,
+        route.locale,
+        scope,
+        { kind: "entry", entryId: entry.id },
+        rangeForEntry(scope, entry.id),
+      );
+    },
+  };
+}
+
+export const providersInteractionRoute = createProvidersInteractionRoute();
+export const personalProvidersInteractionRoute = createProvidersInteractionRoute(
+  { resolveScope: defaultResolvePersonalScope },
+  {
+    namespace: PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
+    authorize: () => true,
+    includeBrave: false,
+    allowRotation: false,
+  },
+);
+
+export interface InitialProvidersPanelOptions {
+  resolveScope?: ProvidersRouteDependencies["resolveScope"];
+  receipt?: PanelReceipt;
+}
+
+export async function buildInitialProvidersPanel(
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
+  locale: string,
+  { resolveScope = defaultResolveScope, receipt }: InitialProvidersPanelOptions = {},
+): Promise<InteractionEditReplyOptions> {
+  if (!isAuthorized(interaction)) {
+    return terminalPayload(locale, "general.errors.permission_denied_description");
+  }
+  const scope = await resolveScope(interaction, false);
+  if (!scope) return terminalPayload(locale, providersNotSetupKey(interaction));
+  return buildProvidersPanelPayload({
+    locale,
+    entries: scope.data.entries,
+    initialEntryId: scope.data.initialEntryId,
+    readStatus: scope.data.readStatus,
+    page: { kind: "entry" },
+    receipt,
+    enabledActions: actionsForNamespace(scope.routeNamespace),
+    routeNamespace: scope.routeNamespace,
+    footerCommand: scope.footerCommand,
+    optionActions: scope.data.optionActions,
+    optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+    viewerId: interaction.user.id,
+    canManageServer: canManageServer(interaction),
+  });
+}
+
+export async function buildInitialPersonalProvidersPanel(
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
+  locale: string,
+  { resolveScope = defaultResolvePersonalScope, receipt }: InitialProvidersPanelOptions = {},
+): Promise<InteractionEditReplyOptions> {
+  const scope = await resolveScope(interaction, false);
+  if (!scope) return terminalPayload(locale, providersNotSetupKey(interaction));
+  return buildProvidersPanelPayload({
+    locale,
+    entries: scope.data.entries,
+    initialEntryId: scope.data.initialEntryId,
+    readStatus: scope.data.readStatus,
+    page: { kind: "entry" },
+    receipt,
+    enabledActions: enabledPersonalProviderActions,
+    routeNamespace: PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
+    footerCommand: scope.footerCommand,
+    optionActions: scope.data.optionActions,
+    optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+    viewerId: interaction.user.id,
+    canManageServer: canManageServer(interaction),
+  });
+}

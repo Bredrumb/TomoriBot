@@ -1,0 +1,192 @@
+---
+title: "Cloudflare Tunnel"
+sidebar:
+  label: "Cloudflare Tunnel"
+  order: 3
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Cấp cho engine cục bộ của bạn một URL HTTPS công khai để lưu trong TomoriBot. Chạy engine cùng `cloudflared` trên máy tính của bạn; bot được lưu trữ riêng sẽ kết nối trực tiếp thông qua tunnel.
+
+Cloudflare Tunnel [có sẵn trên gói Miễn phí](https://developers.cloudflare.com/tunnel/). Bạn cần một tên miền đang hoạt động trên Cloudflare; việc đăng ký tên miền và dịch vụ thượng nguồn của engine có thể phát sinh chi phí riêng.
+
+## 1. Cài đặt cloudflared
+
+Khởi động engine theo hướng dẫn thiết lập của nó và giữ nó liên kết với `127.0.0.1`. Cài đặt `cloudflared` trên chính máy tính đó:
+
+<Tabs syncKey="operating-system">
+<TabItem label="Windows">
+
+```powershell
+winget show --id Cloudflare.cloudflared --exact
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+Trên Debian/Ubuntu, hãy cấu hình [kho APT](https://pkg.cloudflare.com/index.html) đã ký của Cloudflare:
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg |
+  sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+printf '%s\n' 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' |
+  sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+sudo apt-get update && sudo apt-get install cloudflared
+cloudflared --version
+```
+
+Với các bản phân phối khác, hãy dùng gói hoặc kiến trúc tương ứng từ trang tải xuống chính thức.
+
+</TabItem>
+<TabItem label="Mac">
+
+Khi đã cài [Homebrew](https://brew.sh/):
+
+```bash
+brew install cloudflared
+cloudflared --version
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Tạo tunnel
+
+Chọn một hostname dưới tên miền Cloudflare của bạn, chẳng hạn `engine.example.com`. Hãy thay thế nó bằng hostname của chính bạn xuyên suốt hướng dẫn này.
+
+```sh
+cloudflared tunnel login
+cloudflared tunnel create home-engine
+```
+
+Lệnh đầu tiên mở trình duyệt để ủy quyền tên miền của bạn. Lệnh thứ hai in ra UUID của tunnel và tạo tệp JSON chứng chỉ của nó. Hãy giữ bí mật tệp đó cùng chứng chỉ tài khoản.
+
+## 3. Cấu hình tunnel
+{/* anchor: configure-the-tunnel */}
+
+Tạo tệp `config.yml` trong thư mục `.cloudflared` của bạn:
+
+| Hệ điều hành | Thư mục | Ví dụ tệp chứng chỉ |
+|---|---|---|
+| Windows | `%USERPROFILE%\.cloudflared` | `C:\Users\LOCAL_ACCOUNT\.cloudflared\TUNNEL_UUID.json` |
+| Linux | `~/.cloudflared` | `/home/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+| macOS | `~/.cloudflared` | `/Users/LOCAL_ACCOUNT/.cloudflared/TUNNEL_UUID.json` |
+
+Dán ví dụ này cho CLIProxyAPI. Thay thế UUID, đường dẫn JSON tuyệt đối và hostname. Giữ dấu nháy đơn bao quanh đường dẫn chứng chỉ để dấu gạch chéo ngược của Windows được giữ nguyên nghĩa đen.
+
+```yaml title="config.yml"
+tunnel: TUNNEL_UUID
+credentials-file: 'ABSOLUTE_PATH_TO_TUNNEL_JSON'
+ingress:
+  - hostname: engine.example.com
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+  - service: http_status:404
+```
+
+Đối với engine khác, chỉ thay `path` và `service` theo tab tương ứng. Quy tắc đường dẫn chỉ mở các route API của TomoriBot; các đường dẫn không khớp sẽ trả về 404.
+
+<Tabs>
+<TabItem label="Engine văn bản">
+
+```yaml
+    path: ^/v1/(models|chat/completions)$
+    service: http://127.0.0.1:8317
+```
+
+Sử dụng đúng cổng thực tế của bạn: CLIProxyAPI mặc định là 8317, ChatMock là 8000 và KoboldCPP là 5001. Cấu hình này cũng hỗ trợ các engine văn bản tương thích OpenAI khác. Nó loại trừ các API quản lý và thao tác gỡ mô hình.
+
+</TabItem>
+<TabItem label="ComfyUI">
+
+```yaml
+    path: ^/(system_stats|view|queue|history/[A-Za-z0-9_-]+|prompt|upload/image|interrupt|free|api/jobs/[A-Za-z0-9_-]+/cancel)$
+    service: http://127.0.0.1:8188
+```
+
+TomoriBot thăm dò lịch sử tác vụ nên không cần route WebSocket hay giao diện trình duyệt.
+
+</TabItem>
+<TabItem label="Máy chủ TTS">
+
+```yaml
+    path: ^/(health|synthesize)$
+    service: http://127.0.0.1:8015
+```
+
+Thay 8015 bằng [cổng wrapper TTS](/self-hosting/local-endpoints/text-to-speech/#network-access) của bạn. Cấu hình này phục vụ nhân bản giọng nói và Voice Design, thay vì các API giọng nói hay phiên âm của OpenAI.
+
+</TabItem>
+</Tabs>
+
+Để mở nhiều engine cùng lúc, hãy thêm một quy tắc hostname cho mỗi engine trước quy tắc 404 cuối cùng. Cấp cho mỗi engine hostname và cổng loopback riêng. Một tunnel có thể phục vụ tất cả chúng.
+
+## 4. Khởi động tunnel
+
+Mở terminal trong thư mục chứa `config.yml` và kiểm tra tính hợp lệ của tệp:
+
+```sh
+cloudflared tunnel --config ./config.yml ingress validate
+```
+
+Sau đó xuất bản DNS và chạy tunnel:
+
+```sh
+cloudflared tunnel route dns home-engine engine.example.com
+cloudflared tunnel --config ./config.yml run home-engine
+```
+
+Nếu có nhiều hostname, hãy chạy `route dns` một lần cho mỗi hostname. Giữ engine và trình kết nối luôn chạy; bạn không cần mở port trên router hay thêm ngoại lệ tường lửa cho kết nối đến. Sau khi kiểm thử xong, hãy làm theo [hướng dẫn chạy như dịch vụ](https://developers.cloudflare.com/tunnel/features/locally-managed-tunnels/run-as-a-service/) của Cloudflare để tự động khởi động, kèm đường dẫn cấu hình và chứng chỉ tường minh cho tài khoản dịch vụ.
+
+## 5. Kết nối TomoriBot
+{/* anchor: validate-each-authentication-check */}
+
+Mở `/providers` để chia sẻ kết nối trong máy chủ đó, hoặc `/personal providers` để dùng kết nối của riêng bạn:
+
+| Engine | Độ tương thích API | URL endpoint |
+|---|---|---|
+| CLIProxyAPI, ChatMock, KoboldCPP, các engine văn bản khác | `Tương thích OpenAI` | `https://engine.example.com/v1` |
+| ComfyUI | `ComfyUI` | `https://engine.example.com` |
+| Các wrapper TTS cục bộ | `tts-clone` | `https://engine.example.com` |
+
+Dùng client key của engine làm token xác thực nếu engine yêu cầu khóa; ngược lại hãy để trống trường đó. CLIProxyAPI dùng khóa nằm dưới `access.api-keys`. API văn bản của KoboldCPP dùng mật khẩu đã cấu hình của nó. Một token tùy ý chỉ nhập trong TomoriBot sẽ không bật tính năng xác thực trên engine.
+
+Thêm một model dưới kết nối đã lưu, chọn nó cho tính năng tương ứng và thử một yêu cầu nhỏ. Với ComfyUI, hãy kiểm tra thêm việc tải ảnh tham chiếu, tải kết quả và hủy tác vụ. Với TTS, hãy xác nhận âm thanh phát được. Luôn tắt các tính năng quản lý trên engine.
+
+Nếu engine có bật xác thực, hãy xác nhận các yêu cầu tới route được bảo vệ sẽ từ chối khi thiếu hoặc sai khóa. Nếu engine không có xác thực, hãy đọc phần rủi ro còn lại ở mục Rủi ro đã biết bên dưới. [Access và Caddy](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) là lớp bảo vệ bổ sung tùy chọn.
+
+## Khắc phục sự cố
+
+| Hiện tượng | Mục cần kiểm tra |
+|---|---|
+| 502 | Engine có đang chạy không, đúng cổng loopback chưa, trình kết nối có nằm trên cùng PC không |
+| 1033 hoặc tunnel mất kết nối | Tiến trình trình kết nối, cổng đi 7844, kết nối mạng và chế độ ngủ của máy tính |
+| 401 | Client key hoặc mật khẩu của engine khớp với token xác thực trong TomoriBot chưa |
+| 403 hoặc trang đăng nhập HTML | Một ứng dụng Access đang tồn tại có thể chặn các lời gọi API trực tiếp; xem [thiết lập Access và Caddy tùy chọn](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/) nếu bạn đang dùng |
+| 404 | Đúng cấu hình engine và URL chưa; dùng chính xác một `/v1` cho văn bản |
+| Ngắt luồng hoặc 524 | Tình trạng engine/thượng nguồn, chế độ ngủ của máy tính và [giới hạn kết nối Cloudflare](https://developers.cloudflare.com/fundamentals/reference/connection-limits/) |
+| Tải lên tệp lớn thất bại | [Giới hạn tải lên của Cloudflare](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/) cùng giới hạn của bot và engine; mã hóa base64 làm tăng kích thước dữ liệu |
+
+Hãy trả về tệp media đã tạo dưới dạng byte thông qua API. Bot được lưu trữ riêng không thể đọc đường dẫn tệp cục bộ hay URL tải xuống loopback trên máy của bạn. Endpoint production bắt buộc dùng HTTPS công khai và bản ghi DNS phân giải ra địa chỉ công khai; luôn giữ bật xác minh TLS và kiểm tra SSRF.
+
+## Rủi ro đã biết
+{/* anchor: known-risks */}
+
+TomoriBot đã giảm thiểu sẵn các rủi ro sau khi bạn dùng bảng nhà cung cấp của bot:
+
+| Rủi ro | Biện pháp giảm thiểu sẵn có |
+|---|---|
+| Thành viên thông thường đọc được endpoint đã lưu trong bảng | Các bảng đều ở dạng tạm thời (ephemeral). Cài đặt nhà cung cấp của máy chủ yêu cầu quyền `Quản lý máy chủ`; cài đặt cá nhân chỉ tải cấu hình của chính người gọi lệnh. |
+| Lỗi từ nhà cung cấp làm lộ URL hoặc khóa trong chat | Lỗi công khai dùng mô tả đã bản địa hóa. Chi tiết lỗi văn bản thô chỉ mở cho người quản lý máy chủ đối với thông tin xác thực máy chủ, hoặc chủ sở hữu đối với thông tin xác thực cá nhân. Lỗi công cụ media trả về thông báo đã được phân loại. |
+| Liên kết kết quả ComfyUI làm lộ URL của engine | TomoriBot tự tải xuống kết quả rồi mới tải lên Discord. |
+| Mở port khiến PC bị phơi bày trực tiếp | Engine luôn nằm trên loopback và `cloudflared` kết nối ra ngoài; không cần mở port đến công khai cho engine. |
+
+:::danger[Chỉ chia sẻ với người quản lý máy chủ bạn tin cậy]
+Chỉ đăng ký endpoint qua `/providers` trong các máy chủ Discord có người quản lý bạn tin cậy: họ có thể xem URL chính xác, còn bảng sẽ ẩn token xác thực đã lưu của bạn. Hãy dùng `/personal providers` để giữ URL riêng tư khỏi người quản lý máy chủ.
+
+Khi không có xác thực trên engine, bất kỳ ai biết URL đều có thể sử dụng API của nó trực tiếp. Hãy dùng khóa của engine nếu được hỗ trợ, hoặc thêm [lớp bảo vệ Access và Caddy tùy chọn](/self-hosting/local-endpoints/proxies-and-remote-access/cloudflare-access-and-caddy/).
+:::
