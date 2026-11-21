@@ -4,8 +4,16 @@ import {
   GEMINI_2_5_IMAGE_TOKENS,
   NANO_BANANA_1K_IMAGE_TOKENS,
 } from "@/modules/supporter-billing/runtime/spendEstimates";
+import { getOpenRouterPricing } from "@/utils/cache/openrouterCapabilityCache";
 import { normalizeOpenRouterCodename } from "@/utils/cache/openrouterCatalog";
-import type { ChoicePricing, MediaPriceUnit, MediaRate } from "@/utils/provider/modelPricing";
+import { llmModelRepo } from "@/utils/db/repositories";
+import {
+  type ChoicePricing,
+  type MediaPriceUnit,
+  type MediaRate,
+  resolveRowPricing,
+} from "@/utils/provider/modelPricing";
+import { cachedOpenRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
 import type {
   ProviderOptionCapability,
   ProviderOptionModelChoicesInput,
@@ -40,7 +48,9 @@ export async function describeSupporterModelChoices(
   const defaultCodename = await resolveTierDefault(input.scope, input.capability);
   const normalizedDefault = defaultCodename ? normalizeOpenRouterCodename(defaultCodename) : null;
   const baseline = input.choices.find((choice) => normalizeOpenRouterCodename(choice.name) === normalizedDefault);
-  const baselineCost = baseline ? unitCost(baseline.name, baseline.pricing) : null;
+  const baselineCost = defaultCodename
+    ? unitCost(defaultCodename, baseline?.pricing ?? (await loadBaselinePricing(input.capability, defaultCodename)))
+    : null;
 
   const costs = new Map<number, ProviderOptionModelCost>();
   for (const choice of input.choices) {
@@ -57,6 +67,33 @@ export async function describeSupporterModelChoices(
     costs.set(choice.id, { priceLabel, isDefault });
   }
   return costs;
+}
+
+async function loadBaselinePricing(
+  capability: ProviderOptionCapability,
+  codename: string,
+): Promise<ChoicePricing | null> {
+  switch (capability) {
+    case "text":
+    case "vision": {
+      const pricing = getOpenRouterPricing(codename);
+      if (pricing) return { input: pricing.promptPricePerMillion, output: pricing.completionPricePerMillion };
+      const row = await llmModelRepo.loadByProviderAndCodename("openrouter", codename);
+      return row ? resolveRowPricing(row) : null;
+    }
+    case "decision": {
+      const row = await llmModelRepo.loadDecisionModelByProviderAndCodename("openrouter", codename);
+      return row ? resolveRowPricing(row) : null;
+    }
+    case "image":
+    case "video":
+      return cachedOpenRouterMediaRates(capability, codename);
+    case "speech-design":
+    case "speech-clone":
+      return cachedOpenRouterMediaRates("speech", codename);
+    default:
+      return null;
+  }
 }
 
 async function resolveTierDefault(

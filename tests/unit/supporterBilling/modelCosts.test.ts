@@ -2,6 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 import { describeSupporterModelChoices, formatRatio, unitCost } from "@/modules/supporter-billing/discord/modelCosts";
 import * as supporterFunding from "@/modules/supporter-billing/runtime/funding";
+import * as openRouterCapabilities from "@/utils/cache/openrouterCapabilityCache";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
@@ -54,6 +56,48 @@ describe("subscription model cost ratios", () => {
       choices: [{ id: 1, name: "deepseek/deepseek-v4-flash", pricing: { input: 0.1, output: 0.5 } }],
     });
     expect(costs.get(1)).toEqual({ priceLabel: null, isDefault: false });
+  });
+
+  it("prices alternatives using the exact default alias even when it is missing from the picker", async () => {
+    const alias = "~deepseek/deepseek-flash-latest";
+    stubTierDefaults({ text: alias });
+    const getPrice = spyOn(openRouterCapabilities, "getOpenRouterPricing").mockImplementation((codename) =>
+      codename === alias ? { promptPricePerMillion: 0.1, completionPricePerMillion: 0.5 } : undefined,
+    );
+    restores.push(() => getPrice.mockRestore());
+    const choices = [{ id: 2, name: "pricier/model", pricing: { input: 0.3, output: 1.5 } }];
+    const input = { scope: SCOPE, capability: "text", locale: "en-US" } as const;
+    const filtered = await describeSupporterModelChoices({ ...input, choices });
+    const visible = await describeSupporterModelChoices({ ...input, choices: [{ id: 1, name: alias }, ...choices] });
+    expect(filtered.get(2)).toEqual({
+      priceLabel: localizedCopy("en-US", "commands.providers.subscription_model_allowance", { ratio: "3" }),
+      isDefault: false,
+    });
+    expect(visible.get(2)).toEqual(filtered.get(2));
+    expect(visible.get(1)).toEqual({ priceLabel: null, isDefault: true });
+  });
+
+  it("keeps free tags and suppresses paid ratios when the default has no price", async () => {
+    stubTierDefaults({ text: "example/default" });
+    const getPrice = spyOn(openRouterCapabilities, "getOpenRouterPricing").mockReturnValue(undefined);
+    const loadModel = spyOn(llmModelRepo, "loadByProviderAndCodename").mockResolvedValue(null);
+    restores.push(
+      () => getPrice.mockRestore(),
+      () => loadModel.mockRestore(),
+    );
+    const costs = await describeSupporterModelChoices({
+      scope: SCOPE,
+      capability: "text",
+      locale: "en-US",
+      choices: [
+        { id: 1, name: "example/default" },
+        { id: 2, name: "example/paid", pricing: { input: 0.3, output: 1.5 } },
+        { id: 3, name: "example/free:free", pricing: { input: 0, output: 0 } },
+      ],
+    });
+    expect(costs.get(1)).toEqual({ priceLabel: null, isDefault: true });
+    expect(costs.get(2)?.priceLabel).toBeNull();
+    expect(costs.get(3)?.priceLabel).toBe(localizedCopy("en-US", "commands.providers.model_price_free"));
   });
 
   it("compares the voice slot against its own design or clone default", async () => {

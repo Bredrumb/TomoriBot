@@ -6,6 +6,14 @@ import { MemberKeyRepository } from "@/modules/supporter-billing/db/repositories
 import { OAuthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import { afterAll, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import {
+  decisionSections,
+  embeddingSections,
+  imageSections,
+  llmSections,
+  speechSections,
+  videoSections,
+} from "@/db/seed/catalog/models";
+import {
   createPatreonCreatorTokenStore,
   replacePatreonCreatorAuthorization,
   SponsorshipConflictError,
@@ -48,6 +56,7 @@ import {
   checkSupporterBillingTablesExist,
   initializeSupporterBilling,
   initializeSupporterBillingSchema,
+  parseSupporterBillingConfigJson,
   runSupporterBillingMaintenance,
   SUPPORTER_BILLING_TABLE_NAMES,
   SupporterEntitlementRepository,
@@ -67,6 +76,10 @@ import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { resetOpenRouterCapabilityCache } from "@/utils/cache/openrouterCapabilityCache";
+import { getOrFetchOpenRouterDecisionModel } from "@/utils/cache/openrouterDecisionModelCache";
+import { initializeOpenRouterEmbeddingModelCache } from "@/utils/cache/openrouterEmbeddingModelCache";
+import { initializeOpenRouterImageModelCache } from "@/utils/cache/openrouterImageModelCache";
+import { initializeOpenRouterVideoModelCache } from "@/utils/cache/openrouterVideoModelCache";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import {
@@ -261,6 +274,95 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     await cleanupFixtures(testSql);
     await testSql`DELETE FROM decision_models WHERE provider = 'openrouter'
       AND codename IN ('test/personal-decision', 'test/personal-decision-edited')`;
+  });
+
+  it("offers the full active OpenRouter seed in Supporter model pickers", async () => {
+    await initializeSupporterBillingSchema(testSql);
+    await applicationSql`SELECT 1`;
+    const member = await createSupporterFixture("seed_parity", FIXTURE_IDS.userDiscId);
+    const now = Date.now();
+    await new SupporterEntitlementRepository(testSql).upsertSnapshot({
+      supporterIdentityId: member.supporter_identity_id,
+      tierKey: "test_tier",
+      patreonTierId: "tier_test",
+      patronStatus: "active_patron",
+      isActive: true,
+      periodStart: new Date(now - 60_000),
+      periodEnd: new Date(now + 3_600_000),
+      lastVerifiedAt: new Date(now),
+      source: "oauth",
+    });
+    await new SupporterSponsorshipRepository(testSql).startActiveSponsorship({
+      serverId: refs.serverId,
+      serverDiscId: FIXTURE_IDS.serverDiscId,
+      sponsorIdentityId: member.supporter_identity_id,
+      createdByDiscId: member.discord_user_id,
+    });
+    const inherit = "openrouter-default";
+    const config = structuredClone(validSupporterConfig);
+    config.tiers.test_tier.defaultModelByCapability = {
+      text: inherit,
+      vision: inherit,
+      image: inherit,
+      video: inherit,
+      embedding: inherit,
+      decision: inherit,
+      voice: { clone: inherit, design: inherit },
+    };
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+    process.env.TOMORI_SUPPORTER_CONFIG_JSON = JSON.stringify(config);
+    const active = <T extends { provider: string; codename: string; isDeprecated?: boolean }>(
+      sections: readonly { rows: T[] }[],
+    ) => sections.flatMap(({ rows }) => rows).filter((row) => row.provider === "openrouter" && !row.isDeprecated);
+    const text = active(llmSections);
+    const speech = active(speechSections);
+    const decisions = active(decisionSections);
+    const request = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (input: string | URL | Request) => {
+          if (!String(input).endsWith("/models?output_modalities=decisions")) throw new Error("Unexpected live lookup");
+          return Response.json({
+            data: decisions.map((row) => ({
+              id: row.codename,
+              context_length: row.inputTokenLimit,
+              architecture: { input_modalities: ["text"], output_modalities: ["decisions"] },
+              pricing: { prompt: "0.000001", completion: "0" },
+            })),
+          });
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    try {
+      await getOrFetchOpenRouterDecisionModel(decisions[0].codename, { fresh: true });
+      const cases = [
+        ["text", "text", text],
+        ["vision", "vision", text.filter((row) => row.seesImages)],
+        ["image", "image", active(imageSections)],
+        ["video", "video", active(videoSections)],
+        ["embedding", "embedding", active(embeddingSections)],
+        ["tts-design", "speech_design", speech.filter((row) => row.voiceMode === "design")],
+        ["tts-clone", "speech_clone", speech.filter((row) => row.voiceMode === "clone")],
+        ["decision", null, decisions],
+      ] as const;
+      for (const [serverSlot, personalSlot, rows] of cases) {
+        const expected = rows.map((row) => row.codename).sort();
+        for (const provider of ["openrouter", "supporter"]) {
+          const server = await loadConfigModelChoices(refs.serverId, serverSlot, provider);
+          expect(server.map((model) => model.name).sort(), `${provider} server ${serverSlot}`).toEqual(expected);
+          if (personalSlot) {
+            const personal = await loadAvailableModelsForCapability(refs.userId, provider, personalSlot);
+            expect(personal.map((model) => model.name).sort(), `${provider} personal ${personalSlot}`).toEqual(
+              expected,
+            );
+          }
+        }
+      }
+    } finally {
+      request.mockRestore();
+      await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${member.supporter_identity_id}`;
+    }
   });
 
   it("keeps billing tables absent until production billing startup is enabled, then initializes idempotently", async () => {
@@ -1204,7 +1306,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
     }
   });
 
-  it("selects tier defaults for personal access and sponsored servers while keeping BYOK keys", async () => {
+  it("selects OpenRouter defaults for personal access and sponsored servers while keeping BYOK keys", async () => {
     await initializeSupporterBillingSchema(testSql);
     await revokeServerSponsorships(refs.serverId);
     const activeEntitlement = (supporterIdentityId: number) => ({
@@ -1263,15 +1365,22 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       }),
     ).toBe(true);
     const config = structuredClone(validSupporterConfig);
+    const inherit = "openrouter-default";
     config.tiers.test_tier.defaultModelByCapability = {
-      text: "test/default-text",
-      vision: "test/default-vision",
-      image: "test/personal-image",
-      video: "test/personal-video",
-      embedding: "test/personal-embedding",
-      decision: "test/personal-decision",
-      voice: { clone: "fish-audio/s2.1-pro", design: "bytedance-seed/seed-audio-1-0" },
+      text: inherit,
+      vision: inherit,
+      image: inherit,
+      video: inherit,
+      embedding: inherit,
+      decision: inherit,
+      voice: { clone: inherit, design: inherit },
     };
+    const { text, vision, image, video, embedding, decision, voice } = parseSupporterBillingConfigJson(
+      JSON.stringify(config),
+    ).tiers.test_tier.defaultModelByCapability;
+    if (!vision || !image || !video || !embedding || !decision || !voice?.clone || !voice.design)
+      throw new Error("Expected defaults for all Supporter slots");
+    const { clone, design } = voice;
     process.env.RUN_ENV = "production";
     process.env.TOMORI_SUPPORTER_OPENROUTER_MANAGEMENT_KEY = "synthetic-management-key";
     process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
@@ -1282,14 +1391,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         async (input: string | URL | Request) => {
           const url = String(input);
           if (url.endsWith("/models?output_modalities=speech"))
-            return Response.json({ data: [{ id: "fish-audio/s2.1-pro" }, { id: "bytedance-seed/seed-audio-1-0" }] });
-          if (url.endsWith("/models/fish-audio/s2.1-pro/endpoints"))
+            return Response.json({ data: [{ id: clone }, { id: design }] });
+          if (url.endsWith(`/models/${clone}/endpoints`))
             return Response.json({ data: { endpoints: [{ supports_voice_cloning: true }] } });
           if (url.endsWith("/videos/models"))
             return Response.json({
               data: [
                 {
-                  id: "test/personal-video",
+                  id: video,
                   supported_durations: [5],
                   supported_resolutions: ["480p"],
                   supported_aspect_ratios: ["16:9"],
@@ -1302,7 +1411,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
             return Response.json({
               data: [
                 {
-                  id: "test/personal-decision",
+                  id: decision,
                   context_length: 1000,
                   architecture: { input_modalities: ["text"], output_modalities: ["decisions"] },
                   pricing: { prompt: "0.000001", completion: "0" },
@@ -1311,11 +1420,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
             });
           if (url.endsWith("/images/models"))
             return Response.json({
-              data: [{ id: "test/personal-image", architecture: { output_modalities: ["image"] } }],
+              data: [{ id: image, architecture: { output_modalities: ["image"] } }],
             });
-          if (url.endsWith("/images/models/test/personal-image/endpoints"))
+          if (url.endsWith(`/images/models/${image}/endpoints`))
             return Response.json({
-              id: "test/personal-image",
+              id: image,
               endpoints: [
                 {
                   provider_tag: "fixture-image-provider",
@@ -1328,7 +1437,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
             return Response.json({
               data: [
                 {
-                  id: "test/personal-embedding",
+                  id: embedding,
                   context_length: 1000,
                   architecture: { modality: "text->embeddings", output_modalities: ["embeddings"] },
                   pricing: { prompt: "0.000001", completion: "0" },
@@ -1337,11 +1446,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
             });
           if (!url.endsWith("/models")) throw new Error(`Bootstrap must not make an inference request: ${url}`);
           return Response.json({
-            data: [
-              { id: "test/default-text", architecture: { modality: "text->text" } },
-              { id: "test/default-vision", architecture: { modality: "text+image->text" } },
-            ].map((model) => ({
-              ...model,
+            data: [...new Set([text, vision, image])].map((id) => ({
+              id,
+              architecture: { modality: "text+image->text" },
               context_length: 1000,
               supported_parameters: ["max_tokens"],
               pricing: { prompt: "0.000001", completion: "0.000001" },
@@ -1365,6 +1472,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         : null,
     });
     try {
+      await Promise.all([
+        initializeOpenRouterEmbeddingModelCache(),
+        initializeOpenRouterImageModelCache(),
+        initializeOpenRouterVideoModelCache(),
+        getOrFetchOpenRouterDecisionModel(decision, { fresh: true }),
+      ]);
       const saveConfig = llmProviderRepo.upsertUserSavedProviderConfig.bind(llmProviderRepo);
       let refuseFirstSelection = true;
       const firstSelection = spyOn(llmProviderRepo, "upsertUserSavedProviderConfig").mockImplementation(
@@ -1400,18 +1513,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       const personal = await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "supporter");
       const keptPersonal = await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "openrouter");
       expect(personal?.api_key).toBeNull();
-      expect(await codenames(personal)).toEqual({
-        text: "test/default-text",
-        vision: "test/default-vision",
-        image: "test/personal-image",
-        video: "test/personal-video",
-        embedding: "test/personal-embedding",
-      });
+      expect(await codenames(personal)).toEqual({ text, vision, image, video, embedding });
       const [fish] = await testSql`SELECT speech_model_id FROM speech_models
-        WHERE provider = 'openrouter' AND codename = 'fish-audio/s2.1-pro'`;
+        WHERE provider = 'openrouter' AND codename = ${clone}`;
       expect(personal?.speech_clone_model_id).toBe(fish.speech_model_id);
       const [seed] = await testSql`SELECT speech_model_id FROM speech_models
-        WHERE provider = 'openrouter' AND codename = 'bytedance-seed/seed-audio-1-0'`;
+        WHERE provider = 'openrouter' AND codename = ${design}`;
       expect(personal?.speech_design_model_id).toBe(seed.speech_model_id);
       expect(new Set(personal?.enabled_capabilities)).toEqual(
         new Set(["text", "vision", "image", "video", "embedding", "speech_clone", "speech_design"]),
@@ -1420,11 +1527,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       expect(keptPersonal?.llm_id).toBe(byokText.llm_id);
       expect(keptPersonal?.diffusion_model_id).toBe(personalByok.diffusion_model_id);
       expect(keptPersonal?.enabled_capabilities).toEqual([]);
-      expect(
-        (await loadDecisionModelsForScope({ kind: "personal", ownerId: refs.userId })).some(
-          (option) => option.model.codename === "test/personal-decision",
-        ),
-      ).toBe(false);
 
       config.tiers.test_tier.defaultModelByCapability.image = "test/unlisted-image";
       process.env.TOMORI_SUPPORTER_CONFIG_JSON = JSON.stringify(config);
@@ -1458,17 +1560,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       const [serverSpeech] =
         await testSql`SELECT speech_clone_model_id, speech_design_model_id FROM server_speech_configs
         WHERE server_id = ${refs.serverId}`;
-      expect(await codenames(serverModels)).toMatchObject({
-        text: "test/default-text",
-        vision: "test/default-vision",
-        video: "test/personal-video",
-      });
+      expect(await codenames(serverModels)).toMatchObject({ text, vision, video });
       expect(serverModels?.diffusion_model_id).toBe(byokImage.diffusion_model_id);
       expect(serverModels?.embedding_model_id).toBe(byokEmbedding.embedding_model_id);
       expect(serverSpeech.speech_clone_model_id).toBe(fish.speech_model_id);
       expect(serverSpeech.speech_design_model_id).toBe(seed.speech_model_id);
       const sponsoredState = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
       if (!sponsoredState) throw new Error("Expected sponsored workspace");
+      expect(sponsoredState.config.decision_model_id).toBe(state.config.decision_model_id);
       const sponsoredView = await loadConfigSwitchModelsView(sponsoredState, FIXTURE_IDS.serverDiscId, undefined);
       for (const capability of ["text", "vision", "video", "tts-clone", "tts-design"] as const) {
         expect(sponsoredView.slots.find((slot) => slot.capability === capability)?.currentProvider).toBe("supporter");

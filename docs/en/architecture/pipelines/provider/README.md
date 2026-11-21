@@ -232,6 +232,21 @@ server or personal provider configuration. OpenRouter uses `google/gemini-3.1-fl
 without this field leave the slot empty. Credential updates preserve an existing vision selection,
 including an explicitly empty slot.
 
+On `release`, Supporter uses the full active OpenRouter seed catalog for the capabilities it funds.
+Adding or deprecating a seed row changes both providers' built-in choices. Scope registrations and
+capability-specific checks apply when the picker opens or the user selects a model.
+
+Set each enabled Supporter slot in `TOMORI_SUPPORTER_CONFIG_JSON` under
+`tiers.<tier>.defaultModelByCapability` to `"openrouter-default"` to follow OpenRouter. Text, image,
+video, embedding, Decision, and both `voice.clone` and `voice.design` use the active seed defaults in
+`src/db/seed/catalog/models.ts`. Vision uses `openrouterProviderInfo.defaultVisionModel`, which must
+name an active OpenRouter model with image input. A model codename pins that slot to a specific model.
+Omit subscription capabilities a tier does not fund. Omit a voice mode to leave its initial slot empty.
+
+After a deploy, new activations use the inherited defaults and existing selections stay saved. The
+Supporter picker compares usage against the tier default even when the picker filters it out. Paid
+ratios require a priced default and comparable units.
+
 `src/utils/provider/providerOptionRegistry.ts` owns the optional extra entries the provider panels,
 setup wizard, and model views can offer beside the built-in providers. Built-in providers keep their
 existing code paths: every surface asks the registry first and falls through unchanged when nothing

@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  decisionSections,
+  embeddingSections,
+  imageSections,
+  llmSections,
+  speechSections,
+  videoSections,
+} from "@/db/seed/catalog/models";
+import type { ModelSection } from "@/db/seed/catalog/types";
+import { openrouterProviderInfo } from "@/providers/openrouter/providerInfo";
 import type { AppEnvironment } from "@/types/config";
 import { getOAuthPublicBaseUrl } from "@/utils/oauth/settings";
 
@@ -9,6 +19,7 @@ type EnvRecord = Readonly<Record<string, string | undefined>>;
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const positiveIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const INHERIT_OPENROUTER_DEFAULT = "openrouter-default";
 export const SUPPORTER_CAPABILITIES = ["text", "vision", "image", "video", "voice", "decision", "embedding"] as const;
 export type SupporterCapability = (typeof SUPPORTER_CAPABILITIES)[number];
 const urlStringSchema = nonEmptyStringSchema.refine(
@@ -26,6 +37,25 @@ const envVarReferenceSchema = nonEmptyStringSchema.refine((value) => ENV_VAR_NAM
   message: "must be an uppercase environment variable name",
 });
 
+function seededOpenRouterDefault<
+  T extends { provider: string; codename: string; isDefault?: boolean; isDeprecated?: boolean },
+>(
+  sections: readonly ModelSection<T>[],
+  matches: (row: T) => boolean = (row) => row.isDefault === true,
+): string | undefined {
+  const rows = sections.flatMap((section) => section.rows);
+  return rows.find((row) => row.provider === "openrouter" && !row.isDeprecated && matches(row))?.codename;
+}
+
+function modelDefaultSchema(catalogDefault: string | undefined) {
+  return nonEmptyStringSchema.transform((value, context) => {
+    if (value !== INHERIT_OPENROUTER_DEFAULT) return value;
+    if (catalogDefault) return catalogDefault;
+    context.addIssue({ code: "custom", message: "OpenRouter has no active seed default for this slot" });
+    return z.NEVER;
+  });
+}
+
 const supporterTierConfigSchema = z
   .object({
     displayNameKey: nonEmptyStringSchema.optional(),
@@ -34,14 +64,26 @@ const supporterTierConfigSchema = z
     monthlyBudgetMicros: positiveIntegerSchema,
     defaultModelByCapability: z
       .object({
-        text: nonEmptyStringSchema,
-        vision: nonEmptyStringSchema.optional(),
-        image: nonEmptyStringSchema.optional(),
-        video: nonEmptyStringSchema.optional(),
-        embedding: nonEmptyStringSchema.optional(),
-        decision: nonEmptyStringSchema.optional(),
+        text: modelDefaultSchema(seededOpenRouterDefault(llmSections)),
+        vision: modelDefaultSchema(
+          seededOpenRouterDefault(
+            llmSections,
+            (row) => row.codename === openrouterProviderInfo.defaultVisionModel && row.seesImages === true,
+          ),
+        ).optional(),
+        image: modelDefaultSchema(seededOpenRouterDefault(imageSections)).optional(),
+        video: modelDefaultSchema(seededOpenRouterDefault(videoSections)).optional(),
+        embedding: modelDefaultSchema(seededOpenRouterDefault(embeddingSections)).optional(),
+        decision: modelDefaultSchema(seededOpenRouterDefault(decisionSections)).optional(),
         voice: z
-          .object({ clone: nonEmptyStringSchema.optional(), design: nonEmptyStringSchema.optional() })
+          .object({
+            clone: modelDefaultSchema(
+              seededOpenRouterDefault(speechSections, (row) => row.isDefault === true && row.voiceMode === "clone"),
+            ).optional(),
+            design: modelDefaultSchema(
+              seededOpenRouterDefault(speechSections, (row) => row.isDefault === true && row.voiceMode === "design"),
+            ).optional(),
+          })
           .strict()
           .refine((voice) => !!voice.clone || !!voice.design, { message: "must define a clone or design default" })
           .optional(),

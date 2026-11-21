@@ -1,11 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import {
+  decisionSections,
+  embeddingSections,
+  imageSections,
+  llmSections,
+  speechSections,
+  videoSections,
+} from "@/db/seed/catalog/models";
+import {
   initializeSupporterBilling,
   isSupporterBillingEnabled,
   SupporterBillingConfigError,
   parseSupporterBillingConfigJson,
   type SupporterBillingConfig,
 } from "@/modules/supporter-billing";
+import { openrouterProviderInfo } from "@/providers/openrouter/providerInfo";
 
 const validSupporterConfig: SupporterBillingConfig = {
   patreon: {
@@ -45,6 +54,52 @@ function createEnabledEnv(overrides: Record<string, string | undefined> = {}): R
 }
 
 describe("supporter billing config and feature gate", () => {
+  it("inherits each enabled slot from the OpenRouter defaults", () => {
+    const inherit = "openrouter-default";
+    const configured = structuredClone(validSupporterConfig);
+    configured.tiers.test_tier.defaultModelByCapability = {
+      text: inherit,
+      vision: inherit,
+      image: inherit,
+      video: inherit,
+      embedding: inherit,
+      decision: inherit,
+      voice: { clone: inherit, design: inherit },
+    };
+    const defaults = parseSupporterBillingConfigJson(JSON.stringify(configured)).tiers.test_tier
+      .defaultModelByCapability;
+    const groups = [
+      [defaults.text, llmSections],
+      [defaults.image, imageSections],
+      [defaults.video, videoSections],
+      [defaults.embedding, embeddingSections],
+      [defaults.decision, decisionSections],
+    ] as const;
+    for (const [codename, sections] of groups) {
+      const row = sections
+        .flatMap((section) => [...section.rows])
+        .find((model) => model.codename === codename && model.provider === "openrouter");
+      expect(row?.isDefault).toBe(true);
+      expect(row?.isDeprecated).toBeFalsy();
+    }
+    expect(defaults.vision).toBe(openrouterProviderInfo.defaultVisionModel);
+    for (const mode of ["clone", "design"] as const) {
+      const row = speechSections
+        .flatMap((section) => section.rows)
+        .find((model) => model.provider === "openrouter" && model.codename === defaults.voice?.[mode]);
+      expect(row).toMatchObject({ isDefault: true, voiceMode: mode });
+      expect(row?.isDeprecated).toBeFalsy();
+    }
+
+    configured.tiers.test_tier.defaultModelByCapability = { text: inherit, voice: { design: inherit } };
+    expect(
+      parseSupporterBillingConfigJson(JSON.stringify(configured)).tiers.test_tier.defaultModelByCapability,
+    ).toEqual({
+      text: defaults.text,
+      voice: { design: defaults.voice?.design },
+    });
+  });
+
   it("accepts independent voice defaults and rejects ambiguous or empty voice configuration", () => {
     const configure = (voice: unknown) =>
       JSON.stringify({

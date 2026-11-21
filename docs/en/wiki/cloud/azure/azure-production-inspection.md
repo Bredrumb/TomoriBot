@@ -54,6 +54,21 @@ Notes that save a round trip:
 - Keep these scripts read-only. Route writes through a migration or an explicitly confirmed
   one-off, never through casual triage.
 
+## Supporter selection parity
+
+Restore a production snapshot into a local scratch PostgreSQL database. Use the candidate release
+checkout and point `DATABASE_URL` at that database. Keep the gateway stopped during the rehearsal.
+
+```bash
+bun run scripts/maintenance/supporter/schemaRehearsal.ts --confirm-scratch-db --verify-selection-parity
+```
+
+The command captures Supporter billing state, saved models, payer ownership, and referenced model
+availability before and after schema initialization and catalog seeding. It reports counts by table
+group and exits with a nonzero status if a selection, payer, or referenced model changes. Publishing
+a scoped video model with the same ID and eligibility is counted as a catalog promotion. The report
+omits account identifiers and credentials.
+
 ## Memory and cache telemetry: query `metric_samples`
 
 The Azure Monitor Agent was removed once the bot began writing its own telemetry to PostgreSQL, so
