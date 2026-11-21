@@ -90,12 +90,15 @@ import { resolveSupporterFunding } from "@/modules/supporter-billing/runtime/fun
 import { activatePersonalProviderTextModel } from "@/utils/provider/providerActivation";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { loadConfigPersonaVoiceView } from "@/utils/discord/interactions/configPersonaVoiceLoader";
+import { buildModelSelectOption } from "@/utils/discord/ui/modelSelectOption";
 import { personalConfigOperations } from "@/utils/discord/interactions/personalConfigOperations";
 import type { Client } from "discord.js";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
 import { findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { openrouterProviderInfo } from "@/providers/openrouter/providerInfo";
+import { localizedCopy } from "../../helpers/localeCases";
 
 const validSupporterConfig: import("@/modules/supporter-billing/config").SupporterBillingConfig = {
   patreon: {
@@ -276,7 +279,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       AND codename IN ('test/personal-decision', 'test/personal-decision-edited')`;
   });
 
-  it("offers the full active OpenRouter seed in Supporter model pickers", async () => {
+  it("renders the same model names and defaults for the full active OpenRouter seed", async () => {
+    await initializeLocalizer();
     await initializeSupporterBillingSchema(testSql);
     await applicationSql`SELECT 1`;
     const member = await createSupporterFixture("seed_parity", FIXTURE_IDS.userDiscId);
@@ -347,15 +351,27 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         ["decision", null, decisions],
       ] as const;
       for (const [serverSlot, personalSlot, rows] of cases) {
-        const expected = rows.map((row) => row.codename).sort();
+        const expected = rows
+          .map((row) => {
+            const isDefault =
+              serverSlot === "vision" ? row.codename === openrouterProviderInfo.defaultVisionModel : row.isDefault;
+            return isDefault
+              ? localizedCopy("en-US", "commands.providers.model_default_label", { model: row.codename })
+              : row.codename;
+          })
+          .sort();
         for (const provider of ["openrouter", "supporter"]) {
           const server = await loadConfigModelChoices(refs.serverId, serverSlot, provider);
-          expect(server.map((model) => model.name).sort(), `${provider} server ${serverSlot}`).toEqual(expected);
+          expect(
+            server.map((model) => buildModelSelectOption("en-US", provider, model, null).label).sort(),
+            `${provider} server ${serverSlot}`,
+          ).toEqual(expected);
           if (personalSlot) {
             const personal = await loadAvailableModelsForCapability(refs.userId, provider, personalSlot);
-            expect(personal.map((model) => model.name).sort(), `${provider} personal ${personalSlot}`).toEqual(
-              expected,
-            );
+            expect(
+              personal.map((model) => buildModelSelectOption("en-US", provider, model, null).label).sort(),
+              `${provider} personal ${personalSlot}`,
+            ).toEqual(expected);
           }
         }
       }

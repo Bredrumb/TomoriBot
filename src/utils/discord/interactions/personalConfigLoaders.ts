@@ -36,7 +36,7 @@ import {
   providerOptionOffersPersonalCapability,
 } from "@/utils/provider/providerOptionRegistry";
 import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
-import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { freeModelPriceLabel, resolveRowPricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
@@ -226,6 +226,7 @@ async function loadPersonalCatalogModels(
         kind: "personal",
         ownerId: userId,
       });
+      const visionDefault = getStaticProviderInfo(provider)?.defaultVisionModel;
       return (models ?? [])
         .filter((m) => typeof m.llm_id === "number" && m.sees_images)
         .map((m) => {
@@ -236,7 +237,7 @@ async function loadPersonalCatalogModels(
             description: resolveDescription(m.descriptions, locale) ?? undefined,
             pricing,
             priceLabel: freeModelPriceLabel(locale, provider, m.is_free, pricing),
-            isDefault: m.is_default,
+            isDefault: visionDefault ? m.llm_codename === visionDefault : m.is_default,
           };
         });
     }
