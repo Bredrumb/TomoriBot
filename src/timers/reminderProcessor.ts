@@ -1,4 +1,5 @@
 import {
+  type Channel,
   type Client,
   DiscordAPIError,
   type Message,
@@ -156,7 +157,15 @@ export class ReminderProcessor {
         `Executing reminder ${reminder.reminder_id} for user ${reminder.user_nickname} (${reminder.user_discord_id})`,
       );
 
-      const channel = await this.client.channels.fetch(reminder.channel_disc_id);
+      let channel: Channel | null;
+      try {
+        channel = await this.client.channels.fetch(reminder.channel_disc_id);
+      } catch (error) {
+        if (!(error instanceof DiscordAPIError) || error.code !== RESTJSONErrorCodes.UnknownChannel) throw error;
+        assertScheduledWorkActive(work);
+        await this.handleReminderExecutionFailure(reminder, "Discord reported an unknown channel", work, false);
+        return;
+      }
       assertScheduledWorkActive(work);
 
       if (!channel) {
@@ -514,6 +523,7 @@ export class ReminderProcessor {
     reminder: ReminderRow,
     errorReason: string,
     work?: ScheduledWorkContext,
+    attemptFallback = true,
   ): Promise<void> {
     try {
       assertScheduledWorkActive(work);
@@ -524,15 +534,17 @@ export class ReminderProcessor {
       let recurringScheduleRetained = false;
 
       // Sent before the schedule write because removing a dead reminder depends on whether this reached the channel.
-      const fallbackDelivered = await this.sendFallbackReminderEmbed(
-        reminder,
-        retainsSchedule
-          ? "reminders.triggered_footer_recurring_retained"
-          : isRecurring
-            ? "reminders.triggered_footer_recurring_removed"
-            : "reminders.triggered_footer_one_time",
-        work,
-      );
+      const fallbackDelivered =
+        attemptFallback &&
+        (await this.sendFallbackReminderEmbed(
+          reminder,
+          retainsSchedule
+            ? "reminders.triggered_footer_recurring_retained"
+            : isRecurring
+              ? "reminders.triggered_footer_recurring_removed"
+              : "reminders.triggered_footer_one_time",
+          work,
+        ));
       assertScheduledWorkActive(work);
 
       if (reminder.reminder_id) {
@@ -625,7 +637,8 @@ export class ReminderProcessor {
       const failure = `Failed to send fallback reminder info embed for reminder ${reminder.reminder_id}:`;
       if (
         fallbackError instanceof DiscordAPIError &&
-        (fallbackError.code === RESTJSONErrorCodes.MissingAccess ||
+        (fallbackError.code === RESTJSONErrorCodes.UnknownChannel ||
+          fallbackError.code === RESTJSONErrorCodes.MissingAccess ||
           fallbackError.code === RESTJSONErrorCodes.MissingPermissions)
       ) {
         log.warn(failure, fallbackError);
