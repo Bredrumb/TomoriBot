@@ -95,7 +95,6 @@ Eu tenho recursos integrados para ajudar a reduzir custos de abusadores ou spamm
         file_hint_try_json: `Execute o comando novamente com um formato JSON para o formato bruto. Escolha \`JSON com ferramentas\` para incluir as definições de ferramentas.`,
         file_hint_try_text: `Execute o comando novamente com \`format: Text\` para um formato mais legível.`,
         file_privacy_warning: `**Não compartilhe este arquivo com ninguém.** Ele pode conter prompts do servidor, memórias e textos de conversas, incluindo coisas privadas que você me contou.`,
-        file_truncated_note: `O histórico do chat ultrapassou o orçamento do modelo, então as {count} trocas mais antigas foram omitidas, exatamente como aconteceria em uma resposta real.`,
         no_personas_title: `Nenhuma Persona Encontrada`,
         no_personas_description: `Nenhuma persona encontrada para este servidor.`,
         build_failed_title: `Falha no Snapshot`,

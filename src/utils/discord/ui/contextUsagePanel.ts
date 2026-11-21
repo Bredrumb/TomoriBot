@@ -7,6 +7,7 @@ import {
   type ComponentInContainerData,
   type TopLevelComponentData,
 } from "discord.js";
+import { ContextItemTag } from "@/types/misc/context";
 import { getLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
 import { buildInteractionRouteId } from "@/utils/discord/interactions/routeRegistry";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
@@ -14,7 +15,6 @@ import { resolveModelPricing } from "@/utils/provider/modelPricing";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { DISCORD_BUTTON_LABEL_MAX } from "@/utils/discord/ui/componentsV2Limits";
-import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import type { PromptInspection } from "@/utils/text/promptInspection/assemble";
 import {
@@ -24,6 +24,7 @@ import {
   measureContextUsage,
 } from "@/utils/text/promptInspection/contextUsage";
 import type { PromptSnapshotFormat } from "@/utils/text/promptInspection/delivery";
+import { buildPromptTrimmingSummary } from "@/utils/text/promptInspection/trimming";
 
 const SNAPSHOT_BUTTON_KEYS: Record<PromptSnapshotFormat, string> = {
   text: "commands.context.view_text_button",
@@ -40,6 +41,11 @@ const SEGMENT_LABEL_KEYS: Record<ContextGrid["parts"][number]["id"], string> = {
   tools: "commands.context.segment_tools",
   free: "commands.context.segment_free",
   reserved: "commands.context.segment_reserved",
+};
+
+const SERVER_DEFINITION_LABEL_KEYS: Record<ContextUsage["serverDefinitions"][number]["tag"], string> = {
+  [ContextItemTag.KNOWLEDGE_SERVER_EMOJIS]: "commands.context.segment_emoji_definitions",
+  [ContextItemTag.KNOWLEDGE_SERVER_STICKERS]: "commands.context.segment_sticker_definitions",
 };
 
 export const CONTEXT_ROUTE_NAMESPACE = "context";
@@ -101,7 +107,14 @@ function buildUsageLine(locale: string, inspection: PromptInspection, usage: Con
   });
 }
 
-function buildLegend(locale: string, grid: ContextGrid): string {
+function buildLegend(locale: string, grid: ContextGrid, usage: ContextUsage): string {
+  const details = {
+    server: usage.serverDefinitions.map(({ tag, tokens }) => ({ labelKey: SERVER_DEFINITION_LABEL_KEYS[tag], tokens })),
+    tools: [
+      { labelKey: "commands.context.segment_builtin_tools", tokens: usage.toolDefinitions.builtIn },
+      { labelKey: "commands.context.segment_mcp_tools", tokens: usage.toolDefinitions.mcp },
+    ],
+  };
   const legendLines: string[] = [
     localizer(locale, "commands.context.scale_line", { tokens: formatTokens(locale, grid.tokensPerCell) }),
   ];
@@ -117,6 +130,17 @@ function buildLegend(locale: string, grid: ContextGrid): string {
         share: formatShare(locale, part.tokens, grid.capacityTokens),
       }),
     );
+    if (part.id === "server" || part.id === "tools") {
+      for (const { labelKey, tokens } of details[part.id]) {
+        if (tokens === 0) continue;
+        legendLines.push(
+          localizer(locale, "commands.context.legend_detail_line", {
+            label: localizer(locale, labelKey),
+            tokens: formatTokens(locale, tokens),
+          }),
+        );
+      }
+    }
   }
   return legendLines
     .flatMap((line) => line.split("\n"))
@@ -155,15 +179,13 @@ function buildMeasurementLines(
   return lines;
 }
 
-// Prose formatting is disabled because its hard wrap breaks legend lines at a fixed width instead of letting Discord
-// soft-wrap them per client.
 export function buildContextUsagePayload(
   locale: string,
   inspection: PromptInspection,
   canViewText: boolean,
 ): ContextUsagePanelPayload {
   const naiReport = inspection.novelaiRequest?.report;
-  const measured = measureContextUsage(inspection.contextItems, inspection.toolsData);
+  const measured = measureContextUsage(inspection.contextItems, inspection.toolsData, inspection.mcpToolSchemaFraction);
   const usage = naiReport
     ? {
         ...measured,
@@ -201,14 +223,6 @@ export function buildContextUsagePayload(
     localizer(locale, naiReport ? "commands.context.novelai_measurement_note" : "commands.context.estimate_note"),
     localizer(locale, "commands.context.not_counted_note"),
   ];
-  if (inspection.historyPairsDropped > 0) {
-    footnotes.unshift(
-      statusNote(
-        "warning",
-        localizer(locale, "commands.context.truncated_note", { count: inspection.historyPairsDropped }),
-      ),
-    );
-  }
   if (!canViewText) {
     footnotes.push(localizer(locale, "commands.context.text_locked_note"));
   }
@@ -216,10 +230,14 @@ export function buildContextUsagePayload(
   const containerComponents: ComponentInContainerData[] = [
     { type: ComponentType.TextDisplay, content: headerLines.join("\n") },
   ];
+  const trimmingSummary = buildPromptTrimmingSummary(locale, inspection);
+  if (trimmingSummary) {
+    containerComponents.push({ type: ComponentType.TextDisplay, content: trimmingSummary });
+  }
   if (grid.rows.length > 0) {
     containerComponents.push(
       { type: ComponentType.TextDisplay, content: grid.rows.join("\n") },
-      { type: ComponentType.TextDisplay, content: buildLegend(locale, grid) },
+      { type: ComponentType.TextDisplay, content: buildLegend(locale, grid, usage) },
     );
   }
   containerComponents.push({
@@ -233,7 +251,7 @@ export function buildContextUsagePayload(
   }
 
   return {
-    components: [buildPanelContainer(containerComponents, undefined, { formatProse: false })],
+    components: [buildPanelContainer(containerComponents)],
     flags: MessageFlags.IsComponentsV2,
   };
 }

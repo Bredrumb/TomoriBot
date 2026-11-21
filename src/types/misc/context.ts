@@ -77,6 +77,7 @@ export type StructuredContextItem = {
   parts: ContextPart[];
   mediaDescriptors?: MediaDescriptor[];
   metadataTag?: ContextItemTag;
+  mcpToolSchemaFraction?: number;
   messageId?: string;
   // All Discord message IDs folded into a merged turn (`messageId` holds only the first), so replies to later split
   // chunks still resolve.

@@ -75,26 +75,53 @@ interface ContextSegmentUsage {
   tokens: number;
 }
 
+const SERVER_DEFINITION_TAGS = [
+  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
+  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
+] as const;
+
 export interface ContextUsage {
   segments: ContextSegmentUsage[];
   inputTokens: number;
+  serverDefinitions: Array<{ tag: (typeof SERVER_DEFINITION_TAGS)[number]; tokens: number }>;
+  toolDefinitions: { builtIn: number; mcp: number };
+}
+
+export function measureToolSchemaTokens(providerTools: readonly Record<string, unknown>[] | null): number {
+  return providerTools?.length ? charsToTokensJson(JSON.stringify(providerTools).length) : 0;
 }
 
 // Media parts are skipped because their token cost differs per provider.
 export function measureContextUsage(
   contextItems: readonly StructuredContextItem[],
   providerTools: readonly Record<string, unknown>[] | null,
+  mcpToolSchemaFraction = 0,
 ): ContextUsage {
   const charsBySegment = new Map<ContextSegmentId, number>();
+  const definitionChars = new Map<ContextItemTag, number>();
+  let verbatimMcpChars = 0;
   for (const item of contextItems) {
     // Untagged items come from SillyTavern preset routing, which carries prompt instructions.
     const segmentId = item.metadataTag ? TAG_SEGMENTS[item.metadataTag] : "instructions";
     const textChars = item.parts.reduce((total, part) => total + (part.type === "text" ? part.text.length : 0), 0);
     charsBySegment.set(segmentId, (charsBySegment.get(segmentId) ?? 0) + textChars);
+    if (item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS) {
+      verbatimMcpChars += textChars * (item.mcpToolSchemaFraction ?? 0);
+    }
+    if (
+      item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_EMOJIS ||
+      item.metadataTag === ContextItemTag.KNOWLEDGE_SERVER_STICKERS
+    ) {
+      definitionChars.set(item.metadataTag, (definitionChars.get(item.metadataTag) ?? 0) + textChars);
+    }
   }
 
-  const toolSchemaTokens =
-    providerTools && providerTools.length > 0 ? charsToTokensJson(JSON.stringify(providerTools).length) : 0;
+  const toolSchemaTokens = measureToolSchemaTokens(providerTools);
+  const verbatimToolChars = charsBySegment.get("tools") ?? 0;
+  const verbatimToolTokens = charsToTokensText(verbatimToolChars);
+  const mcpTokens =
+    Math.round(toolSchemaTokens * mcpToolSchemaFraction) +
+    Math.round((verbatimToolTokens * verbatimMcpChars) / Math.max(1, verbatimToolChars));
 
   const segments = CONTEXT_SEGMENT_ORDER.flatMap((id) => {
     const chars = charsBySegment.get(id) ?? 0;
@@ -102,7 +129,16 @@ export function measureContextUsage(
     return tokens > 0 ? [{ id, tokens }] : [];
   });
 
-  return { segments, inputTokens: segments.reduce((total, segment) => total + segment.tokens, 0) };
+  const serverDefinitions = SERVER_DEFINITION_TAGS.flatMap((tag) => {
+    const chars = definitionChars.get(tag) ?? 0;
+    return chars > 0 ? [{ tag, tokens: charsToTokensText(chars) }] : [];
+  });
+  return {
+    segments,
+    inputTokens: segments.reduce((total, segment) => total + segment.tokens, 0),
+    serverDefinitions,
+    toolDefinitions: { builtIn: toolSchemaTokens + verbatimToolTokens - mcpTokens, mcp: mcpTokens },
+  };
 }
 
 export const CONTEXT_GRID_COLUMNS = 10;

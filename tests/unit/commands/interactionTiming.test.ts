@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction";
@@ -251,6 +251,30 @@ describe("Contract 2: async defer command /ping", () => {
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     expect(callMethods(calls)).toEqual(["deferReply", "editReply"]);
+  });
+});
+
+describe("/persona remove interaction timing", () => {
+  it("acknowledges the command before loading personas and updates the reply when none can be removed", async () => {
+    const { interaction, calls } = makeFakeInteraction({
+      guild: { id: "fixture-guild" },
+      guildId: "fixture-guild",
+      memberPermissions: { has: () => true },
+      options: { getString: () => "3", getBoolean: () => null },
+    });
+    const { personaRepository } = await import("@/utils/db/repositories");
+    const load = spyOn(personaRepository, "loadAllForServer").mockImplementation(async () => {
+      expect(interaction.deferred).toBe(true);
+      return [];
+    });
+    try {
+      const { execute } = await import("@/commands/persona/remove");
+      await execute(makeClient(), interaction as never, makeUserData(), "en-US");
+      expect(load).toHaveBeenCalledWith("fixture-guild");
+      expect(callMethods(calls)).toEqual(["deferReply", "editReply"]);
+    } finally {
+      load.mockRestore();
+    }
   });
 });
 

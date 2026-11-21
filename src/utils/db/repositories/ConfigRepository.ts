@@ -492,17 +492,13 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   ): Promise<PersonaAutochRuntimeStateRow | null> {
     try {
       const result = await sql.transaction(async (tx) => {
-        const [configRow] = await tx`
-          UPDATE server_auto_trigger_configs
-          SET autoch_threshold = ${threshold},
-              autoch_threshold_max = ${maxThreshold}
-          WHERE server_id = ${serverId}
-          RETURNING server_id
+        await tx`
+          INSERT INTO server_auto_trigger_configs (server_id, autoch_threshold, autoch_threshold_max)
+          VALUES (${serverId}, ${threshold}, ${maxThreshold})
+          ON CONFLICT (server_id) DO UPDATE SET
+            autoch_threshold = EXCLUDED.autoch_threshold,
+            autoch_threshold_max = EXCLUDED.autoch_threshold_max
         `;
-
-        if (!configRow) {
-          throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
-        }
 
         const [runtimeRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
@@ -703,6 +699,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
     try {
       await sql.begin(async (tx) => {
+        await tx`
+          INSERT INTO server_auto_trigger_configs (server_id) VALUES (${serverId})
+          ON CONFLICT (server_id) DO NOTHING
+        `;
         const existingConfigRows = await tx`
           SELECT server_id
           FROM server_auto_trigger_configs

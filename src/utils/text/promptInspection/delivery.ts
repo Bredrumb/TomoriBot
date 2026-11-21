@@ -13,6 +13,7 @@ import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import type { PromptInspection } from "@/utils/text/promptInspection/assemble";
 import { buildJsonSnapshot, buildRequestConfig, buildTextSnapshot } from "@/utils/text/promptInspection/serialize";
+import { buildPromptTrimmingSummary } from "@/utils/text/promptInspection/trimming";
 
 export type PromptSnapshotFormat = "text" | "json";
 
@@ -88,6 +89,7 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       format: formatLabel,
     }),
   );
+  descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.file_scope_note"));
   if (format === "text") {
     descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.file_txt_headers_note"));
     if (delivery.includeRerunHints) {
@@ -103,16 +105,8 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       );
     }
   }
-  if (inspection.historyPairsDropped > 0) {
-    descriptionParts.push(
-      statusNote(
-        "warning",
-        localizer(locale, "commands.tool.prompt.snapshot.file_truncated_note", {
-          count: inspection.historyPairsDropped,
-        }),
-      ),
-    );
-  }
+  const trimmingSummary = buildPromptTrimmingSummary(locale, inspection);
+  if (trimmingSummary) descriptionParts.push(trimmingSummary);
   descriptionParts.push(statusNote("error", localizer(locale, "commands.tool.prompt.snapshot.file_privacy_warning")));
 
   await delivery.editReply({
@@ -142,7 +136,6 @@ function buildSnapshotCard(
         { type: ComponentType.File, file: { url: `attachment://${attachmentName}` } },
       ],
       tone,
-      { formatProse: false },
     ),
   ];
 }

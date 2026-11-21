@@ -38,7 +38,8 @@ Inspection uses cached model limits and subscription facts, so opening a snapsho
 NovelAI inspection uses native context captured before preset reassembly, the resolved personal or
 server credential, and the saved response prefill. It runs the provider's allowlist, renderer, and
 exact fitter without selecting a rotation key. Both formats include the final flat prompt and a
-report of included, excluded, and trimmed identities, input tokens, window, and effective output cap.
+report of included, excluded, and trimmed identities, before and after input counts, the window, and
+the requested and fitted output caps.
 A snapshot reconstructs that credential's current request; it cannot reproduce a previous rotated
 request. Credential identities are omitted from both formats. Missing credentials or required
 tokenizer assets fail inspection instead of producing an approximate request.
@@ -97,8 +98,14 @@ Exports include provider sampling parameters constructed by `buildRequestConfig(
 The `/context` command renders a 10x20 emoji grid where each cell represents 0.5% of the model's context window:
 
 - **Token measurement**: NovelAI uses the exact rendered input count from its fitter, with approximate segment shares. Other providers use character estimates through `tokenEstimate.ts`.
-- **Segment categorization**: Maps `ContextItemTag` values into seven visual categories (instructions, memories, notes, participants, tools, dialogue history, and media).
+- **Segment categorization**: Maps `ContextItemTag` values into seven visual categories. The server
+  info legend lists the token estimates for emoji and sticker definitions. The Tools legend
+  shows how much of the schema estimate comes from built-in tools and MCP servers.
 - **Window budgeting**: Ordinary providers reserve output and the generic truncation margin. NovelAI reserves its fitted output cap, native framing, and sentence-completion headroom against the actual subscription window.
+- **Fitting summary**: The panel and download card share before and after input counts and report
+  context removed during fitting. Generic counts use the truncator's text-only estimate after
+  history selection. NovelAI also reports cuts made for its memory allowance and reductions to the
+  reply cap. Downloads carry the resulting prompt.
 - **Dynamic interaction**: Snapshot buttons route through global interaction handlers (`context:v1:snapshot:<personaId>:<format>`), re-evaluating member permissions on each click.
 
 ## Source pointers

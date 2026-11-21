@@ -100,6 +100,30 @@ export function charsToTokensJson(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_JSON);
 }
 
+export function getMcpToolSchemaFraction(
+  tools: readonly Record<string, unknown>[],
+  mcpNames: readonly string[],
+  indent = 0,
+): number {
+  if (mcpNames.length === 0) return 0;
+
+  const names = new Set<unknown>(mcpNames);
+  let totalChars = 0;
+  let mcpChars = 0;
+  for (const tool of tools) {
+    const declarations = Array.isArray(tool.functionDeclarations)
+      ? (tool.functionDeclarations as Record<string, unknown>[])
+      : [tool];
+    for (const declaration of declarations) {
+      const openAiFunction = declaration.function as Record<string, unknown> | undefined;
+      const chars = JSON.stringify(declaration, null, indent).length;
+      totalChars += chars;
+      if (names.has(openAiFunction?.name ?? declaration.name)) mcpChars += chars;
+    }
+  }
+  return mcpChars / Math.max(1, totalChars);
+}
+
 export function estimateContextItemsTokens(contextItems: StructuredContextItem[]): number {
   let totalChars = 0;
   for (const item of contextItems) {

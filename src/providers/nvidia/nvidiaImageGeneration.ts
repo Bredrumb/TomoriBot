@@ -52,7 +52,6 @@ const NVIDIA_IMAGE_MODEL_SPECS: Record<string, NvidiaImageModelSpec> = {
         cfg_scale: request.cfg ?? FLUX_CFG_SCALE,
         width: dimensions.width,
         height: dimensions.height,
-        seed: request.seed ?? 0,
         steps: FLUX_STEPS,
       };
     },

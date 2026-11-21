@@ -173,6 +173,11 @@ describe("NovelAI prompt fitting", () => {
       ]).flat(),
     ]);
     const removedTags = prepared.report.trimmed.map((id) => id.split(":")[1]);
+    expect(prepared.report.trimmedCounts).toEqual({
+      historyTurns: removedTags.filter((tag) => tag === ContextItemTag.DIALOGUE_HISTORY).length,
+      sampleTurns: removedTags.filter((tag) => tag === ContextItemTag.DIALOGUE_SAMPLE).length,
+      memories: removedTags.filter((tag) => tag === ContextItemTag.KNOWLEDGE_SERVER_MEMORIES).length,
+    });
     expect(removedTags[0]).toBe(ContextItemTag.DIALOGUE_SAMPLE);
     expect(removedTags.indexOf(ContextItemTag.KNOWLEDGE_SERVER_MEMORIES)).toBeGreaterThan(0);
     expect(removedTags.lastIndexOf(ContextItemTag.KNOWLEDGE_SERVER_MEMORIES)).toBeLessThan(

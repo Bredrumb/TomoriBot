@@ -184,6 +184,10 @@ export function createOpenAICompatibleErrorDescription(
     return `Error Code ECONNREFUSED: ${options.connectionRefusedMessage}`;
   }
 
+  if (error.type === "content_blocked") {
+    return `Error Code ${errorCode}: ${localizer(locale, "genai.google.content_blocked_default_message")}`;
+  }
+
   let messageKey: string;
   switch (error.type) {
     case "model_error":

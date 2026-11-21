@@ -427,6 +427,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           };
 
           for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
+            if (chunk.choices?.[0]?.finish_reason === "content_filter") {
+              yield this.wrapChunk(chunk, config.model);
+              return;
+            }
+
             const midStreamError = this.getMidStreamError(chunk);
             if (midStreamError && !committedToAttempt) {
               // Log the raw SSE error before downstream classifiers narrow it so wire evidence survives.
@@ -646,6 +651,19 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     if (openAIChunk.usage) {
       metadata.usage = openAIChunk.usage;
       log.info(`${this.options.adapterName}: Usage ${openAIChunk.usage.total_tokens ?? "unknown"} total tokens`);
+    }
+
+    if (choice.finish_reason === "content_filter") {
+      return {
+        type: "error",
+        error: {
+          type: "content_blocked",
+          message: "The provider stopped the response through its content filter.",
+          code: choice.finish_reason,
+          retryable: false,
+        },
+        metadata: openAIChunk.usage ? metadata : undefined,
+      };
     }
 
     const reasoningContent = choice.delta?.reasoning_content;

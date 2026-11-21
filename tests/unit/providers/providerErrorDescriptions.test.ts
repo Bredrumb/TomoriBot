@@ -78,6 +78,7 @@ describe("public provider error descriptions", () => {
     const providerKeys = suffixes.map((suffix) => `${prefix}.${suffix}`);
     const candidateKeys = [
       ...providerKeys,
+      "genai.google.content_blocked_default_message",
       "genai.stream.model_error_description",
       "genai.stream.provider_overloaded_description",
       "genai.stream.connection_refused_description",

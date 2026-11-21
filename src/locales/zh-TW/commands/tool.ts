@@ -101,7 +101,6 @@ export default {
         file_hint_try_json: `用 JSON 格式再執行一次指令，即可取得原始格式。選擇 \`JSON（含工具）\` 即可一併包含工具定義。`,
         file_hint_try_text: `用 \`format: Text\` 再執行一次指令，即可取得較容易閱讀的格式。`,
         file_privacy_warning: `**請勿與任何人分享此檔案。** 它可能包含伺服器提示詞、記憶與對話內容，包括你曾告訴過我的私密資訊。`,
-        file_truncated_note: `對話紀錄超出模型的上限，因此最早的 {count} 輪對話已被略過，就如實際回覆時一樣。`,
         no_personas_title: `找不到人格`,
         no_personas_description: `這個伺服器找不到任何人格。`,
         build_failed_title: `快照失敗`,

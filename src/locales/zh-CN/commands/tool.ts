@@ -101,7 +101,6 @@ export default {
         file_hint_try_json: `用 JSON 格式再运行一次可以拿到原始格式。选 \`JSON（含工具）\` 可以连工具定义一起导出。`,
         file_hint_try_text: `用 \`format: Text\` 再运行一次可以拿到更好读的格式。`,
         file_privacy_warning: `**请勿与任何人分享此文件。** 它可能包含服务器提示词、记忆和对话文本，包括你告诉我的私密内容。`,
-        file_truncated_note: `聊天记录超出了模型的上下文预算，因此最早的 {count} 轮对话已被忽略，就像实际生成回复时一样。`,
         no_personas_title: `没有找到人格`,
         no_personas_description: `这个服务器里没有找到人格。`,
         build_failed_title: `快照失败`,

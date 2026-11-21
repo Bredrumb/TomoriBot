@@ -42,8 +42,11 @@ interface NovelAIFitReport {
   included: string[];
   excluded: string[];
   trimmed: string[];
+  trimmedCounts: { historyTurns: number; sampleTurns: number; memories: number };
+  inputTokensBefore: number;
   inputTokens: number;
   window: number;
+  desiredOutputCap: number;
   outputCap: number;
   framingReserve: number;
   sentenceReserve: number;
@@ -115,6 +118,7 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
   ];
   const excluded: string[] = [];
   const trimmed: string[] = [];
+  const trimmedCounts = { historyTurns: 0, sampleTurns: 0, memories: 0 };
   const identities = new Map<StructuredContextItem, string>();
   const memoryTimes = new Map<StructuredContextItem, number>();
   let selected: StructuredContextItem[] = [];
@@ -170,7 +174,12 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
     }
   });
   const remove = (units: StructuredContextItem[]) => {
-    for (const item of units) trimmed.push(identities.get(item) ?? "");
+    for (const item of units) {
+      trimmed.push(identities.get(item) ?? "");
+      if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY) trimmedCounts.historyTurns++;
+      else if (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE) trimmedCounts.sampleTurns++;
+      else trimmedCounts.memories++;
+    }
     const removed = new Set(units);
     selected = selected.filter((item) => !removed.has(item));
   };
@@ -239,6 +248,7 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
   };
   let prompt = render();
   let inputTokens = encode(prompt).length;
+  const inputTokensBefore = inputTokens;
   const recount = () => {
     prompt = render();
     inputTokens = encode(prompt).length;
@@ -290,8 +300,11 @@ export function fitNovelAIPrompt(args: FitInput): PreparedNovelAIRequest {
       included: selected.map((item) => identities.get(item) ?? ""),
       excluded,
       trimmed,
+      trimmedCounts,
+      inputTokensBefore,
       inputTokens,
       window: args.window,
+      desiredOutputCap: desiredOutput,
       outputCap,
       framingReserve: profile.nativeFramingTokens,
       sentenceReserve,

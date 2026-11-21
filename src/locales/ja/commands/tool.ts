@@ -101,7 +101,6 @@ export default {
         file_hint_try_json: `生の機械可読フォーマットが必要ですか？JSON形式を指定してコマンドを再実行してください。ツール定義も含めるには \`JSON（ツールあり）\` を選んでください。`,
         file_hint_try_text: `より人間に読みやすい形式が必要ですか？コマンドを再実行する際に \`format: Text\` を指定してください。`,
         file_privacy_warning: `**このファイルを誰とも共有しないでください。** サーバープロンプト、記憶、会話テキストのほか、あなたが話したプライベートな内容が含まれる可能性があります。`,
-        file_truncated_note: `会話履歴がモデルの上限を超えたため、古い会話 {count} 件分が省略されています（実際の返信時と同様の動作です）。`,
         no_personas_title: `ペルソナが見つかりません`,
         no_personas_description: `このサーバーにはペルソナが登録されていません。`,
         build_failed_title: `スナップショット失敗`,

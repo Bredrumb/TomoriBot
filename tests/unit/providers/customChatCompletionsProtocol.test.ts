@@ -84,6 +84,32 @@ async function collect(endpointUrl: string, streamContext: StreamContext): Promi
 describe("custom Chat Completions proxy protocol", () => {
   useEnvSandbox(["RUN_ENV", "ALLOW_PRIVATE_NETWORK"]);
 
+  it("routes a filtered completion to the provider error path", async () => {
+    process.env.RUN_ENV = "development";
+    process.env.ALLOW_PRIVATE_NETWORK = "true";
+    const usage = { prompt_tokens: 12, completion_tokens: 0, total_tokens: 12 };
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        sse([
+          {
+            choices: [{ index: 0, delta: { content: "The prompt was blocked." }, finish_reason: "content_filter" }],
+            usage,
+          },
+        ]),
+    });
+    try {
+      const chunks = await collect(`http://127.0.0.1:${server.port}/v1`, context());
+      const failure = chunks.find((chunk) => chunk.type === "error");
+      expect(failure?.error).toMatchObject({ type: "content_blocked", code: "content_filter", retryable: false });
+      expect(failure?.metadata?.usage).toEqual(usage);
+      expect(chunks.some((chunk) => chunk.type === "text" && chunk.content)).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   it("sends extra-high effort in the streaming request body", async () => {
     process.env.RUN_ENV = "development";
     process.env.ALLOW_PRIVATE_NETWORK = "true";

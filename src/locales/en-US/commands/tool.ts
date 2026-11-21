@@ -85,7 +85,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
     prompt: {
       description: `Inspect the prompts TomoriBot sends to the model.`,
       snapshot: {
-        description: `Dump the exact LLM prompt for a persona to a file for debugging.`,
+        description: `Reconstruct a persona's current prompt and export it to a file for debugging.`,
         persona_description: `Persona to snapshot. Defaults to the main persona.`,
         format_description: `Output format for the snapshot file.`,
         text_option: `Text`,
@@ -97,11 +97,11 @@ I have built-in features to help reduce costs from abusers or spammers in your s
         persona_not_found_description: `That persona no longer exists on this server. Pick one from the list.`,
         file_title: `Prompt Snapshot`,
         file_description: `Here's the prompt snapshot for persona **{persona_name}** (format: {format}).`,
+        file_scope_note: `This file reconstructs the current prompt. The provider can apply its own formatting or trimming before the model reads it.`,
         file_txt_headers_note: `The request config at the top of the TXT file and the \`=== Title (/command) ===\` and \`== SubTitle ==\` headers are annotations that show which config command controls each section. They are **not** part of the actual prompt sent to the LLM. "Untagged" means that it either rearranged by or part of a custom st-preset`,
         file_hint_try_json: `Run the command again with a JSON format for the raw format. Pick \`JSON with Tools\` to include tool definitions.`,
         file_hint_try_text: `Run the command again with \`format: Text\` for a more user-readable format.`,
         file_privacy_warning: `**Do not share this file with anyone.** It can contain server prompts, memories, and conversation text, including private things you told me.`,
-        file_truncated_note: `Chat history was over the model's budget, so the oldest {count} exchange(s) are left out, just as they would be in a real reply.`,
         no_personas_title: `No Personas Found`,
         no_personas_description: `No personas found for this server.`,
         build_failed_title: `Snapshot Failed`,

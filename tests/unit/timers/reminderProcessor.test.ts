@@ -1,4 +1,4 @@
-import { DiscordAPIError } from "discord.js";
+import { DiscordAPIError, RESTJSONErrorCodes } from "discord.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
 // Static imports evaluate before `mock.module`, so spreading them keeps full surfaces across unrelated files in
@@ -521,6 +521,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       spy.mock.calls.filter(([message]) => String(message).startsWith(prefix)).length;
     for (const [fallbackError, fallbackErrorLogs] of [
       [new DiscordAPIError({ code: 50013, message: "Missing Permissions" }, 50013, 403, "POST", "/", {}), 0],
+      [new DiscordAPIError({ code: 10003, message: "Unknown Channel" }, 10003, 404, "POST", "/", {}), 0],
       [new Error("socket hang up"), 1],
     ] as const) {
       errorLog.mockClear();
@@ -568,6 +569,31 @@ describe("ReminderProcessor delivery retry cap", () => {
     });
     await new ReminderProcessor(client as never).processDueReminders();
 
+    expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+    expect(rescheduleReminderMock.mock.calls[0]?.[2]).toBe(1);
+  });
+
+  it("settles an occurrence without asking Discord for the same unknown channel again", async () => {
+    const reminder = makeReminder({ repetition_interval_hours: 1 });
+    getDueRemindersMock.mockImplementation(async () => [reminder]);
+    const [errorLog] = logSpies;
+    errorLog.mockClear();
+    const client = makeClient();
+    client.channels.fetch.mockRejectedValue(
+      new DiscordAPIError(
+        { code: RESTJSONErrorCodes.UnknownChannel, message: "Unknown Channel" },
+        RESTJSONErrorCodes.UnknownChannel,
+        404,
+        "GET",
+        "/",
+        {},
+      ),
+    );
+
+    await new ReminderProcessor(client as never).processDueReminders();
+
+    expect(client.channels.fetch).toHaveBeenCalledTimes(1);
+    expect(errorLog).not.toHaveBeenCalled();
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
     expect(rescheduleReminderMock.mock.calls[0]?.[2]).toBe(1);
   });
