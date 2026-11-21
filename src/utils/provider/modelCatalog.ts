@@ -12,6 +12,7 @@ import type { ConfigModelCapability } from "@/utils/discord/configPanelCatalog";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { freeModelPriceLabel, resolveRowPricing, type ChoicePricing } from "@/utils/provider/modelPricing";
 import { openRouterMediaRates } from "@/utils/provider/openrouterMediaPricing";
+import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import {
   describeProviderOptionModelChoices,
   findProviderOption,
@@ -72,6 +73,7 @@ async function loadCatalogModelChoices(
     case "vision": {
       const models = (await llmModelRepo.loadAvailableModelsForProvider(provider, false, owner)) ?? [];
       const eligible = capability === "vision" ? models.filter((model) => model.sees_images) : models;
+      const visionDefault = capability === "vision" ? getStaticProviderInfo(provider)?.defaultVisionModel : undefined;
       return eligible
         .filter((model) => !textModelFilter || textModelFilter(model))
         .filter((model): model is LlmRow & { llm_id: number } => model.llm_id !== undefined)
@@ -83,7 +85,7 @@ async function loadCatalogModelChoices(
             description: resolveDescription(model.descriptions, locale),
             pricing,
             priceLabel: freeModelPriceLabel(locale, provider, model.is_free, pricing),
-            isDefault: model.is_default,
+            isDefault: visionDefault ? model.llm_codename === visionDefault : model.is_default,
           };
         });
     }
