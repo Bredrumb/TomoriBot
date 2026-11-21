@@ -138,7 +138,7 @@ export function createDiscordClient(
     ...topology.getClientShardOptions(),
     ...(!topology.ownsAllShards() ? { ws: { buildIdentifyThrottler: buildIdentifyThrottler(shutdownSignal) } } : {}),
     intents,
-    partials: [Partials.Channel, Partials.Message, Partials.Reaction],
+    partials: [Partials.Channel, Partials.Message],
     rest: { rejectOnRateLimit: shouldRejectWebhookRateLimit },
     // 50 keeps recent reply targets cached in busy channels (each miss is a REST call for any reply the bot sees); any value is safe because readers fall back to fetch, so tune it from `discord_messages` samples.
     makeCache: Options.cacheWithLimits({

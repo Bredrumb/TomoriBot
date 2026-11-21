@@ -49,12 +49,13 @@ When an admitted turn arrives:
   stream kill handle, clears queued messages, and resets the lock. Active operations using `runUnderWatchdog`
   (such as streaming chunks and tool calls) suppress stale-lock recovery because they enforce their own timeouts.
 
-### Reply reactions
+### Reply controls
 
-Fast regeneration uses the normal chat admission and channel lock. Admission and acquisition
-both reject the request if a turn is active or a replay is pending. After planning, the
-request checks that the reply is still the latest message and that its reaction is still enabled.
-Retry deletes only the text message IDs recorded by delivery for that turn.
+After streaming, TomoriBot adds Retry and Continue to the final message. If its webhook cannot
+carry interactive components, the bot sends a separate button row as a reply to that message.
+A newer persona reply removes the old row. Both actions use normal chat admission and reject
+requests while a turn is active or replay is pending. Before Retry deletes anything, it checks
+the latest message and targets the text message IDs recorded for the selected turn.
 
 ### Interruption and cancellation ownership
 

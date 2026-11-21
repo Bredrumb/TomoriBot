@@ -26,7 +26,6 @@ const eventFolderMap: Record<string, string> = {
   guildMemberRemove: "guildMemberRemove",
   interactionCreate: "interactionCreate",
   messageCreate: "messageCreate",
-  messageReactionAdd: "messageReactionAdd",
   messageDelete: "messageDelete",
   messageDeleteBulk: "messageDeleteBulk",
   messageUpdate: "messageUpdate",

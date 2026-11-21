@@ -8,10 +8,6 @@ import type {
   Interaction,
   Message,
   PartialMessage,
-  MessageReaction,
-  PartialMessageReaction,
-  User,
-  PartialUser,
   Presence,
   RateLimitData,
   VoiceState,
@@ -37,10 +33,6 @@ export type EventArg =
   | Interaction
   | Message
   | PartialMessage
-  | MessageReaction
-  | PartialMessageReaction
-  | User
-  | PartialUser
   | GuildEmoji
   | RateLimitData
   | Sticker;

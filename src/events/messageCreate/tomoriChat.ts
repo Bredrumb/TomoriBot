@@ -107,7 +107,7 @@ async function runAdmittedChatTurn(
     userDiscId: admission.userDiscId,
   });
 
-  const offerReplyReactions = await runWithChannelLock(
+  const offerReplyControls = await runWithChannelLock(
     admission,
     async (lockedTurn, startTyping) => {
       const planStartedAt = performance.now();
@@ -116,7 +116,7 @@ async function runAdmittedChatTurn(
       recordChatDiagnostic({ kind: "turns_planned", count: turnPlan.turns.length });
       let generationResultCount = 0;
       let nudgeContinues = false;
-      let offerLatestReplyReactions: (() => Promise<void>) | undefined;
+      let offerLatestReplyControls: (() => Promise<void>) | undefined;
 
       if (turnPlan.turns.length > 0) {
         try {
@@ -150,7 +150,9 @@ async function runAdmittedChatTurn(
               );
 
               await runPostTurnEffects(context, result);
-              offerLatestReplyReactions = () => offerFastRegeneration(context, result);
+              if (context.streamingContext?.deliveredMessageRefs?.length) {
+                offerLatestReplyControls = () => offerFastRegeneration(context, result);
+              }
               generationResultCount++;
               // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
               nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
@@ -181,7 +183,7 @@ async function runAdmittedChatTurn(
           personaResponses: [],
         });
       }
-      return offerLatestReplyReactions;
+      return offerLatestReplyControls;
     },
     {
       handleStopResponse,
@@ -225,7 +227,7 @@ async function runAdmittedChatTurn(
     },
   );
 
-  await offerReplyReactions?.();
+  await offerReplyControls?.();
   recordChatDiagnostic({ kind: "invocation_finished", disposition: "run" });
   return "run";
 }

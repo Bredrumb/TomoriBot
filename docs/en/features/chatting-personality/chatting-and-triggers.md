@@ -26,16 +26,15 @@ In a DM, send a message directly without any trigger word or mention.
 
 To make the main persona reply to every eligible message in the server without needing a mention or trigger word, enable `Always Reply` in `/config` > `Behavior` > `Trigger Behavior`.
 
-### Reply reactions
+### Reply controls
 
-A server manager can switch on Retry and Continue independently under `Reply Reactions` in
-`/config` > `Behavior` > `Trigger Behavior`. Only the member who prompted the reply can use a
-reaction, and only while the reply is the latest message and the channel is idle. The reactions
-expire after 30 seconds.
+Server managers can enable Retry and Continue in `/config` > `Behavior` > `Trigger Behavior` >
+`Reply Controls`. Only the member who prompted the reply can use its buttons. Use them within
+30 seconds, while the reply is still the latest and the channel is idle.
 
-- 🔄 deletes the reply before asking the same persona to answer again. For replies posted directly by
-  the bot, it needs `Manage Messages`.
-- ➡️ asks the same persona to continue in a new message.
+- `Retry` deletes the whole reply before asking the same persona to answer again. The bot needs
+  `Manage Messages` to delete replies sent under its own account.
+- `Continue` asks the same persona to continue in a new message.
 
 ### Managing Trigger Words
 <!-- anchor: managing-trigger-words -->

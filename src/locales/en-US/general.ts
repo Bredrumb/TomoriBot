@@ -2,6 +2,13 @@ export default {
   general: {
     restarting_title: `Restarting`,
     restarting: `TomoriBot is restarting. Please try again shortly.`,
+    reply_controls: {
+      retry: `Retry`,
+      continue: `Continue`,
+      unavailable: `Reply Control Unavailable`,
+      only_triggerer: `Only the person who prompted this reply can use its controls.`,
+      stale: `This reply is no longer available for Retry or Continue.`,
+    },
     panel_notice: {
       outdated_heading: `Panel Out Of Date`,
       unavailable_heading: `Unavailable`,
