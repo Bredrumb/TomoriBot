@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { embeddingSections, llmSections, videoSections } from "@/db/seed/catalog/models";
+import {
+  decisionSections,
+  embeddingSections,
+  imageSections,
+  llmSections,
+  videoSections,
+} from "@/db/seed/catalog/models";
 
 describe("OpenRouter model catalog defaults", () => {
   it("defaults to paid DeepSeek Flash and retires free Gemma", () => {
@@ -11,9 +17,15 @@ describe("OpenRouter model catalog defaults", () => {
     expect(rows.find((row) => row.codename === "google/gemma-4-31b-it:free")?.isDeprecated).toBe(true);
   });
 
-  it("uses H3 Max as the OpenRouter default video model", () => {
-    const rows = videoSections.flatMap((section) => section.rows).filter((row) => row.provider === "openrouter");
-    expect(rows.filter((row) => row.isDefault).map((row) => row.codename)).toEqual(["minimax/hailuo-3-max"]);
+  it.each([
+    ["image", imageSections, "google/gemini-nano-banana-2.1"],
+    ["video", videoSections, "x-ai/grok-imagine-video-1.5-lite"],
+    ["Decision", decisionSections, "typesafe/jev-1.13"],
+  ] as const)("uses the chosen OpenRouter %s default", (_capability, sections, codename) => {
+    const defaults = sections
+      .flatMap(({ rows }) => [...rows])
+      .filter((row) => row.provider === "openrouter" && row.isDefault && !row.isDeprecated);
+    expect(defaults.map((row) => row.codename)).toEqual([codename]);
   });
 
   it("uses google/gemini-embedding-2 as the OpenRouter default embedding model", () => {

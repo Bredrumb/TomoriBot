@@ -3849,12 +3849,12 @@ export const imageSections: ModelSection<ImageInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-nano-banana-2.1",
+        isDefault: true,
         desc: "Nano Banana 2.1 image generation and editing via OpenRouter",
       },
       {
         provider: "openrouter",
         codename: "google/gemini-2.5-flash-image",
-        isDefault: true,
         desc: "Fast and efficient image generation via OpenRouter with balanced quality and speed",
         i18n: {
           ja: "OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成",
@@ -4316,8 +4316,13 @@ export const videoSections: ModelSection<VideoInput>[] = [
     rows: [
       {
         provider: "openrouter",
-        codename: "minimax/hailuo-3-max",
+        codename: "x-ai/grok-imagine-video-1.5-lite",
         isDefault: true,
+        desc: "Grok Imagine Video 1.5 Lite generates clips with audio at 480p, 720p, or 1080p from text or a starting image.",
+      },
+      {
+        provider: "openrouter",
+        codename: "minimax/hailuo-3-max",
         desc: "MiniMax H3 Max: 5-15 second videos at 480p or 768p with first and last frame control",
         i18n: {
           ja: "MiniMax H3 Max：480pまたは768pの5-15秒動画、開始・終了フレームを指定可能",
@@ -4619,7 +4624,7 @@ export const decisionSections: ModelSection<DecisionInput>[] = [
       {
         provider: "openrouter",
         codename: "typesafe/jev-1.13",
-        isDeprecated: true,
+        isDefault: true,
         inputTokenLimit: 64000,
         inputPricePerMillion: 0.042,
         outputPricePerMillion: 0,
@@ -4672,12 +4677,11 @@ export const decisionSections: ModelSection<DecisionInput>[] = [
       {
         provider: "openrouter",
         codename: "perplexity/pplx-decider-flash-v1.2",
-        isDefault: true,
         seesImages: true,
         inputTokenLimit: 262144,
         inputPricePerMillion: 0.01,
         outputPricePerMillion: 0,
-        desc: "Default fast, low-cost 4B Decision model for text/image classification, routing, and moderation",
+        desc: "Low-cost 4B Decision model for classification, routing, and moderation with text or images.",
       },
       {
         provider: "openrouter",
