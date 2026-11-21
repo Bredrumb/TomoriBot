@@ -68,6 +68,8 @@ export async function execute(
       return;
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const removablePersonas = allPersonas.filter(isRemovablePersona);
 
@@ -94,8 +96,6 @@ export async function execute(
       return;
     }
     const personaId = personaToRemove.persona_id;
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (!personaToRemove.is_alter) {
       const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);
