@@ -30,6 +30,7 @@ describe("history reply context", () => {
     "reused",
     "queued-missing",
     "queued-deleted",
+    "older-reply-control",
     "literal-system",
     "merged",
     "reset",
@@ -39,6 +40,7 @@ describe("history reply context", () => {
     const fail = scenario === "prefetch-failure";
     const channelEvicted = scenario === "evicted";
     const forwardedThread = scenario === "forwarded-thread";
+    const olderReplyControl = scenario === "older-reply-control";
     const persona = createPersona({
       config: {
         time_awareness_enabled: false,
@@ -66,6 +68,7 @@ describe("history reply context", () => {
         active--;
       }
     });
+    const fetchAnchor = mock(async (id: string) => messages.find((message) => message.id === id));
     let historyFetched = false;
     let historyFetches = 0;
     const channel = {
@@ -73,15 +76,17 @@ describe("history reply context", () => {
       isThread: () => false,
       messages: {
         cache: new Map(),
-        fetch: async (options: string | { limit: number }) => {
+        fetch: async (options: string | { message: string } | { limit: number }) => {
           if (typeof options === "string") return fetchById(options);
+          if ("message" in options) return fetchAnchor(options.message);
           historyFetched = true;
           historyFetches++;
-          return new Map(
-            (forwardedThread ? messages.slice(0, 1) : scenario === "queued-missing" ? messages.slice(1) : messages).map(
-              (message) => [message.id, message],
-            ),
-          );
+          const recent = forwardedThread
+            ? messages.slice(0, 1)
+            : scenario === "queued-missing" || olderReplyControl
+              ? messages.slice(1)
+              : messages;
+          return new Map(recent.map((message) => [message.id, message]));
         },
       },
     };
@@ -182,6 +187,10 @@ describe("history reply context", () => {
       if (messages[0].reference) messages[0].reference.messageId = "100";
       getOrCreateChannelLockEntry(channel.id, "fixture-guild").isLocked = true;
     }
+    if (olderReplyControl) {
+      Object.assign(messages[0], { id: "100", author: { ...client.user, bot: true }, reference: null });
+      messages[1].id = "101";
+    }
     const fetchReference = mock(async () => messages[1]);
     if (forwardedThread) {
       Object.assign(messages[0], {
@@ -274,6 +283,14 @@ describe("history reply context", () => {
           const result = await buildChatTurnContext(turn);
           expect(result.simplifiedMessages.some((message) => message.id === "101")).toBe(scenario === "queued-missing");
         }
+        return;
+      }
+      if (olderReplyControl) {
+        incoming.isManuallyTriggered = true;
+        incoming.fastRegeneration = { action: "continue", replyId: "100", messageIds: ["100"], consume: () => true };
+        const result = await buildChatTurnContext(turn);
+        expect(fetchAnchor).toHaveBeenCalledWith("100");
+        expect(result.simplifiedMessages.map(({ id }) => id)).toEqual(["100", "101"]);
         return;
       }
       if (prefetch) {

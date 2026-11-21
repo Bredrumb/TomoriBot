@@ -53,9 +53,10 @@ When an admitted turn arrives:
 
 After streaming, TomoriBot adds Retry and Continue to the final message. If its webhook cannot
 carry interactive components, the bot sends a separate button row as a reply to that message.
-A newer persona reply removes the old row. Both actions use normal chat admission and reject
-requests while a turn is active or replay is pending. Before Retry deletes anything, it checks
-the latest message and targets the text message IDs recorded for the selected turn.
+The shard owner keeps one active row per channel in memory. A newer persona reply replaces it.
+Both actions use normal chat admission and reject requests while a turn is active or replay is
+pending. The action claims the active row under the channel lock. Retry deletes the exact text
+message IDs recorded for that turn.
 
 ### Interruption and cancellation ownership
 

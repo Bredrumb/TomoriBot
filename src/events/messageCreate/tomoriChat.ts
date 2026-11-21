@@ -107,7 +107,7 @@ async function runAdmittedChatTurn(
     userDiscId: admission.userDiscId,
   });
 
-  const offerReplyControls = await runWithChannelLock(
+  const replyControls = await runWithChannelLock(
     admission,
     async (lockedTurn, startTyping) => {
       const planStartedAt = performance.now();
@@ -183,7 +183,7 @@ async function runAdmittedChatTurn(
           personaResponses: [],
         });
       }
-      return offerLatestReplyControls;
+      return { publication: offerLatestReplyControls?.() };
     },
     {
       handleStopResponse,
@@ -227,7 +227,7 @@ async function runAdmittedChatTurn(
     },
   );
 
-  await offerReplyControls?.();
+  await replyControls?.publication;
   recordChatDiagnostic({ kind: "invocation_finished", disposition: "run" });
   return "run";
 }

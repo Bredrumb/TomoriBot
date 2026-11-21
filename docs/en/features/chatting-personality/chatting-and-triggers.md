@@ -29,8 +29,8 @@ To make the main persona reply to every eligible message in the server without n
 ### Reply controls
 
 Server managers can enable Retry and Continue in `/config` > `Behavior` > `Trigger Behavior` >
-`Reply Controls`. Only the member who prompted the reply can use its buttons. Use them within
-30 seconds, while the reply is still the latest and the channel is idle.
+`Reply Controls`. Only the member who prompted the reply can use its buttons. The buttons stay
+on the latest persona reply until that member uses one or a newer persona replies.
 
 - `↻` retries the whole reply by deleting it and asking the same persona to answer again. The bot needs
   `Manage Messages` to delete replies sent under its own account.

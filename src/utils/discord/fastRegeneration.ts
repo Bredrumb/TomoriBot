@@ -23,7 +23,6 @@ import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMes
 
 export const REPLY_CONTROLS_NAMESPACE = "reply-controls";
 export const REPLY_CONTROLS_VERSION = "v1";
-const CONTROL_WINDOW_MS = 30_000;
 const ACTIONS = ["retry", "continue"] as const;
 type Action = (typeof ACTIONS)[number];
 
@@ -31,7 +30,7 @@ export interface FastRegenerationRequest {
   action: Action;
   replyId: string;
   messageIds: readonly string[];
-  ignoredMessageIds: ReadonlySet<string>;
+  consume(): boolean;
 }
 
 interface ControlSurface {
@@ -46,18 +45,15 @@ interface ReplyControls {
   userId: string;
   personaId: number;
   messageIds: string[];
-  deliveryNoticeIds: string[];
   actions: readonly Action[];
   publication: Promise<ControlSurface | undefined>;
-  timeout: ReturnType<typeof setTimeout>;
 }
 
 const replyControlsByChannel = new Map<string, ReplyControls>();
 
-function removeControls(channelId: string, entry: ReplyControls): void {
-  if (replyControlsByChannel.get(channelId) !== entry) return;
+function removeControls(channelId: string, entry: ReplyControls): boolean {
+  if (replyControlsByChannel.get(channelId) !== entry) return false;
   replyControlsByChannel.delete(channelId);
-  clearTimeout(entry.timeout);
   void entry.publication
     .then((surface) => surface?.remove())
     .catch((error) => {
@@ -65,9 +61,10 @@ function removeControls(channelId: string, entry: ReplyControls): void {
         log.warn(`[fastRegeneration] Could not remove controls for messageId=${entry.replyId}`, error);
       }
     });
+  return true;
 }
 
-export async function takeFastRegeneration(
+export async function resolveFastRegeneration(
   channelId: string,
   controlsMessageId: string,
   userId: string,
@@ -83,15 +80,17 @@ export async function takeFastRegeneration(
     return { status: "stale" };
   }
   if (entry.userId !== userId) return { status: "denied" };
-  removeControls(channelId, entry);
-  const ignoredMessageIds = new Set(entry.deliveryNoticeIds);
-  if (surface.messageId !== entry.replyId) ignoredMessageIds.add(surface.messageId);
   return {
     status: "ready",
     trigger: entry.trigger,
     reply: surface.reply,
     personaId: entry.personaId,
-    request: { action, replyId: entry.replyId, messageIds: entry.messageIds, ignoredMessageIds },
+    request: {
+      action,
+      replyId: entry.replyId,
+      messageIds: entry.messageIds,
+      consume: () => removeControls(channelId, entry),
+    },
   };
 }
 
@@ -219,16 +218,12 @@ export async function offerFastRegeneration(context: ChatTurnContext, result: Ge
   if (actions.length === 0) return;
 
   const messageIds = [...new Set(refs.map((ref) => ref.messageId))];
-  const deliveryNoticeIds = (context.streamingContext.deliveryReceipts ?? [])
-    .filter((receipt) => receipt.channelId === channel.id && !messageIds.includes(receipt.messageId))
-    .map((receipt) => receipt.messageId);
   const entry: ReplyControls = {
     replyId: reply.messageId,
     trigger: message,
     userId: userDiscId,
     personaId,
     messageIds,
-    deliveryNoticeIds,
     actions,
     publication: Promise.resolve()
       .then(() => publishControls(context, entry))
@@ -238,7 +233,6 @@ export async function offerFastRegeneration(context: ChatTurnContext, result: Ge
         }
         return undefined;
       }),
-    timeout: setTimeout(() => removeControls(channel.id, entry), CONTROL_WINDOW_MS).unref(),
   };
   replyControlsByChannel.set(channel.id, entry);
   if (!(await entry.publication) && replyControlsByChannel.get(channel.id) === entry) {
@@ -253,19 +247,17 @@ export async function prepareFastRegeneration(turn: ChatTurn, request: FastRegen
   const releaseDeletion = request.action === "retry" ? tryAcquirePersonaTurnDeletion(channel.id) : undefined;
   if (request.action === "retry" && !releaseDeletion) return false;
   try {
-    const limit = request.action === "retry" ? 100 : Math.min(100, 1 + request.ignoredMessageIds.size);
-    const latest = await channel.messages.fetch({ limit, cache: false });
-    if (latest.find((message) => !request.ignoredMessageIds.has(message.id))?.id !== request.replyId) return false;
-
     const state = await getCachedMainPersona(guild.id);
     if (request.action === "continue") {
-      return !signal?.aborted && state?.config.fast_regeneration_continue_enabled === true;
+      if (!state?.config.fast_regeneration_continue_enabled) return false;
+      await channel.messages.fetch({ message: request.replyId, cache: false, force: true });
+      return !signal?.aborted && request.consume();
     }
     if (!state?.config.fast_regeneration_retry_enabled) return false;
 
-    const messageIds = new Set(request.messageIds);
-    const messages = [...latest.values()].reverse().filter((message) => messageIds.has(message.id));
-    if (messages.length !== request.messageIds.length) return false;
+    const messages = await Promise.all(
+      request.messageIds.map((message) => channel.messages.fetch({ message, cache: false, force: true })),
+    );
     await Promise.all(messages.map(verifyMessageWebhook));
     const { blockMessages } = findLastPersonaTurnBlock({
       messages,
@@ -279,6 +271,7 @@ export async function prepareFastRegeneration(turn: ChatTurn, request: FastRegen
       botMember && "permissionsFor" in channel && channel.permissionsFor(botMember)?.has("ManageMessages"),
     );
     if (signal?.aborted || (!canManageMessages && blockMessages.some((message) => !message.webhookId))) return false;
+    if (!request.consume()) return false;
     const { failedCount } = await deletePersonaTurnMessages(channel, blockMessages, canManageMessages, signal);
     return failedCount === 0;
   } catch (error) {

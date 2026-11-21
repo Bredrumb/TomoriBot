@@ -2,7 +2,7 @@ import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   REPLY_CONTROLS_NAMESPACE,
   REPLY_CONTROLS_VERSION,
-  takeFastRegeneration,
+  resolveFastRegeneration,
 } from "@/utils/discord/fastRegeneration";
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { replyPanelReceipt } from "@/utils/discord/ui/panel";
@@ -22,7 +22,7 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
       throw new Error("Invalid reply control");
     }
     await interaction.deferUpdate();
-    const selection = await takeFastRegeneration(
+    const selection = await resolveFastRegeneration(
       interaction.channelId,
       interaction.message.id,
       interaction.user.id,
