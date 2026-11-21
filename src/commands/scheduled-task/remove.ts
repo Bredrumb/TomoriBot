@@ -125,6 +125,7 @@ export async function execute(
         viewerUserId: userData.user_id,
         repeatTextKey: "commands.scheduled-task.remove.select_repeat_text",
         repeatMonthsTextKey: "commands.scheduled-task.remove.select_repeat_months_text",
+        repeatMinutesTextKey: "commands.scheduled-task.remove.select_repeat_minutes_text",
         managerCreatedByKey: "commands.scheduled-task.remove.select_manager_created_by_text",
       });
       const channelName =

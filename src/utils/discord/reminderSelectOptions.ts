@@ -24,6 +24,7 @@ interface ReminderOptionPartsInput {
   /** Locale keys for the hourly and monthly repeat suffixes, which each command owns. */
   repeatTextKey: string;
   repeatMonthsTextKey: string;
+  repeatMinutesTextKey: string;
   /** Locale key for the creator suffix, which each command owns. */
   managerCreatedByKey: string;
 }
@@ -65,7 +66,9 @@ export function buildReminderOptionParts(input: ReminderOptionPartsInput): Remin
       ? ""
       : repetition.unit === "months"
         ? localizer(input.locale, input.repeatMonthsTextKey, { months: repetition.interval })
-        : localizer(input.locale, input.repeatTextKey, { hours: repetition.interval }),
+        : repetition.unit === "minutes"
+          ? localizer(input.locale, input.repeatMinutesTextKey, { minutes: repetition.interval })
+          : localizer(input.locale, input.repeatTextKey, { hours: repetition.interval }),
     manager_created_by_text:
       input.hasManagePermission && reminder.created_by_user_id !== input.viewerUserId
         ? localizer(input.locale, input.managerCreatedByKey, { creator_name: creatorName })

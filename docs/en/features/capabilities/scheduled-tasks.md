@@ -24,9 +24,12 @@ on the 31st of every month, remind me to pay rent
 She parses the requested time and recurrence. Reminders ping the target user when they
 fire. Tasks are silent self-actions the persona carries out when the time comes.
 
-A schedule can repeat every few hours or every few months. A monthly one keeps the same day
-and time. In a month without that day, it runs on the month's last day (April 30 for the
-31st) and goes back to the 31st the month after.
+A schedule can repeat by the minute, hour, or month. Ask for a number of deliveries or a cutoff
+time to end it automatically. If you say "remind me every hour" without giving a start time,
+the first reminder is due in an hour. Minute and hour schedules can also use a daily window in
+the server's timezone, such as 09:00 to 17:00. A trigger outside the window moves to its next
+opening. A monthly schedule keeps the same day and time. In a month without that day, it runs on
+the month's last day (April 30 for the 31st) and goes back to the 31st the month after.
 
 ## Timezones
 
@@ -45,8 +48,8 @@ mislabeled, fix it with a follow-up message or `/scheduled-task edit`.
 Two slash commands let you review and adjust existing schedules:
 
 - `/scheduled-task edit`: change a task's content, next trigger time, repeat interval (in
-  hours or months), or reminder target. Set the interval to `0` to make a recurring task
-  one-time.
+  minutes, hours, or months), repeat limit, or reminder target. Enter an interval such as `15m`,
+  `2h`, or `1mo`. Set it to `0` for a one-time task. Clear the limit field to repeat indefinitely.
 - `/scheduled-task remove`: delete a reminder or task.
 
 Both commands open a picker listing your existing schedules by persona, time, channel,

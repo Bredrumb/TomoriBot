@@ -3,7 +3,7 @@ import { serverScheduleRepository } from "@/utils/db/repositories/ServerSchedule
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
-describe.skipIf(!DB_TESTS_AVAILABLE)("monthly reminder repetition", () => {
+describe.skipIf(!DB_TESTS_AVAILABLE)("reminder repetition", () => {
   let refs: FixtureRefs;
 
   beforeAll(async () => {
@@ -18,6 +18,47 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("monthly reminder repetition", () => {
   afterAll(async () => {
     await testSql`DELETE FROM reminders WHERE server_id = ${refs.serverId}`;
     await cleanupFixtures(testSql);
+  });
+
+  it("keeps a finite minute schedule when edited and decrements its count when a delivery advances it", async () => {
+    const reminderTime = new Date("2099-01-02T03:30:00Z");
+    const created = await serverScheduleRepository.addReminder({
+      server_id: refs.serverId,
+      channel_disc_id: "100000000000000001",
+      user_discord_id: "200000000000000001",
+      user_nickname: "Juno",
+      reminder_purpose: "Check the queue.",
+      reminder_time: reminderTime,
+      repetition: { unit: "minutes", interval: 15 },
+      recurrenceOptions: { limit: { remaining: 3 }, window: { start: 540, end: 1020, timezoneOffset: 5.5 } },
+      created_by_user_id: null,
+    });
+    expect(created).toMatchObject({
+      repetition_interval_minutes: 15,
+      repetition_interval_hours: null,
+      repetition_interval_months: null,
+      repeat_remaining_count: 3,
+      daily_window_timezone_offset: 5.5,
+    });
+    const reminderId = created?.reminder_id as number;
+    const advanced = await serverScheduleRepository.rescheduleReminder(reminderId, {
+      time: new Date("2099-01-02T03:45:00Z"),
+      anchorDay: null,
+      consumeRepeatCount: true,
+    });
+    expect(advanced?.repeat_remaining_count).toBe(2);
+
+    const unchanged = await serverScheduleRepository.updateReminder({
+      reminder_id: reminderId,
+      server_id: refs.serverId,
+      reminder_purpose: "Recheck the queue.",
+      reminder_time: reminderTime,
+      repetition: { unit: "minutes", interval: 15 },
+      self_reminder: false,
+      user_discord_id: "200000000000000001",
+      user_nickname: "Juno",
+    });
+    expect(unchanged).toMatchObject({ repeat_remaining_count: 2, daily_window_start_minutes: 540 });
   });
 
   it("carries the server offset to the scheduler and keeps the anchor while edits stay on the same local day", async () => {
