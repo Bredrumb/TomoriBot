@@ -142,7 +142,7 @@ async function runAdmittedChatTurn(
               nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
 
               if (!willRetryEmptyResponse) {
-                await incoming.onGenerationResult?.(result);
+                await incoming.onGenerationResult?.(result, context.streamingContext.deliveryReceipts);
               }
             });
           }

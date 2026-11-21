@@ -36,6 +36,7 @@ import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/na
 import { NUDGE_MENTION_CASCADE_LIMIT } from "@/modules/natural-nudges/runtime/tuning";
 import { getMatchLimit, queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
+import { resolveWelcomeReplyPersona } from "@/utils/chat/welcomeReply";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
 import {
   determineMatchingPersonas,
@@ -832,6 +833,8 @@ function selectPersonasForTurn(args: {
   }
 
   const config = args.tomoriState.config;
+  const message = args.lockedTurn.admission.message;
+  const isAutochatEligible = isAutochatQualifyingMessage(message, args.isSelfMessage);
   const personalAutoTriggerPersonaId = isPersonaAllowedForTrigger(
     args.whitelistStatus,
     args.personalSpotlightStatus,
@@ -839,31 +842,36 @@ function selectPersonasForTurn(args: {
   )
     ? (args.personalAutoTriggerPersonaId ?? null)
     : null;
-  const isPersonalAutoTriggerActive =
-    personalAutoTriggerPersonaId !== null &&
-    isAutochatQualifyingMessage(args.lockedTurn.admission.message, args.isSelfMessage);
+  const isPersonalAutoTriggerActive = personalAutoTriggerPersonaId !== null && isAutochatEligible;
+  const personalDtmMode = args.userRow.personal_dtm ?? "follow";
+  const isDtmActive =
+    (personalDtmMode === "on" || (personalDtmMode === "follow" && config.deliberate_trigger_mode)) &&
+    !!message.guild &&
+    !isMatrixRelayMessage(message);
+  const welcomeReplyPersona = resolveWelcomeReplyPersona(
+    message,
+    args.tomoriState,
+    args.allPersonas,
+    args.allowedPersonaIds,
+    args.isSelfMessage,
+    isDtmActive,
+  );
   const isAutoMsgHit =
     !isPersonalAutoTriggerActive &&
-    isAutochatQualifyingMessage(args.lockedTurn.admission.message, args.isSelfMessage) &&
+    !welcomeReplyPersona &&
+    isAutochatEligible &&
     isAutochatCounterHit(args.tomoriState, args.effectiveChannelId);
   const serverAutoTriggerPersonaId = getAutochatAssignedPersonaId(config, args.effectiveChannelId);
   const isScopedAlwaysReplyActive =
-    isAutochatAlwaysReplyChannelActive(config, args.effectiveChannelId) &&
-    isAutochatQualifyingMessage(args.lockedTurn.admission.message, args.isSelfMessage);
-  const serverDtmEnabled = !!config.deliberate_trigger_mode;
-  const personalDtmMode = args.userRow.personal_dtm ?? "follow";
-  const isDtmActive =
-    (personalDtmMode === "on" || (personalDtmMode === "follow" && serverDtmEnabled)) &&
-    !!args.lockedTurn.admission.message.guild &&
-    !isMatrixRelayMessage(args.lockedTurn.admission.message);
+    isAutochatAlwaysReplyChannelActive(config, args.effectiveChannelId) && isAutochatEligible;
   const isAlwaysReplyActive =
-    (!!config.always_reply_enabled &&
-      isAutochatQualifyingMessage(args.lockedTurn.admission.message, args.isSelfMessage)) ||
+    (!!config.always_reply_enabled && isAutochatEligible) ||
     isScopedAlwaysReplyActive ||
-    isPersonalAutoTriggerActive;
+    isPersonalAutoTriggerActive ||
+    welcomeReplyPersona !== undefined;
 
   let personasToRespond = determineMatchingPersonas(
-    args.lockedTurn.admission.message,
+    message,
     args.allPersonas,
     args.lockedTurn.admission.client,
     args.lockedTurn.admission.referencedMessage,
@@ -873,11 +881,12 @@ function selectPersonasForTurn(args: {
     isAutoMsgHit,
     isAlwaysReplyActive,
     personalAutoTriggerPersonaId ?? serverAutoTriggerPersonaId,
-    isPersonalAutoTriggerActive
-      ? personalAutoTriggerPersonaId
-      : isScopedAlwaysReplyActive
-        ? serverAutoTriggerPersonaId
-        : null,
+    welcomeReplyPersona?.persona_id ??
+      (isPersonalAutoTriggerActive
+        ? personalAutoTriggerPersonaId
+        : isScopedAlwaysReplyActive
+          ? serverAutoTriggerPersonaId
+          : null),
     isDtmActive,
     args.allowedPersonaIds,
   );

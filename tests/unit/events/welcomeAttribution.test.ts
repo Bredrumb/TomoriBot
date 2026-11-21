@@ -20,11 +20,13 @@ import {
   suppressNextSelfReply,
 } from "@/utils/chat/channelQueue";
 import { applyWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
+import { observeWelcomeReply } from "@/utils/chat/welcomeReply";
+import type { TomoriChatInput } from "@/utils/chat/types";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { PrivacyLevel } from "@/types/db/schema";
 import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
 
-async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = false) {
+async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = false, queueWelcome = false) {
   const persona = createPersona({
     llm: createLlmRow({ sees_images: false }),
     vision_llm: undefined,
@@ -97,6 +99,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
   const admissions: string[] = [];
   const echoReasons: Array<string | undefined> = [];
   const contexts: StructuredContextItem[] = [];
+  let queuedWelcome: TomoriChatInput | undefined;
   const blacklist = spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(true);
   const spies = [
     spyOn(userRepository, "register").mockResolvedValue(
@@ -113,6 +116,10 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(privacyLevel),
     spyOn(chat, "tomoriChat").mockImplementation(async (input) => {
       contexts.push(...(input.injectedContextItems ?? []));
+      if (queueWelcome) {
+        queuedWelcome = input;
+        return "queued";
+      }
       const incoming = normalizeChatInvocation({
         ...input,
         skipLock: true,
@@ -149,7 +156,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
           content: "welcome line",
         }) as unknown as Message;
       const inFlightEcho = await evaluateChatAdmission(
-        normalizeChatInvocation({ client, message: botEcho("echo-1"), isFromQueue: false }),
+        normalizeChatInvocation({ client, message: botEcho("100000000000000201"), isFromQueue: false }),
       );
       echoReasons.push(inFlightEcho.reason);
       releaseChannelLockAndReplayQueue({
@@ -160,7 +167,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
         processQueuedMessage: async () => {},
       });
       const postReleaseEcho = await evaluateChatAdmission(
-        normalizeChatInvocation({ client, message: botEcho("echo-2"), isFromQueue: false }),
+        normalizeChatInvocation({ client, message: botEcho("100000000000000202"), isFromQueue: false }),
       );
       echoReasons.push(postReleaseEcho.reason);
       return admission.disposition;
@@ -168,6 +175,11 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
   ];
   try {
     await handler(client, member);
+    const wouldReplyToMember = async (id: string) => {
+      const reply = { ...message, id, author: member.user, content: "Thanks!" } as Message;
+      await observeWelcomeReply(reply, Promise.resolve(null));
+      return chat.shouldBotReply(reply, persona, [persona], { referencedMessage: null });
+    };
     return {
       admissions,
       echoReasons,
@@ -175,6 +187,9 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
       prompt: contexts
         .flatMap((context) => context.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])))
         .join("\n"),
+      queuedWelcome,
+      wouldReplyToMember,
+      channelId: channel.id,
     };
   } finally {
     for (const spy of spies) spy.mockRestore();
@@ -208,6 +223,37 @@ describe("welcome attribution", () => {
         expect(result.prompt).not.toContain("Português");
         expect(result.prompt).not.toContain("Community");
       }
+    }
+  });
+
+  it("arms a queued welcome only after its greeting has a Discord delivery receipt", async () => {
+    for (const delivered of [true, false]) {
+      const { queuedWelcome, wouldReplyToMember, channelId } = await runWelcome(PrivacyLevel.MINIMAL, false, true);
+      const greetingId = "100000000000000102";
+      expect(await wouldReplyToMember("100000000000000101")).toBe(false);
+      await queuedWelcome?.onGenerationResult?.(
+        delivered
+          ? {
+              status: "completed",
+              streamResults: [{ status: "completed", firstMessageId: greetingId, accumulatedText: "Welcome!" }],
+              personaResponses: [{ personaId: 1, personaName: "Mirri", text: "Welcome!" }],
+              firstDeliveredMessageId: greetingId,
+            }
+          : { status: "empty_response", streamResults: [], personaResponses: [] },
+        delivered
+          ? [
+              {
+                messageId: greetingId,
+                channelId,
+                route: "bot",
+                webhookId: null,
+                identity: { username: "Mirri" },
+                speaker: { personaId: 1, kind: "appearance" },
+              },
+            ]
+          : [],
+      );
+      expect(await wouldReplyToMember("100000000000000103")).toBe(delivered);
     }
   });
 });

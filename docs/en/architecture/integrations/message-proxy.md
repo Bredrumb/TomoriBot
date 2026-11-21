@@ -105,6 +105,8 @@ the channel lock's follow-up path, and only when its original was suppressed and
 host is the active turn's user. It then interrupts, or queues behind a tool chain, and replays
 as the webhook message. A different member on the same host account uses the ordinary busy
 queue. Follow-up replacement is keyed by the host account because the webhook authors the repost.
+A verified PluralBuddy repost can also carry the welcome trigger from its suppressed original
+when the host's expectation has a single match.
 A late PluralBuddy repost whose original left the speedbump is ignored as an ordinary chat trigger,
 even if the original's turn has ended. Another host's repost and any unconfirmed webhook cannot
 interrupt a reply. Verification that finishes after the turn ends finds no lock to interrupt.

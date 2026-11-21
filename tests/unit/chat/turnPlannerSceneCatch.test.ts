@@ -7,12 +7,20 @@ import * as errorVisibility from "@/utils/chat/errorVisibility";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 import type { LockedChatTurn } from "@/utils/chat/types";
+import { observeWelcomeReply, trackWelcomeReply } from "@/utils/chat/welcomeReply";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
 import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
-const MIRRI = createPersona({ persona_id: 5, server_id: 7, persona_nickname: "Mirri", is_alter: false });
+const CHANNEL_ID = "100000000000000101";
+const MIRRI = createPersona({
+  persona_id: 5,
+  server_id: 7,
+  persona_nickname: "Mirri",
+  is_alter: false,
+  config: { welcome_channel_disc_id: CHANNEL_ID, welcome_prompt: "Greet the new member" },
+});
 const BAU = createPersona({ persona_id: 6, server_id: 7, persona_nickname: "Bau", is_alter: true });
 const JUNO = createPersona({
   persona_id: 7,
@@ -27,18 +35,26 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-async function planInterruption(content: string, personalDtm: "off" | "on" = "off"): Promise<number[]> {
+async function planImplicitReply(
+  content: string,
+  options: { personalDtm?: "off" | "on"; welcome?: boolean; allowedPersonaIds?: Set<number> } = {},
+): Promise<number[]> {
   const personas = [MIRRI, BAU, JUNO];
-  const member = createUserRow({ user_id: 77, user_disc_id: "100000000000000077", personal_dtm: personalDtm });
+  const member = createUserRow({
+    user_id: 77,
+    user_disc_id: "100000000000000077",
+    personal_dtm: options.personalDtm ?? "off",
+  });
   const client = { user: { id: "fixture-bot" } };
   const guild = { id: "fixture-guild", preferredLocale: "en-US", members: { fetch: async () => null } };
   const channel = Object.assign(Object.create(TextChannel.prototype), {
-    id: "fixture-channel",
+    id: CHANNEL_ID,
     type: 0,
     isThread: () => false,
   });
   const message = {
-    id: "member-message",
+    id: "100000000000000203",
+    channelId: channel.id,
     author: { id: member.user_disc_id, username: "member", bot: false },
     webhookId: null,
     channel,
@@ -51,11 +67,16 @@ async function planInterruption(content: string, personalDtm: "off" | "on" = "of
     attachments: new Map(),
     embeds: [],
   } as unknown as Message;
+  if (options.welcome) {
+    const welcome = trackWelcomeReply(channel, member.user_disc_id, 6, personas);
+    await welcome.confirm("100000000000000202");
+    await observeWelcomeReply(message, Promise.resolve(null));
+  }
   const incoming = normalizeChatInvocation({
     client: message.client,
     message,
     isFromQueue: true,
-    nudgeSceneCatcherPersonaId: BAU.persona_id,
+    nudgeSceneCatcherPersonaId: options.welcome ? undefined : BAU.persona_id,
   });
   const lockedTurn = {
     channelId: channel.id,
@@ -96,7 +117,7 @@ async function planInterruption(content: string, personalDtm: "off" | "on" = "of
     } as never),
     spyOn(admissionGuards, "evaluateChatAccess").mockResolvedValue({
       rejectedByWhitelist: false,
-      allowedPersonaIds: null,
+      allowedPersonaIds: options.allowedPersonaIds ?? null,
       whitelistStatus: undefined,
       personalSpotlightStatus: null,
     } as never),
@@ -111,15 +132,32 @@ async function planInterruption(content: string, personalDtm: "off" | "on" = "of
 
 describe("a member interrupting a Natural Nudges scene", () => {
   it("is answered by the next scripted speaker when the message addresses nobody", async () => {
-    expect(await planInterruption("よ")).toEqual([BAU.persona_id as number]);
+    expect(await planImplicitReply("よ")).toEqual([BAU.persona_id as number]);
   });
 
   it("is answered by the persona the member named instead", async () => {
-    expect(await planInterruption("juno, what are you two plotting?")).toEqual([JUNO.persona_id as number]);
+    expect(await planImplicitReply("juno, what are you two plotting?")).toEqual([JUNO.persona_id as number]);
   });
 
   it("is not answered for merely joining when the member chose deliberate triggers, or wrote a bot command", async () => {
-    expect(await planInterruption("よ", "on")).toEqual([]);
-    expect(await planInterruption("!roll d20")).toEqual([]);
+    expect(await planImplicitReply("よ", { personalDtm: "on" })).toEqual([]);
+    expect(await planImplicitReply("!roll d20")).toEqual([]);
+  });
+});
+
+describe("a member replying to their welcome", () => {
+  it("plans a normal member turn with the welcoming persona", async () => {
+    expect(await planImplicitReply("Thanks!", { welcome: true })).toEqual([BAU.persona_id as number]);
+  });
+
+  it("uses the persona the member explicitly addresses", async () => {
+    expect(await planImplicitReply("juno, where should I start?", { welcome: true })).toEqual([
+      JUNO.persona_id as number,
+    ]);
+  });
+
+  it("respects deliberate triggers and persona access", async () => {
+    expect(await planImplicitReply("Thanks!", { welcome: true, personalDtm: "on" })).toEqual([]);
+    expect(await planImplicitReply("Thanks!", { welcome: true, allowedPersonaIds: new Set([5, 7]) })).toEqual([]);
   });
 });

@@ -41,7 +41,10 @@ export type QueuedMessageDiscardReason =
   | "self_reply_work_cleared"
   | "scene_interrupted";
 
-export type ChatGenerationResultHandler = (result: GenerationTurnResult) => void | Promise<void>;
+export type ChatGenerationResultHandler = (
+  result: GenerationTurnResult,
+  deliveryReceipts?: readonly import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[],
+) => void | Promise<void>;
 export type QueuedMessageDiscardHandler = (reason: QueuedMessageDiscardReason) => void | Promise<void>;
 
 export interface ManualTriggerInvoker {

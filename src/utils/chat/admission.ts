@@ -32,6 +32,7 @@ import {
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import { applyWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
+import { inheritWelcomeReplyFromOriginal, observeWelcomeReply } from "@/utils/chat/welcomeReply";
 import {
   applyMessageProxyReference,
   cancelPendingMessageProxyExpectation,
@@ -142,15 +143,19 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   if (!channel) {
     return { incoming, disposition: "ignore", locale: "en-US", reason: "channel_unavailable" };
   }
-  await verifyMessageWebhook(message);
+  const isWebhookMessage = Boolean(message.webhookId);
+  const proxyResolution = verifyMessageWebhook(message).then(() =>
+    resolveMessageProxyRecord(message, isWebhookMessage, isMatrixRelayMessage(message)),
+  );
+  const welcomeObservation =
+    !incoming.isManuallyTriggered && !incoming.isFromQueue ? observeWelcomeReply(message, proxyResolution) : undefined;
+  const [messageProxyRecord] = await Promise.all([proxyResolution, welcomeObservation]);
   let referencedMessagePromise: Promise<Message | null> | undefined;
   const getReferencedMessage = () => (referencedMessagePromise ??= resolveReferencedMessage(message));
   const isBotAuthor = message.author.bot;
-  const isWebhookMessage = Boolean(message.webhookId);
   const isInteractionResponse = Boolean(message.interaction);
   const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
   const isMatrixRelay = isMatrixRelayMessage(message);
-  const messageProxyRecord = await resolveMessageProxyRecord(message, isWebhookMessage, isMatrixRelay);
   const isMessageProxy = Boolean(messageProxyRecord);
   const isLikelySelfMessage =
     !isMatrixRelay && !isMessageProxy && (isFromClientUser || isManagedWebhookMessage(message));
@@ -499,6 +504,7 @@ async function resolveMessageProxyRecord(
       : null,
   });
   if (route.attestation.originalMessageId === null) {
+    if (record.originalSuppressed) inheritWelcomeReplyFromOriginal(message, route.expectation.originalMessage);
     consumeVerifiedRepostExpectation(route.expectation);
   }
   applyMessageProxyReference(message);
