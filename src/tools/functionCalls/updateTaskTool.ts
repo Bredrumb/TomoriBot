@@ -31,17 +31,7 @@ import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import type { ReminderRow } from "@/types/db/schema";
 
-const RELATIVE_TIME_MULTIPLIERS_MS = {
-  minutes_from_now: 60 * 1000,
-  hours_from_now: 60 * 60 * 1000,
-  days_from_now: 24 * 60 * 60 * 1000,
-} as const;
-
-type FixedRelativeTimeKey = keyof typeof RELATIVE_TIME_MULTIPLIERS_MS;
-
-const RELATIVE_TIME_KEYS = ["months_from_now", ...Object.keys(RELATIVE_TIME_MULTIPLIERS_MS)] as Array<
-  FixedRelativeTimeKey | "months_from_now"
->;
+const RELATIVE_TIME_KEYS = ["months_from_now", "minutes_from_now"] as const;
 
 export type UpdateTaskActor = {
   requesterUserId?: number;
@@ -144,6 +134,13 @@ export function parseUpdateTaskArguments(
     }
     newReminderTime = parsedReminderTime;
   } else {
+    if (args.hours_from_now != null || args.days_from_now != null) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Use minutes_from_now for fixed start delays.",
+      };
+    }
     const hasRelativeParams = RELATIVE_TIME_KEYS.some((key) => hasProvidedArg(args, key));
     if (hasRelativeParams) {
       let baseTime = new Date();
@@ -164,7 +161,7 @@ export function parseUpdateTaskArguments(
         if (key === "months_from_now") {
           baseTime = addMonthsWithOffset(baseTime, value, timezoneOffset);
         } else {
-          totalMilliseconds += value * RELATIVE_TIME_MULTIPLIERS_MS[key];
+          totalMilliseconds = value * 60_000;
         }
       }
 
@@ -276,7 +273,7 @@ function formatReminderTime(reminderTime: Date, timezoneOffset: number, locale: 
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace or delete a scheduled task by ID. Omit time fields to keep the trigger. Relative time fields add together. Choose at most one positive repeat interval. Omit all intervals to keep recurrence or pass 0 to clear it. Target user, channel, and self-task status stay fixed.";
+    "Replace or delete a scheduled task by ID. Omit time fields to keep the trigger. Apply calendar months before adding elapsed minutes. Choose at most one positive repeat interval. Omit all intervals to keep recurrence or pass 0 to clear it. Target user, channel, and self-task status stay fixed.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -303,15 +300,7 @@ export class UpdateTaskTool extends BaseTool {
       },
       minutes_from_now: {
         type: "number",
-        description: "Minutes from now to the replacement trigger.",
-      },
-      hours_from_now: {
-        type: "number",
-        description: "Hours from now to the replacement trigger.",
-      },
-      days_from_now: {
-        type: "number",
-        description: "Days from now to the replacement trigger.",
+        description: "Elapsed minutes to the replacement trigger (60 per hour, 1440 per day).",
       },
       months_from_now: {
         type: "number",

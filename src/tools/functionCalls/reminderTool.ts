@@ -28,7 +28,7 @@ import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
-    "Schedule a user reminder or a task for yourself. Use cross_channel_message for immediate work in another channel. Relative time fields add together. Omit repeat intervals for a one-time task. Set at most one positive interval. With no first trigger specified, minute repeats start after one interval and other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
+    "Schedule a user reminder or a task for yourself. Use cross_channel_message for immediate work in another channel. Apply calendar months before adding elapsed minutes. Omit repeat intervals for a one-time task. Set at most one positive interval. With no first trigger specified, minute repeats start after one interval and other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -55,15 +55,7 @@ export class ReminderTool extends BaseTool {
       },
       minutes_from_now: {
         type: "number",
-        description: "Minutes from now to the first trigger.",
-      },
-      hours_from_now: {
-        type: "number",
-        description: "Hours from now to the first trigger.",
-      },
-      days_from_now: {
-        type: "number",
-        description: "Days from now to the first trigger.",
+        description: "Elapsed minutes to the first trigger (60 per hour, 1440 per day).",
       },
       months_from_now: {
         type: "number",
@@ -141,8 +133,6 @@ export class ReminderTool extends BaseTool {
     const reminderTimeArg = args.reminder_time as string | undefined;
     const utcOffsetArg = args.utc_offset as number | undefined;
     const minutesFromNowArg = args.minutes_from_now as number | undefined;
-    const hoursFromNowArg = args.hours_from_now as number | undefined;
-    const daysFromNowArg = args.days_from_now as number | undefined;
     const monthsFromNowArg = args.months_from_now as number | undefined;
     const selfReminderArg = args.self_reminder as boolean | undefined;
     const targetChannelArg = args.target_channel as string | undefined;
@@ -371,10 +361,16 @@ export class ReminderTool extends BaseTool {
         };
       }
     } else {
+      if (args.hours_from_now != null || args.days_from_now != null) {
+        const reason = "Use minutes_from_now for fixed start delays.";
+        return {
+          success: false,
+          error: reason,
+          data: { status: "reminder_creation_failed_invalid_args", reason },
+        };
+      }
       const hasRelativeParams =
         (typeof minutesFromNowArg === "number" && minutesFromNowArg > 0) ||
-        (typeof hoursFromNowArg === "number" && hoursFromNowArg > 0) ||
-        (typeof daysFromNowArg === "number" && daysFromNowArg > 0) ||
         (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0);
 
       timeCalculationMethod = "relative";
@@ -390,17 +386,10 @@ export class ReminderTool extends BaseTool {
         typeof monthsFromNowArg === "number" && monthsFromNowArg > 0
           ? addMonthsWithOffset(currentTime, monthsFromNowArg, timezoneOffset)
           : currentTime;
-      let totalMilliseconds = 0;
-
-      if (typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0) {
-        totalMilliseconds += effectiveMinutesFromNow * 60 * 1000;
-      }
-      if (typeof hoursFromNowArg === "number" && hoursFromNowArg > 0) {
-        totalMilliseconds += hoursFromNowArg * 60 * 60 * 1000;
-      }
-      if (typeof daysFromNowArg === "number" && daysFromNowArg > 0) {
-        totalMilliseconds += daysFromNowArg * 24 * 60 * 60 * 1000;
-      }
+      const totalMilliseconds =
+        typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0
+          ? effectiveMinutesFromNow * 60_000
+          : 0;
 
       finalReminderTime = new Date(monthShiftedTime.getTime() + totalMilliseconds);
     }
@@ -420,8 +409,6 @@ export class ReminderTool extends BaseTool {
           ? reminderTimeArg
           : `calculated from relative parameters (${[
               minutesFromNowArg && `${minutesFromNowArg} minutes`,
-              hoursFromNowArg && `${hoursFromNowArg} hours`,
-              daysFromNowArg && `${daysFromNowArg} days`,
               monthsFromNowArg && `${monthsFromNowArg} months`,
             ]
               .filter(Boolean)

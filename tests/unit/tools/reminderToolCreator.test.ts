@@ -83,6 +83,16 @@ describe("create_task recurrence", () => {
     expect(row).toBeUndefined();
   });
 
+  it("rejects retired start delay arguments before scheduling", async () => {
+    for (const timing of [{ hours_from_now: 1 }, { days_from_now: 1 }]) {
+      const { result, row } = await executeTaskCreation({ internalUserId: ANCHOR_AUTHOR.user_id }, timing);
+
+      expect(result.success).toBeFalse();
+      expect(result.data).toMatchObject({ status: "reminder_creation_failed_invalid_args" });
+      expect(row).toBeUndefined();
+    }
+  });
+
   it("shows the cutoff and daily window together on the creation notice", async () => {
     setSystemTime(new Date("2030-06-10T10:00:00Z"));
     const context = { internalUserId: ANCHOR_AUTHOR.user_id };

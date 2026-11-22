@@ -10,7 +10,7 @@ describe("update_task helpers", () => {
   it("reschedules by calendar months before adding fixed-length parts", () => {
     setSystemTime(new Date("2026-01-31T09:00:00Z"));
     const result = parseUpdateTaskArguments(
-      { reminder_id: 3, reminder_purpose: "Renew the domain.", months_from_now: 1, days_from_now: 2 },
+      { reminder_id: 3, reminder_purpose: "Renew the domain.", months_from_now: 1, minutes_from_now: 2880 },
       0,
     );
 
@@ -62,7 +62,7 @@ describe("update_task helpers", () => {
       {
         reminder_id: 9,
         reminder_purpose: "Review the new logs.",
-        hours_from_now: 2,
+        minutes_from_now: 120,
         repetition_interval_minutes: 0,
       },
       0,
@@ -75,6 +75,15 @@ describe("update_task helpers", () => {
     expect(result.newReminderTime?.getTime()).toBeLessThanOrEqual(after + 2 * 60 * 60 * 1000 + 10);
     expect(result.hasRepetitionUpdate).toBe(true);
     expect(result.repetition).toBeNull();
+  });
+
+  it("rejects retired start delays before a content-only update", () => {
+    for (const timing of [{ hours_from_now: 1 }, { days_from_now: 1 }]) {
+      expect(parseUpdateTaskArguments({ reminder_id: 4, reminder_purpose: "Pay rent.", ...timing }, 0)).toMatchObject({
+        ok: false,
+        status: "task_update_failed_invalid_args",
+      });
+    }
   });
 
   it("parses a monthly repeat and rejects a positive interval in both units", () => {
