@@ -2,6 +2,7 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import {
+  type PersonaPostAppearance,
   type PersonaPostContext,
   type PersonaPostOutcome,
   type PersonaPostPayload,
@@ -40,7 +41,10 @@ export function sendToolPersonaPost(
   context: ToolContext,
   persona: TomoriState,
   payload: PersonaPostPayload,
-  destination?: SendableChannel,
+  options?: { destination?: SendableChannel; appearance?: PersonaPostAppearance },
 ): Promise<PersonaPostOutcome> {
-  return sendPersonaPost(buildToolPersonaPostContext(context, persona, destination), payload);
+  return sendPersonaPost(
+    { ...buildToolPersonaPostContext(context, persona, options?.destination), appearance: options?.appearance },
+    payload,
+  );
 }

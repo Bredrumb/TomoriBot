@@ -1135,7 +1135,7 @@ describe("Channels Auto-Trigger routes", () => {
       { current: [1, 1] as const, input: "0", next: [0, 0] as const },
       { current: [0, 0] as const, input: "5", next: [5, 5] as const },
       { current: [5, 5] as const, input: "2-8", next: [2, 8] as const },
-      { current: [2, 8] as const, input: "1000", next: [1000, 1000] as const },
+      { current: [2, 8] as const, input: "9999", next: [9999, 9999] as const },
     ];
 
     for (const [index, mode] of modes.entries()) {
@@ -1183,7 +1183,7 @@ describe("Channels Auto-Trigger routes", () => {
       [9, 55, 0, 0, 0],
       [9, 55, 5, 5, 5],
       [9, 55, 2, 8, 5],
-      [9, 55, 1000, 1000, 1000],
+      [9, 55, 9999, 9999, 9999],
     ]);
     setThreshold.mockRestore();
     random.mockRestore();
@@ -1194,7 +1194,7 @@ describe("Channels Auto-Trigger routes", () => {
     const state = makePersona({
       config: { autoch_threshold: 5, autoch_threshold_max: 5 } as TomoriState["config"],
     });
-    const inputs = ["0-1", "5-3", "1001-1001", "abc", "5-", "-5", "1-2-3"];
+    const inputs = ["0-1", "5-3", "10000-10000", "abc", "5-", "-5", "1-2-3"];
     for (const [index, input] of inputs.entries()) {
       const nonce = `nonce${index + 3}234567`;
       const harness = makeHarness({ state });

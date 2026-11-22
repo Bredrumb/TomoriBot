@@ -67,6 +67,10 @@ inheritance; an empty string selects the base appearance. Both tools use the sha
 resolver, which remembers the selected appearance only after successful delivery. Sprite selection
 does not add speech delivery instructions.
 
+`create_thread` reads a leading `Persona (sprite):` label in its `first_message`. It validates the
+sprite before creating the thread and removes the label from the posted text. A successful post sets
+the persona's remembered appearance in the new thread.
+
 ## Execution dispatch and failure boundaries
 
 Tool execution coordinates through a single entry point: `ToolRegistry.executeTool()`.

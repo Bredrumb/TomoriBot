@@ -3187,7 +3187,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
-  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
+  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT false,
   user_info_updates_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3199,6 +3199,7 @@ SELECT add_column_if_not_exists('server_capabilities_configs', 'conditioning_int
 ALTER TABLE server_capabilities_configs ALTER COLUMN conditioning_interactions_enabled SET DEFAULT true;
 SELECT add_column_if_not_exists('server_capabilities_configs', 'dice_rolling_enabled', 'BOOLEAN NOT NULL', 'true');
 ALTER TABLE server_capabilities_configs ALTER COLUMN dice_rolling_enabled SET DEFAULT true;
+ALTER TABLE server_capabilities_configs ALTER COLUMN short_term_memory_enabled SET DEFAULT false;
 
 DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
 CREATE TRIGGER update_server_capabilities_configs_timestamp

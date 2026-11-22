@@ -64,7 +64,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   user_blocking_enabled: true,
   time_awareness_enabled: true,
   tool_use_enabled: true,
-  short_term_memory_enabled: true,
+  short_term_memory_enabled: false,
   user_info_updates_enabled: true,
   tool_notice_hidden_keys: [],
   tool_notice_verbosity: "minimal",

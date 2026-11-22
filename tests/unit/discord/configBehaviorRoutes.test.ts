@@ -423,7 +423,7 @@ describe("config Behavior routes", () => {
     const events: string[] = [];
     const update = spyOn(configRepository, "updateCapabilitiesConfig").mockImplementation(async (_serverId, patch) => {
       events.push("write");
-      expect(patch).toEqual({ short_term_memory_enabled: false });
+      expect(patch).toEqual({ short_term_memory_enabled: true });
       return true;
     });
     const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {
@@ -433,7 +433,7 @@ describe("config Behavior routes", () => {
       const harness = makeHarness();
       const interaction = makeInteraction(
         harness,
-        buildConfigRouteId({ action: "behavior-stm-enabled-set", locale: "en-US", enabled: false }),
+        buildConfigRouteId({ action: "behavior-stm-enabled-set", locale: "en-US", enabled: true }),
       );
 
       await dispatch(harness, interaction);

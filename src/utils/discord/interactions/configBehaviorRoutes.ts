@@ -1090,7 +1090,7 @@ function fallbackD10View(state: TomoriState) {
     memory: {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
-      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      stmEnabled: state.config.short_term_memory_enabled ?? false,
       toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig: null,
       stmCategories: [],
@@ -1375,7 +1375,7 @@ async function runD10Write(
     };
   }
   if (route.action === "behavior-stm-enabled-set") {
-    if ((state.config.short_term_memory_enabled ?? true) === route.enabled)
+    if ((state.config.short_term_memory_enabled ?? false) === route.enabled)
       return {
         receipt: receipt(
           locale,

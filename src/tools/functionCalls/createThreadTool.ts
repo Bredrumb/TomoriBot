@@ -2,6 +2,7 @@ import { ChannelType, PermissionFlagsBits, type Guild, type NewsChannel, type Te
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
+import { parseLeadingRenderModifier } from "@/utils/discord/renderModifierParser";
 import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
@@ -13,6 +14,7 @@ import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
 import type { Message } from "discord.js";
 import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 import { localizer } from "@/utils/text/localizer";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
 
 const MAX_THREAD_NAME_LENGTH = 100;
 const MAX_FIRST_MESSAGE_LENGTH = 2000;
@@ -167,7 +169,8 @@ export class CreateThreadTool extends BaseTool {
       },
       first_message: {
         type: "string",
-        description: "Acknowledge creating the thread or start the scene if the user requested roleplay.",
+        description:
+          "Acknowledge creating the thread or start the requested roleplay scene. A leading persona sprite label sets the starter's avatar.",
       },
       channel_name: {
         type: "string",
@@ -250,11 +253,12 @@ export class CreateThreadTool extends BaseTool {
       };
     }
 
-    const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
-      context.personaUsername,
-      context.tomoriState.persona_nickname,
-    ]);
-    const firstMessage = stripLeadingKnownSpeakerPrefixes(firstMessageRaw, speakerNames).trim();
+    const activeSpeakerNames = [context.tomoriState.persona_nickname];
+    if (context.personaUsername) activeSpeakerNames.push(context.personaUsername);
+    const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, activeSpeakerNames);
+    const starter = stripLeadingKnownSpeakerPrefixes(firstMessageRaw, speakerNames);
+    const spriteLabel = parseLeadingRenderModifier(starter, activeSpeakerNames);
+    const firstMessage = spriteLabel ? stripLeadingKnownSpeakerPrefixes(spriteLabel.body, speakerNames) : starter;
 
     if (!firstMessage) {
       return {
@@ -401,7 +405,14 @@ export class CreateThreadTool extends BaseTool {
       };
     }
 
-    if (context.tomoriState.is_alter) {
+    const spriteSelection = await resolveToolSpriteSelection(
+      { sprite: spriteLabel?.modifier },
+      context,
+      context.tomoriState.persona_id,
+    );
+    if (!spriteSelection.success) return spriteSelection;
+
+    if (context.tomoriState.is_alter || spriteSelection.appearance?.kind === "sprite") {
       const personaWebhook = await getOrCreateWebhook(targetChannel);
       if (!personaWebhook.webhook) {
         return {
@@ -428,7 +439,7 @@ export class CreateThreadTool extends BaseTool {
           content: firstMessage,
           allowedMentions: { parse: [] },
         },
-        thread,
+        { destination: thread, appearance: spriteSelection.appearance },
       );
       if (outcome.status !== "sent") throw new DiscordDeliveryError(outcome.status, outcome.error);
 

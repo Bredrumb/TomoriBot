@@ -315,7 +315,7 @@ export async function buildServerConfigPages(
       },
       {
         nameKey: "commands.status.field_short_term_memory",
-        value: formatBooleanLocalized(config.short_term_memory_enabled ?? true, locale),
+        value: formatBooleanLocalized(config.short_term_memory_enabled ?? false, locale),
         inline: true,
       },
       {

@@ -647,7 +647,7 @@ const defaultDependencies: ConfigRouteDependencies = {
     const memory: ConfigBehaviorMemoryView = {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
-      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      stmEnabled: state.config.short_term_memory_enabled ?? false,
       toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig,
       stmCategories,

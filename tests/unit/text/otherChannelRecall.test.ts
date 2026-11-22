@@ -313,7 +313,7 @@ describe("other-channel short-term recall", () => {
           triggeringUserId: "user-1",
           currentChannelId: "channel-current",
           currentServerId: "server-1",
-          tomoriState: createPersona(),
+          tomoriState: createPersona({ config: { short_term_memory_enabled: true } }),
           triggererName: "Mirri",
           botName: "Juno",
           personalMemoriesEnabled: false,

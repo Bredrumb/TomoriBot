@@ -912,7 +912,7 @@ const serverCapabilitiesConfigSchema = z.object({
   user_blocking_enabled: z.boolean().default(true),
   time_awareness_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
-  short_term_memory_enabled: z.boolean().default(true),
+  short_term_memory_enabled: z.boolean().default(false),
   user_info_updates_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

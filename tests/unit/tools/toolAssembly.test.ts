@@ -5,6 +5,7 @@ import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
 import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { applyStreamContextAvailability, getAvailableToolsForContext } from "@/tools/availability";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
 import { createPersona } from "../../helpers/fixtures";
 import {
   DanbooruGetPostTool,
@@ -108,7 +109,7 @@ it("exposes optional sprite selection only for the active persona's advertised r
   const persona = createPersona({ persona_id: 7 });
   const voice = buildVoiceMessageToolVariant(new GenerateVoiceMessageTool(), "plain");
   const interaction = new ConditioningInteractionTool();
-  const unrelated = createStaticTool();
+  const thread = new CreateThreadTool();
   for (const scenario of [
     { personaSprites: undefined, enabled: false },
     { personaSprites: { personaId: 7, spriteKeys: [] }, enabled: false },
@@ -119,7 +120,7 @@ it("exposes optional sprite selection only for the active persona's advertised r
     const tools = applyStreamContextAvailability({
       providerLabel: "fixture",
       provider: "google",
-      builtInTools: [voice, interaction, unrelated],
+      builtInTools: [voice, interaction, thread],
       tomoriState: persona,
       streamContext: {
         disableYouTubeProcessing: false,

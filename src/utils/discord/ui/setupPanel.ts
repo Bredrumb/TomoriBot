@@ -1246,7 +1246,7 @@ export function buildSetupSettingsModal(
             label: localizer(locale, SETUP_FEATURE_KEYS[feature].label),
             description: localizer(locale, SETUP_FEATURE_KEYS[feature].description),
             value: feature,
-            default: existing ? existing.features.includes(feature) : true,
+            default: existing ? existing.features.includes(feature) : feature !== "short_term_memory",
           })),
         },
       },
