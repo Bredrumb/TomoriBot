@@ -53,10 +53,6 @@ export class PeekProfilePictureTool extends BaseTool {
         description:
           "Use self for the active persona, an exact persona nickname, or a user name in context. Raw IDs also work.",
       },
-      reason: {
-        type: "string",
-        description: "Why the avatar is needed.",
-      },
     },
     required: [],
   };
@@ -123,7 +119,6 @@ export class PeekProfilePictureTool extends BaseTool {
     const targetIdentity = (
       (args.target_identity as string | undefined) ?? (args.user_id as string | undefined)
     )?.trim();
-    const reason = (args.reason as string) || "User-requested avatar analysis";
 
     if (!targetIdentity) {
       return {
@@ -138,7 +133,7 @@ export class PeekProfilePictureTool extends BaseTool {
     }
 
     const requestScope: [context?: ProviderUsageContext] = [];
-    log.info(`Processing profile picture for identity: ${targetIdentity} - Reason: ${reason}`);
+    log.info(`Processing profile picture for identity: ${targetIdentity}`);
 
     try {
       const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
@@ -175,7 +170,6 @@ export class PeekProfilePictureTool extends BaseTool {
           preparedImages,
           targetTypeLabel,
           userDisplayText,
-          reason,
           context,
           requestScope,
         );
@@ -240,7 +234,6 @@ export class PeekProfilePictureTool extends BaseTool {
           avatar_url: avatarData.avatarUrl,
           banner_url: avatarData.bannerUrl ?? null,
           avatar_source: avatarData.sourceType,
-          reason: reason,
           image_processed: true,
           banner_included: hasBanner,
           status: "completed",
@@ -307,7 +300,6 @@ export class PeekProfilePictureTool extends BaseTool {
     images: PreparedProfileImage[],
     targetTypeLabel: string,
     userDisplayText: string,
-    reason: string,
     context: ToolContext,
     requestScope: [context?: ProviderUsageContext],
   ): Promise<ToolResult> {
@@ -349,8 +341,7 @@ export class PeekProfilePictureTool extends BaseTool {
     const provider = visionLlm.llm_provider.toLowerCase();
     const apiModelName = resolveVisionApiModelName(provider, visionLlm.llm_codename);
 
-    const hasBanner = images.some((image) => image.kind === "banner");
-    const prompt = `${DEFAULT_AVATAR_ANALYSIS_PROMPT} This is the profile picture of ${targetTypeLabel}: ${userDisplayText}. Reason for analysis: ${reason}${hasBanner ? " A profile banner is also attached; use it as supporting context and describe any additional visual information it provides." : ""}`;
+    const prompt = `${DEFAULT_AVATAR_ANALYSIS_PROMPT} This is the profile picture of ${targetTypeLabel}: ${userDisplayText}.`;
 
     log.info(
       `PeekProfilePictureTool: Redirecting avatar analysis to vision model ${provider}/${apiModelName} (primary model is non-vision)`,

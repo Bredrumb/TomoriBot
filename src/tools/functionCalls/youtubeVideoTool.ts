@@ -25,10 +25,6 @@ export class YouTubeVideoTool extends BaseTool {
         description:
           "Complete youtube.com/watch, youtu.be, youtube.com/embed, or youtube.com/shorts URL provided by the user.",
       },
-      reason: {
-        type: "string",
-        description: "Why the video needs analysis.",
-      },
     },
     required: ["youtube_url"],
   };
@@ -100,9 +96,7 @@ export class YouTubeVideoTool extends BaseTool {
     }
 
     const youtubeUrl = args.youtube_url as string;
-    const reason = (args.reason as string) || "User-requested video analysis";
-
-    log.info(`Processing YouTube video: ${youtubeUrl} - Reason: ${reason}`);
+    log.info(`Processing YouTube video: ${youtubeUrl}`);
 
     await sendToolProgressNotice(
       context,
@@ -166,7 +160,6 @@ export class YouTubeVideoTool extends BaseTool {
           type: "context_restart_with_youtube",
           video_id: videoId,
           video_url: youtubeUrl,
-          reason: reason,
           enhanced_context_item: videoContextItem,
         },
       };

@@ -21,10 +21,6 @@ export class ProcessGifTool extends BaseTool {
         type: "string",
         description: "Media ID of the GIF message. It must be among the last 100 channel messages.",
       },
-      reason: {
-        type: "string",
-        description: "Why GIF analysis is needed.",
-      },
     },
     required: ["media_id"],
   };
@@ -68,7 +64,6 @@ export class ProcessGifTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const messageId = args.media_id as string;
-    const reason = (args.reason as string | undefined) || "No reason provided";
 
     if (!messageId) {
       log.warn("ProcessGifTool: Missing required parameter 'media_id'");
@@ -79,7 +74,7 @@ export class ProcessGifTool extends BaseTool {
       };
     }
 
-    log.info(`ProcessGifTool: Starting GIF processing for message ${messageId} - Reason: ${reason}`);
+    log.info(`ProcessGifTool: Starting GIF processing for message ${messageId}`);
 
     try {
       log.info(`ProcessGifTool: Fetching recent messages from channel ${context.channel.id}`);
@@ -234,7 +229,6 @@ export class ProcessGifTool extends BaseTool {
           frame_count: processedFrames.length,
           processing_time_ms: processingTime,
           has_pending_context: true,
-          reason: reason,
         },
       };
     } catch (error) {
@@ -265,7 +259,6 @@ export class ProcessGifTool extends BaseTool {
         data: {
           status: errorStatus,
           media_id: messageId,
-          reason: reason,
         },
       };
     }
