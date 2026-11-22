@@ -25,7 +25,7 @@
 | memory | memória (f) | General term for the bot's stored context or facts. |
 | server memory | memória do servidor (f) | Facts and contexts related to the Discord server itself. |
 | personal memory | memória pessoal (f) | Facts the bot remembers specifically about a user across servers. |
-| short-term memory | memória de curto prazo (f) | Often abbreviated as STM in English; can use "MCP" or keep "STM" if space is limited, but "memória de curto prazo" in full text. |
+| short-term memory | memória de curto prazo (f) | Use memória de curto prazo in prose. Use STM for short labels where space is limited. |
 | teach | ensinar (verb) | The action of giving the bot new facts to remember. |
 | trigger word | palavra-gatilho (f) | The specific words that cause the bot to respond. Plural: "palavras-gatilho". |
 | sticker | figurinha (f) | Standard Discord pt-BR localization for stickers. |

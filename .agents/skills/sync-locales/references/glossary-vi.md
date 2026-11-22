@@ -34,7 +34,7 @@
 | English Term | Chosen Translation | Usage Note |
 |---|---|---|
 | persona | persona | `nhân vật` means a fictional character and collides with Discord members; `nhân cách` is clinical. |
-| alter | alter | A secondary persona. Kept in English to match every other locale in this programme, including es-419 and zh-TW. `bản thể` was proposed once and reads as a philosophical essence. |
+| alter | alter | A secondary persona. Keep the English term in Vietnamese. `bản thể` was proposed once and reads as a philosophical essence. |
 | main persona | persona chính | |
 | server | máy chủ | A Discord server (guild). This is the term the Discord client itself shows in Vietnamese, so the bot's words match the interface around them. Casual speech says "server", which is acceptable inside persona dialogue but not in panel, command or error text. |
 | server default | mặc định của máy chủ | The baseline settings applied to the whole server. |

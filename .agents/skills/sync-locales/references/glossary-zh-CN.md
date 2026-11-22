@@ -90,7 +90,7 @@
 | rate limit | 速率限制 | 与「冷却」不是同一件事：速率限制是自动保护的拒绝，冷却是服务器设置的等待时间。 |
 | quota | 配额 | 每日用量上限，与「速率限制」分开。 |
 | notice embed | 提示嵌入 | 回复下方的过程提示。`Embedding` 模型槽位写「嵌入」，端点写「嵌入端点」；「提示嵌入」不得缩写成「嵌入」，也不引入「向量嵌入」。 |
-| workaround | 兼容处理 | 面板标题 `compatibility_title: Compatibility` 写「兼容性」，其中的单项写「兼容处理」（`edit_workarounds_button: Edit Workarounds` 写「编辑兼容处理」）。不用「变通方法」。 |
+| workaround | 兼容处理 | 指让模型适配严格后端的处理方式。当前模型设置的标签 `model_compat_label` 写「聊天补全兼容性」。 |
 | blocklist | 屏蔽名单 | 跨频道工具不可进入的频道（`channels_rules_blocklist_title: Cross-Channel Blocklist` 写「跨频道屏蔽名单」）。不要写成「白名单」，两者含义相反。 |
 | whitelist | 白名单 | 与「屏蔽名单」是两个功能，不要互换：管理面板的频道与身份组白名单是允许清单，跨频道屏蔽名单是禁止清单。 |
 | private channel | 私密频道 | 短期记忆与思考日志不外流的频道。 |
@@ -100,7 +100,7 @@
 
 面板与按钮名称必须取自本 locale 的 `src/locales/zh-CN/`，本表为基准译值，实现时以 locale 文件为准。
 本表只收真实存在的 en-US 标签；概念名（例如 personal override）只在术语表里出现，不列在这里。
-Manage Server 与 Manage Webhooks 是 Discord 权限名而不是面板标签，两行的中文必须与 Discord 简中客户端一致（与第 11 项同一个待验证依赖）。
+Manage Server 与 Manage Webhooks 是 Discord 权限名而不是面板标签，两行的中文必须与 Discord 简中客户端一致。现有译名尚待核对。
 
 | English label | zh-CN label |
 |---|---|

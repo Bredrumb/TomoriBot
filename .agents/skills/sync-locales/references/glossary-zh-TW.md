@@ -40,7 +40,7 @@
 | BYOK | BYOK | 縮寫保留英文，首次出現寫「BYOK（bring your own key，自備金鑰）」。UI 標籤「User BYOK」譯作「使用者 BYOK」。 |
 | webhook | 網路鉤子 | 台灣社群多直接說 webhook。若全篇保留英文，需與 Discord 權限標籤「管理 Webhook」一致；若採譯名，權限標籤寫「管理網路鉤子」，全篇擇一。 |
 | preset | 預設集 | 不可只寫「預設」，那與 server default 的「伺服器預設」撞詞。人格預設集寫「人格預設集」。 |
-| lineage | 同脈 | 指多個伺服器或語言版本共用同一人格身分（DB 的 persona lineage）。用於「同脈人格」時指共用同一身分來源的人格。此譯法未經母語審校，見文末待決清單。 |
+| lineage | 同脈 | 指多個伺服器或語言版本共用同一人格身分（DB 的 persona lineage）。用於「同脈人格」時指共用同一身分來源的人格。此譯法尚待母語者確認。 |
 | deliberate trigger mode | 明確觸發模式 | 對應 UI 的 Deliberate Trigger Mode。不用「刻意」。 |
 | deliberate tool mode | 明確工具模式 | 對應 UI 的 Deliberate Tool Mode。 |
 | endpoint | 端點 | 自訂 API 位址。不用「端點服務」，贅字。 |
