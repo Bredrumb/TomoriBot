@@ -6,7 +6,6 @@ export default {
     none: `None`,
     none_user_byok: `None (User BYOK)`,
     inherit_global: `Inherit Global Cooldown`,
-    // /stats timeframe + scope choices (shared across all three subcommands)
     today: `Today`,
     week: `Last 7 Days`,
     month: `Last 30 Days`,

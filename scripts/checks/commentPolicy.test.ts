@@ -195,6 +195,52 @@ describe("comment policy", () => {
     ).toEqual(["obvious-narration"]);
   });
 
+  it("warns when a heading repeats the file path or adjacent property names", () => {
+    const file = "src/locales/en-US/commands/moderation.ts";
+    const source = [
+      "// locales/en-US/commands/moderation.ts",
+      "// Assembler: edit the individual command files.",
+      "",
+      "export default {",
+      "  // Whitelist: Channels",
+      '  whitelist_channels_count: "Channels",',
+      '  "whitelist-channels-description": "Allowed channels",',
+      "  // Member access",
+      '  memberAccess: "Members",',
+      "};",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source, file)).toEqual([]);
+    const changedLines = new Map([[file, new Set([5, 8])]]);
+    expect(inspectCommentPolicySource(source, file, { auditNarration: true, changedLines })).toEqual(
+      [1, 5, 8].map((line) => expect.objectContaining({ line, rule: "redundant-heading", severity: "warning" })),
+    );
+  });
+
+  it("leaves rationale, unrelated labels, inline notes, and template contents alone", () => {
+    const source = [
+      "export default {",
+      "  // Discord denies this route for members without Manage Server.",
+      "  // Member access",
+      '  memberAccess: "Members", // Whitelist: Channels',
+      '  whitelist_channels_count: "Channels",',
+      '  whitelist_channels_description: "Allowed channels",',
+      "  // Voice options",
+      '  voice_options_title: "Voice",',
+      '  duration: "Duration",',
+      "  help: `Example",
+      "  // Voice options",
+      '  voice_options_title: "Voice",',
+      '  voice_options_description: "Available voices",',
+      "  `,",
+      "};",
+    ].join("\n");
+
+    expect(
+      inspectCommentPolicySource(source, "src/locales/en-US/commands/moderation.ts", { auditNarration: true }),
+    ).toEqual([]);
+  });
+
   it("rejects JSDoc while allowing single-line public directives and license headers", () => {
     const source = [
       "/** Copyright example */",
@@ -422,16 +468,16 @@ describe("audit block signals", () => {
     expect(findings).toEqual([]);
   });
 
-  it("leaves an authored sentence standing in every locale tree alone", () => {
-    const findings = inspectAuditCorpusSources(
-      new Map([
-        ["src/locales/en-US/commands/legal.ts", source(SUBSTANTIVE)],
-        ["src/locales/ja/commands/legal.ts", source(SUBSTANTIVE)],
-        ["src/locales/pt-BR/commands/legal.ts", source(SUBSTANTIVE)],
-      ]),
-    ).filter((finding) => finding.rule === "duplicate-comment");
+  it("reports one warning listing every locale that copies the same rationale", () => {
+    const shared =
+      "The two policy leaves register only on the hosted instance, so a self-hosted bot advertises the license alone.";
+    const files = ["en-US", "ja", "pt-BR"].map((locale) => `src/locales/${locale}/commands/legal.ts`);
+    const findings = inspectAuditCorpusSources(new Map(files.map((file) => [file, source(shared)]))).filter(
+      (finding) => finding.rule === "duplicate-comment",
+    );
 
-    expect(findings).toEqual([]);
+    expect(findings).toEqual([expect.objectContaining({ severity: "warning" })]);
+    for (const file of files) expect(findings[0]?.text).toContain(`at ${file}:1`);
   });
 
   it("reports a duplicate inside one locale tree against the source tree", () => {

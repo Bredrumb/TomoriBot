@@ -1,8 +1,6 @@
 export default {
   legal: {
     description: `Xem điều khoản dịch vụ, chính sách quyền riêng tư và giấy phép của TomoriBot.`,
-    // The two policy leaves register only on the hosted instance, so a self-hosted bot advertises
-    // the license alone rather than a document set it does not expose.
     "license-only": {
       description: `Xem giấy phép nguồn mở của TomoriBot.`,
     },

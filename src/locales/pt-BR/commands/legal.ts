@@ -1,8 +1,6 @@
 export default {
   legal: {
     description: `Ver os termos de serviço, política de privacidade e licença do TomoriBot.`,
-    // The two policy leaves register only on the hosted instance, so a self-hosted bot advertises
-    // the license alone rather than a document set it does not expose.
     "license-only": {
       description: `Ver a licença de código aberto do TomoriBot.`,
     },

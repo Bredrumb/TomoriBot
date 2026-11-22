@@ -111,9 +111,6 @@ export default {
       tokens_out_short: `salida`,
     },
 
-    // Unidad independiente de "días" usada por el bloque de racha en las tarjetas (sin número inicial).
-
-    // Etiquetas usadas solo en las tarjetas infográficas renderizadas (no en el panel de texto).
     infographic: {
       no_data: `Aún sin estadísticas`,
       server_title: `Clasificación del Servidor`,

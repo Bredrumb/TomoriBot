@@ -11,13 +11,11 @@ export default {
     stale_warning: "Os dados salvos podem estar desatualizados. Ações de escrita estão indisponíveis até a leitura.",
     retry: `Tentar Novamente`,
 
-    // Category buttons
     category_member_access: `Acesso de Membros`,
     category_user_blacklist: `Lista Negra de Usuários`,
     category_whitelist: `Lista Branca`,
     category_quotas: `Cotas`,
 
-    // Member access
     member_access_title: `Configurações de Acesso de Membros`,
     member_access_description: `Configure permissões para membros sem \`Manage Server\`.`,
     member_access_servermemories_enabled: `🟢 Membros podem ver suas próprias memórias do servidor, adicionar novas e editar ou remover as suas.`,
@@ -48,7 +46,6 @@ export default {
     member_access_failed_detail: `A escrita falhou ou as permissões mudaram. Tente novamente.`,
     member_access_invalid_input: `O envio do modal não pôde ser processado. Abra novamente.`,
 
-    // User blacklist
     user_blacklist_count: `Membros na Lista Negra \`({count})\``,
     personalization_blacklist_section: "Lista Negra do Servidor",
     personalization_blacklist_description:
@@ -91,7 +88,6 @@ export default {
     changed_receipt: `Estado da lista negra alterado`,
     changed_receipt_detail: `Essa entrada não está mais na lista negra.`,
 
-    // Whitelist
     select_page_placeholder: `Escolha a página da lista branca...`,
     page_channels: `Canais`,
     page_channels_description: `Canais na lista branca e substituições de tempo de recarga`,
@@ -100,7 +96,6 @@ export default {
     page_roles: `Cargos`,
     page_roles_description: `Cargos na lista branca para gatilhos do bot`,
 
-    // Whitelist: Channels
     whitelist_channels_count: `Canais na Lista Branca \`({count})\``,
     whitelist_channels_description: `Só posso ser ativada nos seguintes canais:`,
     whitelist_channels_empty: "Nenhum canal na lista branca. O bot pode responder em qualquer canal acessível.",
@@ -141,7 +136,6 @@ export default {
     whitelist_changed_receipt: `Estado da lista branca alterado`,
     whitelist_changed_receipt_detail: `Esse canal não está mais na lista branca.`,
 
-    // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: `As personas abaixo só respondem em seus canais listados:`,
     whitelist_persona_channels_empty:
@@ -162,7 +156,6 @@ export default {
     persona_channel_remove_success: `Restrições de persona atualizadas`,
     persona_channel_remove_success_detail: `{count} entradas de canal de persona removidas.`,
 
-    // Whitelist: Roles
     whitelist_roles_count: `Cargos na Lista Branca \`({count})\``,
     whitelist_roles_description: `Apenas os seguintes cargos podem me ativar:`,
     whitelist_roles_empty: `Nenhum cargo na lista branca. Qualquer membro pode me ativar.`,
@@ -197,7 +190,6 @@ export default {
     remove_nothing_changed: `Nada foi removido`,
     remove_nothing_changed_detail: `Todas as entradas continuaram selecionadas. Sem mudanças.`,
 
-    // Quotas
     quotas_title: `Cotas de Geração`,
     quotas_description: "Configure limites diários por usuário e cotas globais do servidor para geração por IA.",
     quotas_image_generation: `Geração de Imagem`,

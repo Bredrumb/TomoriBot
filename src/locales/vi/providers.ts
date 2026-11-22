@@ -113,9 +113,6 @@ export default {
       manage_server_only: `Chỉ thành viên có quyền \`Quản lý máy chủ\` mới xem được lỗi đầy đủ.`,
       personal_only: `Lỗi này đến từ nhà cung cấp cá nhân, nên chỉ chủ sở hữu mới xem được lỗi đầy đủ.`,
     },
-    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
-    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
-    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
     tips: {
       title: `💡 Điều bạn có thể làm`,
       button: `Điều bạn có thể làm`,
@@ -155,7 +152,6 @@ export default {
       switch_model_provider: `Chuyển sang model hoặc nhà cung cấp khác bằng \`/config\` > Models > Switch Models hoặc \`/providers\`.`,
       switch_model_provider_personal: `Chuyển đổi bằng \`/personal config\`, hoặc cập nhật nhà cung cấp trong \`/personal providers\`.`,
       disable_personal_text_override: `Lỗi yêu cầu này bắt nguồn từ [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#your-own-providers) của bạn. Hãy cập nhật trong \`/personal providers\` hoặc chọn model đang hoạt động bằng \`/personal config\`.`,
-      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `Ghé thăm [Máy chủ hỗ trợ chính thức](https://discord.gg/bjCfHm9QsB) để được trợ giúp.`,
       shorten_message: `Hãy thử rút ngắn tin nhắn của bạn rồi gửi lại.`,
       refresh_context: `Xóa ngữ cảnh cuộc trò chuyện bằng \`/refresh\`.`,
@@ -246,7 +242,6 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
     },
     zai: {
-      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
       "429_balance_default_message": `Tài khoản Z.ai của bạn không đủ số dư`,
       "429_plan_access_default_message": `Gói đăng ký Z.ai của bạn không bao gồm quyền truy cập vào model này`,
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
@@ -256,9 +251,6 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
       "403_default_message": `NVIDIA đã từ chối key này. Key có thể bị gõ sai, đã hết hạn, hoặc tài khoản thiếu quyền truy cập inference.`,
       "404_default_message": `Không tìm thấy model NVIDIA NIM được yêu cầu. Model có thể đã bị NVIDIA ngừng hỗ trợ.`,
       "500_default_message": `Backend của NVIDIA phục vụ model này đã gặp lỗi. Lỗi này thường chỉ tạm thời, hãy thử lại sau giây lát. Nếu vẫn tiếp tục lỗi, người host TomoriBot có thể đọc báo cáo đầy đủ của NVIDIA trong log của bot.`,
-      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
-      // parameter. Asserting this cause on every 500 previously sent users to change settings the
-      // failing payload never carried.
       "500_parameter_default_message": `NVIDIA đã từ chối một hoặc nhiều tham số yêu cầu cho model này. Trong \`/config\` > Models > Samplers & Parameters, hãy đặt các sampler không được hỗ trợ như \`min_p\` về \`0\` và xóa các mục \`logit_bias\` đã lưu.`,
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
     },

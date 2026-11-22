@@ -98,7 +98,6 @@ export default {
       videos: `Tổng số video đã tạo`,
     },
 
-    // Per-entry unit suffixes appended after a ranked count (e.g. "12 triggers made").
     units: {
       messages_sent: `tin nhắn đã gửi`,
       messages_to_me: `lần kích hoạt`,
@@ -111,9 +110,6 @@ export default {
       tokens_out_short: `ra`,
     },
 
-    // Standalone "days" unit used by the streak block on cards (no leading number).
-
-    // Labels used only on the rendered infographic cards (not the text dashboard).
     infographic: {
       no_data: `Chưa có thống kê`,
       server_title: `Bảng xếp hạng máy chủ`,

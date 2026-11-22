@@ -12,13 +12,11 @@ export default {
       "Dữ liệu đã lưu có thể đã cũ do đọc dữ liệu thất bại. Không thể ghi dữ liệu cho đến khi đọc lại thành công.",
     retry: `Thử lại`,
 
-    // Category buttons
     category_member_access: `Quyền thành viên`,
     category_user_blacklist: `Blacklist người dùng`,
     category_whitelist: `Whitelist`,
     category_quotas: `Hạn ngạch`,
 
-    // Member access
     member_access_title: `Cài đặt quyền thành viên`,
     member_access_description: `Cấu hình quyền cho thành viên không có quyền \`Quản lý Máy chủ\`.`,
     member_access_servermemories_enabled: `🟢 Thành viên có thể xem bộ nhớ máy chủ của mình, thêm bộ nhớ mới, và chỉnh sửa hoặc xóa bộ nhớ của mình.`,
@@ -49,7 +47,6 @@ export default {
     member_access_failed_detail: `Ghi cơ sở dữ liệu thất bại hoặc quyền đã thay đổi. Hãy thử lại để làm mới cài đặt.`,
     member_access_invalid_input: `Không thể xử lý thông tin gửi từ biểu mẫu. Hãy mở lại trình chỉnh sửa để thử lại.`,
 
-    // User blacklist
     user_blacklist_count: `Thành viên bị blacklist \`({count})\``,
     personalization_blacklist_section: "Blacklist máy chủ",
     personalization_blacklist_description:
@@ -92,7 +89,6 @@ export default {
     changed_receipt: `Trạng thái blacklist đã thay đổi`,
     changed_receipt_detail: `Mục đó không còn trong blacklist. Bảng hiện hiển thị trạng thái hiện tại.`,
 
-    // Whitelist
     select_page_placeholder: `Chọn trang whitelist...`,
     page_channels: `Kênh`,
     page_channels_description: `Các kênh trong whitelist và tùy chỉnh cooldown`,
@@ -101,7 +97,6 @@ export default {
     page_roles: `Vai trò`,
     page_roles_description: `Các vai trò trong whitelist được phép kích hoạt bot`,
 
-    // Whitelist: Channels
     whitelist_channels_count: `Kênh trong whitelist \`({count})\``,
     whitelist_channels_description: `Mình chỉ có thể được kích hoạt trong các kênh sau:`,
     whitelist_channels_empty:
@@ -143,7 +138,6 @@ export default {
     whitelist_changed_receipt: `Trạng thái whitelist đã thay đổi`,
     whitelist_changed_receipt_detail: `Kênh đó không còn trong whitelist. Bảng hiện hiển thị trạng thái hiện tại.`,
 
-    // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Persona \`({count})\``,
     whitelist_persona_channels_description: `Các persona sau chỉ có thể phản hồi trong các kênh được liệt kê:`,
     whitelist_persona_channels_empty:
@@ -164,7 +158,6 @@ export default {
     persona_channel_remove_success: `Đã cập nhật giới hạn persona`,
     persona_channel_remove_success_detail: `Đã xóa {count} mục kênh của persona.`,
 
-    // Whitelist: Roles
     whitelist_roles_count: `Vai trò trong whitelist \`({count})\``,
     whitelist_roles_description: `Chỉ các vai trò sau mới có thể kích hoạt mình:`,
     whitelist_roles_empty: `Không có vai trò trong whitelist. Ai cũng có thể kích hoạt bot.`,
@@ -199,7 +192,6 @@ export default {
     remove_nothing_changed: `Không có mục nào bị xóa`,
     remove_nothing_changed_detail: `Tất cả các mục vẫn được chọn. Không cần ghi dữ liệu.`,
 
-    // Quotas
     quotas_title: `Hạn ngạch tạo nội dung`,
     quotas_description: "Cấu hình giới hạn hàng ngày theo người dùng và hạn ngạch chung toàn máy chủ khi tạo bằng AI.",
     quotas_image_generation: `Tạo hình ảnh`,

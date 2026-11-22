@@ -111,9 +111,6 @@ export default {
       tokens_out_short: `out`,
     },
 
-    // Standalone "days" unit used by the streak block on cards (no leading number).
-
-    // Labels used only on the rendered infographic cards (not the text dashboard).
     infographic: {
       no_data: `No stats yet`,
       server_title: `Server Leaderboard`,

@@ -486,7 +486,7 @@ export function createNovelAITokenizerEncoder(family: NovelAITokenizerFamily): L
   // Upstream caches fragments without eviction, so each fitting session owns its encoder.
   const encoder = new Encoder(definition.vocab, definition.merges, definition.specialTokens, definition.config);
   return (text) => {
-    // Bound upstream's quadratic cost to one million characters and 1,024-code-point fragments until it provides a bounded encoder.
+    // Both caps bound the tokenizer's quadratic work until upstream supplies a bounded encoder.
     if (text.length > NOVELAI_MAX_INPUT_CHARACTERS || oversizedNovelaiFragment.test(text))
       throw new NovelAIPreparationError("input_complexity");
     return encoder.encode(text);

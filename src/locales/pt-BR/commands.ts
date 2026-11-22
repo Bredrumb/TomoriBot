@@ -1,6 +1,3 @@
-// locales/pt-BR/commands.ts
-// Assembler: edit the individual files in commands/ instead.
-
 import learn from "./commands/learn";
 import choices from "./commands/choices";
 import stPreset from "./commands/st-preset";

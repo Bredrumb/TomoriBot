@@ -98,7 +98,6 @@ export default {
       videos: `生成的影片總數`,
     },
 
-    // Per-entry unit suffixes appended after a ranked count (e.g. "12 triggers made").
     units: {
       messages_sent: `則訊息`,
       messages_to_me: `次觸發`,
@@ -111,9 +110,6 @@ export default {
       tokens_out_short: `輸出`,
     },
 
-    // Standalone "days" unit used by the streak block on cards (no leading number).
-
-    // Labels used only on the rendered infographic cards (not the text dashboard).
     infographic: {
       no_data: `還沒有統計`,
       server_title: `伺服器排行榜`,

@@ -12,13 +12,11 @@ export default {
       "Saved data may be out of date because the read failed. Write actions are unavailable until a fresh read succeeds.",
     retry: `Retry`,
 
-    // Category buttons
     category_member_access: `Member Access`,
     category_user_blacklist: `User Blacklist`,
     category_whitelist: `Whitelist`,
     category_quotas: `Quotas`,
 
-    // Member access
     member_access_title: `Member Access Settings`,
     member_access_description: `Configure permissions for members without \`Manage Server\`.`,
     member_access_servermemories_enabled: `🟢 Members can view their own server memories, add new ones, and edit or remove their own.`,
@@ -49,7 +47,6 @@ export default {
     member_access_failed_detail: `The database write failed or permissions changed. Retry to refresh current settings.`,
     member_access_invalid_input: `The modal submission could not be processed. Open the editor again to retry.`,
 
-    // User blacklist
     user_blacklist_count: `Blacklisted Members \`({count})\``,
     personalization_blacklist_section: "Server Blacklist",
     personalization_blacklist_description:
@@ -92,7 +89,6 @@ export default {
     changed_receipt: `Blacklist state changed`,
     changed_receipt_detail: `That entry is no longer present in the blacklist. The panel now shows current state.`,
 
-    // Whitelist
     select_page_placeholder: `Choose whitelist page...`,
     page_channels: `Channels`,
     page_channels_description: `Whitelisted channels and cooldown overrides`,
@@ -101,7 +97,6 @@ export default {
     page_roles: `Roles`,
     page_roles_description: `Whitelisted roles for bot triggers`,
 
-    // Whitelist: Channels
     whitelist_channels_count: `Whitelisted Channels \`({count})\``,
     whitelist_channels_description: `I can only be triggered in the following channels:`,
     whitelist_channels_empty: "No channels are whitelisted. The bot can respond in any accessible channel.",
@@ -142,7 +137,6 @@ export default {
     whitelist_changed_receipt: `Whitelist state changed`,
     whitelist_changed_receipt_detail: `That channel is no longer present in the whitelist. The panel now shows current state.`,
 
-    // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: `The following personas can only respond in their listed channels:`,
     whitelist_persona_channels_empty:
@@ -163,7 +157,6 @@ export default {
     persona_channel_remove_success: `Persona restrictions updated`,
     persona_channel_remove_success_detail: `Removed {count} persona channel entries.`,
 
-    // Whitelist: Roles
     whitelist_roles_count: `Whitelisted Roles \`({count})\``,
     whitelist_roles_description: `Only the following roles can trigger me:`,
     whitelist_roles_empty: `No roles are whitelisted. Any member can trigger the bot.`,
@@ -198,7 +191,6 @@ export default {
     remove_nothing_changed: `Nothing was removed`,
     remove_nothing_changed_detail: `All entries remained selected. No write was needed.`,
 
-    // Quotas
     quotas_title: `Generation Quotas`,
     quotas_description: "Configure daily per-user limits and server-wide pooled quotas for AI generation.",
     quotas_image_generation: `Image Generation`,

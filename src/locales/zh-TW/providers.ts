@@ -113,9 +113,6 @@ export default {
       manage_server_only: `只有具備 \`管理伺服器\` 權限的成員才能查看完整錯誤。`,
       personal_only: `這個錯誤來自個人供應商，所以只有它的擁有者才能查看完整錯誤。`,
     },
-    // createTipText() 會把這些單則提示字串算繪成唯讀 modal 中的破折號項目清單。
-    // 每個鍵是一則項目；呼叫端組合條件式項目，而不是維護整段提示字串。
-    // 文字顯示會算繪 markdown 與超連結。
     tips: {
       title: `💡 你可以這樣做`,
       button: `你可以這樣做`,
@@ -155,7 +152,6 @@ export default {
       switch_model_provider: `用 \`/config\` > 模型 > 切換模型 或 \`/providers\` 切換到其他模型或供應商。`,
       switch_model_provider_personal: `用 \`/personal config\` 切換，或在 \`/personal providers\` 更新供應商。`,
       disable_personal_text_override: `這個要求錯誤來自你的[個人供應商](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/#your-own-providers)。請在 \`/personal providers\` 更新，或用 \`/personal config\` 選擇可用的模型。`,
-      // createTipText() 會自動附加到每個非空的提示 modal；請勿在呼叫端的 tipKeys 列出它。
       support_server: `需要協助時，請前往[官方技術支援伺服器](https://discord.gg/bjCfHm9QsB)。`,
       shorten_message: `試著縮短訊息後再傳一次。`,
       refresh_context: `用 \`/refresh\` 清除對話脈絡。`,
@@ -242,7 +238,6 @@ export default {
       unknown_default_message: `發生未預期的錯誤`,
     },
     zai: {
-      // Z.ai 把帳務拒絕回報成 429；格式化工具會重新編碼，以免被讀成速率限制。
       "429_balance_default_message": `你的 Z.ai 帳號餘額不足`,
       "429_plan_access_default_message": `你的 Z.ai 訂閱方案不包含這個模型`,
       unknown_default_message: `發生未預期的錯誤`,
@@ -252,8 +247,6 @@ export default {
       "403_default_message": `NVIDIA 拒絕了這組金鑰。可能是輸錯、已過期，或所屬帳號沒有推論存取權限。`,
       "404_default_message": `找不到要求的 NVIDIA NIM 模型。可能已被 NVIDIA 下架。`,
       "500_default_message": `為這個模型提供服務的 NVIDIA 後端發生故障。這通常是暫時的，請稍後再試。如果持續失敗，架設 TomoriBot 的人可以在機器人日誌中查看 NVIDIA 的完整報告。`,
-      // 只有在 NVIDIA 自己的訊息提到可移除的要求參數時，才會取代 500_default_message 顯示。
-      // 先前每次 500 都斷定這個原因，會讓使用者去改失敗的內容根本沒帶到的設定。
       "500_parameter_default_message": `NVIDIA 拒絕了這個模型的一或多個要求參數。請到 \`/config\` > 模型 > 取樣器與參數，把 \`min_p\` 等不支援的取樣器設為 \`0\`，並清除已儲存的 \`logit_bias\` 項目。`,
       unknown_default_message: `發生未預期的錯誤`,
     },

@@ -1,6 +1,5 @@
 export default {
-  // The config panel reads several strings from this namespace even though every `/model` leaf but
-  // `override remove` is dissolved, so pruning it wholesale breaks the Channels and Models pages.
+  // Keep these keys because the Channels and Models panels still use them.
   model: {
     description: `Manage this server's default AI models.`,
     providerPicker: {

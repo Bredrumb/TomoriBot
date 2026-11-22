@@ -54,8 +54,7 @@ export async function resolveContextAuthorLabel(
     return webhookName || message.author.username || "Unknown";
   }
 
-  // For direct bot messages (non-webhook), we can't know which persona authored them,
-  // so use the bot's actual username rather than the currently active persona's nickname.
+  // A direct bot message carries no persona identity, so using the active nickname could misattribute it.
   if (message.client.user && message.author.id === message.client.user.id) {
     return message.author.username || "Tomori";
   }

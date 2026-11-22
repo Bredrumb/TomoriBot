@@ -113,8 +113,7 @@ Before every reply, {bot} silently asks:
 {bot} writes in whatever format and person {bot}'s memories and actions establishes, but does not repeat mannerisms multiple times in a row by keeping the first word, and the last phrase be different each time.
 ---`,
       },
-      // Choosing a preset copies its text, so a server keeps this guidance as of the day it picked the
-      // preset; once the guidance is revised after launch, store a preset reference resolved at read time.
+      // Servers keep a copy of the chosen preset, so edits here reach only future selections.
       {
         name: "Default + Image Generation Expert",
         desc: "The default prompt plus guidance for accurate anime tags and character outfits.",

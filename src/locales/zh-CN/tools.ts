@@ -211,8 +211,6 @@ export default {
       reading_footer: `根据页面大小，这可能需要一点时间`,
     },
     intent_packs: {
-      // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
-      // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
         dice: ["骰子", "掷骰"],
         image: ["画一", "画一张", "画个", "生成图", "做图", "来张图", "生成一张", "改图", "修图", "重绘", "图片"],

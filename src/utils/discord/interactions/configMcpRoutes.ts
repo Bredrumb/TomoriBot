@@ -305,8 +305,7 @@ export async function handleConfigMcpModalOpen(
       mcpRead,
       receipt,
     });
-    // Through guarded delivery rather than a raw reply so this refusal stays observable: it is the
-    // only permission denial that reaches a first-time reply instead of a repaint.
+    // This denial replies before any panel repaint, so guarded delivery records the refusal here.
     await deliverGuardedPanel(interaction, panel, {
       locale: route.locale,
       method: "reply",
@@ -354,8 +353,6 @@ export async function handleConfigMcpRoutes(
     const serverType = dependencies.takeSelectValue(modal.id, buildMcpsAddModalFieldId("server-type", route.nonce));
     const state = scope.personas[0];
     if (!state) {
-      // The scope resolved, so this workspace is configured: a persona it no longer carries means
-      // the panel has fallen behind, never that the admin should run /setup.
       await interaction.editReply(outdatedConfigPanelPayload(route.locale));
       return true;
     }

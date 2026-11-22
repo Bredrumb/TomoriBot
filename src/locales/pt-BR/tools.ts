@@ -215,8 +215,6 @@ export default {
       reading_footer: `Isso pode demorar um pouco dependendo do tamanho da página`,
     },
     intent_packs: {
-      // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
-      // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
         dice: ["dados", "rolagem"],
         image: [

@@ -64,7 +64,6 @@ function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): Im
     };
   }
 
-  // A legacy endpoint row that declared nothing: assume the narrowest generation mode.
   return {
     textToImage: true,
     imageToImage: false,

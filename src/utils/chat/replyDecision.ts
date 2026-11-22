@@ -137,7 +137,6 @@ export function shouldBotReply(
     (personalDtmMode === "on" || (personalDtmMode === "follow" && serverDtmEnabled)) &&
     !!message.guild &&
     !isMatrixRelayMessage;
-  // A member who opted into deliberate triggers only is never answered for merely joining a scene.
   if (options.nudgeSceneCatcherPersonaId !== undefined && !isSelfMessage && !isDtmActive) {
     return true;
   }

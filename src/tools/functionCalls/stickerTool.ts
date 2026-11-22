@@ -140,7 +140,6 @@ export class StickerTool extends BaseTool {
         selected = lookup();
       }
       if (selected) {
-        // The tool loop sends the selection and replaces this result with the delivery outcome.
         return {
           success: true,
           message: "Sticker resolved",

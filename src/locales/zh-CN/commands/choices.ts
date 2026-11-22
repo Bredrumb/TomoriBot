@@ -6,7 +6,6 @@ export default {
     none: `无`,
     none_user_byok: `无（用户 BYOK）`,
     inherit_global: `沿用全局冷却`,
-    // /stats timeframe + scope choices (shared across all three subcommands)
     today: `今天`,
     week: `最近 7 天`,
     month: `最近 30 天`,

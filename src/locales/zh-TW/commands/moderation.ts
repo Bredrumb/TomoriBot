@@ -11,13 +11,11 @@ export default {
     stale_warning: "讀取失敗，儲存的資料可能不是最新的。 在新的讀取成功之前，無法執行寫入操作。",
     retry: `重試`,
 
-    // Category buttons
     category_member_access: `成員存取`,
     category_user_blacklist: `使用者黑名單`,
     category_whitelist: `白名單`,
     category_quotas: `額度`,
 
-    // Member access
     member_access_title: `成員存取設定`,
     member_access_description: `為沒有 \`管理伺服器\` 權限的成員設定權限。`,
     member_access_servermemories_enabled: `🟢 成員可以查看自己的伺服器記憶、新增記憶，並編輯或移除自己的記憶。`,
@@ -48,7 +46,6 @@ export default {
     member_access_failed_detail: `資料庫寫入失敗，或權限已變更。請按重試以重新整理目前設定。`,
     member_access_invalid_input: `無法處理視窗送出的內容。請重新開啟編輯器再試一次。`,
 
-    // User blacklist
     user_blacklist_count: `已列入黑名單的成員 \`({count})\``,
     personalization_blacklist_section: "伺服器黑名單",
     personalization_blacklist_description:
@@ -91,7 +88,6 @@ export default {
     changed_receipt: `黑名單狀態已變更`,
     changed_receipt_detail: `那個項目已經不在黑名單中。面板現在顯示目前的狀態。`,
 
-    // Whitelist
     select_page_placeholder: `選擇白名單頁面...`,
     page_channels: `頻道`,
     page_channels_description: `白名單頻道與冷卻覆寫`,
@@ -100,7 +96,6 @@ export default {
     page_roles: `身分組`,
     page_roles_description: `可觸發 bot 的白名單身分組`,
 
-    // Whitelist: Channels
     whitelist_channels_count: `白名單頻道 \`({count})\``,
     whitelist_channels_description: `我只能由下列頻道觸發：`,
     whitelist_channels_empty: "沒有白名單頻道。 bot 可以在任何有權限的頻道回應。",
@@ -141,7 +136,6 @@ export default {
     whitelist_changed_receipt: `白名單狀態已變更`,
     whitelist_changed_receipt_detail: `那個頻道已經不在白名單中。面板現在顯示目前的狀態。`,
 
-    // Whitelist: Persona Channels
     whitelist_persona_channels_count: `人格 \`({count})\``,
     whitelist_persona_channels_description: `下列人格只能在各自列出的頻道回應：`,
     whitelist_persona_channels_empty: "沒有設定任何人格頻道限制。 人格可以在所有允許的頻道回應。",
@@ -161,7 +155,6 @@ export default {
     persona_channel_remove_success: `人格限制已更新`,
     persona_channel_remove_success_detail: `已移除 {count} 個人格頻道項目。`,
 
-    // Whitelist: Roles
     whitelist_roles_count: `白名單身分組 \`({count})\``,
     whitelist_roles_description: `只有下列身分組可以觸發我：`,
     whitelist_roles_empty: `沒有白名單身分組。任何成員都可以觸發 bot。`,
@@ -196,7 +189,6 @@ export default {
     remove_nothing_changed: `沒有移除任何項目`,
     remove_nothing_changed_detail: `所有項目都保持選取。不需要寫入。`,
 
-    // Quotas
     quotas_title: `生成額度`,
     quotas_description: "設定 AI 生成的每日個人上限，以及伺服器 共用的額度池。",
     quotas_image_generation: `圖片生成`,

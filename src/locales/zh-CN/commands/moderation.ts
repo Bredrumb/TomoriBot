@@ -11,13 +11,11 @@ export default {
     stale_warning: "因为读取失败，保存的数据可能已经过期。 在重新读取成功之前，无法进行写入操作。",
     retry: `重试`,
 
-    // Category buttons
     category_member_access: `成员访问`,
     category_user_blacklist: `用户黑名单`,
     category_whitelist: `白名单`,
     category_quotas: `配额`,
 
-    // Member access
     member_access_title: `成员访问设置`,
     member_access_description: `配置没有 \`Manage Server\` 权限的成员的权限。`,
     member_access_servermemories_enabled: `🟢 成员可以查看自己的服务器记忆、添加新记忆，以及编辑或删除自己的记忆。`,
@@ -48,7 +46,6 @@ export default {
     member_access_failed_detail: `数据库写入失败，或权限已变更。请点「重试」刷新当前设置。`,
     member_access_invalid_input: `无法处理弹窗提交的内容。请重新打开编辑器再试。`,
 
-    // User blacklist
     user_blacklist_count: `已列入黑名单的成员 \`({count})\``,
     personalization_blacklist_section: "服务器黑名单",
     personalization_blacklist_description:
@@ -91,7 +88,6 @@ export default {
     changed_receipt: `黑名单状态已变更`,
     changed_receipt_detail: `那个条目已不在黑名单里。面板现在显示的是当前状态。`,
 
-    // Whitelist
     select_page_placeholder: `选择白名单页面...`,
     page_channels: `频道`,
     page_channels_description: `白名单频道和冷却覆盖`,
@@ -100,7 +96,6 @@ export default {
     page_roles: `身份组`,
     page_roles_description: `可以触发 bot 的白名单身份组`,
 
-    // Whitelist: Channels
     whitelist_channels_count: `白名单频道 \`({count})\``,
     whitelist_channels_description: `我只能被以下频道触发：`,
     whitelist_channels_empty: "没有频道被列入白名单。 我可以在任何能访问的频道里回复。",
@@ -141,7 +136,6 @@ export default {
     whitelist_changed_receipt: `白名单状态已变更`,
     whitelist_changed_receipt_detail: `那个频道已不在白名单里。面板现在显示的是当前状态。`,
 
-    // Whitelist: Persona Channels
     whitelist_persona_channels_count: `人格 \`({count})\``,
     whitelist_persona_channels_description: `以下人格只能在列出的频道里回复：`,
     whitelist_persona_channels_empty: "没有配置人格频道限制。 人格可以在所有允许的频道里回复。",
@@ -161,7 +155,6 @@ export default {
     persona_channel_remove_success: `人格限制已更新`,
     persona_channel_remove_success_detail: `已移除 {count} 条人格频道条目。`,
 
-    // Whitelist: Roles
     whitelist_roles_count: `白名单身份组 \`({count})\``,
     whitelist_roles_description: `只有以下身份组才能触发我：`,
     whitelist_roles_empty: `没有身份组被列入白名单。任何成员都能触发 bot。`,
@@ -196,7 +189,6 @@ export default {
     remove_nothing_changed: `没有移除任何内容`,
     remove_nothing_changed_detail: `所有条目都还是选中的。不需要写入。`,
 
-    // Quotas
     quotas_title: `生成配额`,
     quotas_description: "配置 AI 生成的每日每用户上限和 服务器共享配额。",
     quotas_image_generation: `图像生成`,

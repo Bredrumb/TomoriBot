@@ -1,8 +1,6 @@
 export default {
   legal: {
     description: `查看 TomoriBot 的服务条款、隐私政策与许可协议。`,
-    // The two policy leaves register only on the hosted instance, so a self-hosted bot advertises
-    // the license alone rather than a document set it does not expose.
     "license-only": {
       description: `查看 TomoriBot 的开源许可协议。`,
     },

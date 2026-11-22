@@ -197,7 +197,6 @@ async function generateViaImagesEndpoint(
     return { imageData: null, mimeType: null, costUsd };
   }
 
-  // media_type is omitted only when the format cannot be determined; callers default to PNG.
   return { imageData: base64, mimeType: typeof first?.media_type === "string" ? first.media_type : null, costUsd };
 }
 

@@ -1,5 +1,4 @@
-// Bounds on one server's stop-string list, both for the `/config` model panel that has to
-// render the merged list and because every stop string is sent with every request.
+// Both limits bound the merged panel list and request size because every configured stop string is sent upstream.
 export const MAX_STOP_STRINGS_PER_SERVER = 40;
 export const MAX_STOP_STRING_LENGTH = 200;
 
