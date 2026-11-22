@@ -19,6 +19,7 @@ import {
 } from "@/utils/cache/personaSpriteCacheStore";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { clearTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { clearPersonaSpriteMessageCache } from "@/utils/cache/personaSpriteMessageCache";
 import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
 import {
   clearAllChannelDeliveryContinuity,
@@ -128,10 +129,12 @@ beforeEach(() => {
   clearAllChannelDeliveryContinuity();
   clearPersonaSpriteCache();
   spyOn(personaSpriteMessageRepository, "record").mockResolvedValue(true);
+  spyOn(personaSpriteMessageRepository, "pruneOlderThanDays").mockResolvedValue(0);
 });
 afterEach(() => {
   mock.restore();
   clearPersonaSpriteCache();
+  clearPersonaSpriteMessageCache();
   clearAllChannelDeliveryContinuity();
 });
 

@@ -37,6 +37,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
   afterAll(async () => {
     await executeTestSqlFile("src/db/migrations/102_hosted_speech_models.sql");
     await executeTestSqlFile("src/db/migrations/133_hosted_transcription_models.sql");
+    await executeTestSqlFile("src/db/migrations/139_api_key_activity.sql");
   });
 
   async function runDecisionRollback(): Promise<void> {

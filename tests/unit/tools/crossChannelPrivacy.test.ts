@@ -41,6 +41,8 @@ import * as authoredText from "@/utils/discord/modelAuthoredText";
 import { createGuildTextChannel } from "../../helpers/discordChannels";
 import { ReminderTool } from "@/tools/functionCalls/reminderTool";
 import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
+import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
+import * as nudgeConfigCache from "@/modules/natural-nudges/runtime/configCache";
 
 const restores: Array<() => void> = [];
 const sourceId = "source-channel";
@@ -483,6 +485,8 @@ describe("cross-channel request attribution", () => {
             rejectedByWhitelist: borrowed,
           }),
           spyOn(errorVisibility, "shouldSurfaceChatUserErrors").mockReturnValue(false),
+          spyOn(metricSampleRepository, "recordSample").mockResolvedValue(undefined),
+          spyOn(nudgeConfigCache, "recordNaturalNudgeDirectChat").mockResolvedValue(undefined),
           spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.llm),
           spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
           spyOn(credentialResolver, "resolveCapabilityCredentials").mockImplementation(

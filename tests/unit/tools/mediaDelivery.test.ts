@@ -120,6 +120,7 @@ function fixture(isAlter = false, isIdentity = false, inThread = true, rememberS
   spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook });
   spyOn(identity, "resolvePersonaWebhookIdentity").mockResolvedValue({ username: "Juno", avatarUrl: BASE });
   spyOn(personaSpriteMessageRepository, "record").mockResolvedValue(true);
+  spyOn(personaSpriteMessageRepository, "pruneOlderThanDays").mockResolvedValue(0);
   setPersonaSpriteCache(7, [
     {
       sprite_id: 3,

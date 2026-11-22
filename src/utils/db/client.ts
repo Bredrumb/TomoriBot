@@ -25,6 +25,63 @@ function resolveProductionPoolOptions(): PostgresPoolOptions {
   };
 }
 
+function createUnconfiguredDatabaseError(): Error {
+  return new Error("Database is not configured (POSTGRES_PASSWORD is unset)");
+}
+
+function isTemplateStringsArray(value: unknown): value is TemplateStringsArray {
+  return Array.isArray(value) && "raw" in value;
+}
+
+// Reject only on consumption so un-awaited SQL fragments like `ownedServersOnly()` do not emit unhandled rejections.
+function createUnconfiguredQuery(): PromiseLike<never> & {
+  execute(): Promise<never>;
+  catch<TResult = never>(onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null): Promise<TResult>;
+  finally(onfinally?: (() => void) | null): Promise<never>;
+} {
+  const fail = () => Promise.reject(createUnconfiguredDatabaseError());
+  return {
+    execute: fail,
+    // biome-ignore lint/suspicious/noThenProperty: lazy thenable matches Bun SQLQuery so un-awaited SQL fragments stay silent
+    then(onfulfilled, onrejected) {
+      return fail().then(onfulfilled, onrejected);
+    },
+    catch(onrejected) {
+      return fail().catch(onrejected);
+    },
+    finally(onfinally) {
+      return fail().finally(onfinally);
+    },
+  };
+}
+
+// Only `.array` delegates to a real SQL instance; queries reject without opening a socket so unit tests never dial localhost:5432.
+const unconfiguredArrayMarshaller = new SQL({
+  hostname: "127.0.0.1",
+  port: 0,
+  username: "postgres",
+  password: "dummy",
+  database: "tomodb",
+});
+
+const unconfiguredDatabaseClient = Object.assign(
+  function unconfiguredSql(first: unknown, ...rest: unknown[]) {
+    if (isTemplateStringsArray(first)) {
+      return createUnconfiguredQuery();
+    }
+    return { values: [first, ...rest] };
+  },
+  {
+    array: unconfiguredArrayMarshaller.array.bind(unconfiguredArrayMarshaller),
+    begin: () => Promise.reject(createUnconfiguredDatabaseError()),
+    transaction: () => Promise.reject(createUnconfiguredDatabaseError()),
+    unsafe: () => createUnconfiguredQuery(),
+    reserve: () => Promise.reject(createUnconfiguredDatabaseError()),
+    connect: () => Promise.reject(createUnconfiguredDatabaseError()),
+    close: async () => undefined,
+  },
+) as unknown as SQL;
+
 function createDatabaseClient(): SQL {
   const runEnv = process.env.RUN_ENV || "development";
   const host = process.env.POSTGRES_HOST || "localhost";
@@ -35,15 +92,8 @@ function createDatabaseClient(): SQL {
   const password = process.env.POSTGRES_PASSWORD;
   const database = process.env.POSTGRES_DB || "tomodb";
 
-  // Allow dummy initialization when POSTGRES_PASSWORD is unset so non-DB scripts (e.g., linting) can import modules.
   if (!password) {
-    return new SQL({
-      hostname: host,
-      port: port,
-      username: user,
-      password: "dummy",
-      database: database,
-    });
+    return unconfiguredDatabaseClient;
   }
 
   const poolOptions = resolveProductionPoolOptions();
@@ -149,6 +199,9 @@ export function resolveProductionPostgresTls(
 let cachedClient: SQL | null = null;
 
 function getClient(): SQL {
+  if (!process.env.POSTGRES_PASSWORD) {
+    return unconfiguredDatabaseClient;
+  }
   if (!cachedClient) {
     cachedClient = createDatabaseClient();
   }
