@@ -4,6 +4,12 @@ import { changeScheduledTask } from "@/tools/functionCalls/updateTaskTool";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { invalidToolActionArguments, unavailableToolAction } from "@/utils/tools/toolActions";
 
+const RETIRED_TASK_ARGUMENTS = {
+  repetition_interval_hours: "repetition_interval_minutes",
+  hours_from_now: "minutes_from_now",
+  days_from_now: "minutes_from_now",
+} as const;
+
 function buildTaskDefinition(actions: string[]) {
   const canCreate = actions.includes("create");
   const canUpdate = actions.includes("update");
@@ -160,10 +166,24 @@ export class ManageTaskTool extends BaseTool {
     const actionFailure = unavailableToolAction(this, action, context);
     if (actionFailure) return actionFailure;
 
+    if (action !== "delete") {
+      for (const [argument, replacement] of Object.entries(RETIRED_TASK_ARGUMENTS)) {
+        if (args[argument] != null) {
+          return {
+            success: false,
+            error: `Use \`${replacement}\` in place of \`${argument}\` and express the value in minutes.`,
+            data: { status: "retired_task_argument", argument, replacement },
+          };
+        }
+      }
+    }
+
     const variant = this.withActions([action]);
     if (
       !variant.validateParameters(args).isValid ||
-      Object.keys(args).some((key) => !Object.hasOwn(variant.parameters.properties, key)) ||
+      Object.entries(args).some(
+        ([key, value]) => value != null && !Object.hasOwn(variant.parameters.properties, key),
+      ) ||
       (action !== "delete" && !String(args.reminder_purpose).trim())
     ) {
       return invalidToolActionArguments(this, context);

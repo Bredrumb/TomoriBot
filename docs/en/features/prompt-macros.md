@@ -71,36 +71,39 @@ For what each tool can do and which settings enable it, see
 
 ### Built-in tool macros
 
-| Macro | Function name for `tool:` conditions | Example standing instruction |
-| --- | --- | --- |
-| `{capabilities_tool}` | `review_capabilities` | `Use {capabilities_tool} to check what you can do here before promising a feature such as stickers or voice messages.` |
-| `{memory_tool}` | `manage_long_term_memory` with `create` | `Save lasting member preferences, such as favorite party games, with {memory_tool} so you can use them in future chats.` |
-| `{memory_update_tool}` | `manage_long_term_memory` with `update` | `Use {memory_update_tool} to revise the existing memory when a member corrects a saved preference or a moderator changes a recurring event.` |
-| `{short_term_memory_tool}` | `update_short_term_memory` | `At roleplay scene breaks, use {short_term_memory_tool} to record where the party stopped, what clues they found, and what they plan to do next.` |
-| `{task_tool}` | `manage_task` with `create` | `Schedule game-night and poll reminders with {task_tool} when members request them. Confirm the scheduled time afterward.` |
-| `{task_update_tool}` | `manage_task` with `update` or `delete` | `Use {task_update_tool} to reschedule the existing reminder when a member changes its time or repeat schedule.` |
-| `{cross_channel_tool}` | `cross_channel_message` | `When asked to publish event results, post them in #announcements with {cross_channel_tool} and report back here.` |
-| `{create_thread_tool}` | `create_thread` | `When members explicitly ask for a spoiler discussion thread, use {create_thread_tool} and open with a question about the episode.` |
-| `{sticker_tool}` | `select_sticker_for_response` | `Celebrate raid clears with {sticker_tool} when the server has a sticker that fits the moment.` |
-| `{manage_message_tool}`, `{pin_tool}` | `manage_message` | `Pin guides and event recaps with {manage_message_tool} when a moderator asks.` |
-| `{message_interaction_tool}` | `manage_message` with `reply` or `react` | `Use {message_interaction_tool} to react with 🎉 to new tournament result announcements.` |
-| `{conditioning_interaction_tool}` | `interact_with_target` | `Use {conditioning_interaction_tool} for requested victory hugs after major wins.` |
-| `{profile_picture_tool}` | `peek_profile_picture` | `When members ask for avatar feedback, inspect the avatar with {profile_picture_tool} before commenting on the design.` |
-| `{document_tool}` | `read_file` | `Use {document_tool} to read attached rules PDFs before answering questions about scoring or eligibility.` |
-| `{message_metadata_tool}`, `{timestamp_refresh_tool}` | `reveal_message_metadata` | `Use {message_metadata_tool} when members ask for the exact send time or reactions on a recent poll or announcement.` |
-| `{gif_tool}` | `process_gif` | `Use {gif_tool} to inspect an attached reaction GIF when its motion matters to the conversation.` Available in development only. |
-| `{youtube_tool}` | `process_youtube_video` | `Use {youtube_tool} when members ask about a specific move shown in a linked YouTube guide.` |
-| `{image_analysis_tool}` | `analyze_image` | `When helping with an error screenshot, read the visible error with {image_analysis_tool} before suggesting a fix.` |
-| `{image_generation_tool}` | `generate_image` | `For requested event banners, use {image_generation_tool} and leave room for the event title.` |
-| `{anime_image_generation_tool}` | `generate_image_nai` | `Use {anime_image_generation_tool} for requested anime-style roleplay art. Keep the characters' established outfits.` |
-| `{tag_search_tool}` | `danbooru_search_tags` | `Resolve character nicknames and alternate spellings with {tag_search_tool} before searching for fan art.` |
-| `{booru_post_search_tool}` | `danbooru_search_posts` | `When members ask to browse existing anime fan art, post a small selection with {booru_post_search_tool}.` |
-| `{voice_message_tool}` | `generate_voice_message` | `Send quest briefings and dramatic recaps with {voice_message_tool} when players ask to hear them aloud.` |
-| `{block_user_tool}` | `block_user` | `Use {block_user_tool} to apply a persona mute when a moderator asks to stop a member from triggering you for a set time.` |
-| `{unblock_user_tool}` | `unblock_user` | `Use {unblock_user_tool} to lift a persona mute early when a moderator asks.` |
-| `{user_info_tool}` | `update_user_info` | `Save a member's requested nickname or honorific for this persona with {user_info_tool}.` |
+A dash in the expansion column means the macro inserts the condition name.
+
+| Macro | Name for `tool:` conditions | Expands to | Example standing instruction |
+| --- | --- | --- | --- |
+| `{capabilities_tool}` | `review_capabilities` | - | `Use {capabilities_tool} to check what you can do here before promising a feature such as stickers or voice messages.` |
+| `{memory_tool}` | `create_long_term_memory` | `manage_long_term_memory` with `create` | `Save lasting member preferences, such as favorite party games, with {memory_tool} so you can use them in future chats.` |
+| `{memory_update_tool}` | `update_long_term_memory` | `manage_long_term_memory` with `update` | `Use {memory_update_tool} to revise the existing memory when a member corrects a saved preference or a moderator changes a recurring event.` |
+| `{short_term_memory_tool}` | `update_short_term_memory` | - | `At roleplay scene breaks, use {short_term_memory_tool} to record where the party stopped, what clues they found, and what they plan to do next.` |
+| `{task_tool}` | `create_task` | `manage_task` with `create` | `Schedule game-night and poll reminders with {task_tool} when members request them. Confirm the scheduled time afterward.` |
+| `{task_update_tool}` | `update_task` | `manage_task` with `update` or `delete` | `Use {task_update_tool} to reschedule the existing reminder when a member changes its time or repeat schedule.` |
+| `{cross_channel_tool}` | `cross_channel_message` | - | `When asked to publish event results, post them in #announcements with {cross_channel_tool} and report back here.` |
+| `{create_thread_tool}` | `create_thread` | - | `When members explicitly ask for a spoiler discussion thread, use {create_thread_tool} and open with a question about the episode.` |
+| `{sticker_tool}` | `select_sticker_for_response` | - | `Celebrate raid clears with {sticker_tool} when the server has a sticker that fits the moment.` |
+| `{manage_message_tool}`, `{pin_tool}` | `manage_message` | - | `Pin guides and event recaps with {manage_message_tool} when a moderator asks.` |
+| `{message_interaction_tool}` | `interact_with_recent_message` | `manage_message` | `Use {message_interaction_tool} to react with 🎉 to new tournament result announcements.` |
+| `{conditioning_interaction_tool}` | `interact_with_target` | - | `Use {conditioning_interaction_tool} for requested victory hugs after major wins.` |
+| `{profile_picture_tool}` | `peek_profile_picture` | - | `When members ask for avatar feedback, inspect the avatar with {profile_picture_tool} before commenting on the design.` |
+| `{document_tool}` | `read_file` | - | `Use {document_tool} to read attached rules PDFs before answering questions about scoring or eligibility.` |
+| `{message_metadata_tool}`, `{timestamp_refresh_tool}` | `reveal_message_metadata` | - | `Use {message_metadata_tool} when members ask for the exact send time or reactions on a recent poll or announcement.` |
+| `{gif_tool}` | `process_gif` | - | `Use {gif_tool} to inspect an attached reaction GIF when its motion matters to the conversation.` Available in development only. |
+| `{youtube_tool}` | `process_youtube_video` | - | `Use {youtube_tool} when members ask about a specific move shown in a linked YouTube guide.` |
+| `{image_analysis_tool}` | `analyze_image` | - | `When helping with an error screenshot, read the visible error with {image_analysis_tool} before suggesting a fix.` |
+| `{image_generation_tool}` | `generate_image` | - | `For requested event banners, use {image_generation_tool} and leave room for the event title.` |
+| `{anime_image_generation_tool}` | `generate_image_nai` | - | `Use {anime_image_generation_tool} for requested anime-style roleplay art. Keep the characters' established outfits.` |
+| `{tag_search_tool}` | `danbooru_search_tags` | - | `Resolve character nicknames and alternate spellings with {tag_search_tool} before searching for fan art.` |
+| `{booru_post_search_tool}` | `danbooru_search_posts` | - | `When members ask to browse existing anime fan art, post a small selection with {booru_post_search_tool}.` |
+| `{voice_message_tool}` | `generate_voice_message` | - | `Send quest briefings and dramatic recaps with {voice_message_tool} when players ask to hear them aloud.` |
+| `{block_user_tool}` | `block_user` | - | `Use {block_user_tool} to apply a persona mute when a moderator asks to stop a member from triggering you for a set time.` |
+| `{unblock_user_tool}` | `unblock_user` | - | `Use {unblock_user_tool} to lift a persona mute early when a moderator asks.` |
+| `{user_info_tool}` | `update_user_info` | - | `Save a member's requested nickname or honorific for this persona with {user_info_tool}.` |
 
 `{pin_tool}` and `{timestamp_refresh_tool}` are compatibility aliases.
+Use the macro in standing instructions so they pick up the current tool name.
 
 ### Search and URL macros
 

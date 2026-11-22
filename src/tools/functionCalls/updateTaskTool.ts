@@ -133,13 +133,6 @@ export function parseUpdateTaskArguments(
     }
     newReminderTime = parsedReminderTime;
   } else {
-    if (args.hours_from_now != null || args.days_from_now != null) {
-      return {
-        ok: false,
-        status: "task_update_failed_invalid_args",
-        reason: "Use minutes_from_now for fixed start delays.",
-      };
-    }
     const hasRelativeParams = RELATIVE_TIME_KEYS.some((key) => hasProvidedArg(args, key));
     if (hasRelativeParams) {
       let baseTime = new Date();

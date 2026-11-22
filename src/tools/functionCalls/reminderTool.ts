@@ -252,14 +252,6 @@ export async function createScheduledTask(args: Record<string, unknown>, context
       };
     }
   } else {
-    if (args.hours_from_now != null || args.days_from_now != null) {
-      const reason = "Use minutes_from_now for fixed start delays.";
-      return {
-        success: false,
-        error: reason,
-        data: { status: "reminder_creation_failed_invalid_args", reason },
-      };
-    }
     const hasRelativeParams =
       (typeof minutesFromNowArg === "number" && minutesFromNowArg > 0) ||
       (typeof monthsFromNowArg === "number" && monthsFromNowArg > 0);

@@ -201,7 +201,7 @@ describe("manage_message reply delivery identity", () => {
       };
 
       const result = await new ManageMessageTool().execute(
-        { action: "reply", message_id: target.id, content: "Congrats on the thing" },
+        { action: "reply", message_id: target.id, content: "Congrats on the thing", end_message_id: null },
         context,
       );
 

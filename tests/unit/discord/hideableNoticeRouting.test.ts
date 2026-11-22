@@ -193,7 +193,7 @@ describe("hideable tool notices", () => {
         action: operation,
         memory_scope: "server_wide",
         memory_id: memory.server_memory_id,
-        ...(operation === "update" ? { memory_content: content } : {}),
+        memory_content: operation === "update" ? content : null,
       },
       context,
     );

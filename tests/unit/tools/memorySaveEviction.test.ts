@@ -149,7 +149,8 @@ describe("model memory save eviction", () => {
         action: "create",
         memory_scope: scope,
         memory_content: content,
-        ...(scope === "target_user" ? { target_user: "Juno" } : {}),
+        target_user: scope === "target_user" ? "Juno" : null,
+        memory_id: null,
       },
       context,
     );
@@ -160,7 +161,11 @@ describe("model memory save eviction", () => {
     const removeServer = spyOn(serverMemoryRepository, "removeByIdWithLineage");
     const removePersonal = spyOn(personalMemoryRepository, "removeByIdForUserAndLineage");
     try {
-      for (const scope of [{}, { memory_scope: "target_user" }, { memory_scope: "server_wide", target_user: "Juno" }]) {
+      for (const scope of [
+        {},
+        { memory_scope: "target_user", target_user: null },
+        { memory_scope: "server_wide", target_user: "Juno" },
+      ]) {
         const result = await tool.execute({ action: "delete", memory_id: 24, ...scope }, context);
         expect(result).toMatchObject({ success: false, data: { status: "invalid_tool_action_arguments" } });
       }

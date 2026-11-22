@@ -55,6 +55,7 @@ import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
+import { getActionSelector } from "@/utils/tools/toolActions";
 
 export const MAX_FUNCTION_CALL_ITERATIONS = 100;
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
@@ -1109,8 +1110,16 @@ async function executeToolCall(
     );
   }
 
-  const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
-  if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
+  const action = executionArgs.action;
+  const deliberateToolTriggerMatch =
+    params.context.deliberateToolModeActive && !isBlockedByDeliberateAllowlist
+      ? Array.from(params.context.deliberateToolTriggerMatchByToolName.values()).find(({ toolName }) => {
+          const selector = getActionSelector(toolName);
+          if (!selector) return toolName === functionName;
+          return selector.name === functionName && typeof action === "string" && selector.actions.includes(action);
+        })
+      : undefined;
+  if (deliberateToolTriggerMatch) {
     const safeTrigger = deliberateToolTriggerMatch.trigger.replace(/`/g, "'");
     await routeHiddenToolNotice(
       toolContext,

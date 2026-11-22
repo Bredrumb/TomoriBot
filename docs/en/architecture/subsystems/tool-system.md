@@ -57,7 +57,9 @@ Deliberate Tool Mode and Natural Nudges retain saved selectors for the original 
 For example, `create_task` admits only `manage_task` with `create`. A saved
 `interact_with_recent_message` selector admits only eligible `reply` and `react` actions.
 Native tools, verbatim definitions, and prompt conditionals use these groups when presenting the
-available actions. The retired names stay reserved for MCP collision checks.
+available actions. Thought Logs use the selected action to identify the trigger. Capability
+reports describe the current settings without the diagnostic turn's intent filter. The retired
+names stay reserved for MCP collision checks.
 
 `generate_voice_message` and `interact_with_target` also offer an optional `sprite` parameter when
 the turn includes the active persona's sprite list. The parameter refers to that list without

@@ -1198,6 +1198,32 @@ describe("runToolLoop — contract tests", () => {
     expect(clearStopRequestCalls).toBe(1);
   });
 
+  it("attributes a merged message reply to the admitting interaction trigger", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { MessageIdMap } = await import("@/utils/text/messageIdMap");
+    const context = makeContext();
+    context.messageIdMap = new MessageIdMap();
+    const messageRef = context.messageIdMap.register("900000000000000001", "ref");
+    context.deliberateToolModeActive = true;
+    context.streamingContext.deliberateToolAllowedNames = ["manage_message", "interact_with_recent_message"];
+    context.deliberateToolTriggerMatchByToolName = new Map([
+      ["manage_message", { toolName: "manage_message", trigger: "pin test", source: "custom" }],
+      [
+        "interact_with_recent_message",
+        { toolName: "interact_with_recent_message", trigger: "reply test", source: "built-in" },
+      ],
+    ]);
+    const { provider } = makeProvider([
+      makeFunctionCallResult("manage_message", { action: "reply", message_id: messageRef, content: "Test reply." }),
+      { status: "completed", accumulatedText: "Done." },
+    ]);
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(result.status).toBe("completed");
+    expect(toolExecuteCalls).toHaveLength(1);
+    expect(hiddenToolNotices.some((notice) => notice.includes("reply test"))).toBe(true);
+    expect(hiddenToolNotices.some((notice) => notice.includes("pin test"))).toBe(false);
+  });
+
   it("a plain stop request still aborts before tool execution", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     hasStopRequest = true;

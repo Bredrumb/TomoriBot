@@ -289,7 +289,7 @@ export class ManageMessageTool extends BaseTool {
     if (actionFailure) return actionFailure;
 
     if (action === "reply" || action === "react") {
-      if (Object.hasOwn(args, "end_message_id")) return invalidToolActionArguments(this, context);
+      if (args.end_message_id != null) return invalidToolActionArguments(this, context);
       return this.interaction.execute(args, context);
     }
 

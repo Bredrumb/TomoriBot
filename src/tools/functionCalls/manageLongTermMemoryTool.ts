@@ -94,10 +94,12 @@ export class ManageLongTermMemoryTool extends BaseTool {
     const validScope =
       args.memory_scope === "target_user"
         ? typeof args.target_user === "string" && args.target_user.trim().length > 0
-        : args.memory_scope === "server_wide" && !Object.hasOwn(args, "target_user");
+        : args.memory_scope === "server_wide" && args.target_user == null;
     if (
       !variant.validateParameters(args).isValid ||
-      Object.keys(args).some((key) => !Object.hasOwn(variant.parameters.properties, key)) ||
+      Object.entries(args).some(
+        ([key, value]) => value != null && !Object.hasOwn(variant.parameters.properties, key),
+      ) ||
       !validScope ||
       (action !== "delete" && !String(args.memory_content).trim())
     ) {

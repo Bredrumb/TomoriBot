@@ -82,15 +82,6 @@ describe("manage_task update helpers", () => {
     expect(result.repetition).toBeNull();
   });
 
-  it("rejects retired start delays before a content-only update", () => {
-    for (const timing of [{ hours_from_now: 1 }, { days_from_now: 1 }]) {
-      expect(parseUpdateTaskArguments({ reminder_id: 4, reminder_purpose: "Pay rent.", ...timing }, 0)).toMatchObject({
-        ok: false,
-        status: "task_update_failed_invalid_args",
-      });
-    }
-  });
-
   it("parses a monthly repeat and rejects a positive interval in both units", () => {
     const monthly = parseUpdateTaskArguments(
       { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_months: 1 },

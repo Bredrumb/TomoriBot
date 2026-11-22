@@ -66,7 +66,10 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
 }
 
 async function loadToolSnapshot(context: ToolContext): Promise<ToolSnapshot> {
-  const liveBuiltInTools = ToolRegistry.getAvailableTools(context.provider, context);
+  const liveBuiltInTools = ToolRegistry.getAvailableTools(context.provider, {
+    ...context,
+    streamContext: context.streamContext && { ...context.streamContext, deliberateToolAllowedNames: undefined },
+  });
   const assembled = await ToolRegistry.getAvailableToolsWithMCP(context.provider, buildToolAssemblyState(context));
   const assembledBuiltInNames = new Set(assembled.builtInTools.map((tool) => tool.name));
 

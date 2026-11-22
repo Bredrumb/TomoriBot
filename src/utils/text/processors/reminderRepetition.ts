@@ -82,9 +82,6 @@ export function parseRepetitionArgs(hoursArg: unknown, monthsArg: unknown, minut
 }
 
 export function parseToolRepetitionArgs(args: Record<string, unknown>): RepetitionArgsResult {
-  if (args.repetition_interval_hours != null) {
-    return { ok: false, reason: "Use repetition_interval_minutes for fixed repeat intervals." };
-  }
   return parseRepetitionArgs(undefined, args.repetition_interval_months, args.repetition_interval_minutes);
 }
 

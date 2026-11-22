@@ -72,25 +72,36 @@ describe("manage_task create recurrence", () => {
     expect(row?.reminder_time.toISOString()).toBe("2030-06-10T10:01:00.000Z");
   });
 
-  it("rejects an hours argument before scheduling", async () => {
-    const { result, row } = await executeTaskCreation(
-      { internalUserId: ANCHOR_AUTHOR.user_id },
-      { repetition_interval_hours: 1 },
-    );
-
-    expect(result.success).toBeFalse();
-    expect(result.data).toMatchObject({ status: "invalid_tool_action_arguments" });
-    expect(row).toBeUndefined();
+  it("names the replacement for each retired scheduling field before writing", async () => {
+    for (const [argument, replacement] of [
+      ["repetition_interval_hours", "repetition_interval_minutes"],
+      ["hours_from_now", "minutes_from_now"],
+      ["days_from_now", "minutes_from_now"],
+    ]) {
+      for (const args of [{}, { action: "update", reminder_id: 5, self_reminder: null }]) {
+        const { result, row } = await executeTaskCreation(
+          { internalUserId: ANCHOR_AUTHOR.user_id },
+          { ...args, [argument]: 1 },
+        );
+        expect(result).toMatchObject({
+          success: false,
+          data: { status: "retired_task_argument", argument, replacement },
+        });
+        expect(result.error).toContain(replacement);
+        expect(row).toBeUndefined();
+      }
+    }
   });
 
-  it("rejects retired start delay arguments before scheduling", async () => {
-    for (const timing of [{ hours_from_now: 1 }, { days_from_now: 1 }]) {
-      const { result, row } = await executeTaskCreation({ internalUserId: ANCHOR_AUTHOR.user_id }, timing);
-
-      expect(result.success).toBeFalse();
-      expect(result.data).toMatchObject({ status: "invalid_tool_action_arguments" });
-      expect(row).toBeUndefined();
-    }
+  it("omits null siblings of the create action and rejects a populated task ID", async () => {
+    setSystemTime(new Date("2030-06-10T10:00:00Z"));
+    const nullSiblings = { reminder_id: null, clear_daily_window: null, repetition_interval_hours: null };
+    const { result, row } = await executeTaskCreation({ internalUserId: ANCHOR_AUTHOR.user_id }, nullSiblings);
+    expect(result.success).toBe(true);
+    expect(row?.reminder_time.toISOString()).toBe("2030-06-10T10:01:00.000Z");
+    const rejected = await executeTaskCreation({}, { ...nullSiblings, reminder_id: 5 });
+    expect(rejected.result.success).toBe(false);
+    expect(rejected.row).toBeUndefined();
   });
 
   it("shows the cutoff and daily window together on the creation notice", async () => {
