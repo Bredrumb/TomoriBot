@@ -93,6 +93,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     await testSql`ALTER TABLE natural_nudge_fires DROP COLUMN topic`;
     await executeTestSqlFile("src/db/schema.sql");
     await executeTestSqlFile("src/db/schema.sql");
+    await executeTestSqlFile("src/db/migrations/903_subscription_credential_retention.sql");
     const columns = await testSql`
       SELECT data_type, is_nullable FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'natural_nudge_fires' AND column_name = 'topic'
