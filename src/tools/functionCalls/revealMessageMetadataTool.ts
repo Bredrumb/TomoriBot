@@ -4,7 +4,7 @@ import { log } from "@/utils/misc/logger";
 export class RevealMessageMetadataTool extends BaseTool {
   name = "reveal_message_metadata";
   description =
-    "Annotate recent visible messages in this channel with ref_N handles, sent times, and reactors. Use for metadata questions or to identify a target for manage_message or interact_with_recent_message. Reuse a ref_N already shown in context.";
+    "Annotate recent visible messages in this channel with ref_N handles, sent times, and reactors. Use for metadata questions or to identify a target for manage_message. Reuse a ref_N already shown in context.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {

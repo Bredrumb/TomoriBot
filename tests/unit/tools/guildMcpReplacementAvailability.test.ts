@@ -280,7 +280,7 @@ describe("guild MCP replacement availability without a bundled MCP manager", () 
   });
 
   it("keeps advertised built-ins and aliases executable when MCP reads are unavailable or stale", async () => {
-    const memory = { ...builtIn("create_long_term_memory"), requiresFeatureFlag: "self_teaching" };
+    const memory = { ...builtIn("manage_long_term_memory"), requiresFeatureFlag: "self_teaching" };
     ToolRegistry.registerTool(memory);
     const manage = BUILT_INS.find((tool) => tool.name === "manage_message");
     if (!manage) throw new Error("Missing managed-message fixture");

@@ -34,7 +34,7 @@ const SUMMARY_PARAMETERS: ToolParameterSchema = {
 };
 
 export const DEFAULT_STM_TOOL_DESCRIPTION =
-  "Keep context for the current story or conversation. Use create_long_term_memory or update_long_term_memory when the user asks you to remember something across conversations.";
+  "Keep context for the current story or conversation. Use manage_long_term_memory for something the user asks you to remember across conversations.";
 
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";

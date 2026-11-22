@@ -1,6 +1,8 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
+import { expandDeliberateToolAllowedNames, isToolAllowedByDeliberateMode } from "@/utils/tools/deliberateToolMode";
+import { applyToolActionAvailability, getActionSelector, getAvailableToolSelectors } from "@/utils/tools/toolActions";
+import type { StreamingContext } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { renderPromptConditionals, type PromptConditionPredicate } from "./promptConditionals";
@@ -30,6 +32,7 @@ export interface ToolPromptMacroContext {
   stateForContext?: ToolStateForContext | null;
   capabilities?: PromptCapabilityValues | null;
   deliberateToolAllowedNames?: readonly string[] | null;
+  streamContext?: StreamingContext;
   availableToolNames?: ReadonlySet<string> | null;
 }
 
@@ -228,7 +231,7 @@ export function createToolPromptMacroResolver(context?: ToolPromptMacroContext |
         const toolName = STATIC_TOOL_PROMPT_MACROS[macro];
         expanded = expanded.replaceAll(
           macro,
-          availability.availableToolNames.has(toolName) ? formatResolvedToolName(toolName) : UNAVAILABLE_TOOL_TEXT,
+          availability.availableToolNames.has(toolName) ? formatStaticToolMacro(toolName) : UNAVAILABLE_TOOL_TEXT,
         );
       }
 
@@ -248,6 +251,15 @@ export function createToolPromptMacroResolver(context?: ToolPromptMacroContext |
 
 function formatResolvedToolName(toolName: string): string {
   return `\`${toolName}\``;
+}
+
+function formatStaticToolMacro(selector: string): string {
+  const group = getActionSelector(selector);
+  if (!group) return formatResolvedToolName(selector);
+  const name = formatResolvedToolName(group.name);
+  if (group.name === "manage_message") return name;
+  const actions = selector === "update_long_term_memory" ? ["update"] : group.actions;
+  return `${name} with action ${actions.map(formatResolvedToolName).join(" or ")}`;
 }
 
 async function loadToolPromptMacroAvailability(
@@ -305,24 +317,24 @@ async function loadToolPromptMacroAvailability(
       webSearch: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "web_search"),
       urlFetcher: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "url_fetcher"),
     };
-    const availableToolNames = new Set<string>();
-
+    const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(
+      context?.deliberateToolAllowedNames,
+      mcpToolFamilies,
+    );
+    const filteredAvailableToolNames = new Set(
+      mcpFunctionNames.filter((name) => !deliberateToolAllowedNames || deliberateToolAllowedNames.includes(name)),
+    );
     for (const tool of builtInTools) {
-      availableToolNames.add(tool.name);
+      if (deliberateToolAllowedNames && !isToolAllowedByDeliberateMode(tool.name, deliberateToolAllowedNames)) continue;
+      if (deliberateToolAllowedNames?.length === 0) continue;
+      const variant = applyToolActionAvailability(tool, stateForContext.config, {
+        ...context?.streamContext,
+        deliberateToolAllowedNames,
+      });
+      if (variant) {
+        for (const name of getAvailableToolSelectors(variant)) filteredAvailableToolNames.add(name);
+      }
     }
-
-    for (const functionName of mcpFunctionNames) {
-      availableToolNames.add(functionName);
-    }
-
-    const families = Object.fromEntries([
-      ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
-      ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
-    ]);
-    const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(context?.deliberateToolAllowedNames, families);
-    const filteredAvailableToolNames = deliberateToolAllowedNames
-      ? new Set([...availableToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
-      : availableToolNames;
 
     return {
       availableToolNames: filteredAvailableToolNames,

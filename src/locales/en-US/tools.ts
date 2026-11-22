@@ -14,6 +14,9 @@ export default {
       delivery_failed: "The dice result could not be posted. No successful roll was delivered.",
     },
     execution: {
+      action_unavailable: "The `{action}` action of `{tool}` is unavailable on this turn.",
+      invalid_action_arguments:
+        "Check the `{tool}` schema for the required fields and the fields allowed for this action.",
       channel_history_unavailable:
         "The requesting user and I both need permission to read the target channel's message history.",
       private_channel_target:

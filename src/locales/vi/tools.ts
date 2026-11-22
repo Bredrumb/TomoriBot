@@ -14,6 +14,9 @@ export default {
       delivery_failed: "Không thể đăng kết quả xúc xắc. Không có lượt tung nào được gửi thành công.",
     },
     execution: {
+      action_unavailable: "Không thể dùng thao tác `{action}` của `{tool}` trong lượt này.",
+      invalid_action_arguments:
+        "Hãy xem lược đồ của `{tool}` để biết thao tác này yêu cầu và chấp nhận những trường nào.",
       channel_history_unavailable: "Cả người yêu cầu và mình đều cần quyền đọc lịch sử tin nhắn của kênh đích.",
       private_channel_target:
         "Công cụ liên kênh không thể nhắm vào các kênh riêng tư hoặc kênh không thể xác minh quyền xem. Thay vào đó, hãy hỏi mình ngay trong kênh đó.",

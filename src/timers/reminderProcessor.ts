@@ -288,7 +288,6 @@ export class ReminderProcessor {
                 userDiscId: reminder.server_disc_id,
               }
             : undefined,
-        // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
         manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
         onGenerationResult: deliveryTracker.handleGenerationResult,
         onQueueDiscard: deliveryTracker.handleQueueDiscard,

@@ -18,6 +18,7 @@ import { resolveSpeechTargets, speechTargetSource } from "@/utils/provider/speec
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
+import { applyToolActionAvailability } from "@/utils/tools/toolActions";
 
 export type ToolStateForContext = ToolAssemblyState;
 
@@ -83,7 +84,8 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
         continue;
       }
 
-      availableTools.push(tool);
+      const variant = applyToolActionAvailability(tool, context.tomoriState.config, context.streamContext);
+      if (variant) availableTools.push(variant);
     } catch (error) {
       log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
     }
@@ -119,9 +121,11 @@ export function applyStreamContextAvailability(params: {
     locale: "en-US",
   };
 
-  const filteredTools = builtInTools.filter(
-    (tool) => tool.isAvailableForContext?.(provider, declarationContext) !== false,
-  );
+  const filteredTools = builtInTools.flatMap((tool) => {
+    if (tool.isAvailableForContext?.(provider, declarationContext) === false) return [];
+    const variant = applyToolActionAvailability(tool, tomoriState.config, streamContext);
+    return variant ? [variant] : [];
+  });
 
   if (filteredTools.length !== builtInTools.length) {
     log.info(
@@ -174,7 +178,8 @@ export function getAvailableToolsForContext(
         continue;
       }
 
-      availableTools.push(tool);
+      const variant = applyToolActionAvailability(tool, stateForContext.config);
+      if (variant) availableTools.push(variant);
     } catch (error) {
       log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
     }

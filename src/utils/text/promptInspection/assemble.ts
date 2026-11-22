@@ -72,7 +72,7 @@ import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import {
-  filterDeliberateToolNames,
+  applyDeliberateToolAllowlist,
   getAttachmentDeliberateToolIntentResult,
   getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
@@ -333,23 +333,23 @@ async function fetchProviderTools(
     },
   };
 
-  let { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
-  builtInTools = applyStreamContextAvailability({
+  const available = await getAvailableToolsWithMCP(providerName, toolStateForContext);
+  const { builtInTools, mcpFunctionNames } = applyDeliberateToolAllowlist({
+    ...available,
     providerLabel: providerName,
-    provider: providerName,
-    builtInTools,
-    tomoriState: persona,
-    streamContext: {
-      disableYouTubeProcessing: false,
-      personaSprites: getToolSpriteRoster(contextItems, persona.persona_id),
-    },
+    allowedToolNames: toolFilter?.allowedToolNames,
+    builtInTools: applyStreamContextAvailability({
+      providerLabel: providerName,
+      provider: providerName,
+      builtInTools: available.builtInTools,
+      tomoriState: persona,
+      streamContext: {
+        disableYouTubeProcessing: false,
+        deliberateToolAllowedNames: toolFilter?.allowedToolNames,
+        personaSprites: getToolSpriteRoster(contextItems, persona.persona_id),
+      },
+    }),
   });
-
-  if (toolFilter?.allowedToolNames.length) {
-    const allowedSet = new Set(toolFilter.allowedToolNames);
-    builtInTools = builtInTools.filter((tool) => allowedSet.has(tool.name));
-    mcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, toolFilter.allowedToolNames);
-  }
 
   const adapter = selectToolAdapter(providerName);
   const data = await adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);

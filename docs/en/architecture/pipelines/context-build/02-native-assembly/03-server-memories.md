@@ -27,7 +27,7 @@ the formatted block. Placeholder and mention resolution applies to both projecti
 
 ## Constraints and rationale
 
-- **Stable memory IDs**: Prompt IDs map to `server_memory_id`, allowing `update_long_term_memory` to target a row for replacement or deletion. Empty replacement content requests deletion.
+- **Stable memory IDs.** Prompt IDs map to `server_memory_id`. To change a row, `manage_long_term_memory` requires the ID, the `server_wide` scope, and an explicit `update` or `delete` action.
 - **Legacy tags are inert**: Server memory keyword and `#channel` tags neither hide a memory nor appear in its prompt line. Lorebooks own keyword activation, and channel ids own channel scope.
 - **Scopes are IDs**: A stored scope survives channel renames. Document retrieval applies the same channel-or-parent rule in SQL (`retrieveRelevantDocumentChunks`). Data export leaves scopes out, so imported memories arrive unscoped.
 - **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_MEMORIES`, which SillyTavern preset reassembly flushes at the first knowledge anchor.

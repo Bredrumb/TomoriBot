@@ -9,6 +9,14 @@ import { log } from "@/utils/misc/logger";
 import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 import { parseRenderModifierWebhookName } from "@/utils/discord/renderModifierParser";
 import { revealGroupBreakName } from "@/utils/text/groupBreakName";
+import { createToolVariant } from "@/tools/assembly";
+import { RecentMessageInteraction } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import {
+  invalidToolActionArguments,
+  MESSAGE_INTERACTION_ACTIONS,
+  MESSAGE_MANAGEMENT_ACTIONS,
+  unavailableToolAction,
+} from "@/utils/tools/toolActions";
 
 const PREVIEW_MAX_LENGTH = 120;
 
@@ -97,39 +105,80 @@ function getDisplayAuthorName(message: Message): string {
   return message.member?.displayName ?? message.author.globalName ?? stripBridgePrefix(message.author.username);
 }
 
-export class ManageMessageTool extends BaseTool {
-  name = "manage_message";
-  description =
-    "Pin, edit, or delete recent messages in this channel. Discord permissions govern pinning. Edit or delete only messages owned by you or another character. Use reveal_message_metadata for fresh refs or timestamps.";
-  category = "discord" as const;
-  requiresFeatureFlag = "manage_message";
-
-  parameters: ToolParameterSchema = {
+function buildMessageDefinition(actions: string[]) {
+  const canPin = actions.includes("pin");
+  const canEdit = actions.includes("edit");
+  const canDelete = actions.includes("delete");
+  const canReply = actions.includes("reply");
+  const canReact = actions.includes("react");
+  const actionLabels = actions.map((action) => {
+    if (action === "reply") return "reply to";
+    if (action === "react") return "react to";
+    return action;
+  });
+  const description = [
+    `${new Intl.ListFormat("en", { type: "disjunction" }).format(actionLabels)} recent messages in this channel.`.replace(
+      /^./,
+      (letter) => letter.toUpperCase(),
+    ),
+    canPin && "Discord permissions govern pinning.",
+    (canEdit || canDelete) && "Edit or delete only messages owned by you or another character.",
+    canReply && "Replies use the active persona.",
+    "Use reveal_message_metadata for fresh refs or timestamps.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const contentActions = actions.filter((action) => action === "edit" || action === "reply" || action === "react");
+  const parameters: ToolParameterSchema = {
     type: "object",
+    required: ["action", "message_id", ...(contentActions.length === actions.length ? ["content"] : [])],
     properties: {
       action: {
         type: "string",
-        enum: ["pin", "edit", "delete"],
-        description: "Delete accepts a single message or a range.",
+        enum: actions,
+        ...(canDelete ? { description: "Delete accepts a single message or a range." } : {}),
       },
       message_id: {
         type: "string",
         description: "Use ref_N from recent metadata or media_N from an image or video in context.",
       },
-      end_message_id: {
-        type: "string",
-        description: "Inclusive end of a delete range.",
-      },
-      content: {
-        type: "string",
-        description: "Required for edit. Content edits preserve embeds, files, and components where Discord allows.",
-      },
     },
-    required: ["action", "message_id"],
   };
+  if (canDelete) {
+    parameters.properties.end_message_id = { type: "string", description: "Inclusive end of a delete range." };
+  }
+  if (contentActions.length > 0) {
+    const contentLabels = new Intl.ListFormat("en", { type: "disjunction" }).format(contentActions);
+    const contentTypes = new Intl.ListFormat("en", { type: "disjunction" }).format([
+      ...(canEdit ? ["replacement text"] : []),
+      ...(canReply ? ["a short reply"] : []),
+      ...(canReact ? ["an emoji"] : []),
+    ]);
+    parameters.properties.content = {
+      type: "string",
+      description: [
+        contentActions.length < actions.length && `Required for ${contentLabels}.`,
+        `Use ${contentTypes}${contentActions.length > 1 ? " respectively" : ""}.`,
+        canEdit && "Edits preserve embeds, files, and components where Discord allows.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    };
+  }
+  return { description, parameters };
+}
 
-  isAvailableFor(_provider: string): boolean {
-    return true;
+const fullDefinition = buildMessageDefinition([...MESSAGE_MANAGEMENT_ACTIONS, ...MESSAGE_INTERACTION_ACTIONS]);
+
+export class ManageMessageTool extends BaseTool {
+  name = "manage_message";
+  category = "discord" as const;
+  description = fullDefinition.description;
+  parameters = fullDefinition.parameters;
+  private interaction = new RecentMessageInteraction();
+
+  withActions(actions: string[]): this {
+    return createToolVariant(this, buildMessageDefinition(actions));
   }
 
   private resolveMessageId(
@@ -235,7 +284,15 @@ export class ManageMessageTool extends BaseTool {
       };
     }
 
-    const action = args.action as ManageAction;
+    const action = args.action as ManageAction | "reply" | "react";
+    const actionFailure = unavailableToolAction(this, action, context);
+    if (actionFailure) return actionFailure;
+
+    if (action === "reply" || action === "react") {
+      if (Object.hasOwn(args, "end_message_id")) return invalidToolActionArguments(this, context);
+      return this.interaction.execute(args, context);
+    }
+
     const messageIdResult = this.resolveMessageId(args.message_id, context, "message_id");
     if (!messageIdResult.ok) {
       return messageIdResult.result;

@@ -31,6 +31,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             Boolean(tomoriStateForPreset?.llm?.has_tools),
           ),
           deliberateToolAllowedNames: params.deliberateToolAllowedNames,
+          streamContext: params.toolStreamContext,
           stateForContext:
             tomoriStateForPreset?.server_id && tomoriStateForPreset.llm
               ? {

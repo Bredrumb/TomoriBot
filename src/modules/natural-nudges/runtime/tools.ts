@@ -5,6 +5,7 @@ import { log } from "@/utils/misc/logger";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { getAvailableToolSelectors } from "@/utils/tools/toolActions";
 
 export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<string>> {
   if (!resolveToolsEnabled(persona, persona.llm.has_tools)) return new Set();
@@ -47,7 +48,7 @@ export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<
   };
   try {
     const { builtInTools } = await getAvailableToolsWithMCP(normalizeProviderName(persona.llm.llm_provider), state);
-    return new Set(builtInTools.map((tool) => tool.name));
+    return new Set(builtInTools.flatMap(getAvailableToolSelectors));
   } catch (error) {
     log.warn("Natural Nudges: could not resolve tool availability", error, { personaId: persona.persona_id });
     return new Set();

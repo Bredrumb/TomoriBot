@@ -1,6 +1,6 @@
 import { buildFailedToolResponse } from "@/utils/tools/toolResult";
 import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
-import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
+import { expandDeliberateToolAllowedNames, isToolAllowedByDeliberateMode } from "@/utils/tools/deliberateToolMode";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import {
   MAX_RESPONSE_REVISIONS,
@@ -852,9 +852,8 @@ async function executeToolCall(
     }
   }
   const allowedNames = expandDeliberateToolAllowedNames(requestedNames, families);
-  const deliberateAllowedSet = allowedNames?.length ? new Set(allowedNames) : null;
   const isBlockedByDeliberateAllowlist =
-    params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
+    params.context.deliberateToolModeActive && !isToolAllowedByDeliberateMode(functionName, allowedNames);
 
   // Never dispatch truncated args because partial subsets on state-replacing tools silently drop omitted keys.
   if (functionCall.argumentsTruncated) {
@@ -947,7 +946,13 @@ async function executeToolCall(
     const tool = ToolRegistry.getTool(functionName);
     const available =
       !tool ||
-      ToolRegistry.getAvailableTools(toolContext.provider, toolContext).some((entry) => entry.name === functionName);
+      ToolRegistry.getAvailableTools(toolContext.provider, toolContext).some(
+        (entry) =>
+          entry.name === functionName &&
+          (!entry.withActions ||
+            (typeof executionArgs.action === "string" &&
+              entry.parameters.properties.action?.enum?.includes(executionArgs.action))),
+      );
     if (available && review.reviewItems.includes("tools")) {
       const verdict = await reviewToolCandidate(params.context, params.provider, params.providerConfig, prepared);
       if (verdict.status === "cancelled" || responseReviewCancelled(params.context)) return cancelReviewedCall();
@@ -1008,7 +1013,7 @@ async function executeToolCall(
         data: {
           status: "blocked_by_deliberate_tool_mode",
           functionName,
-          allowedToolNames: deliberateAllowedSet ? [...deliberateAllowedSet] : [],
+          allowedToolNames: allowedNames ?? [],
         },
       }
     : await runUnderWatchdog(params.context.channel.id, () => {
@@ -1066,7 +1071,7 @@ async function executeToolCall(
   if (isBlockedByDeliberateAllowlist) {
     log.warn(
       `Deliberate tool mode blocked unexposed tool call "${functionName}" in channel ${params.context.channel.id}. Allowed: ${
-        deliberateAllowedSet ? [...deliberateAllowedSet].join(", ") : ""
+        allowedNames?.join(", ") ?? ""
       }`,
     );
   }

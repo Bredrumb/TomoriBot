@@ -39,7 +39,7 @@ import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
 import * as toolDelivery from "@/utils/discord/webhook/toolPersonaDelivery";
 import * as authoredText from "@/utils/discord/modelAuthoredText";
 import { createGuildTextChannel } from "../../helpers/discordChannels";
-import { ReminderTool } from "@/tools/functionCalls/reminderTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
 import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import * as nudgeConfigCache from "@/modules/natural-nudges/runtime/configCache";
@@ -200,9 +200,10 @@ describe("cross-channel target authorization", () => {
           );
           expect(result.success, `${restriction}, bypass=${bypass}, peek=${peek}`).toBe(false);
         }
-        const task = await new ReminderTool().execute(
+        const task = await new ManageTaskTool().execute(
           {
             target_channel: "garden",
+            action: "create",
             reminder_purpose: "Check",
             self_reminder: true,
             minutes_from_now: 10,

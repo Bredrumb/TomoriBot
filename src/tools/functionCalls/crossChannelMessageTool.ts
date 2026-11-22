@@ -156,7 +156,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 export class CrossChannelMessageTool extends BaseTool {
   name = "cross_channel_message";
   description =
-    "Do one task now in another channel in this server, or peek at its recent history. Use create_task for later or recurring work.";
+    "Do one task now in another channel in this server, or peek at its recent history. Use manage_task with create for later or recurring work.";
   category = "discord" as const;
 
   parameters: ToolParameterSchema = {

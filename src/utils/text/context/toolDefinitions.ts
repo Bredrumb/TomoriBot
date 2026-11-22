@@ -7,6 +7,8 @@ import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimTool
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
 import { getMcpToolSchemaFraction } from "@/utils/text/tokenEstimate";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import type { StreamingContext } from "@/types/tool/interfaces";
 
 // Kept terse without full calling-format instructions because the accompanying verbatim nudge near the dialogue tail
 // already provides them.
@@ -17,7 +19,9 @@ async function buildVerbatimToolDefinitionsJson(
   tomoriState: TomoriState,
   contextItems: StructuredContextItem[],
   isUserImpersonation: boolean,
-  userId?: number,
+  userId: number | undefined,
+  streamContext: StreamingContext | undefined,
+  deliberateToolAllowedNames: string[] | null | undefined,
 ): Promise<{ tools: Record<string, unknown>[]; mcpFunctionNames: string[] }> {
   const provider = tomoriState.llm.llm_provider;
   const toolStateForContext: ToolStateForContext = {
@@ -62,26 +66,38 @@ async function buildVerbatimToolDefinitionsJson(
     },
   };
 
-  const { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(provider, toolStateForContext);
-
-  // Uses OpenAI-compatible schemas for all providers because verbatim mode expects uniform JSON parameter definitions.
-  const adapter = new OpenAICompatibleToolAdapter(provider);
-  const tools = await adapter.getAllToolsInProviderFormat(
-    applyStreamContextAvailability({
+  const { builtInTools, mcpFunctionNames, mcpToolFamilies } = await getAvailableToolsWithMCP(
+    provider,
+    toolStateForContext,
+  );
+  const allowed = applyDeliberateToolAllowlist({
+    providerLabel: provider,
+    builtInTools: applyStreamContextAvailability({
       providerLabel: provider,
       provider,
       builtInTools,
       tomoriState,
       streamContext: {
         disableYouTubeProcessing: false,
+        ...streamContext,
+        deliberateToolAllowedNames: deliberateToolAllowedNames ?? undefined,
         personaSprites: getToolSpriteRoster(contextItems, tomoriState.persona_id),
         deliveryMode: isUserImpersonation ? "user_impersonation" : "persona",
       },
     }),
-    tomoriState.server_id,
     mcpFunctionNames,
+    mcpToolFamilies,
+    allowedToolNames: deliberateToolAllowedNames,
+  });
+
+  // Uses OpenAI-compatible schemas for all providers because verbatim mode expects uniform JSON parameter definitions.
+  const adapter = new OpenAICompatibleToolAdapter(provider);
+  const tools = await adapter.getAllToolsInProviderFormat(
+    allowed.builtInTools,
+    tomoriState.server_id,
+    allowed.mcpFunctionNames,
   );
-  return { tools, mcpFunctionNames };
+  return { tools, mcpFunctionNames: allowed.mcpFunctionNames };
 }
 
 // Tool schemas are serialized in-band under the verbatim-nudge gate so endpoints that ignore the native tools field
@@ -91,6 +107,8 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
   userId?: number;
   contextItems: StructuredContextItem[];
   isUserImpersonation: boolean;
+  streamContext?: StreamingContext;
+  deliberateToolAllowedNames?: readonly string[] | null;
 }): Promise<StructuredContextItem | null> {
   try {
     const { tomoriState } = params;
@@ -103,6 +121,8 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
       params.contextItems,
       params.isUserImpersonation,
       params.userId,
+      params.streamContext,
+      params.deliberateToolAllowedNames ? [...params.deliberateToolAllowedNames] : params.deliberateToolAllowedNames,
     );
     if (tools.length === 0) {
       return null;

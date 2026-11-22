@@ -74,16 +74,16 @@ For what each tool can do and which settings enable it, see
 | Macro | Function name for `tool:` conditions | Example standing instruction |
 | --- | --- | --- |
 | `{capabilities_tool}` | `review_capabilities` | `Use {capabilities_tool} to check what you can do here before promising a feature such as stickers or voice messages.` |
-| `{memory_tool}` | `create_long_term_memory` | `Save lasting member preferences, such as favorite party games, with {memory_tool} so you can use them in future chats.` |
-| `{memory_update_tool}` | `update_long_term_memory` | `Use {memory_update_tool} to revise the existing memory when a member corrects a saved preference or a moderator changes a recurring event.` |
+| `{memory_tool}` | `manage_long_term_memory` with `create` | `Save lasting member preferences, such as favorite party games, with {memory_tool} so you can use them in future chats.` |
+| `{memory_update_tool}` | `manage_long_term_memory` with `update` | `Use {memory_update_tool} to revise the existing memory when a member corrects a saved preference or a moderator changes a recurring event.` |
 | `{short_term_memory_tool}` | `update_short_term_memory` | `At roleplay scene breaks, use {short_term_memory_tool} to record where the party stopped, what clues they found, and what they plan to do next.` |
-| `{task_tool}` | `create_task` | `Schedule game-night and poll reminders with {task_tool} when members request them. Confirm the scheduled time afterward.` |
-| `{task_update_tool}` | `update_task` | `Use {task_update_tool} to reschedule the existing reminder when a member changes its time or repeat schedule.` |
+| `{task_tool}` | `manage_task` with `create` | `Schedule game-night and poll reminders with {task_tool} when members request them. Confirm the scheduled time afterward.` |
+| `{task_update_tool}` | `manage_task` with `update` or `delete` | `Use {task_update_tool} to reschedule the existing reminder when a member changes its time or repeat schedule.` |
 | `{cross_channel_tool}` | `cross_channel_message` | `When asked to publish event results, post them in #announcements with {cross_channel_tool} and report back here.` |
 | `{create_thread_tool}` | `create_thread` | `When members explicitly ask for a spoiler discussion thread, use {create_thread_tool} and open with a question about the episode.` |
 | `{sticker_tool}` | `select_sticker_for_response` | `Celebrate raid clears with {sticker_tool} when the server has a sticker that fits the moment.` |
 | `{manage_message_tool}`, `{pin_tool}` | `manage_message` | `Pin guides and event recaps with {manage_message_tool} when a moderator asks.` |
-| `{message_interaction_tool}` | `interact_with_recent_message` | `Use {message_interaction_tool} to react with 🎉 to new tournament result announcements.` |
+| `{message_interaction_tool}` | `manage_message` with `reply` or `react` | `Use {message_interaction_tool} to react with 🎉 to new tournament result announcements.` |
 | `{conditioning_interaction_tool}` | `interact_with_target` | `Use {conditioning_interaction_tool} for requested victory hugs after major wins.` |
 | `{profile_picture_tool}` | `peek_profile_picture` | `When members ask for avatar feedback, inspect the avatar with {profile_picture_tool} before commenting on the design.` |
 | `{document_tool}` | `read_file` | `Use {document_tool} to read attached rules PDFs before answering questions about scoring or eligibility.` |
@@ -127,7 +127,7 @@ Tell the user when you cannot save a long-term memory.
 
 | Condition | When its branch appears |
 | --- | --- |
-| `{{if tool:<function_name>}}` | The exact tool is available to the provider and model. |
+| `{{if tool:<function_name>}}` | The tool or its saved action group is available to the provider and model. |
 | `{{if capability:<name>}}` | The named capability is enabled. |
 | `{{if tool_family:url_fetch}}` | The built-in URL reader or a server MCP replacement is available. |
 
@@ -141,7 +141,10 @@ Supported capability names are `tool_use`, `self_teaching`, `personal_memories`,
 `tool_use` is false when the active model cannot call tools.
 
 Tool conditions check the tools available when the prompt is assembled, including restrictions
-from Deliberate Tool Mode. Discord permissions are checked when the tool runs. Unknown capability
+from Deliberate Tool Mode. Saved conditions such as `tool:create_long_term_memory` check the
+corresponding action of the merged tool. Use `tool:interact_with_recent_message` to check reply
+or reaction availability and `tool:manage_message` to check pin, edit, or delete availability.
+Discord permissions are checked when the tool runs. Unknown capability
 names evaluate as false and produce a warning. TomoriBot omits malformed blocks and leaves
 conditional tags as written if nesting exceeds the limit.
 

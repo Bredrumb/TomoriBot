@@ -7,7 +7,7 @@ The memory creation stage handles model-initiated persistence of new facts, pref
 
 ## Flow and ownership
 
-When the model identifies information worth preserving across conversations, it invokes `create_long_term_memory` managed by `MemoryTool` in `src/tools/functionCalls/memoryTool.ts`.
+When the model identifies information worth preserving across conversations, it calls `manage_long_term_memory` with `action: "create"`. The creation handler is in `src/tools/functionCalls/memoryTool.ts`.
 
 Execution proceeds through several validation and routing steps:
 
@@ -54,7 +54,7 @@ Stable proxy identities retain personal memory scope because they own synthetic 
 
 ## Source pointers
 
-- `src/tools/functionCalls/memoryTool.ts`: `MemoryTool` parameter validation, scope resolution, and execution flow.
+- `src/tools/functionCalls/memoryTool.ts`: `createLongTermMemory()` parameter validation, scope resolution, and execution flow.
 - `src/utils/discord/targetResolver.ts`: user name matching and bridge fallback handling.
 - `src/utils/db/repositories/ServerMemoryRepository.ts`: queries and limit verification for server memories.
 - `src/utils/db/repositories/PersonalMemoryRepository.ts`: queries and limit verification for personal memories.

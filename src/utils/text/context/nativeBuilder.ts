@@ -83,6 +83,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
     deliberateToolAllowedNames,
+    toolStreamContext,
     presetOwnsSystemPrompt = false,
     messageIdMap,
   } = params;
@@ -160,6 +161,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     provider: tomoriState?.llm?.llm_provider,
     capabilities: resolvePromptCapabilityValues(tomoriConfig, Boolean(tomoriState?.llm?.has_tools)),
     deliberateToolAllowedNames,
+    streamContext: toolStreamContext,
     stateForContext:
       tomoriState?.server_id && tomoriState.llm
         ? {
@@ -386,6 +388,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       userId: triggererUserId,
       contextItems,
       isUserImpersonation,
+      streamContext: toolStreamContext,
+      deliberateToolAllowedNames,
     }),
   );
   const recallPromise = memoryRecall.finish();

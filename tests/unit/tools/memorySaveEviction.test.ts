@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, type Mock, spyOn } from "bun:test";
 import type { AttachmentBuilder, ButtonInteraction, Message, TextChannel } from "discord.js";
-import { MemoryTool } from "@/tools/functionCalls/memoryTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { personalMemorySchema, PrivacyLevel, serverMemorySchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import * as serverCache from "@/utils/cache/tomoriStateCache";
@@ -144,8 +144,38 @@ describe("model memory save eviction", () => {
   afterEach(() => mock.restore());
 
   function save(scope: (typeof scopes)[number], content = newContent) {
-    return new MemoryTool().execute({ memory_scope: scope, memory_content: content, target_user: "Juno" }, context);
+    return new ManageLongTermMemoryTool().execute(
+      {
+        action: "create",
+        memory_scope: scope,
+        memory_content: content,
+        ...(scope === "target_user" ? { target_user: "Juno" } : {}),
+      },
+      context,
+    );
   }
+
+  it("rejects missing or contradictory scope before a memory mutation", async () => {
+    const tool = new ManageLongTermMemoryTool();
+    const removeServer = spyOn(serverMemoryRepository, "removeByIdWithLineage");
+    const removePersonal = spyOn(personalMemoryRepository, "removeByIdForUserAndLineage");
+    try {
+      for (const scope of [{}, { memory_scope: "target_user" }, { memory_scope: "server_wide", target_user: "Juno" }]) {
+        const result = await tool.execute({ action: "delete", memory_id: 24, ...scope }, context);
+        expect(result).toMatchObject({ success: false, data: { status: "invalid_tool_action_arguments" } });
+      }
+      const emptyUpdate = await tool.execute(
+        { action: "update", memory_scope: "server_wide", memory_id: 24, memory_content: "   " },
+        context,
+      );
+      expect(emptyUpdate.success).toBe(false);
+      expect(removeServer).not.toHaveBeenCalled();
+      expect(removePersonal).not.toHaveBeenCalled();
+    } finally {
+      removeServer.mockRestore();
+      removePersonal.mockRestore();
+    }
+  });
 
   it.each(scopes)("surfaces a committed %s eviction and invalidates before notification", async (scope) => {
     const result = await save(scope);

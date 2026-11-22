@@ -16,16 +16,15 @@ whether the active model supports tool calling, which usually names the setting 
 | Tool | Prompt macro | Requires | What it does |
 |---|---|---|---|
 | Review capabilities | `{capabilities_tool}` | - | Check current chat abilities, commands, or settings before answering. |
-| Create / update long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save or replace a stable server fact or user preference. |
+| Manage long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save, correct, or remove a server fact or personal memory. |
 | Update short-term memory | `{short_term_memory_tool}` | - | Save temporary working memory for the current channel or story arc. |
-| Create / update task | `{task_tool}` / `{task_update_tool}` | - | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
+| Manage task | `{task_tool}` / `{task_update_tool}` | - | Schedule, edit, or cancel reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
 | Cross-channel message | `{cross_channel_tool}` | - | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
 | Roll dice | - | `dice_rolling_enabled` | Roll dice publicly and use the returned result in roleplay. |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker or custom expression to a reply. |
-| Manage message | `{manage_message_tool}` | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
+| Manage message | `{manage_message_tool}` / `{message_interaction_tool}` | Varies by action | Reply to recent messages. React when emoji usage is enabled. Pin, edit, or delete when message management is enabled. Pinning needs `Manage Messages`. |
 | Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
-| Interact with recent message | `{message_interaction_tool}` | - | React to or send a short reply to a recent message. |
 | Peek profile picture | `{profile_picture_tool}` | vision model or `vision_llm` | Inspect a user's or the persona's avatar. |
 | Read document | `{document_tool}` | - | Extract text from a PDF or any UTF-8 text file: source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
 | Reveal message metadata | `{message_metadata_tool}` | - | Annotate recent turns with handles and timestamps for precise targeting. |

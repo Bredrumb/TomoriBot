@@ -10,6 +10,8 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona } from "../../helpers/fixtures";
 import { stubLogMembers } from "../../helpers/mockSurface";
 import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { WebSearchTool } from "@/tools/webSearch/webSearchTool";
 import * as searchDispatcher from "@/tools/webSearch/dispatcher";
 import * as stateCache from "@/utils/cache/tomoriStateCache";
@@ -78,14 +80,14 @@ describe("reviewed requests at real dispatch owners", () => {
 
   it("fixes aliases and opaque targets before review and retains execution-time availability", async () => {
     ToolRegistry.registerTool({
-      name: "create_long_term_memory",
+      name: "manage_long_term_memory",
       description: "Harmless memory fixture",
       category: "memory",
       parameters: { type: "object", properties: {}, required: [] },
       isAvailableFor: () => true,
       isAvailableForContext: (_provider, current) => current.userId === "allowed",
       execute: async (args) => {
-        effects.push({ name: "create_long_term_memory", args });
+        effects.push({ name: "manage_long_term_memory", args });
         return { success: true };
       },
     });
@@ -93,8 +95,8 @@ describe("reviewed requests at real dispatch owners", () => {
     const prepared = await ToolRegistry.prepareToolRequest("remember_this_fact", { message_id: opaque }, context);
     context.preparedToolRequest = prepared;
     expect(prepared).toEqual({
-      name: "create_long_term_memory",
-      args: { message_id: "900000000000000001", __original_message_id: opaque },
+      name: "manage_long_term_memory",
+      args: { action: "create", message_id: "900000000000000001", __original_message_id: opaque },
     });
     expect((await ToolRegistry.executeTool(prepared.name, prepared.args, context)).success).toBe(false);
     expect(effects).toEqual([]);
@@ -166,12 +168,16 @@ describe("reviewed requests at real dispatch owners", () => {
         context,
       );
       expect(result.success).toBe(false);
-      expect(result.error).toBe(localizedCopy("en-US", "tools.execution.unavailable", { tool: "manage_message" }));
+      expect(result.error).toBe(
+        localizedCopy("en-US", "tools.execution.action_unavailable", { tool: "manage_message", action: "delete" }),
+      );
     }
     expect(effect).not.toHaveBeenCalled();
     context.tomoriState.config.manage_message_enabled = true;
     context.tomoriState.config.tool_use_enabled = false;
-    expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(true);
+    expect(
+      (await ToolRegistry.executeTool("manage_message", { action: "delete", message_id: "fixture" }, context)).success,
+    ).toBe(true);
     effect.mockRestore();
   });
 
@@ -180,6 +186,7 @@ describe("reviewed requests at real dispatch owners", () => {
     const read = spyOn(stateCache, "getCachedTomoriState").mockResolvedValue(current);
     const tool = new ManageMessageTool();
     const effect = spyOn(tool, "execute").mockResolvedValue({ success: true });
+    const args = { action: "delete", message_id: "fixture" };
     ToolRegistry.registerTool(tool);
     context.provider = "google";
     context.guildId = "fixture-guild";
@@ -189,32 +196,57 @@ describe("reviewed requests at real dispatch owners", () => {
       return { routes: new Map(), replaced: new Set() };
     });
     try {
-      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect((await ToolRegistry.executeTool("manage_message", args, context)).success).toBe(false);
       expect(effect).not.toHaveBeenCalled();
       current.config.manage_message_enabled = true;
       guildRoute.mockImplementation(async () => {
         current.config.manage_message_enabled = false;
         throw new Error("Current MCP registrations unavailable");
       });
-      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect((await ToolRegistry.executeTool("manage_message", args, context)).success).toBe(false);
       expect(effect).not.toHaveBeenCalled();
       guildRoute.mockResolvedValue({ routes: new Map(), replaced: new Set() });
       current.config.manage_message_enabled = true;
       context.tomoriState.persona_nickname = "Mirri";
       context.tomoriState.llm.llm_codename = "personal-model";
       context.tomoriState.config.api_key = Buffer.from("personal-key");
-      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(true);
+      expect((await ToolRegistry.executeTool("manage_message", args, context)).success).toBe(true);
       const executed = effect.mock.calls[0]?.[1];
       expect(executed?.tomoriState.persona_nickname).toBe("Mirri");
       expect(executed?.tomoriState.llm.llm_codename).toBe("personal-model");
       expect(executed?.tomoriState.config.api_key).toEqual(Buffer.from("personal-key"));
       effect.mockClear();
       read.mockRejectedValue(new Error("unavailable"));
-      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect((await ToolRegistry.executeTool("manage_message", args, context)).success).toBe(false);
       expect(effect).not.toHaveBeenCalled();
     } finally {
       read.mockRestore();
       effect.mockRestore();
+    }
+  });
+
+  it("refuses destructive actions when saved selectors admit only creation or interaction", async () => {
+    context.tomoriState.config.self_teaching_enabled = true;
+    context.tomoriState.config.manage_message_enabled = true;
+    context.streamContext = {
+      disableYouTubeProcessing: false,
+      deliberateToolAllowedNames: ["create_task", "create_long_term_memory", "interact_with_recent_message"],
+    };
+    const calls = [
+      { tool: new ManageTaskTool(), args: { action: "delete", reminder_id: 42 } },
+      { tool: new ManageLongTermMemoryTool(), args: { action: "delete", memory_id: 24, memory_scope: "server_wide" } },
+      { tool: new ManageMessageTool(), args: { action: "delete", message_id: "ref_7" } },
+    ];
+    for (const { tool, args } of calls) {
+      const effect = spyOn(tool, "execute").mockResolvedValue({ success: true });
+      ToolRegistry.registerTool(tool);
+      try {
+        const result = await ToolRegistry.executeTool(tool.name, args, context);
+        expect(result).toMatchObject({ success: false, data: { status: "tool_action_unavailable", action: "delete" } });
+        expect(effect).not.toHaveBeenCalled();
+      } finally {
+        effect.mockRestore();
+      }
     }
   });
 

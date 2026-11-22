@@ -428,8 +428,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
-  // Auto-expose voice generation on audio reminders and suppress `create_task` so reminders cannot schedule
-  // nested reminders.
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
     if (
       /\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose) ||
@@ -443,16 +441,19 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       });
     }
 
-    const createTaskIndex = deliberateToolAllowedNames.indexOf("create_task");
-    if (createTaskIndex !== -1) {
-      deliberateToolAllowedNames.splice(createTaskIndex, 1);
-    }
+    if (deliberateToolModeActive) streamingContext.disableTaskCreation = true;
   }
 
   if (deliberateToolModeActive && incoming.naturalNudge) {
     for (const toolName of incoming.naturalNudge.toolNames) {
       deliberateToolAllowedNames.push(toolName);
       deliberateToolTriggerMatches.push({ toolName, trigger: "natural idle nudge", source: "built-in" });
+    }
+  }
+
+  if (streamingContext.disableTaskCreation) {
+    for (let index = deliberateToolAllowedNames.length - 1; index >= 0; index--) {
+      if (deliberateToolAllowedNames[index] === "create_task") deliberateToolAllowedNames.splice(index, 1);
     }
   }
 
@@ -610,6 +611,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       impersonatedUserPrompt,
       explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
       deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
+      toolStreamContext: streamingContext,
       messageIdMap,
     }),
   );

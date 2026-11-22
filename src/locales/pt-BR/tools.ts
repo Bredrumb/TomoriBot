@@ -14,6 +14,8 @@ export default {
       delivery_failed: "Não foi possível postar o resultado dos dados. Nenhuma rolagem foi entregue.",
     },
     execution: {
+      action_unavailable: "A ação `{action}` de `{tool}` está indisponível neste turno.",
+      invalid_action_arguments: "Consulte o esquema de `{tool}` para ver quais campos essa ação exige e aceita.",
       channel_history_unavailable:
         "Tanto o usuário solicitante quanto eu precisamos de permissão para ler o histórico de mensagens do canal de destino.",
       private_channel_target:

@@ -6,6 +6,7 @@ import { loadCommandData } from "@/utils/discord/commandLoader";
 import { log } from "@/utils/misc/logger";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getAvailableToolSelectors } from "@/utils/tools/toolActions";
 
 interface ToolSnapshot {
   builtInTools: Tool[];
@@ -227,6 +228,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const snapshot = await loadToolSnapshot(context);
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
     const builtInNames = new Set(snapshot.builtInTools.map((tool) => tool.name));
+    const availableSelectors = new Set(snapshot.builtInTools.flatMap(getAvailableToolSelectors));
     const content: string[] = [
       "# Your Current Chat Capabilities",
       "",
@@ -267,7 +269,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       "",
       "## Memory and Knowledge",
       "",
-      `- **Long-term memory writing**: ${builtInNames.has("create_long_term_memory") || builtInNames.has("update_long_term_memory") ? "available" : "unavailable"}`,
+      `- **Long-term memory writing**: ${builtInNames.has("manage_long_term_memory") ? "available" : "unavailable"}`,
       `- **Short-term memory**: ${config.short_term_memory_enabled ? "enabled" : "disabled"}`,
       `- **Personal memories**: ${config.personal_memories_enabled ? "enabled" : "disabled"}`,
       `- **User info updates**: ${config.user_info_updates_enabled ? "enabled" : "disabled"}`,
@@ -278,7 +280,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       `- **Image generation**: ${builtInNames.has("generate_image") || builtInNames.has("generate_image_nai") ? "available" : "unavailable"}`,
       `- **Video generation**: ${builtInNames.has("generate_video") ? "available" : "unavailable"}`,
       `- **Voice messages**: ${builtInNames.has("generate_voice_message") ? "available" : "unavailable"}`,
-      `- **Message management**: ${builtInNames.has("manage_message") ? "available" : "unavailable"}`,
+      `- **Message management**: ${availableSelectors.has("manage_message") ? "available" : "unavailable"}`,
       `- **Thread creation**: ${builtInNames.has("create_thread") ? "available" : "unavailable"}`,
       `- **Danbooru tag lookup**: ${builtInNames.has("danbooru_search_tags") ? "available" : "unavailable"}`,
       "",

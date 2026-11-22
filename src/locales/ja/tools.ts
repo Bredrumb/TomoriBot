@@ -14,6 +14,9 @@ export default {
       delivery_failed: "ダイスの結果を投稿できませんでした。ロールは送信されませんでした。",
     },
     execution: {
+      action_unavailable: "このターンでは、`{tool}` の `{action}` は使えません。",
+      invalid_action_arguments:
+        "`{tool}` のスキーマで、この操作の必須フィールドと指定できるフィールドを確認してください。",
       channel_history_unavailable:
         "対象チャンネルのメッセージ履歴を読むには、リクエストしたユーザーと私の両方に権限が必要です。",
       private_channel_target:

@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, setSystemTime, spyOn } from "bun:test";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { ReminderRow } from "@/types/db/schema";
-import { ReminderTool } from "@/tools/functionCalls/reminderTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
 import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import * as expandableEmbedNotice from "@/utils/discord/expandableEmbedNotice";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
@@ -26,8 +26,8 @@ async function executeTaskCreation(
   const sendNotice = spyOn(expandableEmbedNotice, "sendTaskEmbedWithExpand").mockResolvedValue(undefined as never);
   const spies = [addReminder, spyOn(userRepository, "loadByDiscordId").mockResolvedValue(ANCHOR_AUTHOR), sendNotice];
   try {
-    const result = await new ReminderTool().execute(
-      { reminder_purpose: "Check the build.", self_reminder: true, ...timing },
+    const result = await new ManageTaskTool().execute(
+      { action: "create", reminder_purpose: "Check the build.", self_reminder: true, ...timing },
       {
         channel: { id: "fixture-channel" },
         client: { user: { id: "fixture-bot", username: "Tomori" } },
@@ -50,7 +50,7 @@ async function createTaskAndReadCreator(context: Partial<ToolContext>): Promise<
   return row?.created_by_user_id;
 }
 
-describe("create_task recurrence", () => {
+describe("manage_task create recurrence", () => {
   it("defaults the first trigger of a 60-minute repeat to one interval and honors an explicit delay", async () => {
     setSystemTime(new Date("2030-06-10T10:00:00Z"));
     const context = { internalUserId: ANCHOR_AUTHOR.user_id };
@@ -79,7 +79,7 @@ describe("create_task recurrence", () => {
     );
 
     expect(result.success).toBeFalse();
-    expect(result.data).toMatchObject({ status: "reminder_creation_failed_invalid_repeat_interval" });
+    expect(result.data).toMatchObject({ status: "invalid_tool_action_arguments" });
     expect(row).toBeUndefined();
   });
 
@@ -88,7 +88,7 @@ describe("create_task recurrence", () => {
       const { result, row } = await executeTaskCreation({ internalUserId: ANCHOR_AUTHOR.user_id }, timing);
 
       expect(result.success).toBeFalse();
-      expect(result.data).toMatchObject({ status: "reminder_creation_failed_invalid_args" });
+      expect(result.data).toMatchObject({ status: "invalid_tool_action_arguments" });
       expect(row).toBeUndefined();
     }
   });

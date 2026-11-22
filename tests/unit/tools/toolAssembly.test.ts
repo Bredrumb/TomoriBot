@@ -1,6 +1,8 @@
 import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
-import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { applyStreamContextAvailability, getAvailableToolsForContext } from "@/tools/availability";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
 import { createPersona } from "../../helpers/fixtures";
@@ -146,19 +148,45 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
-  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
-    const tool = new InteractWithRecentMessageTool();
-    const state = createAssemblyState();
-    state.config.emoji_usage_enabled = false;
-    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+  it("hides message mutations and reactions independently of text replies", () => {
+    const tool = new ManageMessageTool();
+    const persona = createPersona({ config: { manage_message_enabled: false, emoji_usage_enabled: false } });
+    const assemble = (disableRecentMessageReplyTool = false) =>
+      applyStreamContextAvailability({
+        providerLabel: "fixture",
+        provider: "google",
+        builtInTools: [tool],
+        tomoriState: persona,
+        streamContext: { disableYouTubeProcessing: false, disableRecentMessageReplyTool },
+      });
+    const [replyOnly] = assemble();
     expect(replyOnly).toBeDefined();
     expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
     expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
-      /react|emoji|sticker/i,
+      /react|emoji|pin|edit|delete/i,
     );
-    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
-    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
-    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+    expect(assemble(true)).toEqual([]);
+    expect(getEnum(tool, "action")).toEqual(["pin", "edit", "delete", "reply", "react"]);
+  });
+
+  it("offers only the actions selected by saved Deliberate Tool Mode and nudge names", () => {
+    const [task, memory, message] = applyStreamContextAvailability({
+      providerLabel: "fixture",
+      provider: "google",
+      builtInTools: [new ManageTaskTool(), new ManageLongTermMemoryTool(), new ManageMessageTool()],
+      tomoriState: createPersona({ config: { self_teaching_enabled: true, emoji_usage_enabled: true } }),
+      streamContext: {
+        disableYouTubeProcessing: false,
+        deliberateToolAllowedNames: ["create_task", "update_long_term_memory", "interact_with_recent_message"],
+      },
+    });
+    expect(getEnum(task, "action")).toEqual(["create"]);
+    expect(task.parameters.required).toContain("reminder_purpose");
+    expect(task.parameters.properties.reminder_id).toBeUndefined();
+    expect(getEnum(memory, "action")).toEqual(["update", "delete"]);
+    expect(memory.parameters.required).toContain("memory_id");
+    expect(getEnum(message, "action")).toEqual(["reply", "react"]);
+    expect(message.parameters.properties.end_message_id).toBeUndefined();
   });
 
   it("leaves tools without an assembly hook unchanged", async () => {
