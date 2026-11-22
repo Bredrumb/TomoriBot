@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import { GenerateImageTool, loadIdentityCharacterReference } from "@/tools/functionCalls/generateImageTool";
-import { PrivacyLevel } from "@/types/db/schema";
+import { customEndpointSchema, PrivacyLevel, userSavedProviderConfigSchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import * as mediaQuotaGate from "@/utils/quota/mediaQuotaGate";
 import type { ResolvedAvatarData } from "@/utils/discord/avatarResolver";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 const GUILD_ID = "100000000000000001";
@@ -77,9 +78,8 @@ describe("generate_image identity character references", () => {
 describe("generate_image edit target", () => {
   afterEach(() => mock.restore());
 
-  it("refuses an inpaint without media_id whose references name more than one image", async () => {
-    const resolveCredentials = spyOn(mediaQuotaGate, "resolveCredentialsWithMediaQuota");
-    const context: ToolContext = {
+  function createEditContext(): ToolContext {
+    return {
       channel: { id: "fixture-channel" } as ToolContext["channel"],
       client: {} as Client,
       tomoriState: createPersona({ config: { imagegen_enabled: true } }),
@@ -89,8 +89,17 @@ describe("generate_image edit target", () => {
       guildId: GUILD_ID,
       suppressProgressNotices: true,
     };
+  }
 
-    for (const flags of [{ inpaint: true, mask_prompt: "hat" }, { outpaint: true }]) {
+  it("refuses masked edits with multiple references and no explicit target", async () => {
+    const resolveCredentials = spyOn(mediaQuotaGate, "resolveCredentialsWithMediaQuota");
+    const context = createEditContext();
+
+    for (const flags of [
+      { edit_mode: "inpaint", mask_prompt: "hat" },
+      { edit_mode: "extend", mask_prompt: "hat" },
+      { edit_mode: "outpaint" },
+    ]) {
       const result = await new GenerateImageTool().execute(
         { prompt: "fixture prompt", references: ["Mirri", "Juno"], ...flags },
         context,
@@ -98,5 +107,68 @@ describe("generate_image edit target", () => {
       expect(result.success).toBe(false);
     }
     expect(resolveCredentials).not.toHaveBeenCalled();
+  });
+
+  it("rejects implicit edits and retired mode flags before reserving quota", async () => {
+    const resolveCredentials = spyOn(mediaQuotaGate, "resolveCredentialsWithMediaQuota");
+    const context = createEditContext();
+    const tool = new GenerateImageTool();
+
+    for (const controls of [
+      { mask_prompt: "hat" },
+      { outpaint_amount: "large" },
+      { inpaint: true },
+      { inpaint_mode: "extend" },
+      { outpaint: true },
+    ]) {
+      const result = await tool.execute({ prompt: "Landscape", references: ["Mirri"], ...controls }, context);
+      expect(result.success).toBe(false);
+    }
+    expect(resolveCredentials).not.toHaveBeenCalled();
+  });
+
+  it("rejects edits when the resolved image endpoint cannot execute them", async () => {
+    const context = createEditContext();
+    const endpoint = customEndpointSchema.parse({
+      connection_id: 1,
+      custom_endpoint_id: 1,
+      user_id: 1,
+      capability: "image",
+      api_style: "openai-compatible",
+      label: "Fixture endpoint",
+      endpoint_url: "https://endpoint.invalid",
+      requires_auth: false,
+    });
+    const resolveCredentials = spyOn(mediaQuotaGate, "resolveCredentialsWithMediaQuota").mockResolvedValue({
+      credentials: {
+        provider: "custom:1",
+        source: "personal",
+        apiKey: "synthetic-credential",
+        keyVersion: 1,
+        modelId: 1,
+        customEndpoint: endpoint,
+        savedConfig: userSavedProviderConfigSchema.parse({
+          user_id: 1,
+          provider: "custom:1",
+          api_key: null,
+          llm_id: null,
+          diffusion_model_id: 1,
+          embedding_model_id: null,
+          nai_diffusion_model_id: null,
+          nai_preset_name: null,
+        }),
+      },
+      quotaCheck: { allowed: true, reservation: null },
+    });
+    const loadModel = spyOn(llmModelRepo, "loadDiffusionModelById");
+
+    const result = await new GenerateImageTool().execute(
+      { prompt: "A red hat", edit_mode: "inpaint", mask_prompt: "hat", references: ["Mirri"] },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(resolveCredentials).toHaveBeenCalled();
+    expect(loadModel).not.toHaveBeenCalled();
   });
 });
