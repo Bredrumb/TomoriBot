@@ -81,6 +81,13 @@ export function parseRepetitionArgs(hoursArg: unknown, monthsArg: unknown, minut
   return provided ? { ok: true, provided: true, repetition } : { ok: true, provided: false };
 }
 
+export function parseToolRepetitionArgs(args: Record<string, unknown>): RepetitionArgsResult {
+  if (args.repetition_interval_hours != null) {
+    return { ok: false, reason: "Use repetition_interval_minutes for fixed repeat intervals." };
+  }
+  return parseRepetitionArgs(undefined, args.repetition_interval_months, args.repetition_interval_minutes);
+}
+
 export type ReminderRepeatLimit = { remaining: number } | { until: Date };
 export type ReminderDailyWindow = { start: number; end: number; timezoneOffset: number };
 export type ReminderRecurrenceOptions = {

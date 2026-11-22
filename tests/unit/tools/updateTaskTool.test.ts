@@ -24,7 +24,7 @@ describe("update_task helpers", () => {
         reminder_id: 42,
         reminder_purpose: "   ",
         minutes_from_now: -1,
-        repetition_interval_hours: -1,
+        repetition_interval_minutes: -1,
       },
       0,
     );
@@ -63,7 +63,7 @@ describe("update_task helpers", () => {
         reminder_id: 9,
         reminder_purpose: "Review the new logs.",
         hours_from_now: 2,
-        repetition_interval_hours: 0,
+        repetition_interval_minutes: 0,
       },
       0,
     );
@@ -79,14 +79,19 @@ describe("update_task helpers", () => {
 
   it("parses a monthly repeat and rejects a positive interval in both units", () => {
     const monthly = parseUpdateTaskArguments(
-      { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 0, repetition_interval_months: 1 },
+      { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_months: 1 },
       0,
     );
     expect(monthly).toMatchObject({ ok: true, hasRepetitionUpdate: true, repetition: { unit: "months", interval: 1 } });
 
     expect(
       parseUpdateTaskArguments(
-        { reminder_id: 4, reminder_purpose: "Pay rent.", repetition_interval_hours: 24, repetition_interval_months: 1 },
+        {
+          reminder_id: 4,
+          reminder_purpose: "Pay rent.",
+          repetition_interval_minutes: 1440,
+          repetition_interval_months: 1,
+        },
         0,
       ),
     ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
@@ -148,7 +153,7 @@ describe("update_task helpers", () => {
         {
           reminder_id: 1,
           reminder_purpose: "Update this.",
-          repetition_interval_hours: -1,
+          repetition_interval_minutes: -1,
         },
         0,
       ),

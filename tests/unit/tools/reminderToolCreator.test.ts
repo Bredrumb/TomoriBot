@@ -18,7 +18,7 @@ const ANCHOR_AUTHOR = createUserRow({ user_id: 11, user_disc_id: "fixture-juno" 
 
 async function executeTaskCreation(
   context: Partial<ToolContext>,
-  timing: Record<string, unknown> = { minutes_from_now: 30, repetition_interval_hours: 0 },
+  timing: Record<string, unknown> = { minutes_from_now: 30 },
 ) {
   const addReminder = spyOn(serverScheduleRepository, "addReminder").mockImplementation(
     async (row) => ({ ...row, reminder_id: 5 }) as unknown as ReminderRow,
@@ -51,23 +51,43 @@ async function createTaskAndReadCreator(context: Partial<ToolContext>): Promise<
 }
 
 describe("create_task recurrence", () => {
-  it("defaults the first hourly trigger to one interval and honors an explicit delay", async () => {
+  it("defaults the first trigger of a 60-minute repeat to one interval and honors an explicit delay", async () => {
     setSystemTime(new Date("2030-06-10T10:00:00Z"));
     const context = { internalUserId: ANCHOR_AUTHOR.user_id };
-    const hourly = await executeTaskCreation(context, { repetition_interval_hours: 1 });
-    const explicit = await executeTaskCreation(context, { repetition_interval_hours: 1, minutes_from_now: 5 });
+    const repeating = await executeTaskCreation(context, { repetition_interval_minutes: 60 });
+    const explicit = await executeTaskCreation(context, { repetition_interval_minutes: 60, minutes_from_now: 5 });
 
-    expect(hourly.result.success).toBeTrue();
-    expect(hourly.row?.reminder_time.toISOString()).toBe("2030-06-10T11:00:00.000Z");
+    expect(repeating.result.success).toBeTrue();
+    expect(repeating.row?.reminder_time.toISOString()).toBe("2030-06-10T11:00:00.000Z");
     expect(explicit.result.success).toBeTrue();
     expect(explicit.row?.reminder_time.toISOString()).toBe("2030-06-10T10:05:00.000Z");
+  });
+
+  it("defaults to a one-time task when repeat fields are omitted", async () => {
+    setSystemTime(new Date("2030-06-10T10:00:00Z"));
+    const { result, row } = await executeTaskCreation({ internalUserId: ANCHOR_AUTHOR.user_id }, {});
+
+    expect(result.success).toBeTrue();
+    expect(row?.repetition).toBeNull();
+    expect(row?.reminder_time.toISOString()).toBe("2030-06-10T10:01:00.000Z");
+  });
+
+  it("rejects an hours argument before scheduling", async () => {
+    const { result, row } = await executeTaskCreation(
+      { internalUserId: ANCHOR_AUTHOR.user_id },
+      { repetition_interval_hours: 1 },
+    );
+
+    expect(result.success).toBeFalse();
+    expect(result.data).toMatchObject({ status: "reminder_creation_failed_invalid_repeat_interval" });
+    expect(row).toBeUndefined();
   });
 
   it("shows the cutoff and daily window together on the creation notice", async () => {
     setSystemTime(new Date("2030-06-10T10:00:00Z"));
     const context = { internalUserId: ANCHOR_AUTHOR.user_id };
     const timing = {
-      repetition_interval_hours: 1,
+      repetition_interval_minutes: 60,
       repeat_until_time: "2030-06-10_16:00",
       daily_window_start_time: "12:00",
       daily_window_end_time: "15:00",
@@ -83,7 +103,7 @@ describe("create_task recurrence", () => {
     const cutoff = formatTimeWithOffset(new Date("2030-06-10T16:00:00Z"), 0, { month: "short" }, "en-US");
     for (const text of [reminderFooter, selfTaskBody]) {
       expect(text).toContain(
-        localizedCopy("en-US", "reminders.task_update_repeat_hours", { repetition_interval_hours: 1 }),
+        localizedCopy("en-US", "reminders.task_update_repeat_minutes", { repetition_interval_minutes: 60 }),
       );
       expect(text).toContain(
         localizedCopy("en-US", "reminders.task_update_repeat_until", { time: cutoff, offset: "UTC+0" }),
@@ -104,7 +124,7 @@ describe("create_task recurrence", () => {
       {
         internalUserId: ANCHOR_AUTHOR.user_id,
       },
-      { repetition_interval_hours: 0, repetition_interval_minutes: 15, repeat_count: 2 },
+      { repetition_interval_minutes: 15, repeat_count: 2 },
     );
     expect(result.success).toBeTrue();
     expect(row).toMatchObject({

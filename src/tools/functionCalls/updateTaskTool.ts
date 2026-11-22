@@ -15,7 +15,7 @@ import {
   getReminderRepetition,
   parseReminderDailyWindow,
   parseReminderRepeatLimit,
-  parseRepetitionArgs,
+  parseToolRepetitionArgs,
   type ReminderRecurrenceOptions,
   type ReminderRepetition,
   toRepetitionColumns,
@@ -180,11 +180,7 @@ export function parseUpdateTaskArguments(
     };
   }
 
-  const repetitionArgs = parseRepetitionArgs(
-    args.repetition_interval_hours,
-    args.repetition_interval_months,
-    args.repetition_interval_minutes,
-  );
+  const repetitionArgs = parseToolRepetitionArgs(args);
   if (!repetitionArgs.ok) {
     return { ok: false, status: "task_update_failed_invalid_args", reason: repetitionArgs.reason };
   }
@@ -322,10 +318,6 @@ export class UpdateTaskTool extends BaseTool {
         description:
           "Add calendar months in the server timezone, keeping the time of day. Clamp to the last day if needed.",
       },
-      repetition_interval_hours: {
-        type: "number",
-        description: "Repeat every X hours.",
-      },
       repetition_interval_months: {
         type: "number",
         description:
@@ -333,7 +325,7 @@ export class UpdateTaskTool extends BaseTool {
       },
       repetition_interval_minutes: {
         type: "number",
-        description: "Repeat every X minutes.",
+        description: "Repeat every X minutes (60 for hourly, 1440 for daily).",
       },
       repeat_count: {
         type: "number",

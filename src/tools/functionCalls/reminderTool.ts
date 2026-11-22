@@ -6,7 +6,7 @@ import {
   formatReminderRepetition,
   parseReminderDailyWindow,
   parseReminderRepeatLimit,
-  parseRepetitionArgs,
+  parseToolRepetitionArgs,
   toRepetitionColumns,
 } from "@/utils/text/processors/reminderRepetition";
 import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
@@ -28,7 +28,7 @@ import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
-    "Schedule a user reminder or a task for yourself. Use cross_channel_message for immediate work in another channel. Relative time fields add together. Set at most one positive repeat interval. With no first trigger specified, minute and hour repeats start after one interval and other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
+    "Schedule a user reminder or a task for yourself. Use cross_channel_message for immediate work in another channel. Relative time fields add together. Omit repeat intervals for a one-time task. Set at most one positive interval. With no first trigger specified, minute repeats start after one interval and other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -70,19 +70,14 @@ export class ReminderTool extends BaseTool {
         description:
           "Add calendar months in the server timezone, keeping the time of day. Clamp to the last day if needed.",
       },
-      repetition_interval_hours: {
-        type: "number",
-        description:
-          "Repeat every X hours (24 for daily, 168 for weekly). Set to 0 for one-time, minute, or calendar-month schedules.",
-      },
       repetition_interval_months: {
         type: "number",
         description:
-          "Repeat every X calendar months (1 for monthly, 12 for yearly). Keep the original day and time, using the last day in shorter months. Requires repetition_interval_hours=0.",
+          "Repeat every X calendar months (1 for monthly, 12 for yearly). Keep the original day and time, using the last day in shorter months.",
       },
       repetition_interval_minutes: {
         type: "number",
-        description: "Repeat every X minutes. Use 0 for one-time.",
+        description: "Repeat every X minutes (60 for hourly, 1440 for daily).",
       },
       repeat_count: {
         type: "number",
@@ -96,7 +91,7 @@ export class ReminderTool extends BaseTool {
       daily_window_start_time: {
         type: "string",
         description:
-          "Start of a daily window for minute or hour repeats. Use the server timezone (e.g. 05:00 or 5AM) and supply the end too.",
+          "Start of a daily window for minute repeats. Use the server timezone (e.g. 05:00 or 5AM) and supply the end too.",
       },
       daily_window_end_time: {
         type: "string",
@@ -112,7 +107,7 @@ export class ReminderTool extends BaseTool {
           "Channel or active thread in this server. Copy the exact label in context, including any ID, or pass the channel ID. Defaults to this channel.",
       },
     },
-    required: ["reminder_purpose", "repetition_interval_hours"],
+    required: ["reminder_purpose"],
   };
 
   isAvailableFor(_provider: string): boolean {
@@ -149,7 +144,6 @@ export class ReminderTool extends BaseTool {
     const hoursFromNowArg = args.hours_from_now as number | undefined;
     const daysFromNowArg = args.days_from_now as number | undefined;
     const monthsFromNowArg = args.months_from_now as number | undefined;
-    const repetitionIntervalHoursArg = args.repetition_interval_hours as number | undefined;
     const selfReminderArg = args.self_reminder as boolean | undefined;
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
@@ -242,11 +236,7 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    const repetitionArgs = parseRepetitionArgs(
-      repetitionIntervalHoursArg,
-      args.repetition_interval_months,
-      args.repetition_interval_minutes,
-    );
+    const repetitionArgs = parseToolRepetitionArgs(args);
     if (!repetitionArgs.ok) {
       return {
         success: false,
@@ -346,7 +336,7 @@ export class ReminderTool extends BaseTool {
     const { value: limit } = limitResult;
     const { value: window } = windowResult;
     if ((!repetition && (limit || window)) || (repetition?.unit === "months" && window)) {
-      const reason = "Repeat limits require recurrence. Daily windows require a minute or hour interval.";
+      const reason = "Repeat limits require recurrence. Daily windows require a minute interval.";
       return { success: false, error: reason, data: { status: "reminder_creation_failed_invalid_args", reason } };
     }
 
@@ -390,12 +380,7 @@ export class ReminderTool extends BaseTool {
       timeCalculationMethod = "relative";
       const now = new Date();
       const currentTime = hasRelativeParams ? now : alignReminderToDailyWindow(now, window);
-      const defaultDelayMinutes =
-        repetition?.unit === "hours"
-          ? repetition.interval * 60
-          : repetition?.unit === "minutes"
-            ? repetition.interval
-            : 1;
+      const defaultDelayMinutes = repetition?.unit === "minutes" ? repetition.interval : 1;
       const effectiveMinutesFromNow = hasRelativeParams
         ? minutesFromNowArg
         : currentTime > now

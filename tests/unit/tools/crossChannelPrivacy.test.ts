@@ -194,7 +194,6 @@ describe("cross-channel target authorization", () => {
             reminder_purpose: "Check",
             self_reminder: true,
             minutes_from_now: 10,
-            repetition_interval_hours: 0,
           },
           f.context,
         );
