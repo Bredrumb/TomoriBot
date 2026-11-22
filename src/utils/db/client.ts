@@ -12,18 +12,72 @@ interface PostgresPoolOptions {
   max: number;
 }
 
-// Pool timeouts (seconds) stay under the ~4-minute silent gateway reap to avoid black-hole sockets, yet high because
-// oven-sh/bun#30646 rejects in-flight queries.
+// The idle timeout stays below four minutes because the gateway can silently drop idle sockets around that point.
 function resolveProductionPoolOptions(): PostgresPoolOptions {
   return {
     idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 180, 5),
-    // Hard age cap so no connection lingers indefinitely even under steady load.
     maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 1800, 30),
     connectionTimeout: parseIntegerEnvFlag(process.env.POSTGRES_CONNECTION_TIMEOUT_SECONDS, 10, 1),
-    // Explicit rather than relying on Bun's identical default so pool width stays auditable and env-tunable.
     max: parseIntegerEnvFlag(process.env.POSTGRES_POOL_MAX, 10, 1),
   };
 }
+
+function createUnconfiguredDatabaseError(): Error {
+  return new Error("Database is not configured (POSTGRES_PASSWORD is unset)");
+}
+
+function isTemplateStringsArray(value: unknown): value is TemplateStringsArray {
+  return Array.isArray(value) && "raw" in value;
+}
+
+// Reject only on consumption so un-awaited SQL fragments like `ownedServersOnly()` do not emit unhandled rejections.
+function createUnconfiguredQuery(): PromiseLike<never> & {
+  execute(): Promise<never>;
+  catch<TResult = never>(onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null): Promise<TResult>;
+  finally(onfinally?: (() => void) | null): Promise<never>;
+} {
+  const fail = () => Promise.reject(createUnconfiguredDatabaseError());
+  return {
+    execute: fail,
+    // biome-ignore lint/suspicious/noThenProperty: lazy thenable matches Bun SQLQuery so un-awaited SQL fragments stay silent
+    then(onfulfilled, onrejected) {
+      return fail().then(onfulfilled, onrejected);
+    },
+    catch(onrejected) {
+      return fail().catch(onrejected);
+    },
+    finally(onfinally) {
+      return fail().finally(onfinally);
+    },
+  };
+}
+
+// Bun's array helper marshals values locally, so tests can build SQL arrays without opening a database connection.
+const unconfiguredArrayMarshaller = new SQL({
+  hostname: "127.0.0.1",
+  port: 0,
+  username: "postgres",
+  password: "dummy",
+  database: "tomodb",
+});
+
+const unconfiguredDatabaseClient = Object.assign(
+  function unconfiguredSql(first: unknown, ...rest: unknown[]) {
+    if (isTemplateStringsArray(first)) {
+      return createUnconfiguredQuery();
+    }
+    return { values: [first, ...rest] };
+  },
+  {
+    array: unconfiguredArrayMarshaller.array.bind(unconfiguredArrayMarshaller),
+    begin: () => Promise.reject(createUnconfiguredDatabaseError()),
+    transaction: () => Promise.reject(createUnconfiguredDatabaseError()),
+    unsafe: () => createUnconfiguredQuery(),
+    reserve: () => Promise.reject(createUnconfiguredDatabaseError()),
+    connect: () => Promise.reject(createUnconfiguredDatabaseError()),
+    close: async () => undefined,
+  },
+) as unknown as SQL;
 
 function createDatabaseClient(): SQL {
   const runEnv = process.env.RUN_ENV || "development";
@@ -35,22 +89,14 @@ function createDatabaseClient(): SQL {
   const password = process.env.POSTGRES_PASSWORD;
   const database = process.env.POSTGRES_DB || "tomodb";
 
-  // Allow dummy initialization when POSTGRES_PASSWORD is unset so non-DB scripts (e.g., linting) can import modules.
   if (!password) {
-    return new SQL({
-      hostname: host,
-      port: port,
-      username: user,
-      password: "dummy",
-      database: database,
-    });
+    return unconfiguredDatabaseClient;
   }
 
   const poolOptions = resolveProductionPoolOptions();
 
   if (isProduction) {
-    // Unix socket path (e.g. /cloudsql/<connection-name>): Cloud SQL Auth Proxy handles TLS
-    // internally; the client connects via a local socket and must not add a second TLS layer.
+    // The Cloud SQL Auth Proxy handles TLS, so its Unix socket connects without a second TLS layer.
     if (host.startsWith("/")) {
       return new SQL({
         path: host,
@@ -89,8 +135,7 @@ function createDatabaseClient(): SQL {
 
 const LOOPBACK_DATABASE_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
-// Loopback host requirement prevents TEST_PRODUCTION=true from disabling TLS verification when a copied env points at
-// a remote host.
+// The loopback check keeps TLS enabled when a copied test environment points at a remote database.
 export function skipsTlsForTestProduction(host: string, testProduction = process.env.TEST_PRODUCTION): boolean {
   return testProduction === "true" && LOOPBACK_DATABASE_HOSTS.has(host.trim().toLowerCase());
 }
@@ -100,8 +145,7 @@ export interface ProductionPostgresTlsOptions {
   rejectUnauthorized: true;
 }
 
-// Azure PostgreSQL chains to public roots in Alpine ca-certificates, so only AWS RDS needs a bundled CA unless
-// POSTGRES_CA_CERT_PATH overrides it.
+// Azure PostgreSQL can use the system trust store because its certificates chain to public roots.
 export function resolveProductionPostgresTls(
   host: string,
   configuredCaPath = process.env.POSTGRES_CA_CERT_PATH?.trim(),
@@ -139,24 +183,23 @@ export function resolveProductionPostgresTls(
     }
   }
 
-  // Omitting `ca` delegates root maintenance to the operating-system trust
-  // store while `rejectUnauthorized` preserves chain and hostname validation.
   return { rejectUnauthorized: true };
 }
 
-// Lazily create the client so secrets/env vars are set first (avoids premature
-// initialization when modules import sql before dotenv/Secrets Manager runs).
+// Defer client creation because modules can import `sql` before credentials are loaded.
 let cachedClient: SQL | null = null;
 
 function getClient(): SQL {
+  if (!process.env.POSTGRES_PASSWORD) {
+    return unconfiguredDatabaseClient;
+  }
   if (!cachedClient) {
     cachedClient = createDatabaseClient();
   }
   return cachedClient;
 }
 
-// Schema or extension changes can invalidate PostgreSQL prepared statements, so clearing cachedClient forces a new
-// session with a fresh plan cache.
+// Schema changes can invalidate prepared plans, so the next query needs a fresh session.
 export function resetDatabaseConnection(): void {
   if (cachedClient) {
     cachedClient = null;
@@ -187,8 +230,7 @@ const RETIRED_CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_LIFETIME_TIMEOUT",
   "ERR_POSTGRES_IDLE_TIMEOUT",
   "ERR_POSTGRES_CONNECTION_CLOSED",
-  // Bun emits these parser codes on truncated mid-message drops from `#onClose` (also check stacks for real encoding
-  // faults before assuming connection churn).
+  // Bun can report these parser codes on both truncated replies and encoding faults, so check the stack.
   "ERR_POSTGRES_INVALID_MESSAGE",
   "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
 ]);
@@ -217,14 +259,12 @@ function resolveTransientRetryOptions(): TransientRetryOptions {
   };
 }
 
-// Full jitter spreads retries after a mass pool retirement fails in-flight callers together, preventing them from
-// hammering replacement connections at once.
+// Jitter spreads retries because a pool retirement can reject many queries at once.
 function jitteredDelayMs(delayMs: number): number {
   return delayMs <= 0 ? 0 : Math.floor(Math.random() * delayMs);
 }
 
-// Only replay-safe queries (reads, idempotent writes, or transactions) belong here because mid-commit drops can
-// double-apply writes, and failures rethrow.
+// Retry only operations safe to replay because losing the commit acknowledgement can cause a write to run twice.
 export async function withTransientDbRetry<T>(queryFn: () => Promise<T>, operationName: string): Promise<T> {
   const { attempts, delayMs } = resolveTransientRetryOptions();
   let sawRetiredConnection = false;
@@ -275,8 +315,6 @@ export async function withTransientDbRetry<T>(queryFn: () => Promise<T>, operati
   }
 }
 
-// Only the episode-opening retirement is logged because logging every failed caller during a pool cascade obscures
-// the root cause and adds log load.
 function reportPoolEvent(error: unknown, operationName: string, attempt: number, attempts: number): void {
   const code = (error as { code?: string }).code ?? "unknown";
   const { maxLifetime } = resolveProductionPoolOptions();
@@ -286,7 +324,7 @@ function reportPoolEvent(error: unknown, operationName: string, attempt: number,
     return;
   }
 
-  // `log.metric` rather than `log.error` reaches production's error-pinned JSONL without paging as an actionable fault.
+  // Production retains this metric at error log level so a pool retirement can be tracked without paging.
   log.metric("pool_event", {
     code,
     operation: operationName,

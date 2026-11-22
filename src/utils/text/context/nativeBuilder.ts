@@ -83,10 +83,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
     deliberateToolAllowedNames,
+    toolStreamContext,
     presetOwnsSystemPrompt = false,
     messageIdMap,
   } = params;
 
+  const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const mentionMemo: MentionMemo = new Map();
   const convertMentions: MentionConverter = (
     text,
@@ -113,6 +115,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       },
       mentionMemo,
       preparedParticipantContext.requestScope,
+      personaLineageId ?? tomoriState?.persona_lineage_id,
     );
 
   const contextItems: StructuredContextItem[] = [];
@@ -136,7 +139,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
-  const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const memoryDemand = Promise.withResolvers<boolean>();
   const retrieval = startQueryRetrieval(
     { tomoriState, simplifiedMessageHistory, triggererUserId },
@@ -159,6 +161,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     provider: tomoriState?.llm?.llm_provider,
     capabilities: resolvePromptCapabilityValues(tomoriConfig, Boolean(tomoriState?.llm?.has_tools)),
     deliberateToolAllowedNames,
+    streamContext: toolStreamContext,
     stateForContext:
       tomoriState?.server_id && tomoriState.llm
         ? {
@@ -385,6 +388,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       userId: triggererUserId,
       contextItems,
       isUserImpersonation,
+      streamContext: toolStreamContext,
+      deliberateToolAllowedNames,
     }),
   );
   const recallPromise = memoryRecall.finish();

@@ -32,6 +32,7 @@ import {
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import { applyWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
+import { inheritWelcomeReplyFromOriginal, observeWelcomeReply } from "@/utils/chat/welcomeReply";
 import {
   applyMessageProxyReference,
   cancelPendingMessageProxyExpectation,
@@ -68,10 +69,10 @@ function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
   return botMember?.isCommunicationDisabled() ?? false;
 }
 
-// Admission runs before user registration or DB load, so stored user locale is unavailable and invoker or guild
-// locale is used.
-function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
-  return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
+function resolveAdmissionNoticeLocale(incoming: ChatIncoming, languagePreference?: string): string {
+  return (
+    languagePreference ?? incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US"
+  );
 }
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -112,6 +113,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     nudgeSceneCatcherPersonaId: input.nudgeSceneCatcherPersonaId,
     borrowsTriggerMessage: input.borrowsTriggerMessage,
     suppressSelfReply: input.suppressSelfReply,
+    fastRegeneration: input.fastRegeneration,
     carriedExpressionDelivery: input.carriedExpressionDelivery,
     onGenerationResult: input.onGenerationResult,
     onQueueDiscard: input.onQueueDiscard,
@@ -142,15 +144,19 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   if (!channel) {
     return { incoming, disposition: "ignore", locale: "en-US", reason: "channel_unavailable" };
   }
-  await verifyMessageWebhook(message);
+  const isWebhookMessage = Boolean(message.webhookId);
+  const proxyResolution = verifyMessageWebhook(message).then(() =>
+    resolveMessageProxyRecord(message, isWebhookMessage, isMatrixRelayMessage(message)),
+  );
+  const welcomeObservation =
+    !incoming.isManuallyTriggered && !incoming.isFromQueue ? observeWelcomeReply(message, proxyResolution) : undefined;
+  const [messageProxyRecord] = await Promise.all([proxyResolution, welcomeObservation]);
   let referencedMessagePromise: Promise<Message | null> | undefined;
   const getReferencedMessage = () => (referencedMessagePromise ??= resolveReferencedMessage(message));
   const isBotAuthor = message.author.bot;
-  const isWebhookMessage = Boolean(message.webhookId);
   const isInteractionResponse = Boolean(message.interaction);
   const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
   const isMatrixRelay = isMatrixRelayMessage(message);
-  const messageProxyRecord = await resolveMessageProxyRecord(message, isWebhookMessage, isMatrixRelay);
   const isMessageProxy = Boolean(messageProxyRecord);
   const isLikelySelfMessage =
     !isMatrixRelay && !isMessageProxy && (isFromClientUser || isManagedWebhookMessage(message));
@@ -378,6 +384,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     earlyTomoriState,
     isWebhookMessage,
     isBotAuthor,
+    userDiscId,
   });
   if (audioDisposition) {
     return audioDisposition;
@@ -406,7 +413,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   return {
     incoming,
     disposition: "run",
-    locale: "en-US",
+    locale: resolveAdmissionNoticeLocale(incoming),
     client: incoming.client,
     message: incoming.message,
     channel: incoming.message.channel,
@@ -499,6 +506,7 @@ async function resolveMessageProxyRecord(
       : null,
   });
   if (route.attestation.originalMessageId === null) {
+    if (record.originalSuppressed) inheritWelcomeReplyFromOriginal(message, route.expectation.originalMessage);
     consumeVerifiedRepostExpectation(route.expectation);
   }
   applyMessageProxyReference(message);
@@ -569,8 +577,9 @@ async function evaluateAudioTranscriptionAdmission(args: {
   earlyTomoriState: TomoriState | null;
   isWebhookMessage: boolean;
   isBotAuthor: boolean;
+  userDiscId: string;
 }): Promise<NonRunnableChatAdmission | null> {
-  const { incoming, earlyTomoriState, isWebhookMessage, isBotAuthor } = args;
+  const { incoming, earlyTomoriState, isWebhookMessage, isBotAuthor, userDiscId } = args;
   const { message } = incoming;
   if (hasHandledAudioTranscription(message) || !earlyTomoriState || isWebhookMessage || isBotAuthor) {
     return null;
@@ -645,9 +654,10 @@ async function evaluateAudioTranscriptionAdmission(args: {
       transcriptionResult.failureReason !== "no_endpoint" &&
       transcriptionResult.failureReason !== "missing_api_key"
     ) {
+      const triggerUser = userDiscId === message.author.id ? sender : await getCachedUserRow(userDiscId);
       await sendStandardEmbed(
         message.channel as Parameters<typeof sendStandardEmbed>[0],
-        resolveAdmissionNoticeLocale(incoming),
+        resolveAdmissionNoticeLocale(incoming, triggerUser?.language_pref),
         {
           color: ColorCode.WARN,
           titleKey: "general.errors.voice_transcription_failed_title",
@@ -803,17 +813,9 @@ export async function resolveAdmissionChannelScope(
   if (!hasExplicitErrorVisibility && !shouldShowError && client.user && message.mentions.users.has(client.user.id)) {
     shouldShowError = true;
   }
-  if (!hasExplicitErrorVisibility && !shouldShowError && message.reference?.messageId) {
-    try {
-      const referenceMessage = await message.channel.messages.fetch(message.reference.messageId);
-      if (referenceMessage && referenceMessage.author.id === client.user?.id) {
-        shouldShowError = true;
-      }
-    } catch {}
-  }
-
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
-    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming), {
+    const user = await getCachedUserRow(userDiscId);
+    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming, user?.language_pref), {
       color: ColorCode.ERROR,
       titleKey: "general.errors.channel_not_supported_title",
       descriptionKey: "general.errors.channel_not_supported_description",

@@ -12,13 +12,11 @@ export default {
       "読み込みに失敗したため、保存済みデータが古い可能性があります。 再読み込みが成功するまで書き込み操作は利用できません。",
     retry: `再試行`,
 
-    // カテゴリボタン
     category_member_access: `メンバーアクセス`,
     category_user_blacklist: `ユーザーブラックリスト`,
     category_whitelist: `ホワイトリスト`,
     category_quotas: `クォータ`,
 
-    // メンバーアクセス
     member_access_title: `メンバーアクセス設定`,
     member_access_description: `「サーバー管理」を持たないメンバーの権限を設定します。`,
     member_access_servermemories_enabled: `🟢 メンバーは自分のサーバーの記憶を表示し、新しい記憶を追加し、自分の記憶を編集または削除できます。`,
@@ -49,7 +47,6 @@ export default {
     member_access_failed_detail: `データベースへの書き込みに失敗したか、権限が変更されました。再試行して現在の設定を更新してください。`,
     member_access_invalid_input: `モーダルの送信内容を処理できませんでした。編集画面を開き直してもう一度お試しください。`,
 
-    // ユーザーブラックリスト
     user_blacklist_count: `ブラックリスト登録メンバー \`({count})\``,
     personalization_blacklist_section: "サーバーブラックリスト",
     personalization_blacklist_description:
@@ -93,7 +90,6 @@ export default {
     changed_receipt: `ブラックリストの状態が変更されました`,
     changed_receipt_detail: `その項目はもうブラックリストに存在しません。パネルには現在の状態が表示されています。`,
 
-    // ホワイトリスト
     select_page_placeholder: `ホワイトリストのページを選択...`,
     page_channels: `チャンネル`,
     page_channels_description: `ホワイトリスト登録チャンネルとクールダウンの上書き`,
@@ -102,7 +98,6 @@ export default {
     page_roles: `ロール`,
     page_roles_description: `ボットトリガー用のホワイトリスト登録ロール`,
 
-    // ホワイトリスト：チャンネル
     whitelist_channels_count: `ホワイトリスト登録チャンネル \`({count})\``,
     whitelist_channels_description: `以下のチャンネルでのみトリガーされます：`,
     whitelist_channels_empty:
@@ -144,7 +139,6 @@ export default {
     whitelist_changed_receipt: `ホワイトリストの状態が変更されました`,
     whitelist_changed_receipt_detail: `そのチャンネルはもうホワイトリストに存在しません。パネルには現在の状態が表示されています。`,
 
-    // ホワイトリスト：ペルソナのチャンネル
     whitelist_persona_channels_count: `ペルソナ \`({count})\``,
     whitelist_persona_channels_description: `以下のペルソナは登録されたチャンネルでのみ応答できます：`,
     whitelist_persona_channels_empty:
@@ -165,7 +159,6 @@ export default {
     persona_channel_remove_success: `ペルソナの制限を更新しました`,
     persona_channel_remove_success_detail: `{count} 件のペルソナチャンネル項目を削除しました。`,
 
-    // ホワイトリスト：ロール
     whitelist_roles_count: `ホワイトリスト登録ロール \`({count})\``,
     whitelist_roles_description: `以下のロールのみが私をトリガーできます：`,
     whitelist_roles_empty: `ホワイトリスト登録されたロールはありません。どのメンバーもボットをトリガーできます。`,
@@ -200,7 +193,6 @@ export default {
     remove_nothing_changed: `何も削除されませんでした`,
     remove_nothing_changed_detail: `すべての項目が選択されたままでした。書き込みは行われませんでした。`,
 
-    // クォータ
     quotas_title: `生成クォータ`,
     quotas_description: "AI生成の1日あたりユーザー上限と、サーバー全体で 共有するプールのクォータを設定します。",
     quotas_image_generation: `画像生成`,

@@ -34,6 +34,9 @@ import { localizer } from "@/utils/text/localizer";
 import { isCredentialRejection } from "@/utils/provider/providerErrorClassification";
 import {
   getNextReminderOccurrence,
+  alignReminderToDailyWindow,
+  getReminderDailyWindow,
+  getReminderRepeatLimit,
   getReminderRepetition,
   type ReminderOccurrence,
   type ReminderRepetition,
@@ -57,7 +60,7 @@ const HOURS_PER_SHORTEST_MONTH = 28 * 24;
 
 function isDeadRecurringReminder(failedOccurrences: number, repetition: NonNullable<ReminderRepetition>): boolean {
   const intervalHours =
-    repetition.unit === "months" ? repetition.interval * HOURS_PER_SHORTEST_MONTH : repetition.interval;
+    repetition.interval * { minutes: 1 / 60, hours: 1, months: HOURS_PER_SHORTEST_MONTH }[repetition.unit];
   return (
     failedOccurrences >= REMINDER_DEGRADED_AFTER_FAILED_OCCURRENCES &&
     failedOccurrences * intervalHours >= REMINDER_REMOVAL_MIN_STREAK_HOURS
@@ -67,13 +70,22 @@ function isDeadRecurringReminder(failedOccurrences: number, repetition: NonNulla
 function getNextRecurringOccurrence(
   reminder: ReminderRow,
   repetition: NonNullable<ReminderRepetition>,
-): ReminderOccurrence {
-  return getNextReminderOccurrence(
+  delivered: boolean,
+): (ReminderOccurrence & { consumeRepeatCount?: boolean }) | null {
+  const limit = getReminderRepeatLimit(reminder);
+  if (limit && "remaining" in limit && limit.remaining <= (delivered ? 1 : 0)) return null;
+
+  const occurrence = getNextReminderOccurrence(
     reminder.reminder_time,
     repetition,
     reminder.repetition_anchor_day,
     reminder.server_timezone_offset ?? 0,
   );
+  const time = alignReminderToDailyWindow(occurrence.time, getReminderDailyWindow(reminder));
+  if (limit && "until" in limit && time > limit.until) return null;
+  return limit && "remaining" in limit && delivered
+    ? { ...occurrence, time, consumeRepeatCount: true }
+    : { ...occurrence, time };
 }
 
 function isReminderDeliverySuccessful(result: GenerationTurnResult): boolean {
@@ -151,6 +163,24 @@ export class ReminderProcessor {
       if (reminder.reminder_id && this.activeReminderIds.has(reminder.reminder_id)) {
         log.info(`Reminder ${reminder.reminder_id} is already queued or executing; skipping duplicate delivery.`);
         return;
+      }
+
+      if (getReminderRepetition(reminder) && reminder.reminder_id) {
+        const now = new Date(Date.now());
+        const limit = getReminderRepeatLimit(reminder);
+        const nextWindowTime = alignReminderToDailyWindow(now, getReminderDailyWindow(reminder));
+        if (limit && ("remaining" in limit ? limit.remaining <= 0 : nextWindowTime > limit.until)) {
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          return;
+        }
+        if (nextWindowTime > now) {
+          await serverScheduleRepository.rescheduleReminder(
+            reminder.reminder_id,
+            { time: nextWindowTime, anchorDay: null },
+            reminder.failed_occurrence_count ?? 0,
+          );
+          return;
+        }
       }
 
       log.info(
@@ -258,7 +288,6 @@ export class ReminderProcessor {
                 userDiscId: reminder.server_disc_id,
               }
             : undefined,
-        // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
         manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
         onGenerationResult: deliveryTracker.handleGenerationResult,
         onQueueDiscard: deliveryTracker.handleQueueDiscard,
@@ -386,8 +415,8 @@ export class ReminderProcessor {
 
     const repetition = getReminderRepetition(reminder);
 
-    if (repetition && reminder.reminder_id) {
-      const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
+    const nextOccurrence = repetition ? getNextRecurringOccurrence(reminder, repetition, true) : null;
+    if (nextOccurrence && reminder.reminder_id) {
       const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence);
       if (!canSettleScheduledWork(work)) return;
 
@@ -529,7 +558,8 @@ export class ReminderProcessor {
       assertScheduledWorkActive(work);
       const repetition = getReminderRepetition(reminder);
       const isRecurring = repetition !== null;
-      const retainsSchedule = isRecurring && Boolean(reminder.reminder_id);
+      const nextIfDelivered = repetition ? getNextRecurringOccurrence(reminder, repetition, true) : null;
+      const retainsSchedule = nextIfDelivered !== null && Boolean(reminder.reminder_id);
       const failedOccurrences = (reminder.failed_occurrence_count ?? 0) + 1;
       let recurringScheduleRetained = false;
 
@@ -541,15 +571,18 @@ export class ReminderProcessor {
           retainsSchedule
             ? "reminders.triggered_footer_recurring_retained"
             : isRecurring
-              ? "reminders.triggered_footer_recurring_removed"
+              ? reminder.reminder_id
+                ? "reminders.triggered_footer_recurring_completed"
+                : "reminders.triggered_footer_recurring_removed"
               : "reminders.triggered_footer_one_time",
           work,
         ));
       assertScheduledWorkActive(work);
 
+      const nextOccurrence = repetition && getNextRecurringOccurrence(reminder, repetition, fallbackDelivered);
       if (reminder.reminder_id) {
         if (
-          retainsSchedule &&
+          nextOccurrence &&
           repetition !== null &&
           !fallbackDelivered &&
           isDeadRecurringReminder(failedOccurrences, repetition)
@@ -559,8 +592,7 @@ export class ReminderProcessor {
             `Reminder ${reminder.reminder_id} removed after ${failedOccurrences} consecutive occurrences reached nobody`,
           );
           await this.notifyDeadReminderRemoved(reminder, failedOccurrences, work);
-        } else if (retainsSchedule && repetition !== null) {
-          const nextOccurrence = getNextRecurringOccurrence(reminder, repetition);
+        } else if (nextOccurrence) {
           recurringScheduleRetained = Boolean(
             await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextOccurrence, failedOccurrences),
           );

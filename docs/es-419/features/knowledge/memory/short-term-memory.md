@@ -46,3 +46,6 @@ Puedes ver o corregir el resumen del canal actual en `/config` > `Persona` > `Me
 servidor pueden ajustar los parámetros o deshabilitar la memoria a corto plazo en `/config` > `Comportamiento` >
 `Memoria avanzada`, y revisar o borrar los resúmenes de canales activos en `/memories` > `Corto plazo`.
 `/refresh` borra la memoria del canal actual.
+
+Usa `{@userId}` en un resumen o categoría para insertar el apodo actual específico de esa persona
+cuando TomoriBot lo recuerde. Consulta [Macros de prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).

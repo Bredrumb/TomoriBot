@@ -50,10 +50,9 @@ alter人格讓多個角色在同一個伺服器中共存：
 ### 範例對話
 <!-- anchor: sample-dialogues -->
 
-開啟`/config` > `人格` > 身份和個性，透過使用`{user}`和`{bot}`佔位符的範例來教她的說話風格：
-
-- `{user}`：替換為實際使用者的顯示名稱或暱稱。
-- `{bot}`：替換為她目前的人格名稱。
+開啟`/config` > `人格` > `身分與個性`，透過範例來教導她的說話風格。
+使用名稱巨集來指稱觸發回覆的使用者或目前作用中的人格。
+請參閱[提示詞巨集](/features/prompt-macros/#names)。
 
 ```text
 {user}: What's your favorite hobby?

@@ -79,13 +79,10 @@ export function stripAtPersonaTriggers(content: string, allPersonas: TomoriState
 
 export function buildRevealedMessageMetadataTailDirective(): string {
   return (
-    "Recent message metadata has been revealed in the visible conversation turns. " +
-    "Each annotated message now includes a `ref_N` handle, sent timestamp, and who reacted to it when it has reactions. " +
+    "The metadata reveal is complete for this turn. Recent messages now show `ref_N` handles, timestamps, and reactions. " +
     // Without this line the model re-requests `reveal_message_metadata` because the system prompt expands before
     // the reveal.
-    "That reveal is already complete, so do not call `reveal_message_metadata` again for the rest of this turn: use the `ref_N` handles shown above. " +
-    "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
-    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
+    "Use the `ref_N` handles shown above with `manage_message` when it is available."
   );
 }
 

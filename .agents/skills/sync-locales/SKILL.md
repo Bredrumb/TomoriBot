@@ -11,7 +11,8 @@ branch's English changes. Run it only when asked.
 
 ## Find the work
 
-One command reports both locale keys and docs pages the branch changed without following:
+Use the parity check for missing locale keys and the history scan for branch follow-ups.
+These commands assume a branch targeting `main`. Set `--base` to the actual target ref for other branches.
 
 ```bash
 bun run check-locales --verbose
@@ -30,18 +31,20 @@ Limit the work to what the branch touched. Pre-existing gaps belong to their own
 
 ## Delegate per locale
 
-Spawn one subagent per behind locale in parallel so each subagent owns a disjoint set of target
-files (`src/locales/<locale>/`, `docs/<locale>/`, and `.github/README_<locale>.md`). Pass each
-subagent its locale code, the English diffs or missing keys to translate, and a pointer to this
-skill and `references/glossary-<locale>.md`.
+The parent session assigns work and verifies the results. Each worker edits only its assigned locale.
 
-Select the smallest latest model family for the active harness (for example, Luna on Codex, Gemini
-Hydrogen on Antigravity, or Claude Haiku on Claude Code), with `low` or `medium` reasoning
-effort when the harness supports setting it (`low` for isolated locale keys, `medium` for longer
-docs pages or persona-voiced strings).
+Assign one fresh worker to each affected locale and run them in parallel. When slots fill, start
+the remaining locales in fresh workers as slots open. Keep each worker's files and context isolated
+to that locale. Give it the English changes or missing source keys, this skill, its own
+`references/glossary-<locale>.md`, and the matching files in `src/locales/<locale>/`,
+`docs/<locale>/`, and `.github/README_<locale>.md`. Leave other workers' translations out of its
+context. If the harness cannot provide a separate worker for a locale, report that locale as pending.
 
-After every locale subagent finishes, run `bun run generate-command-reference` once in the parent
-session when command descriptions changed, then run the verification steps below.
+Choose the worker model for the task. Short, well-specified key updates can use a fast model.
+Longer prose or persona dialogue needs a model that can preserve register and voice.
+
+Once all locale workers finish, run `bun run generate-command-reference` once in the parent
+session if command descriptions changed. Then run the verification steps below.
 
 ## Translate locale keys
 
@@ -58,19 +61,18 @@ English file layout, so a key lives at the same path in every tree.
   Japanese version yet.
 - `architecture/`, `contributing/`, and `wiki/` stay English. Never translate or create them; the
   command already leaves them out.
-- `features/command-reference.md` is generated in every locale from the command description keys.
-  Never edit it by hand: after translating command descriptions, run
-  `bun run generate-command-reference`.
+- `features/command-reference.md` is generated from the command description keys. The parent
+  regenerates it after the locale workers finish. Keep this file out of manual translation edits.
 - Translate the whole changed passage in its context, and keep the
   translated page's existing structure and wording elsewhere.
-- Frontmatter: translate `title` and `description`. Always mirror the English source's `aiGenerated`
-  field, including its absence: copy `true` exactly, or omit the field when English omits it. This
-  field marks substantive content nobody has reviewed. AI translation alone does not change that
-  status or certify translation quality. Keep every other field as the translated
-  file already has it.
-- Links: keep the English source's unprefixed route (`/features/knowledge/memory/long-term-memory/`). The build adds
-  the locale prefix, or `/en/` for an untranslated page; a hand-written prefix stays fixed after the
-  target gets translated.
+- Translate the frontmatter `title` and `description`. Copy `aiGenerated: true` or
+  `aiGenerated: false` from English, or omit the field when English omits it. The field tracks
+  review of the source content. Keep other frontmatter fields as they are in the translation.
+  Check review-status changes against the English diff because the history scan ignores this field.
+- In docs pages and component links, use unprefixed internal routes so the build can pick the
+  locale or fall back to English. In translated READMEs and locale strings, use absolute
+  `https://docs.tomoribot.app` links with the target locale prefix, or `/en/` if the page has no
+  translation. See `docs/en/contributing/localization/docs-site.md` for the link rules.
 - Keep every `<!-- anchor: english-slug -->` (in MDX, `{/* anchor: english-slug */}`) comment under
   its heading exactly as it is: it is the English anchor that links in every locale target.
 - UI labels are the exception to "code spans stay verbatim". A code span that names something the
@@ -87,7 +89,8 @@ rejected. When a term is missing from the glossary, reuse the rendering the loca
 or pages already use for it.
 
 Keep these byte-for-byte: placeholders (`{user_nickname}`), slash commands, option names, code,
-URLs, environment variable names, product names, and Discord markers (`-# `, `> `, fenced blocks).
+external URLs, environment variable names, product names, and Discord markers (`-# `, `> `, fenced blocks).
+Use the docs link rules above for links to TomoriBot documentation.
 
 Locale prose follows the repository dash rule. In `ja`, use `：`, `。`, and `（）` instead of dashes;
 the Chinese glossaries state their own punctuation.
@@ -101,7 +104,7 @@ bun run check-locales
 bun run find-stale-translations --reason=unfollowed --base=origin/main
 ```
 
-The follow-up command reads committed `HEAD`, so uncommitted translations still appear in it. Do not
-commit to clear them; the user commits. Fatal `check-locales` findings (Discord length caps, modal
-limits) must be fixed by shortening the translation, never by editing English to make room. Report
-any key or page you could not translate confidently instead of guessing.
+Use the same target ref for both history scans. The follow-up command reads committed `HEAD`,
+so uncommitted translations still appear in it. Leave committing to the user. Resolve
+fatal `check-locales` findings, such as Discord and modal limits, by shortening the translation.
+Leave English as the source. Report keys or pages you could not translate confidently.

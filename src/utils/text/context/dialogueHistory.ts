@@ -87,20 +87,35 @@ export async function appendDialogueHistoryContext(params: {
       },
     ],
   });
+  const savedNoteInsert = async (tag: PromptLayoutInsert["tag"], text: string, depth: number) =>
+    noteInsert(
+      tag,
+      await params.convertMentions(
+        text,
+        params.client,
+        params.guildId,
+        undefined,
+        params.botName,
+        params.tomoriConfig.personal_memories_enabled,
+        undefined,
+        "user-reference",
+      ),
+      depth,
+    );
 
   if (personaNoteText) {
     const depth = params.tomoriState?.context_note_depth ?? 0;
-    activeNotes.push(noteInsert("persona_note", personaNoteText, depth));
+    activeNotes.push(await savedNoteInsert("persona_note", personaNoteText, depth));
   }
   if (channelNoteText) {
     const depth = params.channelContextNote?.depth ?? 0;
-    activeNotes.push(noteInsert("channel_note", channelNoteText, depth));
+    activeNotes.push(await savedNoteInsert("channel_note", channelNoteText, depth));
   }
   if (activeNotes.length === 0) {
     const globalNoteText = params.tomoriConfig.context_note?.trim() || null;
     if (globalNoteText) {
       const depth = params.tomoriConfig.context_note_depth ?? 0;
-      activeNotes.push(noteInsert("global_note", globalNoteText, depth));
+      activeNotes.push(await savedNoteInsert("global_note", globalNoteText, depth));
     }
   }
   if (shouldInjectVerbatimToolCallingNudge(params.tomoriState)) {

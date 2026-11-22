@@ -101,6 +101,7 @@ test runner.
 | `numbered-narration` | Error | Step numbers on line comments |
 | `rule-scaffolding` | Error | `Rule N:` and `Rule #N` prefixes |
 | `obvious-narration` | Warning (error on changed lines) | Action-verb narration and section banners |
+| `redundant-heading` | Audit warning | A file header that repeats the file name, or a standalone label that repeats the next object key or a prefix shared by the next two keys |
 | `orphaned-comment` | Error | Cleanup damage: a continuation with no opening line, a bare divider, an empty JSDoc block |
 | `duplicate-comment` | Audit warning | Blocks with the same text after normalizing markers, whitespace, and case. Floor: 12 words and 60 characters |
 | `long-comment-block` | Audit warning | A non-JSDoc block of 8 lines or more outside `tests/` |
@@ -108,9 +109,8 @@ test runner.
 | `new-multi-sentence` | Error on changed lines | A new line-comment block with multiple sentences |
 | `unexplained-comment` | Warning on changed lines | A new `//` block with no reason, condition, or unit signal (`because`, `so`, `when`, a colon, and similar) |
 
-A locale tree counts as one identity for `duplicate-comment`, so an English comment copied into every
-translated tree reports once. Suppression comments are skipped because each one is a separate lint
-decision.
+Each duplicate warning lists every copy, including copies across locale files. The audit skips
+suppression comments because each one is a separate lint decision.
 
 `COMMENT_AUDIT_DUPLICATE_MIN_WORDS`, `COMMENT_AUDIT_DUPLICATE_MIN_CHARS`, and
 `COMMENT_AUDIT_LONG_BLOCK_LINES` override the limits for recalibration only. The bot never reads them,
@@ -125,6 +125,12 @@ the code it describes. Remove it only when the code already says everything in i
 it down to the constraint. Then re-read the surrounding lines for orphaned continuations and empty
 JSDoc, and review the diff as prose. Clear most duplicate groups by extracting the code path the
 copies share; deleting the copies loses the rationale.
+
+To pick files for manual review, rank standalone `//` lines by file.
+
+```bash
+git grep -c -E '^[[:space:]]*//' -- 'src/*.ts' | sort -t: -k2,2nr | head -20
+```
 
 ## Exceptions
 

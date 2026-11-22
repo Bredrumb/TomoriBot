@@ -31,6 +31,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             Boolean(tomoriStateForPreset?.llm?.has_tools),
           ),
           deliberateToolAllowedNames: params.deliberateToolAllowedNames,
+          streamContext: params.toolStreamContext,
           stateForContext:
             tomoriStateForPreset?.server_id && tomoriStateForPreset.llm
               ? {
@@ -90,6 +91,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             triggererAddressTerm: params.triggererAddressTerm,
             botName: params.tomoriNickname,
             personalMemoriesEnabled: params.tomoriConfig.personal_memories_enabled ?? true,
+            personaLineageId: params.personaLineageId ?? tomoriStateForPreset?.persona_lineage_id,
             toolPromptMacroResolver: presetToolPromptMacroResolver,
           },
         );

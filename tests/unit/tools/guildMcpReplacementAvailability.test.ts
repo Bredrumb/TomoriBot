@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { getAvailableToolsWithMCP, type ToolStateForContext } from "@/tools/availability";
-import type { GuildMcpServerRow } from "@/types/db/schema";
+import { type GuildMcpServerRow, serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
+import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
+import { ReviewCapabilitiesTool } from "@/tools/functionCalls/reviewCapabilities";
+import { UpdateShortTermMemoryTool } from "@/tools/functionCalls/updateShortTermMemoryTool";
 import type { CallableTool } from "@google/genai";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import type { ToolContext, Tool } from "@/types/tool/interfaces";
@@ -11,10 +16,11 @@ import * as speechEndpointResolver from "@/utils/provider/speechEndpointResolver
 import * as crypto from "@/utils/security/crypto";
 import { createPersona } from "../../helpers/fixtures";
 import { stubLogMembers } from "../../helpers/mockSurface";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, UNAVAILABLE_TOOL_TEXT } from "@/utils/tools/toolPromptMacros";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 
 stubLogMembers({ warn: () => {}, info: () => {} });
 
@@ -190,6 +196,76 @@ describe("guild MCP replacement availability without a bundled MCP manager", () 
     };
   }
 
+  it("reports configured capabilities during a diagnostic-only Deliberate Tool Mode turn", async () => {
+    const capabilities = new ReviewCapabilitiesTool();
+    ToolRegistry.clearRegistry();
+    for (const tool of [capabilities, new ManageTaskTool(), new ManageLongTermMemoryTool(), new ManageMessageTool()]) {
+      ToolRegistry.registerTool(tool);
+    }
+    const current = context();
+    current.tomoriState.config.self_teaching_enabled = true;
+    current.tomoriState.config.manage_message_enabled = true;
+    current.streamContext = {
+      disableYouTubeProcessing: false,
+      deliberateToolAllowedNames: ["review_capabilities", "fetch_url"],
+    };
+    const result = await capabilities.execute({ capability_type: "chat" }, current);
+    expect(result).toMatchObject({
+      success: true,
+      data: { built_in_tools: expect.arrayContaining(["manage_task", "manage_long_term_memory", "manage_message"]) },
+    });
+
+    current.streamContext.disableReminderTool = true;
+    current.tomoriState.config.self_teaching_enabled = false;
+    const restricted = await capabilities.execute({ capability_type: "chat" }, current);
+    expect(restricted.success).toBe(true);
+    const tools = (restricted.data as { built_in_tools: string[] }).built_in_tools;
+    expect(tools).toContain("manage_message");
+    expect(tools).not.toContain("manage_task");
+    expect(tools).not.toContain("manage_long_term_memory");
+  });
+
+  it("renders legacy action macros in custom STM schemas using eligible operations", async () => {
+    const state = stateForContext();
+    const serverId = Number(state.server_id);
+    state.config.self_teaching_enabled = true;
+    state.config.manage_message_enabled = false;
+    const config = spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(
+      serverStmConfigSchema.parse({
+        server_id: serverId,
+        tool_description_override:
+          "{{if tool:create_long_term_memory}}{memory_tool}{{/if}} {{if tool:update_task}}{task_update_tool}{{/if}}",
+      }),
+    );
+    const categories = spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([
+      stmCategorySchema.parse({
+        server_id: serverId,
+        position: 0,
+        label: "Scene",
+        description: "{{if tool:manage_message}}{pin_tool}{{else}}{message_interaction_tool}{{/if}} {pin_tool}",
+      }),
+    ]);
+    try {
+      const { builtInTools } = await getAvailableToolsWithMCP(
+        [
+          new ManageTaskTool(),
+          new ManageLongTermMemoryTool(),
+          new ManageMessageTool(),
+          new UpdateShortTermMemoryTool(),
+        ],
+        "google",
+        state,
+      );
+      const stm = builtInTools.find((tool) => tool.name === "update_short_term_memory");
+      expect(stm?.description).toContain("`manage_long_term_memory` with action `create`");
+      expect(stm?.description).toContain("`manage_task` with action `update` or `delete`");
+      expect(stm?.parameters.properties.scene?.description).toBe(`\`manage_message\` ${UNAVAILABLE_TOOL_TEXT}`);
+    } finally {
+      config.mockRestore();
+      categories.mockRestore();
+    }
+  });
+
   it("reserves disabled built-ins and aliases and keeps non-colliding tools executable", async () => {
     declarations.set("notes", ["manage_message", "remember_this_fact", "lookup_notes"]);
     enabledConfigs.mockResolvedValue({ status: "fresh", configs: [guildServer("notes", null)] });
@@ -280,7 +356,7 @@ describe("guild MCP replacement availability without a bundled MCP manager", () 
   });
 
   it("keeps advertised built-ins and aliases executable when MCP reads are unavailable or stale", async () => {
-    const memory = { ...builtIn("create_long_term_memory"), requiresFeatureFlag: "self_teaching" };
+    const memory = { ...builtIn("manage_long_term_memory"), requiresFeatureFlag: "self_teaching" };
     ToolRegistry.registerTool(memory);
     const manage = BUILT_INS.find((tool) => tool.name === "manage_message");
     if (!manage) throw new Error("Missing managed-message fixture");

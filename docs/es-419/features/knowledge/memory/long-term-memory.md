@@ -40,6 +40,10 @@ en el historial de conversación en lugar de la memoria a largo plazo.
 Si quieres que guarde algo, pídele que lo recuerde o agrégalo tú mismo. Los administradores del servidor
 pueden desactivar el guardado automático en `/config` > `Permisos`.
 
+Usa `{@userId}` en una memoria personal o del servidor para referirte a alguien por el apodo que la persona activa
+usa para esa persona. TomoriBot completa el nombre cuando recuerda la memoria.
+Consulta [Macros de prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).
+
 ## Límites de memoria
 <!-- anchor: how-many-memories -->
 

@@ -85,6 +85,18 @@ Os blocos nativos são mapeados diretamente para os componentes do prompt Tomori
 
 Quando uma predefinição importada está ativa, ela controla totalmente o prompt do sistema. O prompt integrado do TomoriBot e qualquer prompt personalizado de `/config` > `Comportamento` > `Comportamento Geral` não são enviados, e os botões do prompt do sistema nessa página ficam bloqueados. Seu prompt personalizado é mantido e volta a funcionar quando você desativa a predefinição em `/config` > `Plugins` > `Predefinições do SillyTavern`.
 
+### Macros de predefinição
+<!-- anchor: preset-macros -->
+
+Use [macros de predefinição](/features/prompt-macros/#sillytavern-preset-macros) para inserir
+detalhes da persona, a última mensagem do usuário ou a hora do servidor em um nó de predefinição.
+
+### Instruções condicionais
+<!-- anchor: conditional-instructions -->
+
+Use [condicionais de predefinição](/features/prompt-macros/#preset-conditionals) para escolher
+instruções com base em um valor, como se a persona tem uma descrição.
+
 ### Notas de Compatibilidade
 
 - Os nós desabilitados em `prompt_order` permanecem inativos até serem habilitados em `/config` > `Plug-ins` > SillyTavern Predefinições. Nós vazios e somente comentários nunca são enviados.

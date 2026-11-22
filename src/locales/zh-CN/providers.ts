@@ -113,9 +113,6 @@ export default {
       manage_server_only: `只有拥有 \`管理服务器\` 权限的成员才能查看完整错误。`,
       personal_only: `这个错误来自个人提供方，所以只有它的所有者才能查看完整错误。`,
     },
-    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
-    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
-    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
     tips: {
       title: `💡 你可以这样做`,
       button: `你可以这样做`,
@@ -155,7 +152,6 @@ export default {
       switch_model_provider: `用 \`/config\` > 模型 > 切换模型 或者 \`/providers\` 换一个模型或提供方。`,
       switch_model_provider_personal: `用 \`/personal config\` 切换，或者在 \`/personal providers\` 里更新提供方。`,
       disable_personal_text_override: `这个请求错误来自你的[个人提供方](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/#your-own-providers)。请在 \`/personal providers\` 里更新它，或者用 \`/personal config\` 选一个能用的模型。`,
-      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `需要帮助请到[官方支持服务器](https://discord.gg/bjCfHm9QsB)。`,
       shorten_message: `试着把消息缩短，然后重新发送。`,
       refresh_context: `用 \`/refresh\` 清空对话上下文。`,
@@ -241,7 +237,6 @@ export default {
       unknown_default_message: `发生了意料之外的错误`,
     },
     zai: {
-      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
       "429_balance_default_message": `你的 Z.ai 账户余额不足`,
       "429_plan_access_default_message": `你的 Z.ai 订阅方案不包含这个模型`,
       unknown_default_message: `发生了意料之外的错误`,
@@ -251,9 +246,6 @@ export default {
       "403_default_message": `NVIDIA 拒绝了这个密钥。它可能输错了、已经过期，或者所属账号没有推理访问权限。`,
       "404_default_message": `找不到所请求的 NVIDIA NIM 模型。它可能已经被 NVIDIA 弃用。`,
       "500_default_message": `为这个模型提供服务的 NVIDIA 后端出错了。这通常是暂时的，请稍后再试。如果一直失败，部署 TomoriBot 的人可以在机器人日志里查看 NVIDIA 的完整报告。`,
-      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
-      // parameter. Asserting this cause on every 500 previously sent users to change settings the
-      // failing payload never carried.
       "500_parameter_default_message": `NVIDIA 拒绝了这个模型的一个或多个请求参数。请到 \`/config\` > 模型 > 文本采样器与参数，把 \`min_p\` 之类不受支持的采样器设成 \`0\`，并清空已保存的 \`logit_bias\` 条目。`,
       unknown_default_message: `发生了意料之外的错误`,
     },

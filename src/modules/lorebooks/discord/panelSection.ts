@@ -610,17 +610,18 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
         channel_scope_pending: (selectedEntry.legacy_channel_tags?.length ?? 0) > 0,
       })?.replace(/^-# /gm, "> ")
     : null;
+  const macroLink = `-# ${localizer(locale, "general.docs.prompt_macros_link")}`;
   const fixedTextLength =
     measureFormattedPanelTextLength(components) +
     measureFormattedPanelTextLength({
       type: ComponentType.TextDisplay,
-      content: scopeLine ? `${metaLine}\n${scopeLine}` : metaLine,
+      content: [metaLine, scopeLine, macroLink].filter(Boolean).join("\n"),
     });
   const availableBudget = Math.max(0, input.availableTextLength - fixedTextLength);
 
   components.push({
     type: ComponentType.TextDisplay,
-    content: renderPanelContentBlock(locale, selectedEntry.content, availableBudget),
+    content: `${renderPanelContentBlock(locale, selectedEntry.content, availableBudget)}\n${macroLink}`,
   });
   components.push({ type: ComponentType.TextDisplay, content: metaLine });
   if (scopeLine) components.push({ type: ComponentType.TextDisplay, content: scopeLine });

@@ -360,7 +360,7 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
       change_trigger_behavior: {
         title: `Đổi hành vi kích hoạt`,
         description:
-          "Mặc định mình trả lời khi bạn gọi tên, @mention mình, hoặc phản hồi tin nhắn của mình. Bạn có thể mở rộng, thu hẹp hoặc tắt theo từng kênh.\n\n**Nơi mình được phép nói chuyện**\nBạn có thể cài để mình chỉ trả lời trong kênh cho phép. Thêm các kênh đó trong {moderationWhitelist}.\n> Kênh không có trong danh sách sẽ được giữ im lặng.\n\n**Tự động lên tiếng**\n{configAutoTrigger} cho phép mình tự gửi tin nhắn sau mỗi vài tin nhắn hoặc gửi ngẫu nhiên.\n\n**Chỉ kích hoạt khi được nhắc đến**\nChế độ kích hoạt có chủ đích giúp mình không trả lời khi chỉ được gọi tên đơn thuần. Bắt buộc phải @mention. Bật tính năng này trong {configBehaviorTrigger}.",
+          "Trong máy chủ, mặc định mình trả lời khi bạn gọi tên, @mention mình, hoặc trả lời tin nhắn webhook của một persona. Khi bạn trả lời tài khoản bot của mình, hãy giữ nút bật trả lời ở trạng thái `@ ON`. Bạn có thể thay đổi thời điểm mình trả lời theo từng kênh.\n\n**Nơi mình được phép nói chuyện**\nBạn có thể cài để mình chỉ trả lời trong kênh cho phép. Thêm các kênh đó trong {moderationWhitelist}.\n> Kênh không có trong danh sách sẽ được giữ im lặng.\n\n**Tự động lên tiếng**\n{configAutoTrigger} cho phép mình tự gửi tin nhắn sau mỗi vài tin nhắn hoặc gửi ngẫu nhiên.\n\n**Chỉ kích hoạt khi được nhắc đến**\nChế độ kích hoạt có chủ đích giúp mình không trả lời khi chỉ được gọi tên đơn thuần. Bắt buộc phải @mention. Bật tính năng này trong {configBehaviorTrigger}.",
       },
       create_first_persona: {
         title: `Tạo persona đầu tiên của bạn`,

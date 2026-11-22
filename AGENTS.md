@@ -7,25 +7,20 @@ every session, so it holds only always-on rules and navigation. Detailed convent
 ## Project Snapshot
 
 TomoriBot is a Discord AI chatbot built with TypeScript + Bun, with:
-- Multi-provider LLM support (Google Gemini, OpenRouter, NovelAI, Custom)
+- Direct LLM providers including Anthropic and Google, plus OpenRouter, NovelAI, and custom endpoints
 - Persistent memory and caching
 - Multi-persona behavior and webhook-based persona identity
-- Localization (`en-US`, `ja`, `pt-BR`, `es-419` (aliased `es-ES`), `zh-TW`, `zh-CN`, `vi`)
+- Localization (`en-US`, `ja`, `pt-BR`, `es-419`, `zh-TW`, `zh-CN`, `vi`). Requests for `es-ES` use `es-419`
 - Tool calling (built-in, REST, MCP)
 - Optional local servers and self-hosting (KoboldCPP, TTS servers, etc.)
 
 ## Making a Change
 
-Read the code the change touches and trace the real flow first. Then stop at the first rung that
-holds:
-
-1. Does it need to exist? If nothing breaks without it and nobody asked, skip it.
-2. Does the codebase already do it? Find the helper, registry, or pattern and extend it. A parallel
-   module beside an existing pattern is a defect.
-3. Does Bun, discord.js, or an installed dependency do it? Use it. New dependencies follow
-   `docs/en/contributing/policies/dependency-security.md`.
-4. Only then write the smallest complete change. Complete includes everything the rules below require
-   to travel together: docs, migrations, cache invalidation, and English locale keys.
+Trace the affected flow in source. Make the smallest change that satisfies the request or fixes a
+concrete problem. Extend an existing helper, registry, or pattern if it fits. Use Bun, discord.js,
+or an installed dependency where it already provides the needed behavior. New dependencies follow
+`docs/en/contributing/policies/dependency-security.md`. Include the required docs, migrations,
+cache invalidation, and English locale keys with the change.
 
 Reuse without speculating:
 - Extract a shared helper only when a second real caller exists.
@@ -112,11 +107,11 @@ proposed follow-up's premise in source before suggesting it.
 9. Use safe DB and error patterns.
    - Use Bun SQL template literals for queries.
    - Use structured logging via `log` with metadata.
-   - A catch that turns a failure into a result object, a reply, or a tool error reports it first
-     (`reportProviderFailure`), with the provider status and its body minus the request's key.
-     Expected refusals (bad input, cancellation, auth or quota on a user's own key) are a metric plus a
-     warn, never an error. Provider text stays out of public replies and tool results; offer it only
-     behind the gated **Show Full Error** modal.
+   - Report provider failures with `reportProviderFailure` where they become results, replies, or
+     tool errors. Include the provider status and response body when available, with the request
+     credential removed. Expected refusals such as bad input, cancellation, or auth or quota on a
+     user's own key get a metric and a warning. Keep provider text out of public replies and tool
+     results. Show it only through the gated **Show Full Error** modal.
 10. Test in proportion, and pass the quality gates before finishing.
     - Test behavior, regression risk, or an interface other code depends on (an exported API, a
       stored data shape, a Discord limit). A bug fix gets the regression test that would have caught

@@ -360,7 +360,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       change_trigger_behavior: {
         title: `Change Trigger Behavior`,
         description:
-          "Out of the box I answer when you say my name, @mention me, or reply to me. You can widen that, narrow it, or turn it off per channel.\n\n**Where I am allowed to speak**\nYou can make me only reply in whitelisted channels. Add them under {moderationWhitelist}.\n> A channel that is not on the list stays quiet.\n\n**Speaking up on my own**\n{configAutoTrigger} lets me automatically send a message either every few messages or at random.\n\n**Trigger me with mentions only**\nDeliberate Trigger Mode prevents me from responding at a simple name call. Makes me wait for @mentions instead. Turn it on in {configBehaviorTrigger}.",
+          "In servers, I answer by default when you say my name, @mention me, or reply to a persona's webhook message. When you reply to my bot account, keep the reply toggle set to `@ ON`. You can change when I answer per channel.\n\n**Where I am allowed to speak**\nYou can make me only reply in whitelisted channels. Add them under {moderationWhitelist}.\n> A channel that is not on the list stays quiet.\n\n**Speaking up on my own**\n{configAutoTrigger} lets me automatically send a message either every few messages or at random.\n\n**Trigger me with mentions only**\nDeliberate Trigger Mode prevents me from responding at a simple name call. Makes me wait for @mentions instead. Turn it on in {configBehaviorTrigger}.",
       },
       create_first_persona: {
         title: `Create your First Persona`,

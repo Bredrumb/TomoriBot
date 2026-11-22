@@ -57,8 +57,8 @@ above the latest four speaker turns, before retrieved documents. Each group keep
 placement and insertion order. All groups share an 8,000-character budget, with Always On entries
 considered first; an entry that would exceed the budget is skipped so later entries can still fit.
 
-Content may use `{{user}}`, `{{char}}`, and `{{bot}}`. TomoriBot replaces them with the current names.
-Other `{{...}}` macros and conditional blocks stay as written.
+Entries support [name macros](/features/prompt-macros/#names), including
+`{@123456789012345678}` for a specific Discord user. Tool macros and conditional blocks stay as written.
 
 ## Channel limits
 

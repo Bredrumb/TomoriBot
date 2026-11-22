@@ -95,7 +95,7 @@ Cả `Tương thích OpenAI` và `Ollama` đều chấp nhận địa chỉ gố
 Sau khi lưu kết nối, chọn nó và chọn `+ Thêm model Văn bản mới` từ dropdown model. Điền các thông tin:
 
 - **Mã tên model (ID API chính xác):** `gemma4:12b`, đúng thẻ từ lệnh `ollama list`.
-- **Cửa sổ ngữ cảnh**: tùy chọn, chỉ dành cho Ollama và KoboldCPP. Đặt giá trị này (ví dụ `8192`, `16384`) để nâng mức `num_ctx` mặc định của Ollama, vốn khá nhỏ và dễ làm cắt bớt ngữ cảnh dài của TomoriBot. Để trống để dùng mặc định của máy chủ.
+- **Cửa sổ ngữ cảnh:** nhập giới hạn token mà TomoriBot nên dự trù. Để trống nếu không rõ giới hạn của máy chủ. Với Ollama, hãy đặt kích thước ngữ cảnh thực tế trong Ollama và nhập cùng giá trị đó tại đây. API tương thích OpenAI của Ollama đặt kích thước ngữ cảnh của model thông qua `Modelfile` với `PARAMETER num_ctx` hoặc qua phần cài đặt ngữ cảnh của chính Ollama. Dùng `ollama ps` sau một câu trả lời để kiểm tra ngữ cảnh của model đã nạp. Xem [cài đặt ngữ cảnh của Ollama](https://docs.ollama.com/context-length) và [độ tương thích OpenAI](https://docs.ollama.com/api/openai-compatibility#setting-the-local-context-size).
 - **Các nút bật/tắt:** bật `Gọi công cụ` nếu model hỗ trợ gọi hàm; chỉ bật `Đầu vào hình ảnh` cho model thị giác; bật `Đầu ra có cấu trúc` nếu model xử lý tốt JSON schema. Trong ví dụ này, Gemma 4 hỗ trợ tất cả nên hãy tích chọn hết.
 
 TomoriBot kiểm tra kết nối ngay khi bạn lưu. Nếu bot báo không thể kết nối tới endpoint, nguyên nhân thường gặp là nhầm lẫn giữa `localhost` và Docker hoặc thiếu/thừa `/v1` (xem [lỗi thường gặp](#notes--gotchas)).
@@ -127,7 +127,7 @@ TomoriBot hỗ trợ mọi endpoint tương thích OpenAI, nhưng các máy ch�
 
 - Khởi động với chế độ tương thích OpenAI (có sẵn mặc định). Mặc định: `http://127.0.0.1:5001/v1`.
 - Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Tuân theo `Cửa sổ ngữ cảnh` giống Ollama.
+- `Cửa sổ ngữ cảnh` đặt ngân sách ngữ cảnh của TomoriBot và được KoboldCPP tuân theo.
 - Để gỡ model trong lúc ComfyUI chạy tác vụ, hãy khởi chạy thêm cờ `--admin` và `--admindir` (xem [Dùng chung một GPU với ComfyUI](#4-optional-share-one-gpu-with-comfyui)).
 - Nạp các model GGUF; tên model là giá trị mà model đang nạp báo về (thường là tên tệp không kèm phần mở rộng), hãy kiểm tra phản hồi `/v1/models` của KoboldCPP.
 
@@ -138,7 +138,7 @@ TomoriBot hỗ trợ mọi endpoint tương thích OpenAI, nhưng các máy ch�
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - Độ tương thích API: `Tương thích OpenAI`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Đặt kích thước cửa sổ ngữ cảnh lúc khởi chạy bằng `-c` vì trường `Cửa sổ ngữ cảnh` trong modal chỉ áp dụng cho Ollama và KoboldCPP nên không có tác dụng ở đây.
+- Đặt cửa sổ ngữ cảnh của máy chủ khi khởi chạy bằng `-c`, sau đó nhập cùng giá trị đó vào `Cửa sổ ngữ cảnh` để TomoriBot dự trù ngân sách cho nó.
 - Tên model là giá trị `/v1/models` báo về; đặt tên gọn gàng cho nó bằng `--alias my-model`.
 - Nếu bạn khởi động kèm `--api-key`, hãy điền khóa đó vào `auth_token`.
 

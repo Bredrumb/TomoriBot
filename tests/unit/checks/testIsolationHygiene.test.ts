@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
+import { sql } from "@/utils/db/client";
+import { ownedServersOnly } from "@/utils/db/repositories/shardFilter";
 import {
   findProcessWideMutations,
   findUnrestoredMutations,
   reachesTestDatabase,
   usesModuleMocks,
 } from "../../../scripts/checks/lib/testIsolation";
+import { useEnvSandbox } from "../../helpers/env";
 
 // Detectors are shared via testIsolation.ts because runTests.ts batches files into shared Bun processes and runs unit
 // lanes concurrently with the DB lane.
@@ -28,11 +31,51 @@ async function readScannableFiles(): Promise<Array<[string, string]>> {
 }
 
 describe("test isolation hygiene", () => {
+  useEnvSandbox(["POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_PASSWORD"]);
+
   it("keeps database credentials and background telemetry writes out of unit processes", () => {
     for (const name of ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PASSWORD", "TEST_DB_READY"]) {
       expect(process.env[name] === undefined, name).toBe(true);
     }
     expect(process.env.STAT_TRACKING_ENABLED).toBe("false");
+  });
+
+  it("rejects unconfigured sql queries without opening a socket or creating unhandled fragment rejections", async () => {
+    let connections = 0;
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    const listener = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        open() {
+          connections++;
+        },
+        data() {},
+      },
+    });
+    try {
+      delete process.env.POSTGRES_PASSWORD;
+      process.env.POSTGRES_HOST = "127.0.0.1";
+      process.env.POSTGRES_PORT = String(listener.port);
+
+      expect(typeof sql.array).toBe("function");
+      const standaloneFragment = ownedServersOnly();
+      expect(typeof standaloneFragment.then).toBe("function");
+      await expect((async () => await sql`SELECT 1 WHERE ${ownedServersOnly()}`)()).rejects.toThrow();
+      await expect(sql`SELECT 1`.execute()).rejects.toThrow();
+      await expect((async () => await sql.unsafe("SELECT 1"))()).rejects.toThrow();
+      await expect(sql.begin(async () => undefined)).rejects.toThrow();
+      await Bun.sleep(0);
+      expect(unhandled).toEqual([]);
+      expect(connections).toBe(0);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      listener.stop(true);
+    }
   });
 
   it("keeps database-touching tests out of the concurrently-running unit lanes", async () => {

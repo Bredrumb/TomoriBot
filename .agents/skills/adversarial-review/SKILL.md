@@ -9,7 +9,8 @@ Review the change/current diff as a skeptical maintainer to verify whether it fa
 
 Construct plausible failure cases, trace them through the code, and report only defects supported by repository evidence. `No findings.` is a valid result.
 
-Do not modify files, create commits, push branches, or post review comments unless the user asks to implement accepted findings.
+Keep the review read-only. When the user asks for fixes, edit only the accepted findings. A commit,
+push, or posted review comment needs authorization for that action.
 
 ## Establish the review target
 
@@ -32,7 +33,8 @@ Use the real upstream or requested base when it differs from `main`.
 
 Determine intended behavior from the user's request, PR description, `AGENTS.md`, contributor guides, architecture pages, existing implementation, and tests.
 
-Code establishes current runtime behavior. When documentation and code disagree, the code describes what the program currently does. When an intentional behavior change makes existing documentation inaccurate, update the owning documentation in the same change.
+Use code to establish current runtime behavior. If the change makes the owning documentation
+inaccurate, include the affected documentation in the review.
 
 ## Review the real execution path
 
@@ -42,7 +44,8 @@ Follow callers, callees, persisted state, caches, permissions, provider selectio
 
 When a shared function changes, check its callers.
 
-Trace at least one complete use case from its entry point to its final effect. For important state changes, also trace a failure path.
+For a runtime change, trace an affected use case from entry point to final effect. For important
+state changes, also trace a failure path.
 
 Challenge assumptions using states the application can realistically reach:
 
@@ -211,13 +214,10 @@ Use:
 
 ```markdown
 ### [P1] Short title: `src/path/file.ts:123`
-
-When <condition>, <failure occurs>. The changed code <causal path>, which causes <impact>.
-
-Evidence: <specific code, test, or documented invariant>.
 ```
 
-Each finding should make the trigger, causal path, wrong behavior, and impact clear.
+For each finding, explain how the trigger reaches the changed code and what fails. Cite the code,
+test, or repository rule that supports the impact.
 
 Cite the narrowest useful changed location. Add a short fix direction only when it helps explain the defect.
 

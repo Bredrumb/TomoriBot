@@ -85,7 +85,7 @@ Mình có các tính năng tích hợp sẵn để giúp giảm chi phí từ ng
     prompt: {
       description: `Kiểm tra các prompt TomoriBot gửi đến model.`,
       snapshot: {
-        description: `Xuất chính xác prompt LLM của một persona ra tệp để gỡ lỗi.`,
+        description: `Tái dựng prompt hiện tại của một persona và xuất ra tệp để gỡ lỗi.`,
         persona_description: `Persona cần tạo snapshot. Mặc định là persona chính.`,
         format_description: `Định dạng đầu ra cho tệp snapshot.`,
         text_option: `Văn bản`,
@@ -97,6 +97,7 @@ Mình có các tính năng tích hợp sẵn để giúp giảm chi phí từ ng
         persona_not_found_description: `Persona đó không còn tồn tại trên máy chủ này. Hãy chọn một persona từ danh sách.`,
         file_title: `Snapshot prompt`,
         file_description: `Đây là snapshot prompt cho persona **{persona_name}** (định dạng: {format}).`,
+        file_scope_note: `Tệp này tái dựng lại prompt hiện tại. Nhà cung cấp có thể áp dụng định dạng hoặc cắt bớt riêng trước khi model đọc.`,
         file_txt_headers_note: `Cấu hình yêu cầu ở đầu tệp TXT cùng các tiêu đề \`=== Title (/command) ===\` và \`== SubTitle ==\` là chú thích cho biết lệnh cấu hình nào kiểm soát từng phần. Chúng **không** phải là một phần của prompt thực tế gửi đến LLM. "Untagged" nghĩa là phần đó được sắp xếp lại bởi preset st tùy chỉnh hoặc là một phần của preset đó`,
         file_hint_try_json: `Chạy lại lệnh với một định dạng JSON để xem định dạng gốc. Chọn \`JSON kèm công cụ\` để kèm theo định nghĩa công cụ.`,
         file_hint_try_text: `Chạy lại lệnh với \`format: Text\` để xem định dạng dễ đọc hơn.`,

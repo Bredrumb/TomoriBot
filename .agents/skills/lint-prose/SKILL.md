@@ -5,12 +5,8 @@ description: Remove AI writing patterns and excess information (obvious statemen
 
 # Lint prose
 
-This skill does not exist to hide that an AI helped write something. It exists because generated
-prose is slow to read: it circles a point, frames it, and restates it before saying it. A contributor
-reading a guide or a comment needs the fact, the constraint, or the instruction, stated plainly
-enough that someone new to the codebase follows it on the first read.
-
-Edit the prose to that standard. Preserve meaning and the intended tone.
+Write so the intended reader can find the fact, constraint, or action on the first read.
+Preserve meaning and tone.
 
 This skill governs how prose reads. What deserves a comment at all is decided by
 `docs/en/contributing/policies/comments.md`, and where a page belongs by
@@ -18,16 +14,16 @@ This skill governs how prose reads. What deserves a comment at all is decided by
 
 ## Process
 
-1. For Markdown, run `bun run audit-comments --docs <file>` for a first pass. It runs slop-guard with
-   `slop-guard.jsonl` in this folder, which keeps only the rules that proved precise on this
-   repository, plus plain-word patterns for rules 6, 11, and 20. Findings cite the rule numbers below.
-   It needs `uv` for slop-guard and runs only the repository patterns without it. The slop-guard MCP
-   server's `check_slop_file` uses the unfiltered defaults, which also penalize checklists and tables,
-   so treat its extra findings as candidates only. The rules below win where they disagree.
-2. Scan for the patterns below.
-3. Rewrite, then ask what still makes the text read as generated, and fix that.
-4. Read it again as the reader with the panel open, and cut every sentence that the panel or the
-   label already tells them (rules 31-34).
+For Markdown, run `bun run audit-comments --docs <file>` for a first pass. It runs slop-guard with
+`slop-guard.jsonl` in this folder, which keeps only the rules that proved precise on this
+repository, plus plain-word patterns for rules 6, 11, and 20. Findings cite the rule numbers below.
+It needs `uv` for slop-guard and runs only the repository patterns without it. The slop-guard MCP
+server's `check_slop_file` uses the unfiltered defaults, which also penalize checklists and tables,
+so treat its extra findings as candidates only. The rules below win where they disagree.
+
+Use the rules below to decide which edits improve the prose. For panel copy and guides that are
+read with a panel open, check whether each sentence adds something the panel does not show
+(rules 31-34).
 
 ## Scope
 
@@ -51,9 +47,8 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
 
 ### Language
 
-5. **AI vocabulary.** Additionally, crucial, delve, enduring, enhance, fostering, garner, interplay,
-   intricate, landscape (abstract), pivotal, robust, seamless, showcase, tapestry, testament,
-   underscore, vibrant. Use the plain word.
+5. **Imprecise wording.** Name the change or result when a term such as "enhance", "robust", or
+   "seamless" leaves it vague. Keep ordinary words where their meaning is exact.
 6. **Fancy ways to say "is".** "serves as", "stands as", "boasts", "features". Say "is" or "has".
 7. **"Not X" contrasts.** "Not just X, but Y", "not X, it's Y", and "Y, not X". State the rule, then
    decide what the negated half is doing:
@@ -82,9 +77,8 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
     or an explanation of the first half is correct.
 15. **Bold and code spans.** Write a label the user sees on screen as a code span: a button, select
     option, modal field, or Discord setting (`Finish Setup`, `Manage Server`). In a translated page,
-    the span holds that locale's UI text, not the English label. Use bold only for a list item's
-    lead-in label, never for emphasis or for product names; if a word needs stress, rewrite the
-    sentence.
+    the span holds that locale's UI text. Use formatting to help the reader scan, for example
+    bold lead-in labels in a list. Follow the panel layout policy for formatting inside panels.
 16. **Inline-header lists.** A bold label and colon that restates the line ("**Performance:**
     Performance improved"). Write the line as prose. A bold lead-in that names the item and is followed
     by new detail is fine.
@@ -102,7 +96,7 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
 
 ### Readability
 
-23. **Dense sentences.** If the reader has to backtrack, split the sentence. One idea per sentence.
+23. **Dense sentences.** Split sentences where a reader would have to backtrack.
 24. **Passive voice.** Name the actor: "the loader parses the file". Passive is fine when the actor is
     unknown or irrelevant.
 25. **Figurative descriptions of technical behavior.** Phrases that attribute action or state to

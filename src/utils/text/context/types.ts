@@ -10,6 +10,7 @@ import type {
 } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
+import type { StreamingContext } from "@/types/tool/interfaces";
 
 export type MessageProxyConversationUser = {
   serviceId: string;
@@ -116,6 +117,7 @@ export interface BuildContextParams {
   // Sentinel value: undefined or null disables scoped filtering, whereas an empty array blocks all Deliberate Tool
   // Mode tools.
   deliberateToolAllowedNames?: readonly string[] | null;
+  toolStreamContext?: StreamingContext;
   // Active presets skip server system_prompt and DEFAULT_SYSTEM_PROMPT so the preset owns the system prompt, while a
   // replace-mode channel prompt still wins.
   presetOwnsSystemPrompt?: boolean;

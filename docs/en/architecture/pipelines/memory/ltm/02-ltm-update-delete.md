@@ -7,19 +7,19 @@ The memory update and delete stage handles model-initiated modifications or remo
 
 ## Flow and ownership
 
-When the model detects an outdated, inaccurate, or redundant memory, it invokes `update_long_term_memory` managed by `UpdateLongTermMemoryTool` in `src/tools/functionCalls/updateLongTermMemoryTool.ts`.
+The model calls `manage_long_term_memory` with `action: "update"` or `action: "delete"` and the memory ID.
 
-The tool distinguishes between updates and deletions based on the provided content:
+The action controls which fields the tool accepts.
 
 - **Update:** `memory_content` provides replacement text. The tool sanitizes braces using `sanitizeUnknownTemplatePlaceholders()` and validates length via `validateMemoryContent()`.
-- **Deletion:** `memory_content` is empty or whitespace-only after sanitization.
+- **Deletion.** Supply the ID and scope. The tool rejects `memory_content` on a delete.
 
 ### Scope determination and resolution
 
-Target scope depends on the presence of the `target_user` argument:
+The required `memory_scope` selects the repository. Server and personal IDs are independent.
 
-- **Server scope:** when `target_user` is absent, the tool updates or deletes records in the `server_memories` table scoped to `(server_id, persona_lineage_id)`.
-- **Personal scope:** when `target_user` is provided, `resolveUserTarget()` (`src/utils/discord/targetResolver.ts`) matches the display name.
+- **Server scope.** With `memory_scope: "server_wide"`, the tool updates or deletes records in the `server_memories` table scoped to `(server_id, persona_lineage_id)`.
+- **Personal scope.** With `memory_scope: "target_user"`, provide `target_user`. `resolveUserTarget()` (`src/utils/discord/targetResolver.ts`) matches the display name.
   - Bridge users reject personal updates with an error because bridge users only support server-wide memories.
   - Personal updates targeting the bot itself return an error.
   - The resolved user must belong to the current guild or direct message channel.
@@ -59,7 +59,7 @@ The tool returns a successful `ToolResult` detailing the outcome.
 
 ## Source pointers
 
-- `src/tools/functionCalls/updateLongTermMemoryTool.ts`: `UpdateLongTermMemoryTool` parameter handling, scope routing, and execution flow.
+- `src/tools/functionCalls/updateLongTermMemoryTool.ts`: `changeLongTermMemory()` and the scoped write paths.
 - `src/utils/db/repositories/ServerMemoryRepository.ts`: queries for updating and removing server memories with lineage checks.
 - `src/utils/db/repositories/PersonalMemoryRepository.ts`: queries for updating and removing personal memories with lineage checks.
 - `src/utils/cache/tomoriStateCache.ts` and `src/utils/cache/userCache.ts`: cache invalidation functions.

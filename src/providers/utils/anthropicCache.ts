@@ -61,7 +61,7 @@ export function applyAnthropicCacheBreakpoints(
 ): void {
   const minimum = minimumCacheTokens(model);
   let prefixChars = system ? textLength(system.content) : 0;
-  // Skip from the text estimate because exact eligibility requires provider token counts, including tools and media.
+  // This text estimate misses tool and media tokens, so it can undercount Anthropic's cacheable prefix.
   if (system && charsToTokensText(prefixChars) >= minimum) markLastBlock(system);
   for (const message of messages) {
     prefixChars += textLength(message.content);

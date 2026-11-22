@@ -48,7 +48,8 @@ export type ConfigBehaviorTriggerAction =
   | "matching-limits"
   | "deliberate-trigger-mode"
   | "always-reply"
-  | "cooldown";
+  | "cooldown"
+  | "fast-regeneration";
 
 export type ConfigBehaviorExperimentalAction = "tool-mode" | "tool-context" | "tool-trigger" | "send-limit";
 export type ConfigBehaviorNoticesAction = "notice-visibility" | "notice-verbosity" | "speech-transcripts";
@@ -371,6 +372,8 @@ export const BEHAVIOR_TRIGGER_ACTION_BY_ROUTE: Partial<
   "behavior-limits-submit": "matching-limits",
   "behavior-dtm-set": "deliberate-trigger-mode",
   "behavior-always-set": "always-reply",
+  "behavior-retry-set": "fast-regeneration",
+  "behavior-continue-set": "fast-regeneration",
   "behavior-cooldown-open": "cooldown",
   "behavior-cooldown-submit": "cooldown",
 };

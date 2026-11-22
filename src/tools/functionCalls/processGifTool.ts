@@ -8,8 +8,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 
 export class ProcessGifTool extends BaseTool {
   name = "process_gif";
-  description =
-    "Extract and analyze keyframes from a GIF attachment in a Discord message. DEV ONLY - memory intensive (100-130 MB per GIF). Use sparingly when GIF context is truly needed for understanding the conversation.";
+  description = "Extract and analyze GIF keyframes only when needed for context. Dev only, 100-130 MB per GIF.";
   category = "utility" as const;
   requiredModelCapabilities = {
     sees_images: true,
@@ -20,13 +19,7 @@ export class ProcessGifTool extends BaseTool {
     properties: {
       media_id: {
         type: "string",
-        description:
-          "The media reference ID (e.g., media_1) from the system hint for the message containing the GIF attachment to process. This message must be within the last 100 messages in the channel.",
-      },
-      reason: {
-        type: "string",
-        description:
-          "Optional brief explanation of why you need to process this GIF. Helps with debugging and understanding AI decision-making.",
+        description: "Media ID of the GIF message. It must be among the last 100 channel messages.",
       },
     },
     required: ["media_id"],
@@ -71,7 +64,6 @@ export class ProcessGifTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const messageId = args.media_id as string;
-    const reason = (args.reason as string | undefined) || "No reason provided";
 
     if (!messageId) {
       log.warn("ProcessGifTool: Missing required parameter 'media_id'");
@@ -82,7 +74,7 @@ export class ProcessGifTool extends BaseTool {
       };
     }
 
-    log.info(`ProcessGifTool: Starting GIF processing for message ${messageId} - Reason: ${reason}`);
+    log.info(`ProcessGifTool: Starting GIF processing for message ${messageId}`);
 
     try {
       log.info(`ProcessGifTool: Fetching recent messages from channel ${context.channel.id}`);
@@ -237,7 +229,6 @@ export class ProcessGifTool extends BaseTool {
           frame_count: processedFrames.length,
           processing_time_ms: processingTime,
           has_pending_context: true,
-          reason: reason,
         },
       };
     } catch (error) {
@@ -268,7 +259,6 @@ export class ProcessGifTool extends BaseTool {
         data: {
           status: errorStatus,
           media_id: messageId,
-          reason: reason,
         },
       };
     }

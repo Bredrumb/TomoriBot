@@ -1,5 +1,5 @@
 import { log } from "../../utils/misc/logger";
-import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
+import type { ToolContext, ToolResult } from "../../types/tool/interfaces";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
@@ -7,521 +7,454 @@ import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtecti
 import { renderMemorySaveNoticeContent, memoryServerDiscId } from "@/tools/functionCalls/memoryNoticeContent";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
-export class MemoryTool extends BaseTool {
-  name = "create_long_term_memory";
-  description =
-    "Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change. Be proactive in remembering user or server preferences, interests, and facts. Do not wait for the user to ask you to remember things and be proactive but avoid saving PII (real names, addresses, and contact info)";
-  category = "memory" as const;
-  requiresFeatureFlag = "self_teaching";
+export async function createLongTermMemory(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+  let memoryContentArg = args.memory_content as string;
+  const memoryScopeArg = args.memory_scope as "server_wide" | "target_user";
+  const targetUserArg = args.target_user as string | undefined;
+  const requestedTargetUser = targetUserArg?.trim();
 
-  parameters: ToolParameterSchema = {
-    type: "object",
-    properties: {
-      memory_content: {
-        type: "string",
-        description:
-          "The specific piece of information, fact, or preference to remember. Be concise and clear. Write in third-person. Use {user} to refer to the target user and {bot} to refer to yourself; never hardcode names. Example: '{user} likes dogs' or '{bot} should greet {user} formally'.",
-      },
-      memory_scope: {
-        type: "string",
-        description:
-          "Specify the scope of this memory. Use 'server_wide' for general information applicable to the whole server, or 'target_user' for information specific to a particular user.",
-        enum: ["server_wide", "target_user"],
-      },
-      target_user: {
-        type: "string",
-        description:
-          "If memory_scope is 'target_user', provide the target user's name as shown in the current conversation or server. Use natural names, not IDs.",
-      },
-    },
-    required: ["memory_content", "memory_scope"],
-  };
+  const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
+  const { ColorCode } = await import("../../utils/misc/logger");
+  const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
-  isAvailableFor(_provider: string): boolean {
-    return true;
-  }
+  const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
+  const { personalMemoryRepository, serverMemoryRepository, userRepository } = await import("@/utils/db/repositories");
 
-  protected isEnabled(context: ToolContext): boolean {
-    return context.tomoriState.config.self_teaching_enabled;
-  }
+  const tomoriState = context.tomoriState;
+  const resolvedUserId = resolveTriggererDiscordId(context);
+  const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
-  async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const validation = this.validateParameters(args);
-    if (!validation.isValid) {
-      return {
-        success: false,
-        error: `Invalid parameters: ${validation.errors?.join(", ") || `Missing required parameters: ${validation.missingParams?.join(", ")}`}`,
-        data: {
-          status: "memory_save_failed_invalid_args",
-          reason: `Invalid parameters: ${validation.errors?.join(", ") || `Missing required parameters: ${validation.missingParams?.join(", ")}`}`,
-        },
-      };
-    }
-
-    if (!this.isEnabled(context)) {
-      return {
-        success: false,
-        error: "Self-teaching is disabled for this server",
-        data: {
-          status: "memory_save_failed_disabled",
-          reason: "Self-teaching functionality is disabled for this server",
-        },
-      };
-    }
-
-    let memoryContentArg = args.memory_content as string;
-    const memoryScopeArg = args.memory_scope as "server_wide" | "target_user";
-    const targetUserArg = args.target_user as string | undefined;
-    const legacyTargetUserDiscordIdArg = args.target_user_discord_id as string | undefined;
-    const legacyTargetUserNicknameArg = args.target_user_nickname as string | undefined;
-    const requestedTargetUser =
-      targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
-
-    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
-    const { ColorCode } = await import("../../utils/misc/logger");
-    const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
-
-    const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
-    const { personalMemoryRepository, serverMemoryRepository, userRepository } = await import(
-      "@/utils/db/repositories"
-    );
-
-    const tomoriState = context.tomoriState;
-    const resolvedUserId = resolveTriggererDiscordId(context);
-    const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
-
-    if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {
-      const missing = [
-        !tomoriState && "tomoriState",
-        !userRow && "userRow",
-        userRow && !userRow.user_id && "userRow.user_id",
-        tomoriState && !tomoriState.server_id && "tomoriState.server_id",
-        tomoriState && !tomoriState.persona_id && "tomoriState.persona_id",
-        !resolvedUserId && "resolvedUserId",
-      ].filter(Boolean);
-      log.error(`Critical state missing before handling create_long_term_memory: [${missing.join(", ")}]`);
-      return {
-        success: false,
-        error: "Internal bot error: Critical state information is missing",
-        data: {
-          status: "memory_save_failed_internal_error",
-          reason: "Internal bot error: Critical state information is missing",
-        },
-      };
-    }
-
-    const personaNickname =
-      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
-
-    if (typeof memoryContentArg !== "string" || !memoryContentArg.trim()) {
-      return {
-        success: false,
-        error: "The 'memory_content' argument was missing, empty, or not a string",
-        data: {
-          status: "memory_save_failed_invalid_args",
-          reason: "The 'memory_content' argument was missing, empty, or not a string",
-        },
-      };
-    }
-
-    if (typeof memoryScopeArg !== "string" || !["server_wide", "target_user"].includes(memoryScopeArg)) {
-      return {
-        success: false,
-        error: "The 'memory_scope' argument was missing or invalid. Must be 'server_wide' or 'target_user'",
-        data: {
-          status: "memory_save_failed_invalid_args",
-          reason: "The 'memory_scope' argument was missing or invalid. Must be 'server_wide' or 'target_user'",
-        },
-      };
-    }
-
-    let effectiveScope = memoryScopeArg;
-    let resolvedTargetUserId: string | undefined;
-    let resolvedTargetUserLabel: string | undefined;
-
-    if (effectiveScope === "target_user") {
-      if (!requestedTargetUser) {
-        return {
-          success: false,
-          error: "The 'target_user' argument is required when 'memory_scope' is 'target_user'.",
-          data: {
-            status: "memory_save_failed_invalid_args",
-            scope: "target_user",
-            reason: "The 'target_user' argument is required when 'memory_scope' is 'target_user'.",
-          },
-        };
-      }
-
-      const userResolution = await resolveUserTarget(requestedTargetUser, context);
-      if (userResolution.status === "ambiguous") {
-        return {
-          success: false,
-          error: `Multiple users match "${requestedTargetUser}". Please clarify which one you mean: ${userResolution.candidates.map((candidate) => candidate.label).join(", ")}.`,
-          data: {
-            status: "memory_save_failed_ambiguous_user",
-            scope: "target_user",
-            reason: "Multiple users matched the requested target.",
-            candidates: userResolution.candidates.map((candidate) => candidate.label),
-          },
-        };
-      }
-
-      if (userResolution.status === "not_found") {
-        return {
-          success: false,
-          error: `Could not find a user matching "${requestedTargetUser}" in this conversation or server.`,
-          data: {
-            status: "memory_save_failed_user_not_found",
-            scope: "target_user",
-            reason: "The requested user was not found in this conversation or server.",
-          },
-        };
-      }
-
-      resolvedTargetUserId = userResolution.targetId;
-      resolvedTargetUserLabel = userResolution.displayLabel;
-
-      if (resolvedTargetUserId === context.client.user?.id || requestedTargetUser.toLowerCase() === "self") {
-        log.info("Memory tool: Bot tried to save a personal memory about itself — falling back to server_wide scope");
-        effectiveScope = "server_wide";
-        resolvedTargetUserId = undefined;
-        resolvedTargetUserLabel = undefined;
-      } else if (userResolution.isBridgeUser) {
-        const bridgeDisplayName = userResolution.displayLabel.replace(/\s+\(Matrix\)$/u, "");
-
-        if (memoryContentArg.includes("{user}")) {
-          const substitutedMemoryContent = memoryContentArg.replaceAll("{user}", bridgeDisplayName);
-          if (substitutedMemoryContent !== memoryContentArg) {
-            memoryContentArg = substitutedMemoryContent;
-            log.info(
-              `Memory tool: Replaced {user} with "${bridgeDisplayName}" before bridge target_user fallback to server_wide`,
-            );
-          }
-        }
-
-        effectiveScope = "server_wide";
-        resolvedTargetUserId = undefined;
-        resolvedTargetUserLabel = undefined;
-      }
-    }
-
-    // Strip unknown {word} braces because the LLM sometimes wraps usernames in braces imitating {user}.
-    const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
-
-    // Validate memory content length after any bridge/self fallback rewrites.
-    const contentValidation = validateMemoryContent(memoryContent);
-    if (!contentValidation.isValid) {
-      return {
-        success: false,
-        error:
-          contentValidation.error === "CONTENT_EMPTY"
-            ? "Memory content cannot be empty"
-            : `Memory content is too long. Maximum length is ${contentValidation.maxAllowed} characters.`,
-        data: {
-          status: "memory_save_failed_invalid_content",
-          reason:
-            contentValidation.error === "CONTENT_EMPTY"
-              ? "Memory content cannot be empty"
-              : `Memory content exceeds maximum length of ${contentValidation.maxAllowed} characters`,
-        },
-      };
-    }
-
-    // Block lineage_id=0 writes because 0 is reserved for global memories rather than any persona.
-    if (tomoriState.persona_lineage_id === 0) {
-      log.error(
-        `Self-teach blocked: Tomori ${tomoriState.persona_id} has persona_lineage_id=0. Schema migration may not have run.`,
-      );
-      return {
-        success: false,
-        error: "Internal configuration error: this persona has an invalid lineage ID.",
-        data: {
-          status: "memory_save_failed_internal_error",
-          reason: "Persona lineage ID is 0, which is reserved for global memories. Schema migration may not have run.",
-        },
-      };
-    }
-
-    if (effectiveScope === "server_wide") {
-      try {
-        const saveResult = await serverMemoryRepository.addWithEviction(
-          tomoriState.server_id,
-          tomoriState.persona_id,
-          tomoriState.persona_lineage_id,
-          userRow.user_id,
-          memoryContent,
-          context.memoryEmbeddingResolved === true,
-        );
-        if (saveResult.status === "refused") {
-          return {
-            success: false,
-            error: `Server memory limit reached. This server can have up to ${saveResult.limit} memories (currently: ${saveResult.currentCount}).`,
-            data: {
-              status: "memory_save_failed_limit_exceeded",
-              scope: "server_wide",
-              current_count: saveResult.currentCount,
-              max_allowed: saveResult.limit,
-              reason: `Server memory limit of ${saveResult.limit} memories has been reached. Please inform the user that they need to use '/memories' to remove some memories before I can learn new ones.`,
-            },
-          };
-        }
-
-        const dbResult = saveResult.memory;
-        const singleServerId = memoryServerDiscId(
-          context,
-          "Critical security error: No valid server or user ID available for memory processing",
-        );
-        invalidateTomoriStateCache(singleServerId);
-        if (saveResult.evicted) {
-          const fields = { scope: "server", decay_days: saveResult.evicted.decay_days };
-          log.metric("memory_eviction", fields);
-          void metricSampleRepository.recordSample("memory_eviction", fields);
-        }
-
-        log.success(
-          `Tomori self-taught a server memory for her own persona lineage (ID: ${dbResult.server_memory_id}): "${memoryContent}"`,
-        );
-
-        try {
-          const notice = await renderMemorySaveNoticeContent({
-            content: memoryContent,
-            client: context.client,
-            serverId: singleServerId,
-            userName: userRow.user_nickname ?? context.message?.author.displayName ?? userRow.user_disc_id,
-            botNickname: tomoriState.persona_nickname,
-            personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
-            locale: context.locale,
-            descriptionKey: "genai.self_teach.server_memory_learned_description",
-            forgottenContent: saveResult.evicted?.content,
-          });
-
-          await sendMemoryEmbedWithExpand(
-            context,
-            {
-              color: ColorCode.SUCCESS,
-              titleKey: "genai.self_teach.server_memory_learned_title",
-              titleVars: {
-                persona_nickname: personaNickname,
-              },
-              description: notice.description,
-              footerKey: "genai.self_teach.server_memory_footer",
-            },
-            notice.fullContent,
-            dbResult.server_memory_id === undefined
-              ? undefined
-              : { kind: "server_memory", id: dbResult.server_memory_id },
-          );
-        } catch (embedError) {
-          log.warn("Failed to send server memory notification notice (non-fatal)", embedError as Error);
-        }
-
-        return {
-          success: true,
-          message: "Memory saved successfully",
-          data: {
-            status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
-            scope: "server_wide",
-            content_saved: memoryContent,
-            memory_id: dbResult.server_memory_id,
-            ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
-          },
-        };
-      } catch (error) {
-        log.error("Database error during server memory save", error as Error);
-        return {
-          success: false,
-          error: "Database error occurred while saving memory",
-          data: {
-            status: "memory_save_failed_db_error",
-            scope: "server_wide",
-            reason: "Database error occurred",
-          },
-        };
-      }
-    } else if (effectiveScope === "target_user") {
-      try {
-        const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
-
-        if (!targetUserRow?.user_id) {
-          log.warn(`Self-teach: Resolved target user ${resolvedTargetUserId} not found in Tomori records`);
-          return {
-            success: false,
-            error: `I don't know ${resolvedTargetUserLabel} yet, so I cannot save a personal memory for them.`,
-            data: {
-              status: "memory_save_failed_user_not_found",
-              scope: "target_user",
-              reason: "I can only save personal memories for users I already know.",
-            },
-          };
-        }
-        const targetUserDisplayName =
-          resolvedTargetUserLabel || targetUserRow.user_nickname || resolvedTargetUserId || "user";
-        const contextServerDiscId = "guild" in context.channel ? context.channel.guild.id : context.userId;
-        const messageProxyHostProtection = await getMessageProxyHostProtection(
-          resolvedTargetUserId as string,
-          contextServerDiscId,
-        );
-        if (messageProxyHostProtection.protected) {
-          log.info(
-            `Self-teach blocked: message-proxy identity ${resolvedTargetUserId} is shielded by host ${messageProxyHostProtection.hostUserDiscId} (${messageProxyHostProtection.reason})`,
-          );
-          return {
-            success: false,
-            error: `Cannot save personal memory: ${targetUserDisplayName} has privacy restrictions.`,
-            data: {
-              status: "memory_save_failed_privacy_restricted",
-              scope: "target_user",
-              reason:
-                messageProxyHostProtection.reason === "host_unresolved"
-                  ? `The host accounts for ${targetUserDisplayName} could not be resolved. I cannot save personal memories until their privacy restrictions can be checked.`
-                  : messageProxyHostProtection.reason === "host_blacklisted"
-                    ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for its message-proxy identities.`
-                    : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for its message-proxy identities.`,
-            },
-          };
-        }
-
-        const { PrivacyLevel } = await import("../../types/db/schema");
-        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
-
-        if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
-          log.info(
-            `Self-teach blocked: User ${resolvedTargetUserId} (${targetUserDisplayName}) has privacy level ${userPrivacyLevel}`,
-          );
-          return {
-            success: false,
-            error: `Cannot save personal memory: ${targetUserDisplayName} has privacy restrictions.`,
-            data: {
-              status: "memory_save_failed_privacy_restricted",
-              scope: "target_user",
-              reason: `The user ${targetUserDisplayName} has chosen to restrict personal memory storage. I cannot save personal memories about them unless they change their privacy settings using '/personal config'.`,
-            },
-          };
-        }
-
-        const saveResult = await personalMemoryRepository.addWithEviction(
-          targetUserRow.user_id,
-          tomoriState.persona_lineage_id,
-          memoryContent,
-          context.memoryEmbeddingResolved === true,
-        );
-        if (saveResult.status === "refused") {
-          return {
-            success: false,
-            error: `Personal memory limit reached. Users can have up to ${saveResult.limit} personal memories (currently: ${saveResult.currentCount}).`,
-            data: {
-              status: "memory_save_failed_limit_exceeded",
-              scope: "target_user",
-              target_user: targetUserDisplayName,
-              current_count: saveResult.currentCount,
-              max_allowed: saveResult.limit,
-              reason: `Personal memory limit of ${saveResult.limit} memories has been reached for this user. Please inform the user that they need to use '/personal memories' to remove some of their memories before I can learn new ones about them.`,
-            },
-          };
-        }
-
-        const dbResult = saveResult.memory;
-        invalidateUserCache(resolvedTargetUserId as string);
-        if (saveResult.evicted) {
-          const fields = { scope: "personal", decay_days: saveResult.evicted.decay_days };
-          log.metric("memory_eviction", fields);
-          void metricSampleRepository.recordSample("memory_eviction", fields);
-        }
-
-        log.success(
-          `Tomori self-taught a personal memory for ${targetUserDisplayName} (Discord ID: ${resolvedTargetUserId}, Internal ID: ${targetUserRow.user_id}): "${memoryContent}"`,
-        );
-
-        try {
-          const serverId = memoryServerDiscId(
-            context,
-            "Critical security error: No valid server or user ID available for memory processing",
-          );
-          const notice = await renderMemorySaveNoticeContent({
-            content: memoryContent,
-            client: context.client,
-            serverId,
-            userName: targetUserDisplayName,
-            botNickname: tomoriState.persona_nickname,
-            personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
-            locale: context.locale,
-            descriptionKey: "genai.self_teach.personal_memory_learned_description",
-            descriptionVars: { user_nickname: targetUserDisplayName },
-            forgottenContent: saveResult.evicted?.content,
-          });
-
-          const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
-          const serverDiscId = memoryServerDiscId(
-            context,
-            "Critical security error: No valid server or user ID available for blacklist checking",
-          );
-          const targetUserIsBlacklisted =
-            ((await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false) ||
-            (await getMessageProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
-
-          let personalMemoryFooterKey: string;
-          if (!personalizationEnabled) {
-            personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_personalization_disabled";
-          } else if (targetUserIsBlacklisted) {
-            personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_user_blacklisted";
-          } else {
-            personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_manage";
-          }
-
-          await sendMemoryEmbedWithExpand(
-            context,
-            {
-              color: ColorCode.SUCCESS,
-              titleKey: "genai.self_teach.personal_memory_learned_title",
-              titleVars: {
-                user_nickname: targetUserDisplayName,
-                persona_nickname: personaNickname,
-              },
-              description: notice.description,
-              footerKey: personalMemoryFooterKey,
-            },
-            notice.fullContent,
-            dbResult.personal_memory_id === undefined
-              ? undefined
-              : { kind: "personal_memory", id: dbResult.personal_memory_id },
-          );
-        } catch (embedError) {
-          log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);
-        }
-
-        return {
-          success: true,
-          message: "Memory saved successfully",
-          data: {
-            status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
-            scope: "target_user",
-            target_user: targetUserDisplayName,
-            memory_id: dbResult.personal_memory_id,
-            content_saved: memoryContent,
-            ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
-          },
-        };
-      } catch (error) {
-        log.error("Error during target_user memory processing", error as Error);
-        return {
-          success: false,
-          error: "Error occurred while processing user-specific memory",
-          data: {
-            status: "memory_save_failed_error",
-            scope: "target_user",
-            reason: error instanceof Error ? error.message : "Unknown error",
-          },
-        };
-      }
-    }
-
+  if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {
+    const missing = [
+      !tomoriState && "tomoriState",
+      !userRow && "userRow",
+      userRow && !userRow.user_id && "userRow.user_id",
+      tomoriState && !tomoriState.server_id && "tomoriState.server_id",
+      tomoriState && !tomoriState.persona_id && "tomoriState.persona_id",
+      !resolvedUserId && "resolvedUserId",
+    ].filter(Boolean);
+    log.error(`Critical state missing before handling create_long_term_memory: [${missing.join(", ")}]`);
     return {
       success: false,
-      error: "Invalid memory scope",
+      error: "Internal bot error: Critical state information is missing",
       data: {
-        status: "memory_save_failed_invalid_scope",
-        reason: "Memory scope validation failed",
+        status: "memory_save_failed_internal_error",
+        reason: "Internal bot error: Critical state information is missing",
       },
     };
   }
+
+  const personaNickname =
+    context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
+
+  if (typeof memoryContentArg !== "string" || !memoryContentArg.trim()) {
+    return {
+      success: false,
+      error: "The 'memory_content' argument was missing, empty, or not a string",
+      data: {
+        status: "memory_save_failed_invalid_args",
+        reason: "The 'memory_content' argument was missing, empty, or not a string",
+      },
+    };
+  }
+
+  if (typeof memoryScopeArg !== "string" || !["server_wide", "target_user"].includes(memoryScopeArg)) {
+    return {
+      success: false,
+      error: "The 'memory_scope' argument was missing or invalid. Must be 'server_wide' or 'target_user'",
+      data: {
+        status: "memory_save_failed_invalid_args",
+        reason: "The 'memory_scope' argument was missing or invalid. Must be 'server_wide' or 'target_user'",
+      },
+    };
+  }
+
+  let effectiveScope = memoryScopeArg;
+  let resolvedTargetUserId: string | undefined;
+  let resolvedTargetUserLabel: string | undefined;
+
+  if (effectiveScope === "target_user") {
+    if (!requestedTargetUser) {
+      return {
+        success: false,
+        error: "The 'target_user' argument is required when 'memory_scope' is 'target_user'.",
+        data: {
+          status: "memory_save_failed_invalid_args",
+          scope: "target_user",
+          reason: "The 'target_user' argument is required when 'memory_scope' is 'target_user'.",
+        },
+      };
+    }
+
+    const userResolution = await resolveUserTarget(requestedTargetUser, context);
+    if (userResolution.status === "ambiguous") {
+      return {
+        success: false,
+        error: `Multiple users match "${requestedTargetUser}". Please clarify which one you mean: ${userResolution.candidates.map((candidate) => candidate.label).join(", ")}.`,
+        data: {
+          status: "memory_save_failed_ambiguous_user",
+          scope: "target_user",
+          reason: "Multiple users matched the requested target.",
+          candidates: userResolution.candidates.map((candidate) => candidate.label),
+        },
+      };
+    }
+
+    if (userResolution.status === "not_found") {
+      return {
+        success: false,
+        error: `Could not find a user matching "${requestedTargetUser}" in this conversation or server.`,
+        data: {
+          status: "memory_save_failed_user_not_found",
+          scope: "target_user",
+          reason: "The requested user was not found in this conversation or server.",
+        },
+      };
+    }
+
+    resolvedTargetUserId = userResolution.targetId;
+    resolvedTargetUserLabel = userResolution.displayLabel;
+
+    if (resolvedTargetUserId === context.client.user?.id || requestedTargetUser.toLowerCase() === "self") {
+      log.info("Memory tool: Bot tried to save a personal memory about itself — falling back to server_wide scope");
+      effectiveScope = "server_wide";
+      resolvedTargetUserId = undefined;
+      resolvedTargetUserLabel = undefined;
+    } else if (userResolution.isBridgeUser) {
+      const bridgeDisplayName = userResolution.displayLabel.replace(/\s+\(Matrix\)$/u, "");
+
+      if (memoryContentArg.includes("{user}")) {
+        const substitutedMemoryContent = memoryContentArg.replaceAll("{user}", bridgeDisplayName);
+        if (substitutedMemoryContent !== memoryContentArg) {
+          memoryContentArg = substitutedMemoryContent;
+          log.info(
+            `Memory tool: Replaced {user} with "${bridgeDisplayName}" before bridge target_user fallback to server_wide`,
+          );
+        }
+      }
+
+      effectiveScope = "server_wide";
+      resolvedTargetUserId = undefined;
+      resolvedTargetUserLabel = undefined;
+    }
+  }
+
+  // Strip unknown {word} braces because the LLM sometimes wraps usernames in braces imitating {user}.
+  const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
+
+  // Validate memory content length after any bridge/self fallback rewrites.
+  const contentValidation = validateMemoryContent(memoryContent);
+  if (!contentValidation.isValid) {
+    return {
+      success: false,
+      error:
+        contentValidation.error === "CONTENT_EMPTY"
+          ? "Memory content cannot be empty"
+          : `Memory content is too long. Maximum length is ${contentValidation.maxAllowed} characters.`,
+      data: {
+        status: "memory_save_failed_invalid_content",
+        reason:
+          contentValidation.error === "CONTENT_EMPTY"
+            ? "Memory content cannot be empty"
+            : `Memory content exceeds maximum length of ${contentValidation.maxAllowed} characters`,
+      },
+    };
+  }
+
+  // Block lineage_id=0 writes because 0 is reserved for global memories rather than any persona.
+  if (tomoriState.persona_lineage_id === 0) {
+    log.error(
+      `Self-teach blocked: Tomori ${tomoriState.persona_id} has persona_lineage_id=0. Schema migration may not have run.`,
+    );
+    return {
+      success: false,
+      error: "Internal configuration error: this persona has an invalid lineage ID.",
+      data: {
+        status: "memory_save_failed_internal_error",
+        reason: "Persona lineage ID is 0, which is reserved for global memories. Schema migration may not have run.",
+      },
+    };
+  }
+
+  if (effectiveScope === "server_wide") {
+    try {
+      const saveResult = await serverMemoryRepository.addWithEviction(
+        tomoriState.server_id,
+        tomoriState.persona_id,
+        tomoriState.persona_lineage_id,
+        userRow.user_id,
+        memoryContent,
+        context.memoryEmbeddingResolved === true,
+      );
+      if (saveResult.status === "refused") {
+        return {
+          success: false,
+          error: `Server memory limit reached. This server can have up to ${saveResult.limit} memories (currently: ${saveResult.currentCount}).`,
+          data: {
+            status: "memory_save_failed_limit_exceeded",
+            scope: "server_wide",
+            current_count: saveResult.currentCount,
+            max_allowed: saveResult.limit,
+            reason: `Server memory limit of ${saveResult.limit} memories has been reached. Please inform the user that they need to use '/memories' to remove some memories before I can learn new ones.`,
+          },
+        };
+      }
+
+      const dbResult = saveResult.memory;
+      const singleServerId = memoryServerDiscId(
+        context,
+        "Critical security error: No valid server or user ID available for memory processing",
+      );
+      invalidateTomoriStateCache(singleServerId);
+      if (saveResult.evicted) {
+        const fields = { scope: "server", decay_days: saveResult.evicted.decay_days };
+        log.metric("memory_eviction", fields);
+        void metricSampleRepository.recordSample("memory_eviction", fields);
+      }
+
+      log.success(
+        `Tomori self-taught a server memory for her own persona lineage (ID: ${dbResult.server_memory_id}): "${memoryContent}"`,
+      );
+
+      try {
+        const notice = await renderMemorySaveNoticeContent({
+          content: memoryContent,
+          client: context.client,
+          serverId: singleServerId,
+          userName: userRow.user_nickname ?? context.message?.author.displayName ?? userRow.user_disc_id,
+          botNickname: tomoriState.persona_nickname,
+          personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
+          locale: context.locale,
+          descriptionKey: "genai.self_teach.server_memory_learned_description",
+          forgottenContent: saveResult.evicted?.content,
+        });
+
+        await sendMemoryEmbedWithExpand(
+          context,
+          {
+            color: ColorCode.SUCCESS,
+            titleKey: "genai.self_teach.server_memory_learned_title",
+            titleVars: {
+              persona_nickname: personaNickname,
+            },
+            description: notice.description,
+            footerKey: "genai.self_teach.server_memory_footer",
+          },
+          notice.fullContent,
+          dbResult.server_memory_id === undefined
+            ? undefined
+            : { kind: "server_memory", id: dbResult.server_memory_id },
+        );
+      } catch (embedError) {
+        log.warn("Failed to send server memory notification notice (non-fatal)", embedError as Error);
+      }
+
+      return {
+        success: true,
+        message: "Memory saved successfully",
+        data: {
+          status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
+          scope: "server_wide",
+          content_saved: memoryContent,
+          memory_id: dbResult.server_memory_id,
+          ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
+        },
+      };
+    } catch (error) {
+      log.error("Database error during server memory save", error as Error);
+      return {
+        success: false,
+        error: "Database error occurred while saving memory",
+        data: {
+          status: "memory_save_failed_db_error",
+          scope: "server_wide",
+          reason: "Database error occurred",
+        },
+      };
+    }
+  } else if (effectiveScope === "target_user") {
+    try {
+      const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
+
+      if (!targetUserRow?.user_id) {
+        log.warn(`Self-teach: Resolved target user ${resolvedTargetUserId} not found in Tomori records`);
+        return {
+          success: false,
+          error: `I don't know ${resolvedTargetUserLabel} yet, so I cannot save a personal memory for them.`,
+          data: {
+            status: "memory_save_failed_user_not_found",
+            scope: "target_user",
+            reason: "I can only save personal memories for users I already know.",
+          },
+        };
+      }
+      const targetUserDisplayName =
+        resolvedTargetUserLabel || targetUserRow.user_nickname || resolvedTargetUserId || "user";
+      const contextServerDiscId = "guild" in context.channel ? context.channel.guild.id : context.userId;
+      const messageProxyHostProtection = await getMessageProxyHostProtection(
+        resolvedTargetUserId as string,
+        contextServerDiscId,
+      );
+      if (messageProxyHostProtection.protected) {
+        log.info(
+          `Self-teach blocked: message-proxy identity ${resolvedTargetUserId} is shielded by host ${messageProxyHostProtection.hostUserDiscId} (${messageProxyHostProtection.reason})`,
+        );
+        return {
+          success: false,
+          error: `Cannot save personal memory: ${targetUserDisplayName} has privacy restrictions.`,
+          data: {
+            status: "memory_save_failed_privacy_restricted",
+            scope: "target_user",
+            reason:
+              messageProxyHostProtection.reason === "host_unresolved"
+                ? `The host accounts for ${targetUserDisplayName} could not be resolved. I cannot save personal memories until their privacy restrictions can be checked.`
+                : messageProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for its message-proxy identities.`
+                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for its message-proxy identities.`,
+          },
+        };
+      }
+
+      const { PrivacyLevel } = await import("../../types/db/schema");
+      const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
+
+      if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
+        log.info(
+          `Self-teach blocked: User ${resolvedTargetUserId} (${targetUserDisplayName}) has privacy level ${userPrivacyLevel}`,
+        );
+        return {
+          success: false,
+          error: `Cannot save personal memory: ${targetUserDisplayName} has privacy restrictions.`,
+          data: {
+            status: "memory_save_failed_privacy_restricted",
+            scope: "target_user",
+            reason: `The user ${targetUserDisplayName} has chosen to restrict personal memory storage. I cannot save personal memories about them unless they change their privacy settings using '/personal config'.`,
+          },
+        };
+      }
+
+      const saveResult = await personalMemoryRepository.addWithEviction(
+        targetUserRow.user_id,
+        tomoriState.persona_lineage_id,
+        memoryContent,
+        context.memoryEmbeddingResolved === true,
+      );
+      if (saveResult.status === "refused") {
+        return {
+          success: false,
+          error: `Personal memory limit reached. Users can have up to ${saveResult.limit} personal memories (currently: ${saveResult.currentCount}).`,
+          data: {
+            status: "memory_save_failed_limit_exceeded",
+            scope: "target_user",
+            target_user: targetUserDisplayName,
+            current_count: saveResult.currentCount,
+            max_allowed: saveResult.limit,
+            reason: `Personal memory limit of ${saveResult.limit} memories has been reached for this user. Please inform the user that they need to use '/personal memories' to remove some of their memories before I can learn new ones about them.`,
+          },
+        };
+      }
+
+      const dbResult = saveResult.memory;
+      invalidateUserCache(resolvedTargetUserId as string);
+      if (saveResult.evicted) {
+        const fields = { scope: "personal", decay_days: saveResult.evicted.decay_days };
+        log.metric("memory_eviction", fields);
+        void metricSampleRepository.recordSample("memory_eviction", fields);
+      }
+
+      log.success(
+        `Tomori self-taught a personal memory for ${targetUserDisplayName} (Discord ID: ${resolvedTargetUserId}, Internal ID: ${targetUserRow.user_id}): "${memoryContent}"`,
+      );
+
+      try {
+        const serverId = memoryServerDiscId(
+          context,
+          "Critical security error: No valid server or user ID available for memory processing",
+        );
+        const notice = await renderMemorySaveNoticeContent({
+          content: memoryContent,
+          client: context.client,
+          serverId,
+          userName: targetUserDisplayName,
+          botNickname: tomoriState.persona_nickname,
+          personalMemoriesEnabled: tomoriState?.config.personal_memories_enabled,
+          locale: context.locale,
+          descriptionKey: "genai.self_teach.personal_memory_learned_description",
+          descriptionVars: { user_nickname: targetUserDisplayName },
+          forgottenContent: saveResult.evicted?.content,
+        });
+
+        const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
+        const serverDiscId = memoryServerDiscId(
+          context,
+          "Critical security error: No valid server or user ID available for blacklist checking",
+        );
+        const targetUserIsBlacklisted =
+          ((await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false) ||
+          (await getMessageProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
+
+        let personalMemoryFooterKey: string;
+        if (!personalizationEnabled) {
+          personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_personalization_disabled";
+        } else if (targetUserIsBlacklisted) {
+          personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_user_blacklisted";
+        } else {
+          personalMemoryFooterKey = "genai.self_teach.personal_memory_footer_manage";
+        }
+
+        await sendMemoryEmbedWithExpand(
+          context,
+          {
+            color: ColorCode.SUCCESS,
+            titleKey: "genai.self_teach.personal_memory_learned_title",
+            titleVars: {
+              user_nickname: targetUserDisplayName,
+              persona_nickname: personaNickname,
+            },
+            description: notice.description,
+            footerKey: personalMemoryFooterKey,
+          },
+          notice.fullContent,
+          dbResult.personal_memory_id === undefined
+            ? undefined
+            : { kind: "personal_memory", id: dbResult.personal_memory_id },
+        );
+      } catch (embedError) {
+        log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);
+      }
+
+      return {
+        success: true,
+        message: "Memory saved successfully",
+        data: {
+          status: saveResult.evicted ? "memory_saved_with_eviction" : "memory_saved_successfully",
+          scope: "target_user",
+          target_user: targetUserDisplayName,
+          memory_id: dbResult.personal_memory_id,
+          content_saved: memoryContent,
+          ...(saveResult.evicted ? { content_forgotten: saveResult.evicted.content } : {}),
+        },
+      };
+    } catch (error) {
+      log.error("Error during target_user memory processing", error as Error);
+      return {
+        success: false,
+        error: "Error occurred while processing user-specific memory",
+        data: {
+          status: "memory_save_failed_error",
+          scope: "target_user",
+          reason: error instanceof Error ? error.message : "Unknown error",
+        },
+      };
+    }
+  }
+
+  return {
+    success: false,
+    error: "Invalid memory scope",
+    data: {
+      status: "memory_save_failed_invalid_scope",
+      reason: "Memory scope validation failed",
+    },
+  };
 }

@@ -107,7 +107,9 @@ describe("setupPanel Components V2 layout and limits", () => {
         "user_info_updates",
         "short_term_memory",
       ]);
-      expect(group?.options?.every((option) => option.default === true)).toBe(true);
+      expect(group?.options?.filter((option) => option.default).map((option) => option.value)).toEqual(
+        SETUP_FEATURES.filter((feature) => feature !== "short_term_memory"),
+      );
       for (const feature of SETUP_FEATURES) {
         const option = group?.options?.find((entry) => entry.value === feature);
         const labelKey = `commands.setup.wizard.settings_features.${feature}.label`;

@@ -27,6 +27,10 @@ Você pode salvar memórias por conta própria, ou a TomoriBot pode decidir salv
 
 Se você quiser que ela salve algo, peça diretamente para ela se lembrar ou adicione você mesmo. Quem gerencia o servidor pode desativar o salvamento automático em `/config` > `Permissions`.
 
+Use `{@userId}` em uma memória pessoal ou do servidor para se referir a alguém pelo apelido que a persona
+ativa usa para essa pessoa. A TomoriBot preenche o nome quando recorda a memória.
+Consulte [Macros de Prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).
+
 ## Limites de memória
 <!-- anchor: how-many-memories -->
 

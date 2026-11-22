@@ -14,6 +14,9 @@ export default {
       delivery_failed: "The dice result could not be posted. No successful roll was delivered.",
     },
     execution: {
+      action_unavailable: "The `{action}` action of `{tool}` is unavailable on this turn.",
+      invalid_action_arguments:
+        "Check the `{tool}` schema for the required fields and the fields allowed for this action.",
       channel_history_unavailable:
         "The requesting user and I both need permission to read the target channel's message history.",
       private_channel_target:
@@ -215,8 +218,7 @@ export default {
       reading_footer: `This may take a moment depending on the page size`,
     },
     intent_packs: {
-      // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
-      // English grammar; keywords here would widen English matching beyond those patterns.
+      // Keep these lists empty because the built-in English patterns already handle deliberate tool requests.
       deliberate: {
         dice: [],
         image: [],

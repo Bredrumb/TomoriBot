@@ -11,6 +11,7 @@ import {
   Collection,
   type Guild,
   MessagePayload,
+  PermissionsBitField,
   TextChannel,
   ThreadChannel,
   Webhook,
@@ -20,6 +21,8 @@ import sharp from "sharp";
 import { GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
 import { GenerateImageNaiTool } from "@/tools/functionCalls/generateImageNaiTool";
 import { GenerateVideoTool } from "@/tools/functionCalls/generateVideoTool";
+import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
+import { consumePendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
 import { brave_image_search } from "@/tools/restAPIs/brave/toolImplementations";
 import * as braveService from "@/tools/restAPIs/brave/braveSearchService";
 import { searxng_image_search } from "@/tools/restAPIs/searxng/toolImplementations";
@@ -50,6 +53,7 @@ import { GENERATED_IMAGE_PROMPT_FILENAME } from "@/utils/image/generatedImageMet
 import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 import * as minimalNoticeBodies from "@/utils/discord/minimalNoticeBodies";
+import * as authoredText from "@/utils/discord/modelAuthoredText";
 
 const BASE = "https://example.com/base.png";
 const SPRITE = "https://example.com/joy.png";
@@ -120,6 +124,7 @@ function fixture(isAlter = false, isIdentity = false, inThread = true, rememberS
   spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook });
   spyOn(identity, "resolvePersonaWebhookIdentity").mockResolvedValue({ username: "Juno", avatarUrl: BASE });
   spyOn(personaSpriteMessageRepository, "record").mockResolvedValue(true);
+  spyOn(personaSpriteMessageRepository, "pruneOlderThanDays").mockResolvedValue(0);
   setPersonaSpriteCache(7, [
     {
       sprite_id: 3,
@@ -301,6 +306,70 @@ async function searchSetup() {
     .toBuffer();
   spyOn(download, "safeDownload").mockResolvedValue({ success: true, buffer });
 }
+
+describe("thread starter delivery", () => {
+  it.each([
+    { firstMessage: "Juno (joy): Meet me at the observatory.", isIdentity: false },
+    { firstMessage: "Juno (joy): Meet me at the observatory.", isIdentity: true },
+    {
+      firstMessage: "Juno (missing): Meet me at the observatory.",
+      isIdentity: false,
+      invalid: true,
+    },
+  ])("resolves the starter's appearance before creating a thread ($firstMessage)", async (scenario) => {
+    const f = fixture(false, scenario.isIdentity, true, false);
+    if (!f.channel.isThread()) throw new Error("Expected a thread fixture");
+    f.channel.name = "observatory";
+    const createThread = mock(async () => f.channel);
+    Object.assign(f.parent.threads, { create: createThread });
+    Object.assign(f.channel.messages, { fetch: async () => new Collection() });
+    spyOn(f.parent, "permissionsFor").mockReturnValue(new PermissionsBitField(PermissionsBitField.All));
+    spyOn(authoredText, "getKnownPersonaSpeakerNames").mockResolvedValue(new Set(["Juno"]));
+    Object.assign(f.parent.guild.members, {
+      me: { id: BOT },
+      fetch: async (id: string) => ({ id, user: { username: "Mirri" } }),
+    });
+    f.context.client.guilds.cache.set(f.parent.guildId, f.parent.guild);
+    f.context.channel = f.parent;
+    f.context.guildId = f.parent.guildId;
+    f.context.userId = String(++serial);
+    const item = await buildPersonaSpriteContextItem({
+      client: f.context.client,
+      guildId: f.parent.guildId,
+      tomoriState: f.persona,
+      tomoriConfig: f.persona.config,
+      botName: "Juno",
+      isUserImpersonation: false,
+      convertMentions: async (text) => text,
+    });
+    f.context.contextItems = item ? [item] : [];
+
+    const result = await new CreateThreadTool().execute(
+      { thread_name: f.channel.name, first_message: scenario.firstMessage },
+      f.context,
+    );
+    const pending = consumePendingBoomerang(f.parent.id);
+    if (scenario.invalid) {
+      expect(result).toMatchObject({ success: false, error: localizedCopy("en-US", "tools.sprite_selection.invalid") });
+      expect(createThread).not.toHaveBeenCalled();
+      expect(f.requests).toBeEmpty();
+      return;
+    }
+
+    expect(result).toMatchObject({ success: true, endTurn: true });
+    expect(pending?.targetChannelId).toBe(f.channel.id);
+    expect(f.requests).toHaveLength(1);
+    const request = f.requests[0];
+    expect(request.url.searchParams.get("thread_id")).toBe(f.channel.id);
+    expect(request.payload).toMatchObject({
+      content: "Meet me at the observatory.",
+      username: scenario.isIdentity ? "joy (Juno)" : "Juno",
+      avatar_url: SPRITE,
+    });
+    expect(getPersonaAppearance(f.channel.id, 7)?.sprite?.spriteName).toBe("joy");
+    expect(getPersonaAppearance(f.parent.id, 7)).toBeUndefined();
+  });
+});
 
 describe("persona media delivery", () => {
   it("selects a voice sprite for audio and caption, then explicitly returns to base", async () => {

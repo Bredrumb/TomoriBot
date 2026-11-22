@@ -34,24 +34,7 @@ sidebar:
 | Danbooru 貼文讀取 | - | `danbooru_enabled` | 從 ID 或連結讀取單一 Danbooru 貼文的分組標籤。 |
 | 產生語音訊息 | `{voice_message_tool}` | ElevenLabs 金鑰 + 人格語音 + `voice_message_enabled` | 發送語音 Discord 語音回覆。 |
 
-:::note[提示詞作者須知]
-自訂她的系統提示詞或人格指示時，請透過上表中的**提示詞巨集**來引用工具，而不是硬編碼工具名稱，因為巨集會在組裝脈絡時展開為正確的名稱，並在工具不可用時適度降級。`{pin_tool}` 與 `{timestamp_refresh_tool}` 仍可作為 `{manage_message_tool}` 與 `{message_metadata_tool}` 的相容別名。下方的網路搜尋與 URL 工具也有巨集：`{web_search_tool}`、`{image_search_tool}`、`{video_search_tool}`、`{news_search_tool}`、`{url_fetch_tool}` 與 `{url_metadata_tool}`。這些巨集會動態解析為最佳的可用引擎，包括伺服器 MCP 替代方案。
-:::
-
 ### 條件式提示詞區塊
+<!-- anchor: conditional-prompt-blocks -->
 
-支援上述工具巨集的提示詞文字也支援具範圍的條件句：
-
-```text
-{{if capability:self_teaching}}
-Use {memory_tool} when a detail is worth remembering.
-{{else}}
-Do not promise to save long-term memories.
-{{/if}}
-```
-
-若為已啟用的 TomoriBot 設定請使用 `capability:<name>`；若文字僅在目前供應商與模型具備該確切工具時才顯示，請使用 `tool:<function_name>`。當內建的 URL 讀取器或伺服器 MCP 替代方案可用時，請使用 `tool_family:url_fetch`。在條件前加上 `!` 可將其反轉。區塊可以巢狀嵌套，且可包含一個 `{{else}}`；不支援通用的 `and`/`or` 運算式。
-
-支援的功能名稱包括 `tool_use`、`self_teaching`、`personal_memories`、`emoji_usage`、`sticker_usage`、`web_search`、`manage_message`、`thread_creation`、`image_generation`、`video_generation`、`voice_message`、`user_blocking`、`short_term_memory` 與 `time_awareness`。
-
-工具條件反映了供應商/模型支援、伺服器設定、已設定的後端、MCP 替代方案以及目前的明確工具模式允許清單。它們不會繞過或預測工具執行時所進行的 Discord 權限檢查。未知的功能名稱會評估為 false 並記錄在日誌中；格式錯誤的區塊會被省略。未經處理的聊天訊息、模型輸出與工具結果絕不會被視為條件式範本。
+使用[工具巨集](/features/prompt-macros/#tool-macros)在已儲存的指示中插入函式名稱。使用[條件式區塊](/features/prompt-macros/#conditional-prompt-blocks)，讓這些指示只在工具或功能可用時才納入。

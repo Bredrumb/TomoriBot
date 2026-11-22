@@ -64,7 +64,7 @@ import {
   providerUsesApiFamily,
 } from "@/utils/provider/providerInfoRegistry";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
-import { buildContext } from "@/utils/text/contextBuilder";
+import { buildContext, convertMentions } from "@/utils/text/contextBuilder";
 import { type ContextTruncationReport, truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -72,7 +72,7 @@ import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import {
-  filterDeliberateToolNames,
+  applyDeliberateToolAllowlist,
   getAttachmentDeliberateToolIntentResult,
   getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
@@ -333,23 +333,23 @@ async function fetchProviderTools(
     },
   };
 
-  let { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
-  builtInTools = applyStreamContextAvailability({
+  const available = await getAvailableToolsWithMCP(providerName, toolStateForContext);
+  const { builtInTools, mcpFunctionNames } = applyDeliberateToolAllowlist({
+    ...available,
     providerLabel: providerName,
-    provider: providerName,
-    builtInTools,
-    tomoriState: persona,
-    streamContext: {
-      disableYouTubeProcessing: false,
-      personaSprites: getToolSpriteRoster(contextItems, persona.persona_id),
-    },
+    allowedToolNames: toolFilter?.allowedToolNames,
+    builtInTools: applyStreamContextAvailability({
+      providerLabel: providerName,
+      provider: providerName,
+      builtInTools: available.builtInTools,
+      tomoriState: persona,
+      streamContext: {
+        disableYouTubeProcessing: false,
+        deliberateToolAllowedNames: toolFilter?.allowedToolNames,
+        personaSprites: getToolSpriteRoster(contextItems, persona.persona_id),
+      },
+    }),
   });
-
-  if (toolFilter?.allowedToolNames.length) {
-    const allowedSet = new Set(toolFilter.allowedToolNames);
-    builtInTools = builtInTools.filter((tool) => allowedSet.has(tool.name));
-    mcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, toolFilter.allowedToolNames);
-  }
 
   const adapter = selectToolAdapter(providerName);
   const data = await adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
@@ -819,12 +819,25 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   if (providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && !inspectionApiKey) {
     throw new NovelAIPreparationError("subscription_unavailable");
   }
+  const serverPrefill = answeringState.config.response_prefill?.trim();
   const novelaiPrefill = providerUsesApiFamily(answeringState.llm.llm_provider, "novelai")
     ? await applyAssistantPrefill({
         contextItems: resolvedContextItems,
         tomoriState: answeringState,
-        prefill: answeringState.config.response_prefill?.trim()
-          ? { text: answeringState.config.response_prefill, source: "server" }
+        prefill: serverPrefill
+          ? {
+              source: "server",
+              text: await convertMentions(
+                serverPrefill,
+                client,
+                guild.id,
+                snapshotNaming.nickname,
+                answeringState.persona_nickname,
+                answeringState.config.personal_memories_enabled,
+                { tomoriState: answeringState, triggererUserRow: userData, isTriggererBlacklisted },
+                "template",
+              ),
+            }
           : null,
       })
     : undefined;

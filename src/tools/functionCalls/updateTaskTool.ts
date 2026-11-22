@@ -8,9 +8,15 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import {
+  alignReminderToDailyWindow,
   formatReminderRepetition,
+  getReminderDailyWindow,
+  getReminderRepeatLimit,
   getReminderRepetition,
-  parseRepetitionArgs,
+  parseReminderDailyWindow,
+  parseReminderRepeatLimit,
+  parseToolRepetitionArgs,
+  type ReminderRecurrenceOptions,
   type ReminderRepetition,
   toRepetitionColumns,
 } from "@/utils/text/processors/reminderRepetition";
@@ -22,20 +28,10 @@ import {
   parseTimeWithOffset,
 } from "@/utils/text/timezoneHelper";
 import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
-import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { ReminderRow } from "@/types/db/schema";
 
-const RELATIVE_TIME_MULTIPLIERS_MS = {
-  minutes_from_now: 60 * 1000,
-  hours_from_now: 60 * 60 * 1000,
-  days_from_now: 24 * 60 * 60 * 1000,
-} as const;
-
-type FixedRelativeTimeKey = keyof typeof RELATIVE_TIME_MULTIPLIERS_MS;
-
-const RELATIVE_TIME_KEYS = ["months_from_now", ...Object.keys(RELATIVE_TIME_MULTIPLIERS_MS)] as Array<
-  FixedRelativeTimeKey | "months_from_now"
->;
+const RELATIVE_TIME_KEYS = ["months_from_now", "minutes_from_now"] as const;
 
 export type UpdateTaskActor = {
   requesterUserId?: number;
@@ -52,6 +48,7 @@ export type UpdateTaskArgumentParseResult =
       newReminderTime?: Date;
       hasRepetitionUpdate: boolean;
       repetition?: ReminderRepetition;
+      recurrenceOptions?: ReminderRecurrenceOptions;
     }
   | {
       ok: false;
@@ -87,26 +84,25 @@ export function parseUpdateTaskArguments(
     };
   }
 
-  const reminderPurposeArg = args.reminder_purpose;
-  if (typeof reminderPurposeArg !== "string") {
-    return {
-      ok: false,
-      status: "task_update_failed_invalid_args",
-      reason: "The 'reminder_purpose' argument was missing or not a string.",
-    };
-  }
-
-  const newPurpose = reminderPurposeArg.trim();
-  const isDeleteRequested = newPurpose.length === 0;
-  if (isDeleteRequested) {
+  if (args.action === "delete") {
     return {
       ok: true,
-      reminderId: Math.trunc(reminderIdArg),
-      newPurpose,
-      isDeleteRequested,
+      reminderId: reminderIdArg,
+      newPurpose: "",
+      isDeleteRequested: true,
       hasRepetitionUpdate: false,
     };
   }
+
+  const reminderPurposeArg = args.reminder_purpose;
+  if (typeof reminderPurposeArg !== "string" || !reminderPurposeArg.trim()) {
+    return {
+      ok: false,
+      status: "task_update_failed_invalid_args",
+      reason: "Updating requires a nonblank reminder_purpose.",
+    };
+  }
+  const newPurpose = reminderPurposeArg.trim();
 
   let newReminderTime: Date | undefined;
   const reminderTimeArg = args.reminder_time;
@@ -157,7 +153,7 @@ export function parseUpdateTaskArguments(
         if (key === "months_from_now") {
           baseTime = addMonthsWithOffset(baseTime, value, timezoneOffset);
         } else {
-          totalMilliseconds += value * RELATIVE_TIME_MULTIPLIERS_MS[key];
+          totalMilliseconds = value * 60_000;
         }
       }
 
@@ -173,19 +169,37 @@ export function parseUpdateTaskArguments(
     };
   }
 
-  const repetitionArgs = parseRepetitionArgs(args.repetition_interval_hours, args.repetition_interval_months);
+  const repetitionArgs = parseToolRepetitionArgs(args);
   if (!repetitionArgs.ok) {
     return { ok: false, status: "task_update_failed_invalid_args", reason: repetitionArgs.reason };
   }
+
+  const limit = parseReminderRepeatLimit(
+    args.repeat_count,
+    args.repeat_until_time,
+    args.clear_repeat_limit,
+    timezoneOffset,
+  );
+  if (!limit.ok) return { ok: false, status: "task_update_failed_invalid_args", reason: limit.reason };
+  const window = parseReminderDailyWindow(
+    args.daily_window_start_time,
+    args.daily_window_end_time,
+    args.clear_daily_window,
+    timezoneOffset,
+  );
+  if (!window.ok) return { ok: false, status: "task_update_failed_invalid_args", reason: window.reason };
 
   return {
     ok: true,
     reminderId: Math.trunc(reminderIdArg),
     newPurpose,
-    isDeleteRequested,
+    isDeleteRequested: false,
     newReminderTime,
     hasRepetitionUpdate: repetitionArgs.provided,
     repetition: repetitionArgs.provided ? repetitionArgs.repetition : undefined,
+    ...(limit.value !== undefined || window.value !== undefined
+      ? { recurrenceOptions: { limit: limit.value, window: window.value } }
+      : {}),
   };
 }
 
@@ -248,310 +262,259 @@ function formatReminderTime(reminderTime: Date, timezoneOffset: number, locale: 
   )} (${formatUTCOffset(timezoneOffset)})`;
 }
 
-export class UpdateTaskTool extends BaseTool {
-  name = "update_task";
-  description =
-    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead (members with Manage Server may delete any reminder in the server; everyone else only their own). You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours (every X hours) or repetition_interval_months (every X calendar months) to 1+ for recurring, or 0 for one-time; if both are omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
-  category = "utility" as const;
+export async function changeScheduledTask(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+  const tomoriState = context.tomoriState;
+  if (!tomoriState?.server_id) {
+    log.error("Missing server_id in Tomori state for task management");
+    return buildFailureResult("task_update_failed_internal_error", "Internal bot error: Missing server context.");
+  }
 
-  parameters: ToolParameterSchema = {
-    type: "object",
-    properties: {
-      reminder_id: {
-        type: "number",
-        description: "The reminder/task ID shown in context, such as ID:42. Must be a positive integer.",
-      },
-      reminder_purpose: {
-        type: "string",
-        description:
-          "The full replacement reminder/task content. If this is empty or blank, delete the targeted reminder/task instead.",
-      },
-      reminder_time: {
-        type: "string",
-        description:
-          "OPTIONAL: Absolute replacement trigger time in YYYY-MM-DD_HH:MM format. Pass the wall-clock time exactly as the user expressed it. do NOT convert between timezones yourself. Without 'utc_offset', this is interpreted in the server's configured timezone. If provided, this takes priority over relative time parameters.",
-      },
-      utc_offset: {
-        type: "number",
-        description:
-          "OPTIONAL: The UTC offset in hours that 'reminder_time' is expressed in (e.g., 8 for UTC+8, -5 for UTC-5, 5.5 for UTC+5:30). Set this to the target user's personal timezone offset (shown in the conversation context) when they expressed the time in their own local time. If omitted, the server's configured timezone is used. Only meaningful together with 'reminder_time'.",
-      },
-      minutes_from_now: {
-        type: "number",
-        description:
-          "OPTIONAL: Minutes from now for the replacement trigger time. Can be combined with other relative parameters.",
-      },
-      hours_from_now: {
-        type: "number",
-        description:
-          "OPTIONAL: Hours from now for the replacement trigger time. Can be combined with other relative parameters.",
-      },
-      days_from_now: {
-        type: "number",
-        description:
-          "OPTIONAL: Days from now for the replacement trigger time. Can be combined with other relative parameters.",
-      },
-      months_from_now: {
-        type: "number",
-        description:
-          "OPTIONAL: Months from now for the replacement trigger time. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
-      },
-      repetition_interval_hours: {
-        type: "number",
-        description:
-          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recurring every X hours. If both repeat parameters are omitted, the existing repeat interval is preserved.",
-      },
-      repetition_interval_months: {
-        type: "number",
-        description:
-          "OPTIONAL: Set to 1+ to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly), or 0 for one-time. In months without that day it runs on the last day, then returns to the original day. Cannot be combined with a positive 'repetition_interval_hours'.",
-      },
-    },
-    required: ["reminder_id", "reminder_purpose"],
+  const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
+  const parsedArgs = parseUpdateTaskArguments(args, timezoneOffset);
+  if (!parsedArgs.ok) {
+    return buildFailureResult(parsedArgs.status, parsedArgs.reason);
+  }
+
+  const { serverScheduleRepository, userRepository } = await import("@/utils/db/repositories");
+
+  if (context.message) await verifyMessageWebhook(context.message);
+  const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
+  const requesterBridgeUserId = isMatrixRelayRequester
+    ? (extractBridgeUserId(context.message?.author.username ?? "") ?? undefined)
+    : undefined;
+  const requesterDiscordId = requesterBridgeUserId ? undefined : resolveTriggererDiscordId(context);
+  const requesterUserRow = requesterDiscordId ? await userRepository.loadByDiscordId(requesterDiscordId) : null;
+
+  if (!requesterBridgeUserId && (!requesterDiscordId || !requesterUserRow?.user_id)) {
+    return buildFailureResult(
+      "task_update_failed_user_not_found",
+      "The invoking user could not be resolved for reminder/task editing.",
+    );
+  }
+
+  const actor: UpdateTaskActor = {
+    requesterUserId: requesterUserRow?.user_id,
+    requesterDiscordId,
+    requesterBridgeUserId,
   };
 
-  isAvailableFor(_provider: string): boolean {
-    return true;
-  }
-
-  isAvailableForContext(_provider: string, context?: ToolContext): boolean {
-    if (context?.streamContext?.disableReminderTool) return false;
-    return true;
-  }
-
-  async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    const validation = this.validateParameters(args);
-    if (!validation.isValid) {
-      return buildFailureResult(
-        "task_update_failed_invalid_args",
-        `Invalid parameters: ${validation.errors?.join(", ") || `Missing required parameters: ${validation.missingParams?.join(", ")}`}`,
-      );
-    }
-
-    const tomoriState = context.tomoriState;
-    if (!tomoriState?.server_id) {
-      log.error("Missing server_id in Tomori state for update_task");
-      return buildFailureResult("task_update_failed_internal_error", "Internal bot error: Missing server context.");
-    }
-
-    const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
-    const parsedArgs = parseUpdateTaskArguments(args, timezoneOffset);
-    if (!parsedArgs.ok) {
-      return buildFailureResult(parsedArgs.status, parsedArgs.reason);
-    }
-
-    const { serverScheduleRepository, userRepository } = await import("@/utils/db/repositories");
-
-    if (context.message) await verifyMessageWebhook(context.message);
-    const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
-    const requesterBridgeUserId = isMatrixRelayRequester
-      ? (extractBridgeUserId(context.message?.author.username ?? "") ?? undefined)
-      : undefined;
-    const requesterDiscordId = requesterBridgeUserId ? undefined : resolveTriggererDiscordId(context);
-    const requesterUserRow = requesterDiscordId ? await userRepository.loadByDiscordId(requesterDiscordId) : null;
-
-    if (!requesterBridgeUserId && (!requesterDiscordId || !requesterUserRow?.user_id)) {
-      return buildFailureResult(
-        "task_update_failed_user_not_found",
-        "The invoking user could not be resolved for reminder/task editing.",
-      );
-    }
-
-    const actor: UpdateTaskActor = {
-      requesterUserId: requesterUserRow?.user_id,
-      requesterDiscordId,
-      requesterBridgeUserId,
-    };
-
-    if (parsedArgs.isDeleteRequested) {
-      // The message author is not necessarily the triggerer (proxied and relayed turns), so the
-      // permission is read from the resolved triggerer's member record, never from the message.
-      const requesterMember = requesterDiscordId
-        ? await context.message?.guild?.members.fetch(requesterDiscordId).catch(() => null)
-        : null;
-      const deleteResult = await serverScheduleRepository.deleteReminderForRequester({
-        reminder_id: parsedArgs.reminderId,
-        server_id: tomoriState.server_id,
-        actor: {
-          requester_user_id: actor.requesterUserId,
-          requester_discord_id: actor.requesterDiscordId,
-          requester_bridge_user_id: actor.requesterBridgeUserId,
-          requester_can_manage_server: requesterMember?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
-        },
-      });
-
-      if (deleteResult.status === "not_found") {
-        return buildFailureResult("task_update_failed_not_found", "Reminder/task ID not found in this server.");
-      }
-      if (deleteResult.status === "unauthorized") {
-        return buildFailureResult(
-          "task_update_failed_unauthorized",
-          "You can only delete reminders/tasks you created, non-self reminders targeted at you, or any reminder if you have the Manage Server permission.",
-        );
-      }
-      if (deleteResult.status !== "deleted") {
-        return buildFailureResult("task_update_failed_db_error", "Database operation failed to delete reminder/task.");
-      }
-
-      const deletedPurpose = truncateReminderPurpose(deleteResult.reminder.reminder_purpose);
-      const personaNickname =
-        context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
-
-      await sendTaskEmbedWithExpand(
-        context,
-        {
-          color: ColorCode.ERROR,
-          titleKey: "reminders.task_deleted_title",
-          titleVars: {
-            persona_nickname: personaNickname,
-          },
-          descriptionKey: "reminders.task_deleted_description",
-          descriptionVars: {
-            reminder_id: parsedArgs.reminderId,
-            reminder_purpose: deletedPurpose,
-          },
-          footerKey: "reminders.task_deleted_footer",
-        },
-        deleteResult.reminder.reminder_purpose,
-      );
-
-      return {
-        success: true,
-        message: "Reminder/task deleted successfully",
-        data: {
-          status: "task_deleted_successfully",
-          reminder_id: parsedArgs.reminderId,
-          reminder_purpose_deleted: deleteResult.reminder.reminder_purpose,
-        },
-      };
-    }
-
-    const existingReminder = await serverScheduleRepository.getReminderById(parsedArgs.reminderId);
-    if (!existingReminder || existingReminder.server_id !== tomoriState.server_id) {
-      return buildFailureResult("task_update_failed_not_found", "Reminder/task ID not found in this server.");
-    }
-
-    if (!canReminderActorModifyReminder(existingReminder, actor)) {
-      return buildFailureResult(
-        "task_update_failed_unauthorized",
-        "You can only update reminders/tasks you created, or non-self reminders targeted at you.",
-      );
-    }
-
-    const finalReminderTime = parsedArgs.newReminderTime ?? new Date(existingReminder.reminder_time);
-    if (!validateFutureTime(finalReminderTime)) {
-      return buildFailureResult("task_update_failed_invalid_time", "The updated reminder time must be in the future.");
-    }
-
-    const finalRepetition = parsedArgs.hasRepetitionUpdate
-      ? (parsedArgs.repetition ?? null)
-      : getReminderRepetition(existingReminder);
-
-    const updateResult = await serverScheduleRepository.updateReminderCoreForRequester({
+  if (parsedArgs.isDeleteRequested) {
+    // The message author is not necessarily the triggerer (proxied and relayed turns), so the
+    // permission is read from the resolved triggerer's member record, never from the message.
+    const requesterMember = requesterDiscordId
+      ? await context.message?.guild?.members.fetch(requesterDiscordId).catch(() => null)
+      : null;
+    const deleteResult = await serverScheduleRepository.deleteReminderForRequester({
       reminder_id: parsedArgs.reminderId,
       server_id: tomoriState.server_id,
-      reminder_purpose: parsedArgs.newPurpose,
-      reminder_time: finalReminderTime,
-      repetition: finalRepetition,
       actor: {
         requester_user_id: actor.requesterUserId,
         requester_discord_id: actor.requesterDiscordId,
         requester_bridge_user_id: actor.requesterBridgeUserId,
+        requester_can_manage_server: requesterMember?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
       },
     });
 
-    if (updateResult.status === "not_found") {
+    if (deleteResult.status === "not_found") {
       return buildFailureResult("task_update_failed_not_found", "Reminder/task ID not found in this server.");
     }
-    if (updateResult.status === "unauthorized") {
+    if (deleteResult.status === "unauthorized") {
       return buildFailureResult(
         "task_update_failed_unauthorized",
-        "You can only update reminders/tasks you created, or non-self reminders targeted at you.",
+        "You can only delete reminders/tasks you created, non-self reminders targeted at you, or any reminder if you have the Manage Server permission.",
       );
     }
-    if (updateResult.status !== "updated") {
-      return buildFailureResult("task_update_failed_db_error", "Database operation failed to update reminder/task.");
+    if (deleteResult.status !== "deleted") {
+      return buildFailureResult("task_update_failed_db_error", "Database operation failed to delete reminder/task.");
     }
 
+    const deletedPurpose = truncateReminderPurpose(deleteResult.reminder.reminder_purpose);
     const personaNickname =
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
-    const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
-
-    // Self tasks target the bot (no personal timezone), while user tasks show both clocks when personal and server
-    // offsets differ so misconverted times stand out.
-    let targetPersonalOffset: number | null = null;
-    if (!existingReminder.self_reminder) {
-      const targetUserRow = await userRepository.loadByDiscordId(existingReminder.user_discord_id);
-      targetPersonalOffset = targetUserRow?.timezone_offset ?? null;
-    }
-    const reminderTimeText =
-      targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
-        ? localizer(context.locale, "reminders.dual_time_display", {
-            server_time: formatTimeWithOffset(
-              finalReminderTime,
-              timezoneOffset,
-              {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-              context.locale,
-            ),
-            server_offset: formatUTCOffset(timezoneOffset),
-            user_time: formatTimeWithOffset(
-              finalReminderTime,
-              targetPersonalOffset,
-              {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-              context.locale,
-            ),
-            user_offset: formatUTCOffset(targetPersonalOffset),
-            user_nickname: existingReminder.user_nickname,
-          })
-        : formatReminderTime(finalReminderTime, timezoneOffset, context.locale);
-    const repeatText = formatReminderRepetition(context.locale, finalRepetition);
 
     await sendTaskEmbedWithExpand(
       context,
       {
-        color: ColorCode.MEMORY_UPDATE,
-        titleKey: "reminders.task_updated_title",
+        color: ColorCode.ERROR,
+        titleKey: "reminders.task_deleted_title",
         titleVars: {
           persona_nickname: personaNickname,
         },
-        descriptionKey: "reminders.task_updated_description",
+        descriptionKey: "reminders.task_deleted_description",
         descriptionVars: {
           reminder_id: parsedArgs.reminderId,
-          reminder_purpose: reminderPurposeText,
-          reminder_time: reminderTimeText,
-          repeat_text: repeatText,
+          reminder_purpose: deletedPurpose,
         },
-        footerKey: "reminders.task_updated_footer",
+        footerKey: "reminders.task_deleted_footer",
       },
-      parsedArgs.newPurpose,
-      { kind: "task", id: parsedArgs.reminderId },
+      deleteResult.reminder.reminder_purpose,
     );
 
     return {
       success: true,
-      message: "Reminder/task updated successfully",
+      message: "Reminder/task deleted successfully",
       data: {
-        status: "task_updated_successfully",
+        status: "task_deleted_successfully",
         reminder_id: parsedArgs.reminderId,
-        reminder_purpose: parsedArgs.newPurpose,
-        reminder_time: finalReminderTime.toISOString(),
-        ...toRepetitionColumns(finalRepetition),
-        self_reminder: existingReminder.self_reminder ?? false,
-        target_user: existingReminder.user_nickname,
-        target_channel_id: existingReminder.channel_disc_id,
+        reminder_purpose_deleted: deleteResult.reminder.reminder_purpose,
       },
     };
   }
+
+  const existingReminder = await serverScheduleRepository.getReminderById(parsedArgs.reminderId);
+  if (!existingReminder || existingReminder.server_id !== tomoriState.server_id) {
+    return buildFailureResult("task_update_failed_not_found", "Reminder/task ID not found in this server.");
+  }
+
+  if (!canReminderActorModifyReminder(existingReminder, actor)) {
+    return buildFailureResult(
+      "task_update_failed_unauthorized",
+      "You can only update reminders/tasks you created, or non-self reminders targeted at you.",
+    );
+  }
+
+  const { limit, window } = parsedArgs.recurrenceOptions ?? {};
+  const finalRepetition = parsedArgs.hasRepetitionUpdate
+    ? (parsedArgs.repetition ?? null)
+    : getReminderRepetition(existingReminder);
+  if (!finalRepetition && (limit || window)) {
+    return buildFailureResult("task_update_failed_invalid_args", "Repeat limits and windows require recurrence.");
+  }
+  const finalWindow = finalRepetition
+    ? window === undefined
+      ? getReminderDailyWindow(existingReminder)
+      : window
+    : null;
+  if (finalRepetition?.unit === "months" && finalWindow) {
+    return buildFailureResult("task_update_failed_invalid_args", "Clear the daily window before switching to months.");
+  }
+  const finalReminderTime = alignReminderToDailyWindow(
+    parsedArgs.newReminderTime ?? new Date(existingReminder.reminder_time),
+    finalWindow,
+  );
+  if (!validateFutureTime(finalReminderTime)) {
+    return buildFailureResult("task_update_failed_invalid_time", "The updated reminder time must be in the future.");
+  }
+
+  const finalLimit = finalRepetition ? (limit === undefined ? getReminderRepeatLimit(existingReminder) : limit) : null;
+  if (finalLimit && "until" in finalLimit && finalReminderTime > finalLimit.until) {
+    return buildFailureResult("task_update_failed_invalid_time", "The repeat cutoff must allow the next delivery.");
+  }
+
+  const updateResult = await serverScheduleRepository.updateReminderCoreForRequester({
+    reminder_id: parsedArgs.reminderId,
+    server_id: tomoriState.server_id,
+    reminder_purpose: parsedArgs.newPurpose,
+    reminder_time: finalReminderTime,
+    repetition: finalRepetition,
+    recurrenceOptions: parsedArgs.recurrenceOptions,
+    actor: {
+      requester_user_id: actor.requesterUserId,
+      requester_discord_id: actor.requesterDiscordId,
+      requester_bridge_user_id: actor.requesterBridgeUserId,
+    },
+  });
+
+  if (updateResult.status === "not_found") {
+    return buildFailureResult("task_update_failed_not_found", "Reminder/task ID not found in this server.");
+  }
+  if (updateResult.status === "unauthorized") {
+    return buildFailureResult(
+      "task_update_failed_unauthorized",
+      "You can only update reminders/tasks you created, or non-self reminders targeted at you.",
+    );
+  }
+  if (updateResult.status !== "updated") {
+    return buildFailureResult("task_update_failed_db_error", "Database operation failed to update reminder/task.");
+  }
+
+  const personaNickname =
+    context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
+  const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
+
+  // Self tasks target the bot (no personal timezone), while user tasks show both clocks when personal and server
+  // offsets differ so misconverted times stand out.
+  let targetPersonalOffset: number | null = null;
+  if (!existingReminder.self_reminder) {
+    const targetUserRow = await userRepository.loadByDiscordId(existingReminder.user_discord_id);
+    targetPersonalOffset = targetUserRow?.timezone_offset ?? null;
+  }
+  const reminderTimeText =
+    targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
+      ? localizer(context.locale, "reminders.dual_time_display", {
+          server_time: formatTimeWithOffset(
+            finalReminderTime,
+            timezoneOffset,
+            {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            },
+            context.locale,
+          ),
+          server_offset: formatUTCOffset(timezoneOffset),
+          user_time: formatTimeWithOffset(
+            finalReminderTime,
+            targetPersonalOffset,
+            {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            },
+            context.locale,
+          ),
+          user_offset: formatUTCOffset(targetPersonalOffset),
+          user_nickname: existingReminder.user_nickname,
+        })
+      : formatReminderTime(finalReminderTime, timezoneOffset, context.locale);
+  const repeatText = formatReminderRepetition(
+    context.locale,
+    finalRepetition,
+    getReminderRepeatLimit(updateResult.reminder),
+    getReminderDailyWindow(updateResult.reminder),
+    timezoneOffset,
+  );
+
+  await sendTaskEmbedWithExpand(
+    context,
+    {
+      color: ColorCode.MEMORY_UPDATE,
+      titleKey: "reminders.task_updated_title",
+      titleVars: {
+        persona_nickname: personaNickname,
+      },
+      descriptionKey: "reminders.task_updated_description",
+      descriptionVars: {
+        reminder_id: parsedArgs.reminderId,
+        reminder_purpose: reminderPurposeText,
+        reminder_time: reminderTimeText,
+        repeat_text: repeatText,
+      },
+      footerKey: "reminders.task_updated_footer",
+    },
+    parsedArgs.newPurpose,
+    { kind: "task", id: parsedArgs.reminderId },
+  );
+
+  return {
+    success: true,
+    message: "Reminder/task updated successfully",
+    data: {
+      status: "task_updated_successfully",
+      reminder_id: parsedArgs.reminderId,
+      reminder_purpose: parsedArgs.newPurpose,
+      reminder_time: finalReminderTime.toISOString(),
+      ...toRepetitionColumns(finalRepetition),
+      repeat_remaining_count: updateResult.reminder.repeat_remaining_count ?? null,
+      repeat_until_time: updateResult.reminder.repeat_until_time?.toISOString() ?? null,
+      daily_window: getReminderDailyWindow(updateResult.reminder),
+      self_reminder: existingReminder.self_reminder ?? false,
+      target_user: existingReminder.user_nickname,
+      target_channel_id: existingReminder.channel_disc_id,
+    },
+  };
 }

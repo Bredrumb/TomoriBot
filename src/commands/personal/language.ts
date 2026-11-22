@@ -65,8 +65,6 @@ export async function execute(
     return;
   }
 
-  // A confirmation in the old language reads as a failed change, so the receipt uses the language
-  // just written.
   await replyInfoEmbed(interaction, language, {
     titleKey: "commands.personal.config.language_updated_heading",
     descriptionKey: "commands.personal.config.language_updated_detail",

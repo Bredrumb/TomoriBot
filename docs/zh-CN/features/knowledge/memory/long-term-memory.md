@@ -22,6 +22,8 @@ aiGenerated: false
 
 如果你想让她记住某件事，直接要求她记住，或者自己手动添加。服务器管理员可以在 `/config` > `权限` 中禁用自动保存。
 
+在个人记忆或服务器记忆中使用 `{@userId}`，可以按当前生效人格对某人的称呼来指代对方。TomoriBot 会在回忆该记忆时填入对应名称。参见[提示词宏](/features/prompt-macros/#refer-to-a-specific-discord-user)。
+
 ## 记忆上限
 <!-- anchor: how-many-memories -->
 

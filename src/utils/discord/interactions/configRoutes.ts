@@ -628,6 +628,8 @@ const defaultDependencies: ConfigRouteDependencies = {
       alwaysReplyEnabled: state.config.always_reply_enabled ?? false,
       cooldownType: state.config.cooldown_type ?? 0,
       cooldownLength: state.config.cooldown_length ?? 5,
+      fastRegenerationRetryEnabled: state.config.fast_regeneration_retry_enabled,
+      fastRegenerationContinueEnabled: state.config.fast_regeneration_continue_enabled,
     };
     const experimental: ConfigBehaviorExperimentalView = {
       deliberateToolMode: state.config.deliberate_tool_mode ?? false,
@@ -645,7 +647,7 @@ const defaultDependencies: ConfigRouteDependencies = {
     const memory: ConfigBehaviorMemoryView = {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
-      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      stmEnabled: state.config.short_term_memory_enabled ?? false,
       toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig,
       stmCategories,

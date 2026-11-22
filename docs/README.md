@@ -53,6 +53,7 @@ Pages are bucketed into task-based sub-categories:
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
   - [`novelai.md`](./en/features/integrations/novelai/)
+- [`features/prompt-macros.md`](./en/features/prompt-macros/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)

@@ -167,6 +167,8 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "deliberate_tool_mode",
       "deliberate_tool_context_turns",
       "deliberate_tool_triggers",
+      "fast_regeneration_retry_enabled",
+      "fast_regeneration_continue_enabled",
       "cooldown_type",
       "cooldown_length",
     ],
@@ -443,6 +445,8 @@ class ResetRepository {
           deliberate_tool_mode = DEFAULT,
           deliberate_tool_context_turns = DEFAULT,
           deliberate_tool_triggers = DEFAULT,
+          fast_regeneration_retry_enabled = DEFAULT,
+          fast_regeneration_continue_enabled = DEFAULT,
           cooldown_type = DEFAULT,
           cooldown_length = DEFAULT,
           updated_at = NOW()

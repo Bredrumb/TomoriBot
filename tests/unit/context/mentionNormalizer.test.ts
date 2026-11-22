@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, GuildMember } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache } from "@/utils/cache/userCache";
-import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { personaRepository, userNamingRepository, userRepository } from "@/utils/db/repositories";
+import { userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
 import { convertMentions, type MentionMemo } from "@/utils/text/context/mentionNormalizer";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
@@ -33,22 +34,59 @@ function createClient() {
   return {
     user: { id: BOT_ID },
     guilds: { cache: new Map(guilds.map((guild) => [guild.id, guild])) },
-    users: { cache: new Map(), fetch: async () => null },
+    users: { cache: new Map(), fetch: async (id: string) => (id === USER_ID ? { username: "mirri_username" } : null) },
   } as unknown as Client;
 }
 
-function stubUsers(blacklistedGuild?: string) {
+function stubUsers(blacklistedGuild?: string, privacyLevel = PrivacyLevel.MINIMAL) {
   clearUserCache();
   const row = createUserRow({ user_disc_id: USER_ID, user_nickname: "Mirri Saved" });
   const load = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(row);
   const blacklist = spyOn(userRepository, "isBlacklisted").mockImplementation(
     async (guildId) => guildId === blacklistedGuild,
   );
-  spies.push(load, blacklist, spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL));
+  spies.push(load, blacklist, spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(privacyLevel));
   return { load, blacklist };
 }
 
 describe("mention resolution isolation", () => {
+  it("resolves roles in the current guild and shares fetches and misses across conversions", async () => {
+    const cachedRoleId = "500000000000000001";
+    const fetchedRoleId = "500000000000000002";
+    const unknownRoleId = "500000000000000003";
+    const fetchRole = mock(async (id: string) => (id === fetchedRoleId ? { name: "Event Crew" } : null));
+    const guild = {
+      id: GUILD_A,
+      roles: {
+        cache: new Map([
+          [cachedRoleId, { name: "Raid Guides" }],
+          [GUILD_A, { name: "@everyone" }],
+        ]),
+        fetch: fetchRole,
+      },
+      members: { fetch: async () => null },
+    };
+    const client = {
+      guilds: { cache: new Map([[guild.id, guild]]) },
+      users: { cache: new Map(), fetch: async () => null },
+    } as unknown as Client;
+    const { load } = stubUsers();
+    load.mockResolvedValue(null);
+    const memo: MentionMemo = new Map();
+
+    const text = `<@&${cachedRoleId}> <@&${fetchedRoleId}> <@&${GUILD_A}> <@&${unknownRoleId}>`;
+    const expected = `@Raid Guides @Event Crew @everyone <@&${unknownRoleId}>`;
+    const convert = (input: string, mode: "template" | "preserve", guildId = GUILD_A) =>
+      convertMentions(input, client, guildId, "Mirri", "Tomori", true, undefined, mode, undefined, memo);
+    expect(await Promise.all([convert(`${text} ${text}`, "template"), convert(text, "preserve")])).toEqual([
+      `${expected} ${expected}`,
+      expected,
+    ]);
+    expect(await convert(`<@&${fetchedRoleId}>`, "template", GUILD_B)).toBe(`<@&${fetchedRoleId}>`);
+    expect(fetchRole.mock.calls).toEqual([[fetchedRoleId], [unknownRoleId]]);
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it.each(["personalization off", "blacklisted"])("isolates overlapping guild calls when %s", async (scenario) => {
     stubUsers(scenario === "blacklisted" ? GUILD_B : undefined);
     const client = createClient();
@@ -101,5 +139,100 @@ describe("mention resolution isolation", () => {
     expect(await convert(GUILD_B)).toBe("Mirri Guild Mirri Guild");
     expect(blacklist).toHaveBeenCalledTimes(2);
     expect(await convertMentions(`<@${BOT_ID}>`, client, GUILD_A, "Juno", "Tomori", false)).toBe("Guild Bot");
+  });
+});
+
+describe("Discord user reference macros", () => {
+  const macro = `{@${USER_ID}}`;
+
+  it("uses the active persona's nickname and keeps Discord mentions independent", async () => {
+    stubUsers();
+    const client = createClient();
+    const memo: MentionMemo = new Map();
+    const preferences = spyOn(userNamingRepository, "loadPreferences").mockImplementation(
+      async ([{ userId, personaLineageId }]) =>
+        new Map([
+          [
+            userPersonaNamingPairKey(userId, personaLineageId),
+            {
+              user_id: userId,
+              persona_lineage_id: personaLineageId,
+              nickname_override: personaLineageId === 1 ? "Mirri" : "Navigator",
+              prefix_override: "Captain",
+              suffix_override: null,
+            },
+          ],
+        ]),
+    );
+    spies.push(preferences);
+
+    const convert = (personaLineageId: number) =>
+      convertMentions(
+        `${macro} <@${USER_ID}> ${macro}`,
+        client,
+        GUILD_A,
+        "Juno",
+        "Tomori",
+        true,
+        { tomoriState: createPersona({ persona_lineage_id: personaLineageId }) },
+        "template",
+        undefined,
+        memo,
+      );
+    expect(await convert(1)).toBe("Mirri Mirri Saved Mirri");
+    expect(await convert(2)).toBe("Navigator Mirri Saved Navigator");
+    expect(preferences.mock.calls).toHaveLength(2);
+  });
+
+  it("uses the global nickname without a persona override", async () => {
+    stubUsers();
+    spies.push(spyOn(userNamingRepository, "loadPreferences").mockResolvedValue(new Map()));
+    expect(
+      await convertMentions(
+        macro,
+        createClient(),
+        GUILD_A,
+        "Juno",
+        "Tomori",
+        true,
+        { tomoriState: createPersona() },
+        "template",
+      ),
+    ).toBe("Mirri Saved");
+  });
+
+  it.each([
+    "unregistered",
+    "blacklisted",
+    "full privacy",
+    "personalization off",
+  ])("resolves to the Discord username when %s", async (scenario) => {
+    const { load } = stubUsers(
+      scenario === "blacklisted" ? GUILD_A : undefined,
+      scenario === "full privacy" ? PrivacyLevel.FULL : PrivacyLevel.MINIMAL,
+    );
+    if (scenario === "unregistered") load.mockResolvedValue(null);
+    const preferences = spyOn(userNamingRepository, "loadPreferences").mockResolvedValue(new Map());
+    spies.push(preferences);
+    expect(
+      await convertMentions(
+        macro,
+        createClient(),
+        GUILD_A,
+        "Juno",
+        "Tomori",
+        scenario !== "personalization off",
+        { tomoriState: createPersona() },
+        "template",
+      ),
+    ).toBe("mirri_username");
+    expect(preferences).not.toHaveBeenCalled();
+  });
+
+  it("keeps unknown IDs and malformed macros literal", async () => {
+    const text = "{@400000000000000002} {@123} {{@400000000000000001}}";
+    expect(await convertMentions(text, createClient(), GUILD_A, "Juno", "Tomori", false, undefined, "template")).toBe(
+      text,
+    );
   });
 });

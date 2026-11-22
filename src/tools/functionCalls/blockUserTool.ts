@@ -12,8 +12,7 @@ import {
 
 export class BlockUserTool extends BaseTool {
   name = "block_user";
-  description =
-    "Temporarily mute or block a Discord user for the active persona only. Use mute when the persona should stop being triggered by that user. Use block when the persona should stop being triggered by that user and should not see that user's recent live messages/media in this conversation context. This does not delete, forget, or redact memories.";
+  description = "Temporarily mute or block a user for the active persona. Stored memories stay intact.";
   category = "discord" as const;
   requiresFeatureFlag = "user_blocking";
 
@@ -22,14 +21,13 @@ export class BlockUserTool extends BaseTool {
     properties: {
       blocked_user: {
         type: "string",
-        description:
-          "Name of the Discord user to mute or block, as shown in the current conversation or current server. Use natural names, not IDs.",
+        description: "User name as shown in this conversation or server.",
       },
       block_type: {
         type: "string",
         enum: ["mute", "block"],
         description:
-          "Use 'mute' to prevent this user from triggering the active persona. Use 'block' to also hide this user's recent live messages/media from the active persona's context.",
+          "mute stops the user's messages from triggering this persona. block also hides the user's recent live messages and media from its context.",
       },
       block_duration_hours: {
         type: "number",
@@ -37,8 +35,7 @@ export class BlockUserTool extends BaseTool {
       },
       block_reason: {
         type: "string",
-        description:
-          "Reason for the mute/block. Be specific enough that users and moderators understand what happened.",
+        description: "Reason to show the user and moderators.",
       },
     },
     required: ["blocked_user", "block_type", "block_duration_hours", "block_reason"],

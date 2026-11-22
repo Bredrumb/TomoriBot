@@ -74,6 +74,18 @@ Los bloques nativos se asignan directamente a los componentes del mensaje Tomori
 
 Cuando un preajuste importado está activo, este controla por completo el prompt del sistema. El prompt integrado de TomoriBot y cualquier prompt personalizado de `/config` > `Comportamiento` > `Comportamiento general` no se envían, y los botones del prompt del sistema allí quedan bloqueados. Tu prompt personalizado se conserva y vuelve a aplicarse cuando desactivas el preajuste en `/config` > `Plugins` > `Preajustes de SillyTavern`.
 
+### Macros de preajuste
+<!-- anchor: preset-macros -->
+
+Usa [macros de preajuste](/features/prompt-macros/#sillytavern-preset-macros) para insertar
+detalles de la persona, el mensaje más reciente del usuario o la hora del servidor en un nodo del preajuste.
+
+### Instrucciones condicionales
+<!-- anchor: conditional-instructions -->
+
+Usa [condicionales de preajuste](/features/prompt-macros/#preset-conditionals) para elegir
+instrucciones según un valor, como si la persona tiene una descripción.
+
 ### Notas de compatibilidad
 
 - Los nodos deshabilitados en `prompt_order` permanecen inactivos hasta que se habilitan en `/config` > `Plugins` > SillyTavern Presets. Los nodos vacíos y de solo comentarios nunca se envían.

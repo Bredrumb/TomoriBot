@@ -51,7 +51,7 @@ Stores scheduled reminder tasks:
 
 Incoming messages route through these priorities:
 
-- **Direct bot replies**: Replying to a message sent by the bot user routes to the main persona.
+- **Direct bot replies** with the bot user in the reply's user mentions route to the main persona in server channels.
 - **Webhook replies**: `webhookIdentity.ts` verifies the webhook ID against the managed webhook cache or repository for that guild and channel before matching a persona nickname. Threads use the parent channel's registration. A temporary user-impersonation webhook is never persisted, so it is trusted from the in-memory relay cache (24 hours) when its guild and channel match, which means replies to its messages stop triggering after a restart or the TTL. Copied render names resolve only after this check. A failed lookup grants no persona identity.
 - **Bot mentions**: Mentioning the bot routes to the main persona.
 - **Explicit trigger words**: Matching strings in `persona_configs.trigger_words` activate the matching personas.

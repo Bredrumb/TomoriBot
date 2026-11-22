@@ -113,9 +113,7 @@ export default {
       manage_server_only: `Only members with \`Manage Server\` can view the full error.`,
       personal_only: `This error came from a personal provider, so only its owner can view the full error.`,
     },
-    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
-    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
-    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
+    // Each tip key supplies one bullet because callers choose which recovery actions to show.
     tips: {
       title: `💡 What you can do`,
       button: `What You Can Do`,
@@ -155,7 +153,6 @@ export default {
       switch_model_provider: `Switch to a different model or provider with \`/config\` > Models > Switch Models or \`/providers\`.`,
       switch_model_provider_personal: `Switch with \`/personal config\`, or update the provider in \`/personal providers\`.`,
       disable_personal_text_override: `This request error was from your [personal provider](https://docs.tomoribot.app/en/features/knowledge/personalization/#your-own-providers). Update it in \`/personal providers\` or select a working model with \`/personal config\`.`,
-      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `Visit the [Official Support Server](https://discord.gg/bjCfHm9QsB) for assistance.`,
       shorten_message: `Try shortening your message, then send it again.`,
       refresh_context: `Clear the conversation context with \`/refresh\`.`,
@@ -246,7 +243,6 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     zai: {
-      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
       "429_balance_default_message": `Your Z.ai account has insufficient balance`,
       "429_plan_access_default_message": `Your Z.ai subscription plan does not include access to this model`,
       unknown_default_message: `An unexpected error occurred`,
@@ -256,9 +252,6 @@ The selected model requires allowing data for paid model training, but your Open
       "403_default_message": `NVIDIA refused this key. It may be mistyped, expired, or missing inference access on its account.`,
       "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA.`,
       "500_default_message": `The NVIDIA backend serving this model failed. This is usually transient, so try again in a moment. If it keeps failing, whoever hosts TomoriBot can read NVIDIA's full report in the bot logs.`,
-      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
-      // parameter. Asserting this cause on every 500 previously sent users to change settings the
-      // failing payload never carried.
       "500_parameter_default_message": `NVIDIA rejected one or more request parameters for this model. In \`/config\` > Models > Samplers & Parameters, set unsupported samplers such as \`min_p\` to \`0\` and clear saved \`logit_bias\` entries.`,
       unknown_default_message: `An unexpected error occurred`,
     },

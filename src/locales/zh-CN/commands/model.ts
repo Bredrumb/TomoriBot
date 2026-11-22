@@ -1,6 +1,4 @@
 export default {
-  // The config panel reads several strings from this namespace even though every `/model` leaf but
-  // `override remove` is dissolved, so pruning it wholesale breaks the Channels and Models pages.
   model: {
     description: `管理这个服务器的默认 AI 模型。`,
     providerPicker: {

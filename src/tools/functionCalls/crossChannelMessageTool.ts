@@ -156,7 +156,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 export class CrossChannelMessageTool extends BaseTool {
   name = "cross_channel_message";
   description =
-    "Dispatch yourself to a different channel in the same server to do work there right now, once, or silently peek its recent message history. Anything you can do here (generate an image, search, answer, say something) happens in that channel instead. For work at a later time or on a repeat, use create_task. Set peek_only to true to read what is happening there without sending any message. Optionally enable 'boomerang' to report back to the current channel about what you did.";
+    "Do one task now in another channel in this server, or peek at its recent history. Use manage_task with create for later or recurring work.";
   category = "discord" as const;
 
   parameters: ToolParameterSchema = {
@@ -164,26 +164,21 @@ export class CrossChannelMessageTool extends BaseTool {
     properties: {
       target_channel: {
         type: "string",
-        description:
-          "Name of the target channel in the current server. If the conversation shows a channel in inline-code like `general` or `general (ID: ...)`, copy the exact name inside the backticks. A raw Discord channel ID is also accepted.",
+        description: "Copy the exact channel label shown in context, including any ID, or pass the channel ID.",
       },
       task: {
         type: "string",
         description:
-          "A descriptive task (2-4 sentences) explaining what you should do in the target channel. Be specific about the output wanted (for example, generate an image of X, or say Y), the TONE to use, and any context from the current conversation that's relevant. This instruction guides your message generation in the target channel. Not used when peek_only is true.",
+          "In 2-4 sentences, specify what to do, the desired output and tone, and relevant context. Required for dispatch and report_back. Omit for peek.",
       },
-      boomerang: {
-        type: "boolean",
+      mode: {
+        type: "string",
+        enum: ["dispatch", "report_back", "peek"],
         description:
-          "If true, after sending the message in the target channel, you will automatically generate a follow-up message back in the current channel reporting what you did or found. Useful when someone asked you to go check on or say something in another channel. Ignored when peek_only is true.",
-      },
-      peek_only: {
-        type: "boolean",
-        description:
-          "If true, fetch and return the target channel's recent message history without sending any message there. Use this when you want to silently read what is happening in another channel to inform your response here, without making your presence known in that channel. The number of messages fetched matches the server's configured message fetch limit.",
+          "Defaults to dispatch. report_back creates a post-task reply. peek only reads recent history silently.",
       },
     },
-    required: ["target_channel", "task"],
+    required: ["target_channel"],
   };
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -216,9 +211,22 @@ export class CrossChannelMessageTool extends BaseTool {
     const legacyChannelIdArg = args.channel_id as string | undefined;
     const legacyChannelNameArg = args.channel_name as string | undefined;
     const taskArg = args.task as string | undefined;
-    const boomerangArg = args.boomerang as boolean | undefined;
-    const peekOnlyArg = args.peek_only as boolean | undefined;
-    const isPeekOnly = peekOnlyArg === true;
+    const mode = args.mode ?? "dispatch";
+    if (
+      args.peek_only != null ||
+      args.boomerang != null ||
+      (mode !== "dispatch" && mode !== "report_back" && mode !== "peek")
+    ) {
+      const reason = "Use mode with dispatch, report_back, or peek.";
+      return {
+        success: false,
+        error: reason,
+        data: { status: "cross_channel_failed_invalid_mode", reason },
+      };
+    }
+
+    const isPeekOnly = mode === "peek";
+    const shouldReportBack = mode === "report_back";
     const inferredChannelFromTask = inferTargetChannelFromTask(taskArg);
     const requestedChannel =
       targetChannelArg?.trim() || legacyChannelNameArg?.trim() || legacyChannelIdArg?.trim() || inferredChannelFromTask;
@@ -566,7 +574,7 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      if (boomerangArg) {
+      if (shouldReportBack) {
         let targetMessages: Array<{
           author: string;
           content: string;
@@ -607,7 +615,7 @@ export class CrossChannelMessageTool extends BaseTool {
 
       // End the turn immediately when boomerang is enabled so the LLM cannot fabricate a report before the follow-up
       // turn runs.
-      if (boomerangArg) {
+      if (shouldReportBack) {
         return {
           success: true,
           endTurn: true,
@@ -634,7 +642,7 @@ export class CrossChannelMessageTool extends BaseTool {
       assertActive();
       log.error(`Cross-channel tool: Failed to dispatch to #${targetChannel.name}:`, error as Error);
 
-      if (boomerangArg) {
+      if (shouldReportBack) {
         pendingBoomerangs.set(context.channel.id, {
           sourceChannelId: context.channel.id,
           targetChannelName: targetChannel.name,

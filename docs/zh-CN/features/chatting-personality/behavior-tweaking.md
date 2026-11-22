@@ -84,6 +84,8 @@ sidebar:
 - `/config` > `行为` > `常规行为`：从系统提示词预设集中选择。`Default + Image Generation Expert` 会在默认提示词基础上增加关于准确动漫标签与角色服装的指导（参见 [标签查询](/features/capabilities/media-generation/image-generation/#tag-lookup)）。
 - `/config` > `行为` > `常规行为`：重置为默认值。确认会显示之前的提示，因此如果意外清除，你可以恢复它。
 
+使用[提示词宏](/features/prompt-macros/)在系统提示词或回复预填充中插入名称或可用工具。
+
 当 [SillyTavern 预设集](/features/integrations/sillytavern-support/) 处于活动状态时，它会控制系统提示词。关闭该预设集即可再次编辑已保存的服务器提示词。
 
 ## 不做内容过滤

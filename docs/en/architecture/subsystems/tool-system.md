@@ -46,11 +46,20 @@ a reply. Tool rolls also return their structured result to the current model tur
 Before provider serialization, tools pass through `assembleToolsForContext()` in `src/tools/assembly.ts`. Most tools return their static definition unchanged. Capability-sensitive tools implement `assembleForContext(context)` and return tailored variants via `createToolVariant()`:
 
 - `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news. With neither available, the schema advertises text search only, including on OpenRouter turns.
-- `interact_with_recent_message`: Offers only `reply` when `emoji_usage_enabled` is off, removing reaction instructions from its schema while retaining text replies; execution rejects reaction calls using the refreshed setting too.
-- `generate_image`: Prunes parameters to match active backend capabilities (text-to-image, reference image fields, and ComfyUI inpaint or outpaint controls). Parameter descriptions omit instructions for unconfigured modes, preventing the model from receiving unsupported guidance.
+- `manage_message` offers `pin`, `edit`, and `delete` with message management enabled. The emoji setting controls `react`, and queued reply turns suppress `reply`. Dispatch checks the selected action with refreshed settings. The handler checks Discord permissions and message ownership.
+- `manage_task` and `manage_long_term_memory` share `create`, `update`, and `delete` actions. Delete takes an ID and, for long-term memory, an explicit scope. Ordinary reminder delivery suppresses all task actions. Deliberate Tool Mode also suppresses task creation on self-task delivery.
+- `generate_image`: Prunes parameters to match active backend capabilities (text-to-image, reference image fields, and ComfyUI inpaint or outpaint controls). The optional `edit_mode` lists only the masked edits the active image backend can execute. The tool requires an explicit mode for edit controls and revalidates the resolved backend before generating.
 - `generate_voice_message`: Resolves persona priority against independently inherited personal/server Design and Clone targets, then prunes markup and delivery controls for the selected target. Execution revalidates that source, target, and credential revision. Speech synthesis and delivery are shared with `/generate voice-message`; see [Voice System](/architecture/integrations/voice/).
 
 Assembly guards prevent the model from seeing unsupported parameters, while execution-time checks guard against stale configurations and crafted tool calls.
+
+Deliberate Tool Mode and Natural Nudges retain saved selectors for the original operation groups.
+For example, `create_task` admits only `manage_task` with `create`. A saved
+`interact_with_recent_message` selector admits only eligible `reply` and `react` actions.
+Native tools, verbatim definitions, and prompt conditionals use these groups when presenting the
+available actions. Thought Logs use the selected action to identify the trigger. Capability
+reports describe the current settings without the diagnostic turn's intent filter. The retired
+names stay reserved for MCP collision checks.
 
 `generate_voice_message` and `interact_with_target` also offer an optional `sprite` parameter when
 the turn includes the active persona's sprite list. The parameter refers to that list without
@@ -59,6 +68,10 @@ the current persona sprites before synthesis or interaction writes. Omission pre
 inheritance; an empty string selects the base appearance. Both tools use the shared persona delivery
 resolver, which remembers the selected appearance only after successful delivery. Sprite selection
 does not add speech delivery instructions.
+
+`create_thread` reads a leading `Persona (sprite):` label in its `first_message`. It validates the
+sprite before creating the thread and removes the label from the posted text. A successful post sets
+the persona's remembered appearance in the new thread.
 
 ## Execution dispatch and failure boundaries
 

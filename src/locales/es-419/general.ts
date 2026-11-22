@@ -2,6 +2,12 @@ export default {
   general: {
     restarting_title: `Reiniciando`,
     restarting: `TomoriBot se está reiniciando. Por favor, intenta de nuevo en breve.`,
+    reply_controls: {
+      unavailable: `Control de respuesta no disponible`,
+      only_triggerer: `Solo la persona que originó esta respuesta puede usar sus controles.`,
+      stale: `Esta respuesta ya no está disponible para Reintentar o Continuar.`,
+      newer_messages: `Estos controles están disponibles cuando esta respuesta es el último mensaje en la conversación.`,
+    },
     panel_notice: {
       outdated_heading: `Panel desactualizado`,
       unavailable_heading: `No disponible`,
@@ -30,6 +36,7 @@ export default {
     },
     docs: {
       open_button_label: `Más información`,
+      prompt_macros_link: `[Macros de prompt](https://docs.tomoribot.app/en/features/prompt-macros/)`,
     },
     duration: {
       now: `ahora`,
@@ -173,11 +180,9 @@ export default {
     reminder_set_title: `⏰ {persona_nickname} estableció un recordatorio`,
     reminder_set_description: `Le recordaré a {user_nickname} sobre "**{reminder_purpose}**" a las \`{reminder_time}\``,
     reminder_set_footer: `Se enviará una mención después de {time_remaining} a partir de ahora. Elimina recordatorios con \`/scheduled-task remove\`.`,
-    reminder_set_footer_recurring: `Primera mención en {time_remaining}. Se repite cada {repetition_interval_hours} hora(s). Elimina recordatorios con \`/scheduled-task remove\`.`,
-    reminder_set_footer_recurring_months: `Primera mención en {time_remaining}. Se repite cada {repetition_interval_months} mes(es) el mismo día. Elimina recordatorios con \`/scheduled-task remove\`.`,
+    recurring_reminder_set_footer: `Primera mención en {time_remaining}.\nRepetición: {repeat_text}\nElimina recordatorios con \`/scheduled-task remove\`.`,
     recurring_task_set_title: `🔁 {persona_nickname} configuró una tarea recurrente`,
-    recurring_task_set_description: `Ejecutaré "**{reminder_purpose}**" comenzando a las \`{reminder_time}\`, luego se repetirá cada {repetition_interval_hours} hora(s).`,
-    recurring_task_set_description_months: `Ejecutaré "**{reminder_purpose}**" comenzando a las \`{reminder_time}\`, luego se repetirá cada {repetition_interval_months} mes(es) el mismo día.`,
+    recurring_task_set_details: `Ejecutaré "**{reminder_purpose}**" a partir de las \`{reminder_time}\`.\nRepetición: {repeat_text}`,
     recurring_task_set_footer: `Puedes eliminar recordatorios usando \`/scheduled-task remove\`.`,
     task_set_title: `✅ {persona_nickname} configuró una tarea`,
     task_set_description: `Ejecutaré "**{reminder_purpose}**" a las \`{reminder_time}\``,
@@ -191,6 +196,11 @@ export default {
     task_update_repeat_none: `una vez`,
     task_update_repeat_hours: `cada {repetition_interval_hours} hora(s)`,
     task_update_repeat_months: `cada {repetition_interval_months} mes(es)`,
+    task_update_repeat_minutes: `cada {repetition_interval_minutes} min`,
+    task_update_repeat_count: `entregas restantes: {count}`,
+    task_update_repeat_until: `hasta {time} ({offset})`,
+    task_update_repeat_window: `diario de {start} a {end} ({offset})`,
+    triggered_footer_recurring_completed: `La generación falló, por lo que el contenido programado se muestra sin cambios. La programación alcanzó su límite de repeticiones.`,
     expand_task_button: `Mostrar tarea completa`,
     expand_task_title: `Contenido completo de la tarea`,
     reminder_triggered_title: `🟡 Recordatorio activado (entrega fallida)`,

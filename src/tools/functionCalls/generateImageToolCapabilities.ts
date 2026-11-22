@@ -36,7 +36,7 @@ function readEndpointImageModeConfig(endpoint: CustomEndpointRow): Record<string
   return isRecord(workflowSupports) ? workflowSupports : null;
 }
 
-function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): ImageToolCapabilities {
+export function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): ImageToolCapabilities {
   const imageModeConfig = readEndpointImageModeConfig(endpoint);
   const supports = readImageEndpointSupports(endpoint);
   const sourceLabel = endpoint.model_name?.trim() || endpoint.label;
@@ -46,28 +46,15 @@ function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): Im
       textToImage: supports.txt2img,
       imageToImage: supports.img2img,
       inpaint: supports.inpaint,
-      outpaint: imageModeConfig ? readBooleanField(imageModeConfig, "outpaint", supports.inpaint) : supports.inpaint,
+      outpaint: supports.inpaint && (!imageModeConfig || readBooleanField(imageModeConfig, "outpaint", true)),
       negativePrompt: supports.negative_prompt,
       sourceLabel,
     };
   }
 
-  if (imageModeConfig) {
-    const inpaint = readBooleanField(imageModeConfig, "inpaint", false);
-    return {
-      textToImage: supports.txt2img,
-      imageToImage: supports.img2img,
-      inpaint,
-      outpaint: readBooleanField(imageModeConfig, "outpaint", false),
-      negativePrompt: supports.negative_prompt,
-      sourceLabel,
-    };
-  }
-
-  // A legacy endpoint row that declared nothing: assume the narrowest generation mode.
   return {
-    textToImage: true,
-    imageToImage: false,
+    textToImage: imageModeConfig ? supports.txt2img : true,
+    imageToImage: imageModeConfig ? supports.img2img : false,
     inpaint: false,
     outpaint: false,
     negativePrompt: supports.negative_prompt,
@@ -82,8 +69,7 @@ function resolveCuratedProviderImageCapabilities(model: DiffusionModelRow): Imag
   return {
     textToImage: supports.txt2img,
     imageToImage: supports.img2img,
-    inpaint: supports.inpaint,
-    // No curated provider exposes outpainting yet, and no column declares it.
+    inpaint: false,
     outpaint: false,
     negativePrompt: supports.negative_prompt,
     sourceLabel: model.provider,

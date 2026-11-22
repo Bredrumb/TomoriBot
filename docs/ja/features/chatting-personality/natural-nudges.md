@@ -20,6 +20,8 @@ Natural Nudgesを使用すると、TomoriBotはメンションされなくても
 
 Natural Nudgesはサーバー内でのみ動作し、DMでは動作しません。
 
+どちらも、TomoriBotと直接会話する人がいない状態が14日間続くと一時停止します。メンション、ペルソナのトリガーワード、または[トリガーとなる返信](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her)によって再開されます。
+
 ## アクティブナッジ
 <!-- anchor: active-nudges -->
 

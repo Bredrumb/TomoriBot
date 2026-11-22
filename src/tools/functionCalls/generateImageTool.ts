@@ -38,10 +38,12 @@ import {
   type ToolAssemblyContext,
   type ToolContext,
   type ToolParameterSchema,
+  type ToolStringParameterSchema,
   type ToolResult,
 } from "../../types/tool/interfaces";
 import { createToolVariant } from "@/tools/assembly";
 import {
+  resolveCustomEndpointImageCapabilities,
   resolveImageToolCapabilities,
   type ImageToolCapabilities,
 } from "@/tools/functionCalls/generateImageToolCapabilities";
@@ -123,9 +125,14 @@ export async function loadIdentityCharacterReference(
 }
 
 const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["references", "denoise"] as const;
+const IMAGE_EDIT_MODES = ["inpaint", "extend", "outpaint"] as const;
+type ImageEditMode = (typeof IMAGE_EDIT_MODES)[number];
+const IMAGE_EDIT_MODE_GUIDANCE: Record<ImageEditMode, string> = {
+  inpaint: "inpaint replaces a masked region.",
+  extend: "extend grows masked content.",
+  outpaint: "outpaint expands the canvas.",
+};
 const INPAINT_PARAMETER_NAMES = [
-  "media_id",
-  "inpaint",
   "mask_prompt",
   "clothing_segment_categories",
   "clothing_mode",
@@ -135,10 +142,8 @@ const INPAINT_PARAMETER_NAMES = [
   "cfg",
   "mask_mode",
   "inpaint_preset",
-  "inpaint_mode",
 ] as const;
 const OUTPAINT_PARAMETER_NAMES = [
-  "outpaint",
   "outpaint_strategy",
   "outpaint_amount",
   "outpaint_left_prompt",
@@ -150,6 +155,18 @@ const OUTPAINT_PARAMETER_NAMES = [
   "outpaint_overlap",
   "outpaint_zoom_scale",
 ] as const;
+
+function getImageEditModes(capabilities: ImageToolCapabilities): ImageEditMode[] {
+  return IMAGE_EDIT_MODES.filter((mode) => (mode === "outpaint" ? capabilities.outpaint : capabilities.inpaint));
+}
+
+function buildImageEditModeParameter(modes: readonly ImageEditMode[]): ToolStringParameterSchema {
+  return {
+    type: "string",
+    enum: [...modes],
+    description: ["Omit for generation.", ...modes.map((mode) => IMAGE_EDIT_MODE_GUIDANCE[mode])].join(" "),
+  };
+}
 
 function getSupportedImageModeLabels(capabilities: ImageToolCapabilities): string[] {
   const labels = [];
@@ -163,9 +180,9 @@ function getSupportedImageModeLabels(capabilities: ImageToolCapabilities): strin
 function buildImageToolDescription(capabilities: ImageToolCapabilities): string {
   const modeList = getSupportedImageModeLabels(capabilities).join(", ");
   const negativePromptNote = capabilities.negativePrompt
-    ? " Default negative image tags are sent through the backend negative-prompt channel."
-    : " This backend has no declared negative-prompt channel, so default negative image tags are not sent.";
-  return `Generate images using the active image backend (${capabilities.sourceLabel}). This schema only exposes supported modes for the configured backend: ${modeList}.${negativePromptNote} Sends the result directly to Discord.`;
+    ? " Sends default negative tags."
+    : " Skips default negative tags.";
+  return `Generate an image with ${capabilities.sourceLabel} and send it to Discord. Supports ${modeList}.${negativePromptNote}`;
 }
 
 function formatModeList(modes: string[]): string {
@@ -181,13 +198,13 @@ function formatModeList(modes: string[]): string {
 function buildImagePromptDescription(capabilities: ImageToolCapabilities): string {
   let description = "Describe the desired image.";
   description += capabilities.imageToImage
-    ? " For known users/personas, add them to references and describe only the scene, pose, and expression; their reference carries their look, so skip their name and outfit unless the outfit changes. With two characters, say in a few words who is on the left and who is on the right."
-    : " Include relevant Physical Appearance context for known users/personas.";
+    ? " Use references for known users and personas. Describe the scene, pose, expression, and outfit changes. Leave out reference names and unchanged outfits. Identify who goes on each side for two characters."
+    : " Use Physical Appearance context for known users and personas.";
   if (capabilities.inpaint) {
-    description += " For inpaint, describe only the local replacement.";
+    description += " For inpaint, describe only the replacement.";
   }
   if (capabilities.outpaint) {
-    description += " For outpaint, describe what should continue into the new canvas.";
+    description += " For outpaint, describe the new area.";
   }
   return description;
 }
@@ -232,7 +249,10 @@ function includeImageParameter(parameterName: string, capabilities: ImageToolCap
     return capabilities.imageToImage || capabilities.inpaint || capabilities.outpaint;
   }
 
-  if (INPAINT_PARAMETER_NAMES.includes(parameterName as (typeof INPAINT_PARAMETER_NAMES)[number])) {
+  if (
+    parameterName === "media_id" ||
+    INPAINT_PARAMETER_NAMES.includes(parameterName as (typeof INPAINT_PARAMETER_NAMES)[number])
+  ) {
     return capabilities.inpaint || capabilities.outpaint;
   }
 
@@ -247,6 +267,11 @@ function buildImageToolParameters(tool: Tool, capabilities: ImageToolCapabilitie
   const properties: ToolParameterSchema["properties"] = {};
 
   for (const [parameterName, parameterSchema] of Object.entries(tool.parameters.properties)) {
+    if (parameterName === "edit_mode") {
+      const modes = getImageEditModes(capabilities);
+      if (modes.length) properties.edit_mode = buildImageEditModeParameter(modes);
+      continue;
+    }
     if (!includeImageParameter(parameterName, capabilities)) {
       continue;
     }
@@ -282,8 +307,7 @@ export function buildGenerateImageToolVariant(tool: Tool, capabilities: ImageToo
 
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
-  description =
-    "Generate, edit, or outpaint an image. Sends the result directly to Discord. When depicting known users or personas, use their Physical Appearance context.";
+  description = "Generate, edit, or outpaint an image and send it to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
@@ -293,30 +317,26 @@ export class GenerateImageTool extends BaseTool {
     properties: {
       nsfw: {
         type: "boolean",
-        description: "Set true when the image requires a Discord spoiler, useful for NSFW images.",
+        description: "Send as a Discord spoiler.",
       },
       prompt: {
         type: "string",
         description:
-          "Describe the desired image. Include relevant Physical Appearance context for known users/personas. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas.",
+          "Describe the desired image. Use Physical Appearance context for known users and personas. For inpaint, describe only the replacement. For outpaint, describe the new area.",
       },
       media_id: {
         type: "string",
         description: "Media ID such as media_1 of the image to inpaint or outpaint.",
       },
-      inpaint: {
-        type: "boolean",
-        description: "Set true only for localized edits. Do not set for outpaint.",
-      },
+      edit_mode: buildImageEditModeParameter(IMAGE_EDIT_MODES),
       mask_prompt: {
         type: "string",
         description:
-          "For inpaint: simplest generic noun for the existing target. Use 'body', 'dress', 'earring', or 'background'; avoid possessives/adjectives like 'the baby's body'. Do not describe the requested change.",
+          "Name the existing region with a generic noun such as 'dress' or 'background'. Describe the replacement in prompt.",
       },
       clothing_segment_categories: {
         type: "array",
-        description:
-          "Clothing-parser categories for clothing targets. For dresses, include Dress, Upper-clothes, and Skirt.",
+        description: "For dresses, include Dress, Upper-clothes, and Skirt.",
         items: {
           type: "string",
           enum: [
@@ -340,7 +360,7 @@ export class GenerateImageTool extends BaseTool {
       },
       mask_threshold: {
         type: "number",
-        description: "Inpaint detection threshold. Lower is broader; higher is stricter.",
+        description: "Lower covers a broader area. Higher is stricter.",
       },
       mask_grow: {
         type: "number",
@@ -360,31 +380,22 @@ export class GenerateImageTool extends BaseTool {
       },
       mask_mode: {
         type: "string",
-        description: "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
+        description: "target edits the mask_prompt region. background edits around it.",
         enum: ["target", "background"],
       },
       inpaint_preset: {
         type: "string",
-        description: "Inpaint category. Prefer presets over raw tuning.",
+        description: "Prefer a preset over raw tuning.",
         enum: ["small_detail", "tight_recolor", "broad_recolor", "background", "extend"],
-      },
-      inpaint_mode: {
-        type: "string",
-        description: "Inpaint behavior: normal edits the mask, extend grows nearby content, outpaint expands canvas.",
-        enum: ["normal", "extend", "outpaint"],
-      },
-      outpaint: {
-        type: "boolean",
-        description: "Set true to expand the canvas. Requires media_id or references. Do not also set inpaint=true.",
       },
       outpaint_strategy: {
         type: "string",
-        description: "Outpaint strategy. full_canvas is the default.",
+        description: "Defaults to full_canvas.",
         enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
       outpaint_amount: {
         type: "string",
-        description: "Canvas expansion preset: slight, moderate, large, or dramatic.",
+        description: "Amount of canvas expansion.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       outpaint_left_prompt: {
@@ -405,26 +416,25 @@ export class GenerateImageTool extends BaseTool {
       },
       extend_direction: {
         type: "string",
-        description:
-          "Extension direction. Use all for zoom-out/pull-back requests, or one edge for directional expansions.",
+        description: "Use all for zoom-out or pull-back. Use the requested edge for a directional expansion.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
         type: "number",
-        description: "Approximate extension size in pixels. Prefer outpaint_amount when possible.",
+        description: "Approximate extension in pixels. Prefer outpaint_amount.",
       },
       outpaint_overlap: {
         type: "number",
-        description: "Optional outpaint transition overlap in pixels.",
+        description: "Transition overlap in pixels.",
       },
       outpaint_zoom_scale: {
         type: "number",
-        description: "Optional zoom-out source scale from 0.5 to 0.95.",
+        description: "Zoom-out source scale from 0.5 to 0.95.",
       },
       references: {
         type: "array",
         description:
-          "Who or what to draw from, in left-to-right order: user/persona names and message image media IDs, e.g. ['Mirri', 'media_1']. A name uses their saved character reference, or their avatar when none is saved.",
+          "User or persona names and image media IDs in left-to-right order. A name uses their saved reference or avatar.",
         items: {
           type: "string",
         },
@@ -453,52 +463,6 @@ export class GenerateImageTool extends BaseTool {
 
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.imagegen_enabled;
-  }
-
-  private shouldUseInpaint(args: Record<string, unknown>): boolean {
-    if (
-      typeof args.mask_mode === "string" ||
-      typeof args.mask_prompt === "string" ||
-      typeof args.inpaint_preset === "string"
-    ) {
-      return true;
-    }
-    if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
-      return true;
-    }
-    // Outpaint is implemented by providers as a reference-image edit with a
-    // generated padding mask, so it intentionally uses the inpaint-capable path.
-    if (args.outpaint === true) {
-      return true;
-    }
-    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
-      return true;
-    }
-    if (args.inpaint === true) {
-      return true;
-    }
-    if (typeof args.inpaint === "string") {
-      return args.inpaint.toLowerCase() === "true";
-    }
-
-    return false;
-  }
-
-  private shouldUseOutpaint(args: Record<string, unknown>): boolean {
-    if (args.outpaint === true) {
-      return true;
-    }
-    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
-      return true;
-    }
-    return typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "outpaint";
-  }
-
-  private isExplicitInpaintTrue(args: Record<string, unknown>): boolean {
-    if (args.inpaint === true) {
-      return true;
-    }
-    return typeof args.inpaint === "string" && args.inpaint.toLowerCase() === "true";
   }
 
   private resolveOutpaintDirection(prompt: string, direction: string | null, strategy: string | null): string | null {
@@ -813,6 +777,19 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
+    const editMode = args.edit_mode as ImageEditMode | undefined;
+    if (
+      args.inpaint != null ||
+      args.inpaint_mode != null ||
+      args.outpaint != null ||
+      (editMode == null && [...INPAINT_PARAMETER_NAMES, ...OUTPAINT_PARAMETER_NAMES].some((name) => args[name] != null))
+    ) {
+      return {
+        success: false,
+        error: "Use edit_mode to choose a supported edit before supplying edit controls.",
+      };
+    }
+
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const editMessageId = this.resolveMediaId(rawMediaId, context);
@@ -820,9 +797,8 @@ export class GenerateImageTool extends BaseTool {
     const requestedAspectRatio = typeof args.aspect_ratio === "string" ? args.aspect_ratio : null;
     let aspectRatio = requestedAspectRatio || "1:1";
     const usesReferences = !!editMessageId || references.length > 0;
-    const inpaint = this.shouldUseInpaint(args);
-    const outpaint = this.shouldUseOutpaint(args);
-    const explicitInpaint = this.isExplicitInpaintTrue(args);
+    const inpaint = editMode != null;
+    const outpaint = editMode === "outpaint";
     const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || (outpaint ? "main foreground object" : null);
     const maskThreshold = this.parseClampedNumber(args.mask_threshold, 0, 1);
     const maskGrow = this.parseClampedNumber(args.mask_grow, 0, 128);
@@ -835,7 +811,7 @@ export class GenerateImageTool extends BaseTool {
     const denoise = this.parseClampedNumber(args.denoise, 0, 1);
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
     const inpaintPreset = typeof args.inpaint_preset === "string" ? args.inpaint_preset : null;
-    const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
+    const inpaintMode = editMode === "inpaint" ? "normal" : (editMode ?? null);
     const rawOutpaintStrategy = typeof args.outpaint_strategy === "string" ? args.outpaint_strategy : null;
     const outpaintStrategy = outpaint ? this.resolveOutpaintStrategy(prompt, rawOutpaintStrategy) : rawOutpaintStrategy;
     const outpaintAmount = typeof args.outpaint_amount === "string" ? args.outpaint_amount : null;
@@ -885,13 +861,6 @@ export class GenerateImageTool extends BaseTool {
       return {
         success: false,
         error: "Inpaint and outpaint edit one image: pass media_id, or a single entry in references.",
-      };
-    }
-    if (outpaint && explicitInpaint) {
-      return {
-        success: false,
-        error:
-          "Outpaint requests must not also set inpaint=true. Use outpaint=true or inpaint_mode='outpaint' by itself; the ComfyUI provider will use the required inpaint-style workflow internally.",
       };
     }
     if (inpaint && !outpaint && !maskPrompt) {
@@ -961,6 +930,14 @@ export class GenerateImageTool extends BaseTool {
           error: "Image generation quota exceeded",
           message: errorMessage,
         };
+      }
+
+      if (
+        editMode &&
+        (!creds.customEndpoint ||
+          !getImageEditModes(resolveCustomEndpointImageCapabilities(creds.customEndpoint)).includes(editMode))
+      ) {
+        return { success: false, error: "The selected image backend does not support that edit mode." };
       }
 
       const diffusionModelId =

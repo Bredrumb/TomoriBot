@@ -1,8 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
-import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { applyStreamContextAvailability, getAvailableToolsForContext } from "@/tools/availability";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
 import { createPersona } from "../../helpers/fixtures";
 import {
   DanbooruGetPostTool,
@@ -10,12 +13,15 @@ import {
   DanbooruSearchTagsTool,
 } from "@/tools/functionCalls/danbooruTools";
 import { buildGenerateImageToolVariant, GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
-import type { ImageToolCapabilities } from "@/tools/functionCalls/generateImageToolCapabilities";
+import {
+  type ImageToolCapabilities,
+  resolveCustomEndpointImageCapabilities,
+} from "@/tools/functionCalls/generateImageToolCapabilities";
 import { buildVoiceMessageToolVariant, GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
 import { buildWebSearchToolVariant, WebSearchTool } from "@/tools/webSearch/webSearchTool";
 import type { SearchCategory } from "@/tools/webSearch/types";
 import type { Tool, ToolAssemblyContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
-import type { CustomEndpointRow } from "@/types/db/schema";
+import { customEndpointSchema, type CustomEndpointRow } from "@/types/db/schema";
 import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
@@ -103,7 +109,7 @@ it("exposes optional sprite selection only for the active persona's advertised r
   const persona = createPersona({ persona_id: 7 });
   const voice = buildVoiceMessageToolVariant(new GenerateVoiceMessageTool(), "plain");
   const interaction = new ConditioningInteractionTool();
-  const unrelated = createStaticTool();
+  const thread = new CreateThreadTool();
   for (const scenario of [
     { personaSprites: undefined, enabled: false },
     { personaSprites: { personaId: 7, spriteKeys: [] }, enabled: false },
@@ -114,7 +120,7 @@ it("exposes optional sprite selection only for the active persona's advertised r
     const tools = applyStreamContextAvailability({
       providerLabel: "fixture",
       provider: "google",
-      builtInTools: [voice, interaction, unrelated],
+      builtInTools: [voice, interaction, thread],
       tomoriState: persona,
       streamContext: {
         disableYouTubeProcessing: false,
@@ -143,19 +149,45 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
-  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
-    const tool = new InteractWithRecentMessageTool();
-    const state = createAssemblyState();
-    state.config.emoji_usage_enabled = false;
-    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+  it("hides message mutations and reactions independently of text replies", () => {
+    const tool = new ManageMessageTool();
+    const persona = createPersona({ config: { manage_message_enabled: false, emoji_usage_enabled: false } });
+    const assemble = (disableRecentMessageReplyTool = false) =>
+      applyStreamContextAvailability({
+        providerLabel: "fixture",
+        provider: "google",
+        builtInTools: [tool],
+        tomoriState: persona,
+        streamContext: { disableYouTubeProcessing: false, disableRecentMessageReplyTool },
+      });
+    const [replyOnly] = assemble();
     expect(replyOnly).toBeDefined();
     expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
     expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
-      /react|emoji|sticker/i,
+      /react|emoji|pin|edit|delete/i,
     );
-    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
-    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
-    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+    expect(assemble(true)).toEqual([]);
+    expect(getEnum(tool, "action")).toEqual(["pin", "edit", "delete", "reply", "react"]);
+  });
+
+  it("offers only the actions selected by saved Deliberate Tool Mode and nudge names", () => {
+    const [task, memory, message] = applyStreamContextAvailability({
+      providerLabel: "fixture",
+      provider: "google",
+      builtInTools: [new ManageTaskTool(), new ManageLongTermMemoryTool(), new ManageMessageTool()],
+      tomoriState: createPersona({ config: { self_teaching_enabled: true, emoji_usage_enabled: true } }),
+      streamContext: {
+        disableYouTubeProcessing: false,
+        deliberateToolAllowedNames: ["create_task", "update_long_term_memory", "interact_with_recent_message"],
+      },
+    });
+    expect(getEnum(task, "action")).toEqual(["create"]);
+    expect(task.parameters.required).toContain("reminder_purpose");
+    expect(task.parameters.properties.reminder_id).toBeUndefined();
+    expect(getEnum(memory, "action")).toEqual(["update", "delete"]);
+    expect(memory.parameters.required).toContain("memory_id");
+    expect(getEnum(message, "action")).toEqual(["reply", "react"]);
+    expect(message.parameters.properties.end_message_id).toBeUndefined();
   });
 
   it("leaves tools without an assembly hook unchanged", async () => {
@@ -241,7 +273,7 @@ describe("tool schema assembly", () => {
     expect(getPropertyNames(tool as Tool)).toContain("references");
     expect(getPropertyNames(tool as Tool)).not.toContain("media_id");
     expect(getPropertyNames(tool as Tool)).not.toContain("mask_prompt");
-    expect(getPropertyNames(tool as Tool)).not.toContain("outpaint");
+    expect(getPropertyNames(tool as Tool)).not.toContain("edit_mode");
     const properties = (tool as Tool).parameters.properties;
     expect(properties.denoise.description).toBe("Img2img strength from 0 to 1. Lower preserves more.");
     expect(properties.prompt.description).toContain("references");
@@ -264,13 +296,40 @@ describe("tool schema assembly", () => {
 
     expect(propertyNames).toContain("mask_prompt");
     expect(propertyNames).toContain("inpaint_preset");
-    expect(propertyNames).toContain("outpaint");
+    expect(propertyNames).toContain("edit_mode");
     expect(propertyNames).toContain("outpaint_amount");
     const properties = (tool as Tool).parameters.properties;
+    expect(properties.edit_mode).toMatchObject({ type: "string", enum: ["inpaint", "extend", "outpaint"] });
     expect(properties.prompt.description).toContain("For inpaint");
     expect(properties.prompt.description).toContain("For outpaint");
     expect(properties.media_id.description).toContain("inpaint or outpaint");
     expect(properties.denoise.description).toBe("Img2img/inpaint strength from 0 to 1. Lower preserves more.");
+  });
+
+  it("advertises only masked modes a custom endpoint can execute", () => {
+    const endpoint = customEndpointSchema.parse({
+      connection_id: 1,
+      custom_endpoint_id: 1,
+      server_id: 1,
+      capability: "image",
+      api_style: "comfyui",
+      label: "Fixture workflow",
+      endpoint_url: "https://endpoint.invalid",
+      requires_auth: false,
+      extra_config: { workflow_supports: { txt2img: true, img2img: true, inpaint: true, outpaint: false } },
+    });
+    const tool = new GenerateImageTool();
+    const inpaintOnly = buildGenerateImageToolVariant(tool, resolveCustomEndpointImageCapabilities(endpoint));
+    expect(inpaintOnly?.parameters.properties.edit_mode).toMatchObject({
+      type: "string",
+      enum: ["inpaint", "extend"],
+    });
+    expect(inpaintOnly?.parameters.properties.outpaint_strategy).toBeUndefined();
+
+    const genericEndpoint = { ...endpoint, api_style: "openai-compatible" as const };
+    const generic = buildGenerateImageToolVariant(tool, resolveCustomEndpointImageCapabilities(genericEndpoint));
+    expect(generic?.parameters.properties.prompt).toBeDefined();
+    expect(generic?.parameters.properties.edit_mode).toBeUndefined();
   });
 
   it("omits generate_image when no image modes are supported", () => {

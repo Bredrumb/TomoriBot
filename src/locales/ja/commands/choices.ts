@@ -6,7 +6,6 @@ export default {
     none: `なし`,
     none_user_byok: `なし（ユーザーBYOK）`,
     inherit_global: `グローバルクールダウンを継承`,
-    // /stats の期間・範囲の選択肢（3つのサブコマンド共通）
     today: `今日`,
     week: `過去7日間`,
     month: `過去30日間`,

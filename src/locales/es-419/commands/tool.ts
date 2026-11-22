@@ -85,7 +85,7 @@ Tengo funciones integradas para ayudar a reducir los costos de abusadores o spam
     prompt: {
       description: `Inspecciona los prompts que TomoriBot envía al modelo.`,
       snapshot: {
-        description: `Vuelca el prompt exacto del LLM para una persona en un archivo para depuración.`,
+        description: `Reconstruye el prompt actual de una persona y expórtalo a un archivo para depuración.`,
         persona_description: `Persona para la instantánea. Por defecto es la persona principal.`,
         format_description: `Formato de salida para el archivo de instantánea.`,
         text_option: `Texto`,
@@ -97,6 +97,7 @@ Tengo funciones integradas para ayudar a reducir los costos de abusadores o spam
         persona_not_found_description: `Esa persona ya no existe en este servidor. Elige una de la lista.`,
         file_title: `Instantánea del prompt`,
         file_description: `Aquí está la instantánea del prompt de la persona **{persona_name}** (formato: {format}).`,
+        file_scope_note: `Este archivo reconstruye el prompt actual. El proveedor puede aplicar su propio formato o recorte antes de que el modelo lo lea.`,
         file_txt_headers_note: `La configuración de la solicitud en la parte superior del archivo TXT y los encabezados \`=== Title (/command) ===\` y \`== SubTitle ==\` son anotaciones que muestran qué comando de configuración controla cada sección. **No** son parte del prompt real enviado al LLM. "Sin etiquetar" significa que fue reorganizado o es parte de un st-preset personalizado.`,
         file_hint_try_json: `Ejecuta el comando nuevamente con un formato JSON para el formato sin procesar. Elige \`JSON con herramientas\` para incluir las definiciones de herramientas.`,
         file_hint_try_text: `Ejecuta el comando nuevamente con \`format: Text\` para un formato más legible.`,

@@ -12,13 +12,11 @@ export default {
       "Los datos guardados pueden estar desactualizados porque la lectura falló. Las acciones de escritura no estarán disponibles hasta que una lectura reciente tenga éxito.",
     retry: `Reintentar`,
 
-    // Botones de categoría
     category_member_access: `Acceso de miembros`,
     category_user_blacklist: `Lista negra de usuarios`,
     category_whitelist: `Lista blanca`,
     category_quotas: `Cuotas`,
 
-    // Acceso de miembros
     member_access_title: `Ajustes de acceso de miembros`,
     member_access_description: `Configura los permisos para miembros sin \`Administrar servidor\`.`,
     member_access_servermemories_enabled: `🟢 Los miembros pueden ver sus propias memorias del servidor, agregar nuevas y editar o eliminar las suyas.`,
@@ -49,7 +47,6 @@ export default {
     member_access_failed_detail: `Falló la escritura en la base de datos o los permisos cambiaron. Reintenta para actualizar los ajustes actuales.`,
     member_access_invalid_input: `No se pudo procesar el envío del formulario. Vuelve a abrir el editor para reintentar.`,
 
-    // Lista negra de usuarios
     user_blacklist_count: `Miembros en lista negra \`({count})\``,
     personalization_blacklist_section: "Lista negra del servidor",
     personalization_blacklist_description:
@@ -93,7 +90,6 @@ export default {
     changed_receipt: `El estado de la lista negra cambió`,
     changed_receipt_detail: `Esa entrada ya no está presente en la lista negra. El panel ahora muestra el estado actual.`,
 
-    // Lista blanca
     select_page_placeholder: `Elige la página de lista blanca...`,
     page_channels: `Canales`,
     page_channels_description: `Canales en lista blanca y excepciones de enfriamiento`,
@@ -102,7 +98,6 @@ export default {
     page_roles: `Roles`,
     page_roles_description: `Roles en lista blanca para los disparadores del bot`,
 
-    // Lista blanca: canales
     whitelist_channels_count: `Canales en lista blanca \`({count})\``,
     whitelist_channels_description: `Solo puedo activarme en los siguientes canales:`,
     whitelist_channels_empty: "No hay canales en la lista blanca. El bot puede responder en cualquier canal accesible.",
@@ -143,7 +138,6 @@ export default {
     whitelist_changed_receipt: `El estado de la lista blanca cambió`,
     whitelist_changed_receipt_detail: `Ese canal ya no está presente en la lista blanca. El panel ahora muestra el estado actual.`,
 
-    // Lista blanca: canales por persona
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: "Las siguientes personas solo pueden responder en sus canales listados:",
     whitelist_persona_channels_empty:
@@ -164,7 +158,6 @@ export default {
     persona_channel_remove_success: `Restricciones de persona actualizadas`,
     persona_channel_remove_success_detail: `Se quitaron {count} entradas de canal por persona.`,
 
-    // Lista blanca: roles
     whitelist_roles_count: `Roles en lista blanca \`({count})\``,
     whitelist_roles_description: `Solo los siguientes roles pueden activarme:`,
     whitelist_roles_empty: "No hay roles en la lista blanca. Cualquier miembro puede activar al bot.",
@@ -199,7 +192,6 @@ export default {
     remove_nothing_changed: `No se quitó nada`,
     remove_nothing_changed_detail: `Todas las entradas siguieron seleccionadas. No fue necesario escribir nada.`,
 
-    // Cuotas
     quotas_title: `Cuotas de generación`,
     quotas_description:
       "Configura los límites diarios por usuario y las cuotas compartidas de todo el servidor para la generación con IA.",

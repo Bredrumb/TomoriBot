@@ -20,6 +20,8 @@ Natural Nudges 能让 TomoriBot 在未被提及的情况下主动开口，主要
 
 Natural Nudges 仅在服务器中生效，绝不在私信（DM）中运行。
 
+两种搭话都会在连续 14 天无人直接与 TomoriBot 对话后暂停。提及她、使用人格触发词，或发出[会触发她的回复](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her)即可恢复。
+
 ## 主动搭话
 <!-- anchor: active-nudges -->
 

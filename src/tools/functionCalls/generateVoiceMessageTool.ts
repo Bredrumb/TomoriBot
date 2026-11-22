@@ -43,54 +43,26 @@ import { notifyProviderToolFailure } from "@/utils/provider/providerUsage";
 export const VOICE_TOOL_VARIANTS = {
   "bracket-tags": {
     toolDescription:
-      "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this when voice delivery is requested or required by the conversation instructions. " +
-      "Otherwise, use it when spoken delivery improves the reply. " +
-      "You may include bracketed expression tags anywhere in the script to shape delivery " +
-      "(e.g. [happy], [sad], [whispers], [laughs]). " +
-      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
-    scriptDescription:
-      "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Bracketed expression tags (emotional states like [happy], [sad], [tired] or actions like " +
-      "[whispers], [laughs]) can be placed inline to shape delivery.",
+      "Send a voice message as the active persona. Use when requested, required by the conversation, or helpful to the reply. Adds a transcript if enabled.",
+    scriptDescription: "Exact words to speak. Use inline expression tags such as [happy] or [whispers].",
   },
   plain: {
     toolDescription:
-      "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this when voice delivery is requested or required by the conversation instructions. " +
-      "Otherwise, use it when spoken delivery improves the reply. " +
-      "Write the script as natural plain speech text only; do not include any bracketed tags or special markup. " +
-      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
-    scriptDescription:
-      "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Plain text only: do not write bracketed tags or any special markup.",
+      "Send a voice message as the active persona. Use when requested, required by the conversation, or helpful to the reply. Adds a transcript if enabled.",
+    scriptDescription: "Plain text only. Write the exact words to speak.",
   },
   emoji: {
     toolDescription:
-      "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this when voice delivery is requested or required by the conversation instructions. " +
-      "Otherwise, use it when spoken delivery improves the reply. " +
-      "You may embed emoji characters inline in the script to convey emotion " +
-      "(e.g. 😊 for happy, 😢 for sad, 😮 for surprised). Do not use bracketed tags. " +
-      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
-    scriptDescription:
-      "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Embed emoji characters inline to convey emotion (e.g. 😊, 😢, 😮). No bracketed tags.",
+      "Send a voice message as the active persona. Use when requested, required by the conversation, or helpful to the reply. Adds a transcript if enabled.",
+    scriptDescription: "Exact words to speak, with inline emoji for emotion. Leave out bracketed tags.",
   },
   "voice-design": {
     toolDescription:
-      "Generate a spoken Discord audio message using the active persona's configured voice design prompt. " +
-      "Use this when voice delivery is requested or required by the conversation instructions. " +
-      "Otherwise, use it when spoken delivery improves the reply. " +
-      "Write the script as natural plain speech text. You may optionally provide extra one-off delivery instructions " +
-      'such as "sound mad", "near tears", or "sleepy and quiet"; those instructions shape this message only and are not spoken aloud. ' +
-      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
+      "Send a voice message with the active persona's voice design prompt. Use when requested, required by the conversation, or helpful to the reply. Adds a transcript if enabled.",
     scriptDescription:
-      "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Plain text only: put delivery direction in voice_instructions instead of in the spoken script.",
+      "Plain text only. Write the exact words to speak and put delivery direction in voice_instructions when available.",
     voiceInstructionsDescription:
-      "Optional one-off delivery direction for this voice message only. Examples: sound mad, about to cry, whispery and tired. " +
-      "Do not repeat the spoken script here.",
+      "Optional one-off delivery direction (e.g. 'whispery and tired'). The directions are unspoken.",
   },
 } as const satisfies Record<
   string,
@@ -142,8 +114,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     properties: {
       title: {
         type: "string",
-        description:
-          'A short descriptive title for the voice message (e.g. "greeting", "farewell", "apology"). Used as the audio filename. Keep it lowercase with no spaces.',
+        description: "Short lowercase audio filename with no spaces.",
       },
       script: {
         type: "string",

@@ -38,6 +38,10 @@ remains in the conversation history rather than long-term memory.
 If you want her to save something, ask her to remember it or add it yourself. Server managers can
 disable automatic saving under `/config` > `Permissions`.
 
+Use `{@userId}` in a personal or server memory to refer to someone by the nickname the active
+persona uses for them. TomoriBot fills in the name when she recalls the memory.
+See [Prompt Macros](/features/prompt-macros/#refer-to-a-specific-discord-user).
+
 ## Memory limits
 <!-- anchor: how-many-memories -->
 

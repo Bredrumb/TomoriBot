@@ -27,6 +27,8 @@ import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } fro
 import { waitForWelcomeGate } from "@/events/guildMemberAdd/helpers/welcomeGate";
 import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
 import { type WelcomeHandoff, openWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
+import { trackWelcomeReply } from "@/utils/chat/welcomeReply";
+import type { ChatAdmissionDisposition } from "@/utils/chat/types";
 import { getEndpointRemotePolicy } from "@/utils/security/remoteUrlSecurity";
 
 const VISION_PROVIDER_URLS: Record<string, string> = {
@@ -359,23 +361,44 @@ async function sendWelcome(params: {
     `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.persona_nickname}`,
   );
 
-  await tomoriChat({
-    client,
-    message: lastMessage,
-    isFromQueue: false,
-    isManuallyTriggered: true,
-    forceReason: false,
-    isStopResponse: false,
-    selectedPersonaId: chosenPersona.persona_id,
-    isPersonaJob: false,
-    isUserImpersonation: false,
-    textQuotaSource: "system",
-    textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
-    borrowsTriggerMessage: true,
-    suppressSelfReply: true,
-    injectedContextItems: [welcomeContextItem],
-    forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
-  });
+  const personaId = chosenPersona.persona_id;
+  const welcomeReply = trackWelcomeReply(welcomeChannel, member.id, personaId, availablePersonas);
+  let disposition: ChatAdmissionDisposition | undefined;
+  try {
+    disposition = await tomoriChat({
+      client,
+      message: lastMessage,
+      isFromQueue: false,
+      isManuallyTriggered: true,
+      forceReason: false,
+      isStopResponse: false,
+      selectedPersonaId: personaId,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "system",
+      textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
+      borrowsTriggerMessage: true,
+      suppressSelfReply: true,
+      injectedContextItems: [welcomeContextItem],
+      forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
+      onGenerationResult: (result, receipts) => {
+        const greeting = receipts?.find(
+          (receipt) => receipt.channelId === welcomeChannel.id && receipt.messageId === result.firstDeliveredMessageId,
+        );
+        if (
+          result.status === "completed" &&
+          greeting?.speaker?.personaId === personaId &&
+          greeting.speaker.kind !== "copied"
+        ) {
+          return welcomeReply.confirm(greeting.messageId);
+        }
+        welcomeReply.cancel();
+      },
+      onQueueDiscard: welcomeReply.cancel,
+    });
+  } finally {
+    if (disposition !== "queued") welcomeReply.cancel();
+  }
 
   await ensureDiscordUserMention({
     client,

@@ -430,8 +430,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
-  // Auto-expose voice generation on audio reminders and suppress `create_task` so reminders cannot schedule
-  // nested reminders.
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
     if (
       /\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose) ||
@@ -445,16 +443,19 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       });
     }
 
-    const createTaskIndex = deliberateToolAllowedNames.indexOf("create_task");
-    if (createTaskIndex !== -1) {
-      deliberateToolAllowedNames.splice(createTaskIndex, 1);
-    }
+    if (deliberateToolModeActive) streamingContext.disableTaskCreation = true;
   }
 
   if (deliberateToolModeActive && incoming.naturalNudge) {
     for (const toolName of incoming.naturalNudge.toolNames) {
       deliberateToolAllowedNames.push(toolName);
       deliberateToolTriggerMatches.push({ toolName, trigger: "natural idle nudge", source: "built-in" });
+    }
+  }
+
+  if (streamingContext.disableTaskCreation) {
+    for (let index = deliberateToolAllowedNames.length - 1; index >= 0; index--) {
+      if (deliberateToolAllowedNames[index] === "create_task") deliberateToolAllowedNames.splice(index, 1);
     }
   }
 
@@ -612,6 +613,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       impersonatedUserPrompt,
       explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
       deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
+      toolStreamContext: streamingContext,
       messageIdMap,
     }),
   );
@@ -790,7 +792,8 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   loadedCustomExpressions: import("@/types/db/schema").CustomExpressionRow[] | null;
   isRpChannel: boolean;
 }> {
-  if (turn.isDMChannel || !turn.guild || !turn.persona.server_id) {
+  const guild = turn.guild;
+  if (turn.isDMChannel || !guild || !turn.persona.server_id) {
     return {
       emojiStrings: [],
       loadedEmojis: null,
@@ -806,12 +809,17 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
     (rpParentId !== null && turn.persona.config.rp_channel_ids.includes(rpParentId));
   const { emojis, stickers, customs } = await loadEmojiStickerCache(
     turn.persona.server_id,
-    turn.guild,
+    guild,
     isRpChannel ? false : turn.persona.config.emoji_usage_enabled,
     isRpChannel ? false : turn.persona.config.sticker_usage_enabled,
   );
   const emojiStrings =
-    emojis?.map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
+    emojis
+      ?.filter((row) => {
+        const emoji = guild.emojis?.cache.get(row.emoji_disc_id);
+        return emoji && emoji.available !== false;
+      })
+      .map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
   return {
     emojiStrings,
     loadedEmojis: emojis,
@@ -834,7 +842,7 @@ async function buildSimplifiedHistory(
   reactedMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
-  const channel = turn.lockedTurn.admission.channel;
+  const { channel, incoming, message: trigger } = turn.lockedTurn.admission;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
   let messages =
     "messages" in channel
@@ -855,6 +863,14 @@ async function buildSimplifiedHistory(
   ) {
     messages.push(turn.lockedTurn.admission.message);
     messages.sort((left, right) => left.id.length - right.id.length || left.id.localeCompare(right.id));
+  }
+  if (incoming.fastRegeneration && !messages.some((message) => message.id === trigger.id)) {
+    try {
+      const anchor = await channel.messages.fetch({ message: trigger.id, cache: false, force: true });
+      messages.unshift(anchor);
+    } catch (error) {
+      log.warn(`[fastRegeneration] Could not load history anchor messageId=${trigger.id}`, error);
+    }
   }
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
@@ -1146,7 +1162,6 @@ async function buildSimplifiedHistory(
     userIds.add(turn.lockedTurn.admission.client.user.id);
   }
 
-  const incoming = turn.lockedTurn.admission.incoming;
   if (incoming.reminderData && (incoming.reminderRecipientID || incoming.reminderData.self_reminder)) {
     const isSelfReminder = incoming.reminderData.self_reminder === true;
     let reminderContent = "";
@@ -1628,6 +1643,7 @@ async function resolveTurnAssistantPrefill(turn: ChatTurn, persona: TomoriState)
     persona.persona_nickname,
     persona.config.personal_memories_enabled,
     { ...turn.requestSnapshot, tomoriState: persona },
+    selected.source === "server" ? "template" : "resolve",
   );
   return text.trim() ? { text: text.trim(), source: selected.source } : null;
 }
@@ -1681,7 +1697,7 @@ function appendTailDirectives(args: {
     const isEmbedMessage =
       lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
 
-    if (isFromSelectedPersona && !isEmbedMessage) {
+    if (incoming.fastRegeneration?.action === "continue" || (isFromSelectedPersona && !isEmbedMessage)) {
       log.info(
         `Manual trigger (${args.turn.persona.persona_nickname} as last speaker): injecting continuation directive`,
       );

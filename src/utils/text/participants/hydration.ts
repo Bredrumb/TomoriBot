@@ -276,7 +276,12 @@ export function canMentionParticipant(seed: ParticipantSeed): boolean {
 export function formatPendingReminderForContext(
   reminder: Pick<
     ReminderRow,
-    "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours" | "repetition_interval_months"
+    | "reminder_id"
+    | "reminder_purpose"
+    | "reminder_time"
+    | "repetition_interval_hours"
+    | "repetition_interval_months"
+    | "repetition_interval_minutes"
   >,
   timezoneOffset: number,
 ): string {
@@ -291,7 +296,7 @@ export function formatPendingReminderForContext(
   const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
   const repetition = getReminderRepetition(reminder);
   const repeatText = repetition
-    ? `, repeats every ${repetition.interval} ${repetition.unit === "months" ? "month(s)" : "hour(s)"}`
+    ? `, repeats every ${repetition.interval} ${{ minutes: "minute(s)", hours: "hour(s)", months: "month(s)" }[repetition.unit]}`
     : "";
 
   return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
@@ -847,6 +852,8 @@ async function hydratePersonalMemoryEntries(
         displayName,
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
+        undefined,
+        "template",
       );
       const formattedText = formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []);
       if (

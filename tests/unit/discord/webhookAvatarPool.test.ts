@@ -739,6 +739,7 @@ describe("managed local avatar dispatch", () => {
     pool.channel.createWebhook.mockRejectedValue(Object.assign(new Error(), { code: 50013 }));
     const stream = makeStream(pool, primary as unknown as Webhook);
     const recordSprite = spyOn(personaSpriteMessageRepository, "record").mockResolvedValue(true);
+    spyOn(personaSpriteMessageRepository, "pruneOlderThanDays").mockResolvedValue(0);
     await stream.updater.sendSinglePayload(
       {
         content: "sprite",

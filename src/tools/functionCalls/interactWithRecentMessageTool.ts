@@ -2,14 +2,7 @@ import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import {
-  BaseTool,
-  type ToolAssemblyContext,
-  type ToolContext,
-  type ToolParameterSchema,
-  type ToolResult,
-} from "@/types/tool/interfaces";
-import { createToolVariant } from "@/tools/assembly";
+import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { DISCORD_ID_PATTERN, findFuzzyMessageMatch } from "@/utils/text/fuzzyMessageMatch";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -85,72 +78,7 @@ type ReplyDeliveryContext = {
   targetPersonaMatched: boolean;
 };
 
-export class InteractWithRecentMessageTool extends BaseTool {
-  name = "interact_with_recent_message";
-  description =
-    "Interact with a recent message in the current channel for expressive follow-up behavior. `react` adds an emoji reaction. `reply` sends a short reply or backtrack comment about an earlier message. Replies are always sent as yourself, even when the target is another persona's message. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.";
-  category = "discord" as const;
-
-  parameters: ToolParameterSchema = {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["react", "reply"],
-        description:
-          "Which expressive interaction to perform: react to a recent message with an emoji, or reply to a recent message with new text.",
-      },
-      message_id: {
-        type: "string",
-        description: "The target recent message reference, usually a `ref_N` handle from recent message metadata.",
-      },
-      content: {
-        type: "string",
-        description:
-          "Required interaction content. For `react`, provide the emoji, it can be a custom emoji. For `reply`, provide the reply text.",
-      },
-    },
-    required: ["action", "message_id", "content"],
-  };
-
-  isAvailableFor(_provider: string): boolean {
-    return true;
-  }
-
-  assembleForContext(context: ToolAssemblyContext): InteractWithRecentMessageTool {
-    if (context.state.config.emoji_usage_enabled) return this;
-
-    return createToolVariant(this, {
-      description:
-        "Reply to a recent message in the current channel with a short follow-up or backtrack comment. Replies are always sent as yourself, even when the target is another persona's message. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.",
-      parameters: {
-        ...this.parameters,
-        properties: {
-          ...this.parameters.properties,
-          action: {
-            type: "string",
-            enum: ["reply"],
-            description: "Send a text reply to a recent message.",
-          },
-          content: { type: "string", description: "The text to send in the reply." },
-        },
-      },
-    });
-  }
-
-  isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    if (!this.isAvailableFor(provider)) {
-      return false;
-    }
-
-    if (context?.streamContext?.disableAllTools) {
-      log.info("InteractWithRecentMessageTool: Disabled for this turn because tools are suppressed");
-      return false;
-    }
-
-    return true;
-  }
-
+export class RecentMessageInteraction {
   private resolveMessageId(
     rawValue: unknown,
     context: ToolContext,
@@ -289,33 +217,6 @@ export class InteractWithRecentMessageTool extends BaseTool {
   }
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    if (args.action === "react" && !context.tomoriState.config.emoji_usage_enabled) {
-      return {
-        success: false,
-        error: "Emoji reactions are disabled for this server.",
-        data: { status: "emoji_reactions_disabled" },
-      };
-    }
-    if (context.streamContext?.disableAllTools) {
-      log.info("InteractWithRecentMessageTool: Execution blocked because tools are suppressed for this turn");
-      return {
-        success: false,
-        error: "Message interaction tools are disabled for this turn.",
-        data: {
-          status: "message_interaction_disabled_for_turn",
-        },
-      };
-    }
-
-    const validation = this.validateParameters(args);
-    if (!validation.isValid) {
-      return {
-        success: false,
-        error: `Invalid parameters: ${validation.errors?.join(", ") || validation.missingParams?.join(", ") || "unknown validation error"}`,
-        message: "The recent-message interaction arguments were invalid.",
-      };
-    }
-
     const action = args.action as InteractionAction;
     const messageIdResult = this.resolveMessageId(args.message_id, context);
     if (!messageIdResult.ok) {
@@ -330,18 +231,6 @@ export class InteractWithRecentMessageTool extends BaseTool {
         message: action === "react" ? "Reacting requires an emoji." : "Replying requires non-empty text.",
         data: {
           status: action === "react" ? "missing_reaction_emoji" : "missing_reply_content",
-        },
-      };
-    }
-
-    if (action === "reply" && context.streamContext?.disableRecentMessageReplyTool) {
-      log.info("InteractWithRecentMessageTool: Reply action blocked because this turn is already a queued reply");
-      return {
-        success: false,
-        error: "Message reply interaction is disabled for this turn.",
-        message: "This turn is already replying to the queued message directly.",
-        data: {
-          status: "message_reply_interaction_disabled_for_turn",
         },
       };
     }
@@ -363,7 +252,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
       if (fuzzyMatch) {
         targetMessage = fuzzyMatch.message;
         log.info(
-          `InteractWithRecentMessageTool: Fuzzy-matched message ID "${messageIdResult.resolvedId}" -> "${fuzzyMatch.message.id}" (diff=${fuzzyMatch.diff})`,
+          `RecentMessageInteraction: Fuzzy-matched message ID "${messageIdResult.resolvedId}" -> "${fuzzyMatch.message.id}" (diff=${fuzzyMatch.diff})`,
         );
       }
     }
@@ -419,7 +308,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
           },
         };
       } catch (error) {
-        const failure = `InteractWithRecentMessageTool: Failed to react to message ${targetMessage.id}`;
+        const failure = `RecentMessageInteraction: Failed to react to message ${targetMessage.id}`;
         if (error instanceof Error) {
           if (error.message.includes("10014") || error.message.includes("Unknown Emoji")) {
             log.warn(failure, error);
@@ -471,7 +360,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
       author = await resolvePersonaPostAuthor(buildToolPersonaPostContext(context, senderPersona));
     } catch (error) {
       log.warn(
-        `InteractWithRecentMessageTool: Failed to resolve the reply author for message ${targetMessage.id}`,
+        `RecentMessageInteraction: Failed to resolve the reply author for message ${targetMessage.id}`,
         error as Error,
       );
       return {
@@ -528,7 +417,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
       );
       if (outcome.status !== "sent") {
         log.warn(
-          `InteractWithRecentMessageTool: Reply to message ${targetMessage.id} was not delivered (${outcome.status})`,
+          `RecentMessageInteraction: Reply to message ${targetMessage.id} was not delivered (${outcome.status})`,
         );
         return {
           success: false,
@@ -566,7 +455,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
         endTurn: true,
       };
     } catch (error) {
-      log.error(`InteractWithRecentMessageTool: Failed to reply to message ${targetMessage.id}`, error as Error);
+      log.error(`RecentMessageInteraction: Failed to reply to message ${targetMessage.id}`, error as Error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown reply failure",

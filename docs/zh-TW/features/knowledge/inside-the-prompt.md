@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot 將指示與記憶整理在對話上方，並將變動的資訊放在最靠近最新訊息的位置。[NovelAI](/features/integrations/novelai/) 使用獨立的版面配置，而 [SillyTavern 預設集](/features/integrations/sillytavern-support/) 則可重新排列前面的區塊。
+TomoriBot 將指示與記憶整理在對話上方，並將變動的資訊放在最靠近最新訊息的位置。[NovelAI](/features/integrations/novelai/) 使用獨立的版面配置，而 [SillyTavern 預設集](/features/integrations/sillytavern-support/) 則可重新排列前面的區塊。[提示詞巨集](/features/prompt-macros/)會在已儲存的指示中插入目前的名稱與工具參照。
 
 | 位置 | TomoriBot 接收的內容 | 在何處管理 |
 |---|---|---|
@@ -26,10 +26,20 @@ TomoriBot 將指示與記憶整理在對話上方，並將變動的資訊放在�
 :::
 
 ### 檢視提示詞
+<!-- anchor: inspecting-the-prompt -->
 
-- `/tool prompt snapshot` 將組裝好的提示詞儲存至檔案，包括使用中的記憶、文件與世界書。
+- `/tool prompt snapshot` 會在裁剪以符合模型後將提示詞儲存至檔案。下載卡片會回報被裁減的內容。
 - `/context` 顯示脈絡使用量與預估輸入成本的視覺化解析。
 - `/tool estimate cost` 按大小與成本分解提示詞。
+
+### 脈絡配適
+<!-- anchor: context-fitting -->
+
+訊息上限決定 TomoriBot 往回讀取的範圍。配適會從該上限內選取的歷史紀錄開始。對多數供應商而言，輸入預算是模型脈絡視窗在預留回覆空間並計入估算誤差後所剩餘的空間。在 150% 的情況下，提示詞在裁剪前會需要該輸入預算的 1.5 倍。
+
+當估算值超過該預算時，TomoriBot 會分批捨棄最舊的對話輪次並保留最新的請求。指令與範例對話這類固定內容，有可能在所有可捨棄的對話輪次都移除後仍使提示詞超出預算。TomoriBot 會先配適文字。當檢視包含工具結構描述時，配適警告也會一併檢查它們的預估大小。供應商會套用自己的對話範本與 token 計算方式，因此可能會裁剪更多脈絡，或拒絕過大的請求。
+
+NovelAI 會根據算繪後的提示詞計算 token 數，並另外為記憶設定上限。它可能會裁減範例對話、記憶與較舊的對話輪，接著調降回覆上限。檢視與匯出的細節請參閱 [Prompt Snapshot](/architecture/subsystems/prompt-snapshot/)。
 
 ### 工具是在哪裡定義的？
 
@@ -44,7 +54,3 @@ TomoriBot 將指示與記憶整理在對話上方，並將變動的資訊放在�
 | `/refresh` 讓她忘記了 | 重新整理會截斷近期訊息並清除該頻道的短期記憶，但不會刪除長期記憶。刪除重新整理的嵌入訊息即可解除截斷。 |
 
 如果你希望某項內容在上述所有情況下都能留存，它就必須成為長期記憶。請參閱[記憶](/features/knowledge/memory/long-term-memory/)。
-
-:::tip
-較大的訊息限制並不保證有更多歷史記錄會送達模型。當提示詞對於模型的脈絡視窗而言過大時，最舊的對話會在傳送前被捨棄；`/context` 會顯示剩餘的空間。
-:::

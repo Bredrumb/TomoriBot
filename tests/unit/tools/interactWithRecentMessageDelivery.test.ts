@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:te
 import { Collection, type Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { RecentMessageInteraction } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { clearWebhookIdentityCache } from "@/utils/chat/webhookIdentity";
@@ -75,22 +76,19 @@ function makeContext(activePersonaId: number | undefined): ToolContext {
 }
 
 function resolve(context: ToolContext, message: Message): Promise<DeliveryResult> {
-  return (new InteractWithRecentMessageTool() as unknown as DeliveryResolver).resolveReplyDeliveryContext(
-    context,
-    message,
-  );
+  return (new RecentMessageInteraction() as unknown as DeliveryResolver).resolveReplyDeliveryContext(context, message);
 }
 
-describe("interact_with_recent_message reply delivery identity", () => {
+describe("manage_message reply delivery identity", () => {
   it("rejects reactions before touching Discord when emojis are disabled", async () => {
     const context = makeContext(MAIN.persona_id);
     context.tomoriState = createPersona({ config: { emoji_usage_enabled: false } });
-    const result = await new InteractWithRecentMessageTool().execute(
+    const result = await new ManageMessageTool().execute(
       { action: "react", message_id: mainBotMessage.id, content: "👍" },
       context,
     );
     expect(result.success).toBe(false);
-    expect(result.data).toMatchObject({ status: "emoji_reactions_disabled" });
+    expect(result.data).toMatchObject({ status: "tool_action_unavailable", action: "react" });
   });
 
   let personas: ReturnType<typeof spyOn<typeof tomoriStateCache, "getCachedAllPersonas">>;
@@ -190,7 +188,10 @@ describe("interact_with_recent_message reply delivery identity", () => {
     tracked.push(send);
 
     const context = makeContext(MAIN.persona_id);
-    context.tomoriState = createPersona({ ...MAIN, config: { ...MAIN.config, emoji_usage_enabled: false } });
+    context.tomoriState = createPersona({
+      ...MAIN,
+      config: { ...MAIN.config, manage_message_enabled: false, emoji_usage_enabled: false },
+    });
     const channel = context.channel as unknown as {
       messages: { fetch: () => Promise<Collection<string, Message>> };
     };
@@ -199,8 +200,8 @@ describe("interact_with_recent_message reply delivery identity", () => {
         fetch: async () => new Collection<string, Message>([[target.id, target]]),
       };
 
-      const result = await new InteractWithRecentMessageTool().execute(
-        { action: "reply", message_id: target.id, content: "Congrats on the thing" },
+      const result = await new ManageMessageTool().execute(
+        { action: "reply", message_id: target.id, content: "Congrats on the thing", end_message_id: null },
         context,
       );
 

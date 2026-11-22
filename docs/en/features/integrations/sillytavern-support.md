@@ -103,62 +103,17 @@ prompt and any custom prompt from `/config` > Behavior > General Behavior are no
 system prompt buttons there are locked. Your custom prompt is kept, and it comes back when you turn
 the preset off in `/config` > Plugins > SillyTavern Presets.
 
-### Conditional instructions
-
-Use Handlebars blocks to include instructions only when a value is present:
-
-```text
-{{#if description}}Follow the character description.{{else}}Use a neutral voice.{{/if}}
-{{#unless {{getvar::compact}}}}Include scene details.{{/unless}}
-```
-
-A bare name such as `description` means `{{description}}`. You can also put value macros directly
-inside a condition, as in `{{#if {{input}}}}`. Empty text, `false`, and `0` are false after spaces
-are trimmed and case is ignored. Unknown macros in conditions count as empty.
-
-Blocks can nest, including TomoriBot's `{{if capability:web_search}}` and `{{if tool:web_search}}`
-blocks. Close `#if` with `{{/if}}` and `#unless` with `{{/unless}}`. A malformed block (such as a second
-`else` or the wrong closer) is omitted. A Handlebars block without a closer ends at the end of its
-node. Stray `else` and closers are dropped. More than 32 nested blocks leave the conditional syntax
-unrendered. Import notes report these problems.
-
-`{{setvar::key::value}}` stores text; `{{addvar::key::value}}` appends it. A declaration in an untaken
-Handlebars branch has no effect. Conditions see declarations earlier in the node order, including
-earlier in the same node. Plain `{{getvar::key}}` text sees the final value after all enabled nodes
-have been visited. Tool and capability conditions run afterward, so they do not control variable
-assignment.
-
 ### Preset macros
 <!-- anchor: preset-macros -->
 
-| Macro | Value |
-|---|---|
-| `{{user}}` | The member who triggered the reply |
-| `{{char}}`, `{{bot}}` | The active persona's name |
-| `{{personality}}` | Persona attributes |
-| `{{description}}` | Persona prompt |
-| `{{scenario}}` | Empty: card scenarios are folded into persona attributes |
-| `{{mesExamples}}` | Sample dialogue text |
-| `{{lastChatMessage}}`, `{{input}}` | The most recent user message in the supplied conversation |
-| `{{time}}` | Server time, such as `3:45 PM` |
-| `{{date}}` | Server date, such as `October 28, 2026` |
-| `{{weekday}}` | English weekday name, such as `Wednesday` |
-| `{{isotime}}` | Server time in `HH:mm` format, such as `15:45` |
-| `{{isodate}}` | Server date in `YYYY-MM-DD` format, such as `2026-10-28` |
-| `{{model}}` | Configured model id; per-turn randomizer picks and fallback models are not reflected |
-| `{{provider}}` | Configured provider id: `google`, `openrouter`, `novelai`, or `custom` |
-| `{{char_version}}` | Empty: character card versions are not stored |
+Use [preset macros](/features/prompt-macros/#sillytavern-preset-macros) to insert
+persona details, the latest user message, or server time into a preset node.
 
-Temporal macros share one clock reading per prompt and use the server's numeric UTC offset.
-Daylight saving follows the offset you set. A member's personal timezone does not affect them.
-When time awareness is off, all five temporal macros are empty and a condition testing one is false.
-Keep temporal macros in late or depth-injected nodes: a changing value such as `{{time}}` invalidates
-the provider prompt cache for everything after it.
+### Conditional instructions
+<!-- anchor: conditional-instructions -->
 
-`{{random: A, B}}` and `{{random::A::B}}` choose an item; `{{roll:2d6}}` rolls dice. `{{// notes}}`
-removes a comment and `{{trim}}` trims the node's surrounding whitespace. These macros and
-conditionals apply to preset instructions. Lorebook entries expand only `{{user}}`, `{{char}}`, and
-`{{bot}}`.
+Use [preset conditionals](/features/prompt-macros/#preset-conditionals) to choose
+instructions based on a value, such as whether the persona has a description.
 
 ### Compatibility Notes
 

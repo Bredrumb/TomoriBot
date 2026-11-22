@@ -1875,6 +1875,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         stbc.cooldown_type, stbc.cooldown_length,
         stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
         stbc.deliberate_tool_triggers,
+        stbc.fast_regeneration_retry_enabled, stbc.fast_regeneration_continue_enabled,
         -- 11. server_novelai_imagegen_configs
         snaic.nai_preset_name, snaic.image_default_positive_tags, snaic.image_default_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
@@ -1988,6 +1989,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         stbc.cooldown_type, stbc.cooldown_length,
         stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
         stbc.deliberate_tool_triggers,
+        stbc.fast_regeneration_retry_enabled, stbc.fast_regeneration_continue_enabled,
         -- 11. server_novelai_imagegen_configs
         snaic.nai_preset_name, snaic.image_default_positive_tags, snaic.image_default_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,

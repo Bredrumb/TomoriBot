@@ -211,7 +211,7 @@ describe("prompt macro resolver condition integration", () => {
     });
 
     expect(await resolver.expand("{{if capability:self_teaching}}Use {memory_tool}.{{/if}}")).toBe(
-      "Use `create_long_term_memory`.",
+      "Use `manage_long_term_memory` with action `create`.",
     );
   });
 
@@ -225,7 +225,7 @@ describe("prompt macro resolver condition integration", () => {
         availableToolNames: new Set(["create_long_term_memory"]),
       });
       const expanded = await resolver.expand("Use {memory_tool}, then {short_term_memory_tool}.");
-      const expected = `Use ${hasTools ? "`create_long_term_memory`" : UNAVAILABLE_TOOL_TEXT}, then ${UNAVAILABLE_TOOL_TEXT}.`;
+      const expected = `Use ${hasTools ? "`manage_long_term_memory` with action `create`" : UNAVAILABLE_TOOL_TEXT}, then ${UNAVAILABLE_TOOL_TEXT}.`;
       if (expanded !== expected) failures.push(`has_tools=${hasTools}: ${expanded}`);
     }
     expect(failures).toEqual([]);
@@ -326,8 +326,8 @@ describe("prompt macro resolver condition integration", () => {
 
     const expanded = await resolver.expand(DEFAULT_SYSTEM_PROMPT);
 
-    expect(expanded).toContain("`create_long_term_memory`");
-    expect(expanded).toContain("`update_long_term_memory`");
+    expect(expanded).toContain("`manage_long_term_memory` with action `create`");
+    expect(expanded).toContain("`manage_long_term_memory` with action `update`");
     expect(expanded).not.toContain("{{if");
   });
 
@@ -369,7 +369,9 @@ describe("prompt macro resolver condition integration", () => {
     expect(bundled).toContain("`review_capabilities`");
     expect(bundled).toContain("`fetch_url`");
     expect(bundled).toContain("https://docs.tomoribot.app/llms.txt");
-    expect(bundled.indexOf("`create_long_term_memory`")).toBeLessThan(bundled.indexOf("`review_capabilities`"));
+    expect(bundled.indexOf("`manage_long_term_memory` with action `create`")).toBeLessThan(
+      bundled.indexOf("`review_capabilities`"),
+    );
     expect(bundled).toContain("warrants it.\n\n");
     expect(guild).toContain("`read_webpage`");
     expect(guild).not.toContain("currently available URL fetch tool");

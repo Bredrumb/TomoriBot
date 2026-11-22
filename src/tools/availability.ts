@@ -18,6 +18,7 @@ import { resolveSpeechTargets, speechTargetSource } from "@/utils/provider/speec
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
+import { applyToolActionAvailability, getAvailableToolSelectors } from "@/utils/tools/toolActions";
 
 export type ToolStateForContext = ToolAssemblyState;
 
@@ -83,7 +84,8 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
         continue;
       }
 
-      availableTools.push(tool);
+      const variant = applyToolActionAvailability(tool, context.tomoriState.config, context.streamContext);
+      if (variant) availableTools.push(variant);
     } catch (error) {
       log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
     }
@@ -119,9 +121,11 @@ export function applyStreamContextAvailability(params: {
     locale: "en-US",
   };
 
-  const filteredTools = builtInTools.filter(
-    (tool) => tool.isAvailableForContext?.(provider, declarationContext) !== false,
-  );
+  const filteredTools = builtInTools.flatMap((tool) => {
+    if (tool.isAvailableForContext?.(provider, declarationContext) === false) return [];
+    const variant = applyToolActionAvailability(tool, tomoriState.config, streamContext);
+    return variant ? [variant] : [];
+  });
 
   if (filteredTools.length !== builtInTools.length) {
     log.info(
@@ -145,7 +149,7 @@ export function applyStreamContextAvailability(params: {
           sprite: {
             type: "string",
             description:
-              "Optional appearance for this message. Use an exact sprite label from your available sprites. Use an empty string to return to your base appearance; omit to keep your current appearance.",
+              "Exact available sprite label. Empty string selects the base appearance. Omit to keep the current appearance.",
           },
         },
       },
@@ -174,7 +178,8 @@ export function getAvailableToolsForContext(
         continue;
       }
 
-      availableTools.push(tool);
+      const variant = applyToolActionAvailability(tool, stateForContext.config);
+      if (variant) availableTools.push(variant);
     } catch (error) {
       log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
     }
@@ -305,7 +310,7 @@ export async function getAvailableToolsWithMCP(
     builtInTools = await assembleToolsForContext(builtInTools, {
       provider,
       state: stateForContext,
-      availableToolNames: new Set([...builtInTools.map((tool) => tool.name), ...mcpFunctionNames]),
+      availableToolNames: new Set([...builtInTools.flatMap(getAvailableToolSelectors), ...mcpFunctionNames]),
     });
 
     const totalCount = builtInTools.length + mcpFunctionNames.length;

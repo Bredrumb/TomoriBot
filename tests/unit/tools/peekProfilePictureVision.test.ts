@@ -11,7 +11,7 @@ import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 const requestedUrls: string[] = [];
-const remoteFetch = mock(async (input: RequestInfo | URL) => {
+const remoteFetch = mock(async (input: RequestInfo | URL, _init?: RequestInit) => {
   requestedUrls.push(String(input));
   return Response.json({ choices: [{ message: { content: "A fixture avatar." } }] });
 });
@@ -56,6 +56,7 @@ it("sends a non-vision persona's avatar only to the vision provider's own endpoi
     ["nonexistent-provider", null],
   ] as const) {
     requestedUrls.length = 0;
+    remoteFetch.mockClear();
     spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
       provider,
       source: "personal",
@@ -74,12 +75,18 @@ it("sends a non-vision persona's avatar only to the vision provider's own endpoi
       }),
     });
 
+    const retiredReason = "Fixture analysis rationale";
     const result = await new PeekProfilePictureTool().execute(
-      { target_identity: "Juno" },
+      { target_identity: "Juno", reason: retiredReason },
       contextForVisionProvider(provider),
     );
 
     expect(result.success).toBe(expectedUrl !== null);
     expect(requestedUrls).toEqual(expectedUrl ? [expectedUrl] : []);
+    if (expectedUrl) {
+      const body = remoteFetch.mock.calls[0]?.[1]?.body;
+      expect(typeof body).toBe("string");
+      expect(String(body)).not.toContain(retiredReason);
+    }
   }
 });

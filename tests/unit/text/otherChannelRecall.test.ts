@@ -12,6 +12,7 @@ import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { applyPromptLayoutInserts, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { resolveRandomChoiceMacrosInBuildOutput } from "@/utils/text/context/templates";
+import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { createGuildTextChannel } from "../../helpers/discordChannels";
 import * as stateCache from "@/utils/cache/tomoriStateCache";
 import { createUserRow } from "../../helpers/fixtures";
@@ -21,8 +22,10 @@ let sameChannelEntry: ShortTermMemoryEntry | undefined;
 let userEntries: ShortTermMemoryEntry[] = [];
 let crossServerOptIn = false;
 const channels = new Collection<string, ReturnType<typeof createGuildTextChannel>>();
+const referencedUserId = "400000000000000001";
 const client = {
   channels: { cache: channels, fetch: async (id: string) => channels.get(id) ?? null },
+  users: { cache: new Map([[referencedUserId, { username: "navigator" }]]) },
 } as unknown as Client;
 
 const scopedMock = createScopedModuleMocker(mock, {
@@ -51,7 +54,10 @@ function hydratedEntry(channelId: string, lastUpdated: number, overrides: Partia
   return { messages: [], serverId: "server-1", channelId, lastUpdated, ...overrides } satisfies ShortTermMemoryEntry;
 }
 
-async function recallText(tomoriState = createPersona()) {
+async function recallText(
+  tomoriState = createPersona(),
+  mentionConverter: Parameters<typeof buildShortTermMemoryContext>[0]["convertMentions"] = async (text) => text,
+) {
   const { memoryItems } = await buildShortTermMemoryContext({
     triggeringUserId: "user-1",
     currentChannelId: "channel-current",
@@ -62,7 +68,7 @@ async function recallText(tomoriState = createPersona()) {
     personalMemoriesEnabled: false,
     client,
     isUserImpersonation: false,
-    convertMentions: async (text) => text,
+    convertMentions: mentionConverter,
   });
   return memoryItems
     .filter((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)
@@ -85,6 +91,22 @@ describe("other-channel short-term recall", () => {
     spyOn(shortTermMemoryRepository, "getStmConfig").mockRestore();
     spyOn(shortTermMemoryRepository, "getStmCategories").mockRestore();
     spyOn(stateCache, "getCachedTomoriState").mockRestore();
+  });
+
+  it("resolves short-term summaries and categories while keeping copied chat literal", async () => {
+    const macro = `{@${referencedUserId}}`;
+    const timestamp = Date.now();
+    sameChannelEntry = hydratedEntry("channel-current", timestamp, { summary: `${macro} follows the map.` });
+    otherChannelEntries = [
+      hydratedEntry("channel-other", timestamp, {
+        categories: { plans: `${macro} leads the expedition.` },
+        messages: [{ role: "user", content: `Chat quoted ${macro}.`, timestamp }],
+      }),
+    ];
+    const text = (await recallText(createPersona(), convertMentions)).join("\n");
+    expect(text).toContain("navigator follows the map.");
+    expect(text).toContain("navigator leads the expedition.");
+    expect(text).toContain(`Chat quoted ${macro}.`);
   });
 
   it("isolates private sources and destinations for summaries, categories, and crude messages unless sharing is allowed", async () => {
@@ -291,7 +313,7 @@ describe("other-channel short-term recall", () => {
           triggeringUserId: "user-1",
           currentChannelId: "channel-current",
           currentServerId: "server-1",
-          tomoriState: createPersona(),
+          tomoriState: createPersona({ config: { short_term_memory_enabled: true } }),
           triggererName: "Mirri",
           botName: "Juno",
           personalMemoriesEnabled: false,

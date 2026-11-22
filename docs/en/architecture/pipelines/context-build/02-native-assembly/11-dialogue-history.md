@@ -50,6 +50,7 @@ Instead of adapting media to a specific model's vision capabilities during conte
 The registry applies note ordering at depths measured from the end of simplified history (`totalMessages - depth`), after each message's date spacer. These saved depths count items, independently of speaker-turn counting for the tail slot:
 
 - **Persona and channel notes**: Persona notes and channel notes are additive; both inject when configured. The global server context note is a fallback used only when neither persona nor channel configures a note.
+- **User references**: Saved persona, channel, and global notes resolve `{@userId}` with the active persona's naming preferences.
 - **Verbatim tool-calling nudge**: When `shouldInjectVerbatimToolCallingNudge(tomoriState)` is true, injects `VERBATIM_TOOL_CALLING_NUDGE` at depth 3 to guide custom endpoint models on verbatim tool syntax.
 - **Reunion note**: Injects a precomputed reunion note at `TIME_AWARENESS_NOTE_DEPTH` (3) when a returning triggerer has an eligible absence gap. A turn answering another persona (a self-reply chain or a later scene turn) skips it and records no presence, because the person who started the chain did not address that persona.
 - **Date spacers**: Injects an absolute-date `[System: ...]` separator before any message whose server-calendar day differs from the preceding timestamped turn. The pointer to `reveal_message_metadata` sits inside `{{if tool:reveal_message_metadata}}`.

@@ -29,3 +29,5 @@ TomoriBot 會讀取使用中頻道的近期訊息。短期記憶（STM）藉由�
 你可以在 `/config` > `人格` > `記憶` 下檢視或更正目前頻道的摘要。
 伺服器管理員可以在 `/config` > `行為` > `進階記憶` 下調整參數或停用短期記憶，並在 `/memories` > `短期` 下檢視或清除使用中的頻道摘要。
 `/refresh` 會清除目前頻道的記憶。
+
+在摘要或分類中使用 `{@userId}`，會在 TomoriBot 回想時插入該成員目前的人格專屬暱稱。請參閱[提示詞巨集](/features/prompt-macros/#refer-to-a-specific-discord-user)。

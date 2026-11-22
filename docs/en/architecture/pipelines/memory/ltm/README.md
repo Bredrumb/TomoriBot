@@ -13,8 +13,8 @@ The sub-pipeline provides two operational stages:
 
 | Stage | Tool name | Operation | Storage target |
 |---|---|---|---|
-| [01: Memory Creation](/architecture/pipelines/memory/ltm/01-ltm-create/) | `create_long_term_memory` | Inserts a new server or personal memory record | `server_memories` or `personal_memories` |
-| [02: Memory Update & Delete](/architecture/pipelines/memory/ltm/02-ltm-update-delete/) | `update_long_term_memory` | Updates or deletes an existing memory by its integer ID | `server_memories` or `personal_memories` |
+| [01: Memory Creation](/architecture/pipelines/memory/ltm/01-ltm-create/) | `manage_long_term_memory` with `create` | Inserts a new server or personal memory record | `server_memories` or `personal_memories` |
+| [02: Memory Update & Delete](/architecture/pipelines/memory/ltm/02-ltm-update-delete/) | `manage_long_term_memory` with `update` or `delete` | Updates or deletes an existing memory by its integer ID | `server_memories` or `personal_memories` |
 
 ## Key design facts
 

@@ -122,8 +122,7 @@ function visibleParticipantIdentity(
     }
     return { key: createPersonaKey(personaId), sourceDisplayName: syntheticUser.displayName };
   }
-  // A stable proxy identity arrives through a webhook but owns a real user row, so its kind comes
-  // from the ID, never from a webhook entry a caller happened to record for it.
+  // Stable proxy IDs resolve as users because the webhook only transports their messages.
   if (syntheticUser?.type === "webhook" && !isMessageProxyIdentityUserId(normalizedId)) {
     return { key: createWebhookKey(normalizedId), sourceDisplayName: syntheticUser.displayName };
   }

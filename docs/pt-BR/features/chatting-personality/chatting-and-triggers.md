@@ -13,11 +13,18 @@ TomoriBot responde quando convocado. Esta página aborda as maneiras como ela po
 Por padrão, ela responde quando você:
 
 - **Mencione ela**: `@TomoriBot`
-- **Responder** a uma de suas mensagens (incluindo a mensagem de webhook de uma pessoa)
+- **Responder** com `@ ON` a uma mensagem da conta do bot, ou responder à mensagem de webhook de uma persona
 - **Use uma palavra-gatilho**: qualquer palavra-gatilho registrada em qualquer lugar da mensagem
 - **Use `/respond`**: solicite uma resposta manualmente
 
 Em um DM, envie uma mensagem diretamente, sem qualquer palavra-gatilho ou menção.
+
+### Controles de resposta
+
+Os gerentes de servidor podem ativar Tentar Novamente e Continuar em `/config` > `Comportamento` > `Comportamento de Gatilho` > `Controles de Resposta`. Apenas o membro que solicitou uma resposta pode usar os botões dela, e somente enquanto a resposta estiver no fim da conversa. Novas mensagens ocultam os botões. Excluir essas mensagens traz os botões de volta se a mesma resposta não utilizada voltar a ser a última. Usar um botão, uma nova resposta de persona ou `/refresh` desativa esses controles definitivamente.
+
+- `↻` refaz a resposta inteira, excluindo-a e pedindo para a mesma persona responder novamente. O bot precisa de `Gerenciar mensagens` para excluir respostas enviadas pela própria conta.
+- `→` pede para a mesma persona continuar em uma nova mensagem.
 
 ### Gerenciando Palavras-Gatilho
 <!-- anchor: managing-trigger-words -->
@@ -71,7 +78,7 @@ Quando DTM está ativo:
 
 - `@{trigger}` (a palavra acionadora prefixada com `@`) aciona uma resposta
 - Discord menciona que `@TomoriBot` ainda aciona uma resposta
-- As respostas às mensagens ainda funcionam
+- [Respostas que a acionam](#how-to-trigger-her) ainda funcionam
 - `/respond` ainda funciona
 - Palavras-gatilho simples sem `@` não a ativam mais
 

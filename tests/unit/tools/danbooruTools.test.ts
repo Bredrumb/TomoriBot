@@ -261,6 +261,14 @@ describe("danbooru_search_tags tool", () => {
     client: {},
   } as unknown as ToolContext;
 
+  function isTagSearchReport([, , report]: Parameters<typeof log.error> | Parameters<typeof log.warn>): boolean {
+    return (
+      report?.errorType === "DanbooruRequestFailed" &&
+      report.serverId === context.tomoriState.server_id &&
+      report.metadata?.operation === "search_tags"
+    );
+  }
+
   it("returns a tool failure and reports it when Danbooru's response fails validation", async () => {
     fetchSpy = stubGlobalFetch(() => Response.json({ unexpected: true }));
     const errorSpy = spyOn(log, "error").mockImplementation(async () => undefined);
@@ -268,7 +276,7 @@ describe("danbooru_search_tags tool", () => {
       const result = await new DanbooruSearchTagsTool().execute({ queries: ["ryza"] }, context);
 
       expect(result).toEqual({ success: false, error: DANBOORU_FAILURE_MESSAGES.malformed });
-      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy.mock.calls.filter(isTagSearchReport)).toHaveLength(1);
     } finally {
       errorSpy.mockRestore();
     }
@@ -278,17 +286,21 @@ describe("danbooru_search_tags tool", () => {
     const errorSpy = spyOn(log, "error").mockImplementation(async () => undefined);
     const warnSpy = spyOn(log, "warn").mockImplementation(() => undefined);
     try {
-      for (const [status, errorLogs] of [
-        [503, 0],
-        [500, 1],
+      for (const [status, reports] of [
+        [503, { error: 0, warn: 1 }],
+        [500, { error: 1, warn: 0 }],
       ] as const) {
         fetchSpy?.mockRestore();
         fetchSpy = stubGlobalFetch(() => Response.json({ message: "The database is unavailable." }, { status }));
         errorSpy.mockClear();
+        warnSpy.mockClear();
         const result = await new DanbooruSearchTagsTool().execute({ queries: ["ryza"] }, context);
 
         expect(result).toEqual({ success: false, error: DANBOORU_FAILURE_MESSAGES.unavailable });
-        expect(errorSpy).toHaveBeenCalledTimes(errorLogs);
+        expect({
+          error: errorSpy.mock.calls.filter(isTagSearchReport).length,
+          warn: warnSpy.mock.calls.filter(isTagSearchReport).length,
+        }).toEqual(reports);
       }
     } finally {
       errorSpy.mockRestore();

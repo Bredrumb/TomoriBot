@@ -102,6 +102,7 @@ export interface StreamingContext {
   disableAllTools?: boolean;
   deliberateToolAllowedNames?: string[];
   disableReminderTool?: boolean;
+  disableTaskCreation?: boolean;
   // Written per attempt by applyAssistantPrefill, so the stream layer can strip any echoed prefix instead of
   // displaying it.
   outputPrefill?: string;
@@ -289,6 +290,7 @@ export interface Tool {
   isAvailableForContext?(provider: string, context: ToolContext): boolean;
 
   assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
+  withActions?(actions: string[]): Tool;
 
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
   requiresPermissions?: string[];

@@ -226,6 +226,61 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
   });
 
+  it("expires a recurring task whose cutoff elapsed before the worker got to it", async () => {
+    const reminder = makeReminder({
+      repetition_interval_minutes: 5,
+      reminder_time: new Date(Date.now() - 60_000),
+      repeat_until_time: new Date(Date.now() - 30_000),
+    });
+    getDueRemindersMock.mockImplementation(async () => [reminder]);
+
+    await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+    expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
+    expect(tomoriChatMock).not.toHaveBeenCalled();
+  });
+
+  it("moves a due task to the opening of a closed daily window without consuming its remaining count", async () => {
+    const clock = spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-12T16:00:00Z"));
+    try {
+      const reminder = makeReminder({
+        repetition_interval_minutes: 15,
+        repeat_remaining_count: 3,
+        daily_window_start_minutes: 9 * 60,
+        daily_window_end_minutes: 17 * 60,
+        daily_window_timezone_offset: 5.5,
+      });
+      getDueRemindersMock.mockImplementation(async () => [reminder]);
+
+      await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+      expect(tomoriChatMock).not.toHaveBeenCalled();
+      expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+      expect(rescheduleReminderMock.mock.calls[0]?.[1]).toEqual({
+        time: new Date("2026-09-13T03:30:00Z"),
+        anchorDay: null,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("counts successful deliveries and deletes a finite schedule after its last one", async () => {
+    const continuing = makeReminder({ repetition_interval_minutes: 15, repeat_remaining_count: 2 });
+    const finishing = makeReminder({ reminder_id: 43, repetition_interval_minutes: 15, repeat_remaining_count: 1 });
+    getDueRemindersMock.mockImplementation(async () => [continuing, finishing]);
+    tomoriChatMock.mockImplementation(async (input) => {
+      await input.onGenerationResult?.({ status: "completed", streamResults: [], personaResponses: [] });
+      return "run";
+    });
+
+    await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+    expect(rescheduleReminderMock.mock.calls[0]?.[1]).toMatchObject({ consumeRepeatCount: true });
+    expect(deleteReminderByIdMock).toHaveBeenCalledWith(finishing.reminder_id);
+    expect(deleteReminderByIdMock).not.toHaveBeenCalledWith(continuing.reminder_id);
+  });
+
   it("settles delivered reminders during drain but never after owner epoch loss", async () => {
     for (const lostOwner of [false, true]) {
       const reminder = makeReminder({ repetition_interval_hours: lostOwner ? null : 24 });

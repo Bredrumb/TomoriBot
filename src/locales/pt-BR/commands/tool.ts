@@ -79,7 +79,7 @@ Eu tenho recursos integrados para ajudar a reduzir custos de abusadores ou spamm
     prompt: {
       description: `Inspecione os prompts que TomoriBot envia para o modelo.`,
       snapshot: {
-        description: `Despeje o prompt exato do LLM para uma persona em um arquivo para depuração.`,
+        description: `Reconstrua o prompt atual de uma persona e exporte-o para um arquivo para depuração.`,
         persona_description: `Persona para gerar o snapshot. O padrão é a persona principal.`,
         format_description: `Formato de saída para o arquivo de snapshot.`,
         text_option: `Texto`,
@@ -91,6 +91,7 @@ Eu tenho recursos integrados para ajudar a reduzir custos de abusadores ou spamm
         persona_not_found_description: `Essa persona não existe mais neste servidor. Escolha uma da lista.`,
         file_title: `Snapshot do Prompt`,
         file_description: `Aqui está o snapshot do prompt para a persona **{persona_name}** (formato: {format}).`,
+        file_scope_note: `Este arquivo reconstrói o prompt atual. O provedor pode aplicar sua própria formatação ou corte antes que o modelo o leia.`,
         file_txt_headers_note: `A configuração da solicitação no início do arquivo TXT e os cabeçalhos \`=== Title (/command) ===\` e \`== SubTitle ==\` são anotações que mostram qual comando de configuração controla cada seção. Eles **não** fazem parte do prompt real enviado ao LLM. "Untagged" significa que foi reorganizado por ou é parte de uma predefinição personalizada.`,
         file_hint_try_json: `Execute o comando novamente com um formato JSON para o formato bruto. Escolha \`JSON com ferramentas\` para incluir as definições de ferramentas.`,
         file_hint_try_text: `Execute o comando novamente com \`format: Text\` para um formato mais legível.`,

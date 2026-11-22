@@ -31,6 +31,7 @@ import * as realProviderFactory from "@/utils/provider/providerFactory";
 import * as realCrypto from "@/utils/security/crypto";
 import * as realKeyRotation from "@/utils/security/keyRotation";
 import * as realToolRegistry from "@/tools/toolRegistry";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import { VERBATIM_TOOL_CALLING_NUDGE } from "@/utils/tools/verbatimToolCalling";
 import { computeSafeInputBudget } from "@/utils/text/contextTruncator";
@@ -324,9 +325,9 @@ scopedMock.module("@/utils/chat/toolLoop", () => ({
 scopedMock.module("@/tools/toolRegistry", () => ({
   ...realToolRegistry,
   getAvailableToolsWithMCP: async () => ({
-    builtInTools: [new GenerateVoiceMessageTool(), new ConditioningInteractionTool()],
+    builtInTools: [new GenerateVoiceMessageTool(), new ConditioningInteractionTool(), new ManageTaskTool()],
     mcpFunctionNames: [],
-    totalCount: 2,
+    totalCount: 3,
   }),
 }));
 
@@ -2123,6 +2124,11 @@ describe("runGenerationTurn fallback behavior", () => {
 
     it.each([false, true])("injects fallback schemas matching the advertised sprite roster: %j", async (hasSprites) => {
       const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "unused-fallback"));
+      context.streamingContext.deliberateToolAllowedNames = [
+        "create_task",
+        "generate_voice_message",
+        "interact_with_target",
+      ];
       context.currentPersona.fallback_chain = [
         {
           kind: "llm",
@@ -2192,6 +2198,9 @@ describe("runGenerationTurn fallback behavior", () => {
         expect(Boolean(schema?.function.parameters.properties.sprite)).toBe(hasSprites);
         expect(schema?.function.parameters.required).not.toContain("sprite");
       }
+      const task = schemas.find((tool) => tool.function.name === "manage_task");
+      expect(task?.function.parameters.properties.action.enum).toEqual(["create"]);
+      expect(task?.function.parameters.properties.reminder_id).toBeUndefined();
       const primaryItems = toolLoopCalls[0]?.contextItems ?? [];
       expect(primaryItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)).toBe(
         false,

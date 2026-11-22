@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot gom nhóm các chỉ dẫn và bộ nhớ ở phía trên cuộc trò chuyện, sau đó đặt thông tin hay thay đổi ở gần các tin nhắn mới nhất. [NovelAI](/features/integrations/novelai/) sử dụng bố cục riêng, và [preset SillyTavern](/features/integrations/sillytavern-support/) có thể sắp xếp lại các khối phía trước.
+TomoriBot gom nhóm các chỉ dẫn và bộ nhớ ở phía trên cuộc trò chuyện, sau đó đặt thông tin hay thay đổi ở gần các tin nhắn mới nhất. [NovelAI](/features/integrations/novelai/) sử dụng bố cục riêng, và [preset SillyTavern](/features/integrations/sillytavern-support/) có thể sắp xếp lại các khối phía trước. [Macro prompt](/features/prompt-macros/) chèn tên hiện tại và tham chiếu công cụ vào các chỉ dẫn đã lưu.
 
 | Vị trí | Những gì TomoriBot nhận được | Nơi quản lý |
 |---|---|---|
@@ -25,11 +25,23 @@ Ghi chú ngữ cảnh được đặt trước nhóm thông tin hay thay đổi 
 Một số model sử dụng thông tin ở gần đầu hoặc cuối của một prompt dài đáng tin cậy hơn thông tin ở giữa. Đối với các nhà cung cấp sử dụng ghi chú ngữ cảnh, hãy thử đặt hướng dẫn gần tin nhắn mới nhất. Hiệu quả phụ thuộc vào model và tác vụ. Xem [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) và [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
 :::
 
-`/tool prompt snapshot` đưa gói chính xác của một cá nhân vào một tệp. Đó là sự thật cơ bản mà ký ức hiện đang hoạt động, liệu tài liệu có trùng khớp hay không và mức độ thực sự phù hợp của cuộc trò chuyện.
+### Kiểm tra prompt
+<!-- anchor: inspecting-the-prompt -->
 
-`/context` vẽ cùng một gói dưới dạng lưới màu của cửa sổ ngữ cảnh của model, một màu cho mỗi nhóm khối ở trên, do đó bạn có thể xem nhanh những gì lấp đầy nó và còn lại bao nhiêu chỗ trống. Một vòng tròn đánh dấu một nhóm nhỏ hơn một hình vuông. Nó cũng hiển thị chi phí đầu vào ước tính cho mỗi câu trả lời và số lượng mã thông báo đầu vào mà nhà cung cấp đã báo cáo cho câu trả lời thực tế cuối cùng.
+- `/tool prompt snapshot` lưu lại prompt sau khi đã cắt bớt cho vừa với model. Thẻ tải xuống sẽ báo cáo những phần nào đã bị cắt.
 
-`/tool estimate cost` chia nhỏ gói tương tự theo kích thước, điều này rất hữu ích để tìm ra những gì đang ảnh hưởng đến bối cảnh của bạn trước khi bạn tăng bất kỳ giới hạn nào.
+- `/context` vẽ cùng một gói dưới dạng lưới màu của cửa sổ ngữ cảnh của model, một màu cho mỗi nhóm khối ở trên, do đó bạn có thể xem nhanh những gì lấp đầy nó và còn lại bao nhiêu chỗ trống. Một vòng tròn đánh dấu một nhóm nhỏ hơn một hình vuông. Nó cũng hiển thị chi phí đầu vào ước tính cho mỗi câu trả lời và số lượng mã thông báo đầu vào mà nhà cung cấp đã báo cáo cho câu trả lời thực tế cuối cùng.
+
+- `/tool estimate cost` chia nhỏ gói tương tự theo kích thước, điều này rất hữu ích để tìm ra những gì đang ảnh hưởng đến bối cảnh của bạn trước khi bạn tăng bất kỳ giới hạn nào.
+
+### Điều chỉnh ngữ cảnh
+<!-- anchor: context-fitting -->
+
+Giới hạn tin nhắn quyết định TomoriBot đọc ngược lại bao xa. Quá trình điều chỉnh bắt đầu từ lịch sử được chọn trong giới hạn đó. Với hầu hết nhà cung cấp, ngân sách đầu vào là phần còn lại của cửa sổ ngữ cảnh model sau khi chừa chỗ cho câu trả lời và tính cả sai số ước tính. Ở mức 150%, prompt cần gấp rưỡi ngân sách đầu vào đó trước khi bị cắt bớt.
+
+Khi mức ước tính vượt quá ngân sách đó, TomoriBot bỏ đi các lượt trao đổi trò chuyện cũ nhất theo từng đợt và giữ lại yêu cầu mới nhất. Nội dung cố định như chỉ dẫn và hội thoại mẫu có thể khiến prompt vẫn vượt ngân sách sau khi mọi lượt trao đổi đủ điều kiện đã bị bỏ. TomoriBot điều chỉnh phần văn bản trước. Khi schema công cụ được đưa vào trong một lần kiểm tra, cảnh báo điều chỉnh cũng kiểm tra kích thước ước tính của chúng. Nhà cung cấp áp dụng mẫu chat và cách đếm token riêng. Họ có thể cắt bớt thêm ngữ cảnh hoặc từ chối yêu cầu quá cỡ.
+
+NovelAI đếm token từ prompt đã kết xuất của mình và giới hạn bộ nhớ riêng. Nó có thể cắt bớt hội thoại mẫu, bộ nhớ và các lượt trò chuyện cũ hơn, sau đó giảm giới hạn câu trả lời. Chi tiết kiểm tra và xuất dữ liệu nằm trong [Snapshot prompt](/architecture/subsystems/prompt-snapshot/).
 
 ### Công cụ được định nghĩa ở đâu?
 

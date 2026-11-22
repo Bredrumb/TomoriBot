@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { UpdateLongTermMemoryTool } from "@/tools/functionCalls/updateLongTermMemoryTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -82,11 +82,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("personal memory deletion authorization", (
     expect(before.some((row) => row.personal_memory_id === memory.personal_memory_id)).toBe(true);
     const notice = spyOn(notices, "sendMemoryEmbedWithExpand").mockResolvedValue(undefined);
     try {
-      const result = await new UpdateLongTermMemoryTool().execute(
+      const result = await new ManageLongTermMemoryTool().execute(
         {
+          action: "delete",
+          memory_scope: "target_user",
           target_user: targetId,
           memory_id: memory.personal_memory_id,
-          memory_content: "",
         },
         context,
       );
@@ -108,8 +109,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("personal memory deletion authorization", (
     if (!memory?.personal_memory_id) throw new Error("Could not create personal memory");
     const notice = spyOn(notices, "sendMemoryEmbedWithExpand").mockResolvedValue(undefined);
     try {
-      const result = await new UpdateLongTermMemoryTool().execute(
-        { target_user: targetId, memory_id: memory.personal_memory_id, memory_content: "" },
+      const result = await new ManageLongTermMemoryTool().execute(
+        { action: "delete", memory_scope: "target_user", target_user: targetId, memory_id: memory.personal_memory_id },
         context,
       );
       const remaining = await personalMemoryRepository.loadForUserLineage(ownerId, refs.personaLineageId, true);
@@ -188,8 +189,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("personal memory deletion authorization", (
     };
     const notice = spyOn(notices, "sendMemoryEmbedWithExpand").mockResolvedValue(undefined);
     try {
-      const result = await new UpdateLongTermMemoryTool().execute(
-        { target_user: proxyId, memory_id: memory.personal_memory_id, memory_content: "" },
+      const result = await new ManageLongTermMemoryTool().execute(
+        { action: "delete", memory_scope: "target_user", target_user: proxyId, memory_id: memory.personal_memory_id },
         proxyContext,
       );
       const remaining = await personalMemoryRepository.loadForUserLineage(identity.userRow.user_id, 0, false);

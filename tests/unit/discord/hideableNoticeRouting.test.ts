@@ -12,7 +12,7 @@ import {
 } from "discord.js";
 import { NOTICE_CONFIG_HINT_KEY, type NoticeVerbosity, type ToolNoticeKey } from "@/constants/toolNotices";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { UpdateLongTermMemoryTool } from "@/tools/functionCalls/updateLongTermMemoryTool";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
 import { UpdateUserInfoTool } from "@/tools/functionCalls/updateUserInfoTool";
 import { sendUserBlockedNotice } from "@/tools/functionCalls/userBlockToolShared";
 import { serverMemoryRepository, userNamingRepository, userRepository } from "@/utils/db/repositories";
@@ -188,8 +188,13 @@ describe("hideable tool notices", () => {
     spyOn(minimalNoticeRefRepository, "record").mockResolvedValue(true);
     spyOn(minimalNoticeRefRepository, "pruneOlderThanDays").mockResolvedValue(0);
 
-    const result = await new UpdateLongTermMemoryTool().execute(
-      { memory_id: memory.server_memory_id, memory_content: operation === "update" ? content : "" },
+    const result = await new ManageLongTermMemoryTool().execute(
+      {
+        action: operation,
+        memory_scope: "server_wide",
+        memory_id: memory.server_memory_id,
+        memory_content: operation === "update" ? content : null,
+      },
       context,
     );
 

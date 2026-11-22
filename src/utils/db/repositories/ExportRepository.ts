@@ -98,6 +98,8 @@ interface WorkspaceConfigProjectionRow {
   deliberate_tool_mode: boolean;
   deliberate_tool_context_turns: number | null;
   deliberate_tool_triggers: Record<string, unknown>;
+  fast_regeneration_retry_enabled: boolean;
+  fast_regeneration_continue_enabled: boolean;
   cooldown_type: number;
   cooldown_length: number;
   stm_privacy_bypass: boolean;
@@ -361,6 +363,8 @@ export class ExportRepository {
           COALESCE(stbc.deliberate_tool_mode, false)                AS deliberate_tool_mode,
           stbc.deliberate_tool_context_turns                         AS deliberate_tool_context_turns,
           COALESCE(stbc.deliberate_tool_triggers, '{}'::JSONB)      AS deliberate_tool_triggers,
+          COALESCE(stbc.fast_regeneration_retry_enabled, false) AS fast_regeneration_retry_enabled,
+          COALESCE(stbc.fast_regeneration_continue_enabled, false) AS fast_regeneration_continue_enabled,
           COALESCE(stbc.cooldown_type, 0)                           AS cooldown_type,
           COALESCE(stbc.cooldown_length, 5)                         AS cooldown_length,
           COALESCE(scsc.stm_privacy_bypass, false)                  AS stm_privacy_bypass,
@@ -387,7 +391,7 @@ export class ExportRepository {
           COALESCE(snc.uncensor_unicode_space_enabled, false)       AS uncensor_unicode_space_enabled,
           COALESCE(snc.uncensor_sanitize_enabled, false)            AS uncensor_sanitize_enabled,
           COALESCE(scac.tool_use_enabled, true)                     AS tool_use_enabled,
-          COALESCE(scac.short_term_memory_enabled, true)            AS short_term_memory_enabled,
+          COALESCE(scac.short_term_memory_enabled, false)           AS short_term_memory_enabled,
           COALESCE(scac.user_info_updates_enabled, true)            AS user_info_updates_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
           COALESCE(smpc.persona_export_enabled, false)              AS persona_export_enabled,
@@ -566,6 +570,8 @@ export class ExportRepository {
             deliberate_tool_mode: configData.deliberate_tool_mode,
             deliberate_tool_context_turns: configData.deliberate_tool_context_turns ?? null,
             deliberate_tool_triggers: configData.deliberate_tool_triggers ?? {},
+            fast_regeneration_retry_enabled: configData.fast_regeneration_retry_enabled,
+            fast_regeneration_continue_enabled: configData.fast_regeneration_continue_enabled,
             cooldown_type: configData.cooldown_type,
             cooldown_length: configData.cooldown_length,
             stm_privacy_bypass: configData.stm_privacy_bypass,
@@ -769,7 +775,7 @@ export class ExportRepository {
           COALESCE(scac.user_blocking_enabled, true) AS user_blocking_enabled,
           COALESCE(scac.time_awareness_enabled, true) AS time_awareness_enabled,
           COALESCE(scac.tool_use_enabled, true) AS tool_use_enabled,
-          COALESCE(scac.short_term_memory_enabled, true) AS short_term_memory_enabled,
+          COALESCE(scac.short_term_memory_enabled, false) AS short_term_memory_enabled,
           COALESCE(scac.user_info_updates_enabled, true) AS user_info_updates_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[]) AS tool_notice_hidden_keys,
           snec.tool_notice_verbosity AS tool_notice_verbosity,
@@ -791,6 +797,8 @@ export class ExportRepository {
           COALESCE(stbc.deliberate_tool_mode, false) AS deliberate_tool_mode,
           stbc.deliberate_tool_context_turns AS deliberate_tool_context_turns,
           COALESCE(stbc.deliberate_tool_triggers, '{}'::JSONB) AS deliberate_tool_triggers,
+          COALESCE(stbc.fast_regeneration_retry_enabled, false) AS fast_regeneration_retry_enabled,
+          COALESCE(stbc.fast_regeneration_continue_enabled, false) AS fast_regeneration_continue_enabled,
           COALESCE(stbc.cooldown_type, 0) AS cooldown_type,
           COALESCE(stbc.cooldown_length, 5) AS cooldown_length,
           COALESCE(scsc.stm_privacy_bypass, false) AS stm_privacy_bypass,
@@ -887,6 +895,8 @@ export class ExportRepository {
           deliberate_tool_mode: configData.deliberate_tool_mode,
           deliberate_tool_context_turns: configData.deliberate_tool_context_turns,
           deliberate_tool_triggers: configData.deliberate_tool_triggers,
+          fast_regeneration_retry_enabled: configData.fast_regeneration_retry_enabled,
+          fast_regeneration_continue_enabled: configData.fast_regeneration_continue_enabled,
           cooldown_type: configData.cooldown_type,
           cooldown_length: configData.cooldown_length,
         },

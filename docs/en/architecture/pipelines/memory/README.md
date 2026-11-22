@@ -12,7 +12,7 @@ The memory pipeline manages state writes around a chat turn. It records recent c
 The pipeline splits into two distinct paths:
 
 - **Short-term memory (STM):** captures conversation turns into an in-process cache after each generation turn, with optional model-authored summary or category upgrades via the `update_short_term_memory` tool.
-- **Long-term memory (LTM):** executes database writes when the model invokes `create_long_term_memory` or `update_long_term_memory` during the tool loop.
+- **Long-term memory (LTM):** executes database writes when the model invokes `manage_long_term_memory` during the tool loop.
 
 An intent detection gate checks whether the user asked to remember information permanently, steering the model toward LTM tools instead of STM upgrades.
 
@@ -33,7 +33,7 @@ flowchart TD
     IntentGate -- Explicit intent --> SetIntentFlag["Set explicitLongTermMemoryIntent<br/>Suppress STM upgrade tool & prompt nudge"]
     IntentGate -- Normal message --> ToolLoop["Tool Loop Execution"]
     SetIntentFlag --> ToolLoop
-    ToolLoop -- create_long_term_memory / update_long_term_memory --> LTMPath["LTM Database Writes<br/>server_memories / personal_memories"]
+    ToolLoop -- manage_long_term_memory --> LTMPath["LTM Database Writes<br/>server_memories / personal_memories"]
     ToolLoop -- update_short_term_memory --> STMUpgrade["STM Summary Upgrade<br/>short_term_memories upsert"]
     ToolLoop --> PostTurn["Post-Turn Effects<br/>runPostTurnEffects()"]
     PostTurn --> PassiveSTM["Passive STM Capture<br/>storeShortTermMemory()"]
@@ -60,14 +60,14 @@ flowchart TD
 |---|---|---|---|---|
 | STM crude turns | In-process cache (`Map`) | Entry: 12 hours, or 24 when summary text exists | Passive turn capture (`storeShortTermMemory`) | STM context assembly |
 | STM summary / categories | In-process cache and `short_term_memories` table | Cache: 24 hours with summary text, otherwise 12 hours; database: separate retention | Tool call (`update_short_term_memory`) | STM context assembly (takes priority over crude turns) |
-| LTM server memory | `server_memories` table | Permanent | Tool call (`create_long_term_memory`) | Server memories context assembly |
-| LTM personal memory | `personal_memories` table | Permanent | Tool call (`create_long_term_memory`) | Participants context assembly |
+| LTM server memory | `server_memories` table | Permanent | `manage_long_term_memory` with `create` | Server memories context assembly |
+| LTM personal memory | `personal_memories` table | Permanent | `manage_long_term_memory` with `create` | Participants context assembly |
 
 ## Shared constraints and lifecycle
 
 ### Feature flags
 
-- **LTM tools:** both `create_long_term_memory` and `update_long_term_memory` require `self_teaching_enabled = true` in `TomoriState.config`. When disabled, tool execution aborts without writing to the database.
+- **LTM writes.** All `manage_long_term_memory` actions require `self_teaching_enabled = true` in `TomoriState.config`. When disabled, tool execution aborts without writing to the database.
 - **STM automation:** `short_term_memory_enabled` disables the update tool and cadence nudge. Existing memory content still renders, allowing manually curated summaries to remain useful. NovelAI does not receive the update tool.
 
 ### Privacy guards

@@ -10,8 +10,7 @@ const CHAT_DOCUMENT_MAX_TEXT_LENGTH = Number.parseInt(process.env.CHAT_DOCUMENT_
 
 export class ReadFileTool extends BaseTool {
   name = "read_file";
-  description =
-    "Read and extract text content from a text-based file attachment in a Discord message. Supports PDF and any plain-text format including source code (.py, .ts, .c, .cpp, .java, .go, .rs, .json, .yaml, .md, .txt, etc.). Use this when you want to see the contents of a file that was shared in the conversation.";
+  description = "Read a PDF or plain-text attachment, including source files.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -19,13 +18,11 @@ export class ReadFileTool extends BaseTool {
     properties: {
       media_id: {
         type: "string",
-        description:
-          "The media reference ID (e.g., media_1) from the system hint for the message containing the document attachment to read. This message must be within the last 100 messages in the channel.",
+        description: "Media ID of the attachment message. It must be among the last 100 channel messages.",
       },
       filename: {
         type: "string",
-        description:
-          "Optional filename to select when a message has multiple document attachments. If omitted, the first document found is used.",
+        description: "Name of the attachment to read. Omit to use the first supported document.",
       },
     },
     required: ["media_id"],

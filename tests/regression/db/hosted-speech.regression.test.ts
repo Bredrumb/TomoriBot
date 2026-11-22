@@ -34,16 +34,23 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
   let googleCredentialId: number;
   let personalCredentialId: number;
   let foreignServerId: number;
+  let reviseSpeechCredentials: string;
   const migrations = [
     "102_hosted_speech_models.sql",
     "133_hosted_transcription_models.sql",
+    "139_api_key_activity.sql",
     "901_subscription_speech_selections.sql",
+    "903_subscription_credential_retention.sql",
   ].map((name) => path.join(process.cwd(), "src/db/migrations", name));
   const scope = () => ({ kind: "server" as const, ownerId: refs.serverId });
   const personal = () => ({ kind: "personal" as const, ownerId: refs.userId });
 
   beforeAll(async () => {
     await setupTestDb();
+    const [definition] = await testSql<
+      { body: string }[]
+    >`SELECT pg_get_functiondef('revise_speech_credentials()'::regprocedure) AS body`;
+    reviseSpeechCredentials = definition.body;
     refs = await insertFixtures(testSql);
     await testSql`INSERT INTO persona_voice_configs (persona_id) VALUES (${refs.personaId})`;
     const [foreign] =
@@ -77,6 +84,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
   });
 
   afterAll(async () => {
+    await testSql.unsafe(reviseSpeechCredentials);
     await cleanupFixtures(testSql);
     await testSql`DELETE FROM servers WHERE server_id = ${foreignServerId}`;
   });

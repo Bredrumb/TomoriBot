@@ -20,13 +20,30 @@ import {
 import { localizer } from "@/utils/text/localizer";
 import { refreshToolExecutionContext } from "@/tools/availability";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
+import { getActionSelectorNames, unavailableToolAction } from "@/utils/tools/toolActions";
 
 const BUILTIN_TOOL_ALIASES: Record<string, string> = {
-  remember_this_fact: "create_long_term_memory",
+  remember_this_fact: "manage_long_term_memory",
 };
 
 function resolveBuiltInToolAlias(toolName: string): string {
   return BUILTIN_TOOL_ALIASES[toolName] ?? toolName;
+}
+
+function resolveToolArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+  messageIdMap?: MessageIdMap,
+): Record<string, unknown> {
+  const resolved = resolveOpaqueIds(args, messageIdMap);
+  if (toolName !== "remember_this_fact") return resolved;
+  const { target_user_discord_id, target_user_nickname, ...memoryArgs } = resolved;
+  const target = memoryArgs.target_user ?? target_user_nickname ?? target_user_discord_id;
+  return {
+    ...memoryArgs,
+    ...(target !== undefined ? { target_user: target } : {}),
+    action: resolved.action === undefined || resolved.action === "create" ? "create" : undefined,
+  };
 }
 
 function toolNameDistance(left: string, right: string): number {
@@ -123,7 +140,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   getReservedToolNames(): Set<string> {
-    return new Set([...this.tools.keys(), ...Object.keys(BUILTIN_TOOL_ALIASES)]);
+    return new Set([...this.tools.keys(), ...Object.keys(BUILTIN_TOOL_ALIASES), ...getActionSelectorNames()]);
   }
 
   // Guild MCP tools always require follow-up generation because the model must present the remote tool's result.
@@ -154,7 +171,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const resolvedArgs =
       context.preparedToolRequest?.name === resolvedToolName && context.preparedToolRequest.args === args
         ? args
-        : resolveOpaqueIds(args, context.messageIdMap);
+        : resolveToolArgs(toolName, args, context.messageIdMap);
 
     const serverId = context.tomoriState?.server_id;
     if (serverId) {
@@ -231,7 +248,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async prepareToolRequest(toolName: string, args: Record<string, unknown>, context: ToolContext) {
     return {
       name: resolveBuiltInToolAlias(toolName),
-      args: resolveOpaqueIds(structuredClone(args), context.messageIdMap),
+      args: resolveToolArgs(toolName, structuredClone(args), context.messageIdMap),
     };
   }
 
@@ -263,6 +280,15 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
     if (!isBuiltInToolAvailable(tool, context.provider, context)) {
       return { success: false, error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }) };
+    }
+
+    if (
+      tool.withActions &&
+      typeof args.action === "string" &&
+      tool.parameters.properties.action?.enum?.includes(args.action)
+    ) {
+      const actionFailure = unavailableToolAction(tool, args.action, context);
+      if (actionFailure) return actionFailure;
     }
 
     try {
@@ -394,10 +420,6 @@ export const ToolRegistry = new ToolRegistryImpl();
 
 export function registerTool(tool: Tool): void {
   ToolRegistry.registerTool(tool);
-}
-
-export function getTool(name: string): Tool | undefined {
-  return ToolRegistry.getTool(name);
 }
 
 export function getAvailableTools(provider: string, context: ToolContext): Tool[] {

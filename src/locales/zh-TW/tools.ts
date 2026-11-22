@@ -13,6 +13,8 @@ export default {
       delivery_failed: "無法傳送擲骰結果。未能成功完成擲骰。",
     },
     execution: {
+      action_unavailable: "本輪無法使用 `{tool}` 的 `{action}` 動作。",
+      invalid_action_arguments: "請查閱 `{tool}` 的參數定義，確認此動作需要及接受哪些欄位。",
       channel_history_unavailable: "提出請求的使用者與我都需要有讀取目標頻道訊息歷史紀錄的權限。",
       private_channel_target: "跨頻道工具無法以私人頻道或無法驗證可見度的頻道為目標。請改在該頻道中詢問我。",
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
@@ -211,8 +213,6 @@ export default {
       reading_footer: `依頁面大小不同，可能需要一點時間`,
     },
     intent_packs: {
-      // 英文刻意留空，因為 deliberateToolMode.ts 的內建樣式已經涵蓋英文語法；
-      // 在這裡加入關鍵詞會讓英文比那些樣式匹配到更多內容。
       // 中文沒有空格，條目一律以子字串比對，所以每則都取足以鎖定意圖的詞組，
       // 不用「記」「存」「畫」這種單字動詞，否則會在無關的要求上誤開工具。
       deliberate: {

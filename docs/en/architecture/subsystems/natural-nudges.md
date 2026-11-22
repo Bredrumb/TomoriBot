@@ -288,7 +288,7 @@ The Phase C turn carries `naturalNudge.targetUserDiscId`, which changes these th
   the opener creates defaults to them rather than to a bystander.
 - **Mentions.** The target's handles join the forced mentions, and `mentionableUserIds` makes the
   stream send `allowedMentions` with only that user and no `parse`, so the opener cannot ping roles,
-  `@everyone`, or another member. `interact_with_recent_message` honors the same list. After delivery,
+  `@everyone`, or another member. The `reply` action of `manage_message` honors the same list. After delivery,
   `ensureDiscordUserMention` posts a bare mention if the opener omitted it, through the persona's
   webhook for an alter (`sendAlterPersonaMention`).
 - **Records.** `target_user_id` is written on the fire row (the lottery penalty reads it) and on the

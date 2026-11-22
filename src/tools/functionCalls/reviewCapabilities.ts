@@ -8,6 +8,7 @@ import { loadCommandData } from "@/utils/discord/commandLoader";
 import { log } from "@/utils/misc/logger";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getAvailableToolSelectors } from "@/utils/tools/toolActions";
 
 interface ToolSnapshot {
   builtInTools: Tool[];
@@ -75,7 +76,10 @@ async function describeProvider(context: ToolContext): Promise<string> {
 }
 
 async function loadToolSnapshot(context: ToolContext): Promise<ToolSnapshot> {
-  const liveBuiltInTools = ToolRegistry.getAvailableTools(context.provider, context);
+  const liveBuiltInTools = ToolRegistry.getAvailableTools(context.provider, {
+    ...context,
+    streamContext: context.streamContext && { ...context.streamContext, deliberateToolAllowedNames: undefined },
+  });
   const assembled = await ToolRegistry.getAvailableToolsWithMCP(context.provider, buildToolAssemblyState(context));
   const assembledBuiltInNames = new Set(assembled.builtInTools.map((tool) => tool.name));
 
@@ -178,7 +182,7 @@ export function formatCommandCapabilities(registrationData: ApplicationCommandDa
 export class ReviewCapabilitiesTool extends BaseTool {
   name = "review_capabilities";
   description =
-    "Check your current model, runtime capabilities, available tools, settings, or registered Discord slash commands instead of guessing. Use chat for user-safe conversational capabilities, commands for the authoritative command catalog, and settings for detailed configuration. Operational settings are redacted unless the requesting member can manage the server.";
+    "Look up the current model, tools, runtime settings, or registered slash commands. Detailed operational settings require Manage Server.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -187,7 +191,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capability_type: {
         type: "string",
         description:
-          "Use 'chat' for current conversational abilities and tools, 'commands' for registered slash commands, or 'settings' for runtime feature configuration and disabled reasons.",
+          "Use chat for user-safe capabilities, commands for the registered catalog, or settings for feature status and disabled reasons.",
         enum: ["chat", "commands", "settings"],
       },
     },
@@ -238,6 +242,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
     const providerLabel = await describeProvider(context);
     const builtInNames = new Set(snapshot.builtInTools.map((tool) => tool.name));
+    const availableSelectors = new Set(snapshot.builtInTools.flatMap(getAvailableToolSelectors));
     const content: string[] = [
       "# Your Current Chat Capabilities",
       "",
@@ -278,7 +283,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       "",
       "## Memory and Knowledge",
       "",
-      `- **Long-term memory writing**: ${builtInNames.has("create_long_term_memory") || builtInNames.has("update_long_term_memory") ? "available" : "unavailable"}`,
+      `- **Long-term memory writing**: ${builtInNames.has("manage_long_term_memory") ? "available" : "unavailable"}`,
       `- **Short-term memory**: ${config.short_term_memory_enabled ? "enabled" : "disabled"}`,
       `- **Personal memories**: ${config.personal_memories_enabled ? "enabled" : "disabled"}`,
       `- **User info updates**: ${config.user_info_updates_enabled ? "enabled" : "disabled"}`,
@@ -289,7 +294,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       `- **Image generation**: ${builtInNames.has("generate_image") || builtInNames.has("generate_image_nai") ? "available" : "unavailable"}`,
       `- **Video generation**: ${builtInNames.has("generate_video") ? "available" : "unavailable"}`,
       `- **Voice messages**: ${builtInNames.has("generate_voice_message") ? "available" : "unavailable"}`,
-      `- **Message management**: ${builtInNames.has("manage_message") ? "available" : "unavailable"}`,
+      `- **Message management**: ${availableSelectors.has("manage_message") ? "available" : "unavailable"}`,
       `- **Thread creation**: ${builtInNames.has("create_thread") ? "available" : "unavailable"}`,
       `- **Danbooru tag lookup**: ${builtInNames.has("danbooru_search_tags") ? "available" : "unavailable"}`,
       "",

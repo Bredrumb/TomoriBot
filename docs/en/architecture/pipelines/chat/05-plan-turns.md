@@ -13,7 +13,9 @@ persona(s) reply, validates access and quotas, and produces an ordered `ChatTurn
 
 ```mermaid
 flowchart TD
-  turn["LockedChatTurn"] --> load["loadOrRegisterTriggerUser()<br/>hydrates UserRow and locale"]
+  turn["LockedChatTurn"] --> state{"Persona state available?"}
+  state -->|"No"| notice["Send a setup or updating notice when eligible"]
+  state -->|"Yes"| load["loadOrRegisterTriggerUser()<br/>hydrates UserRow and locale"]
   load --> direct["validateDirectChatTrigger()<br/>validates direct mention / trigger words"]
   direct --> access["evaluateChatAccess()<br/>checks whitelist, blacklist, and role rules"]
   access --> autochat["updateAutochatCounter()<br/>advances count for queued turns that skipped pre-lock"]
@@ -26,8 +28,12 @@ flowchart TD
 
 ### User hydration and trigger validation
 
+When persona state is missing, planning reads the triggering user's saved language without
+registering a user. Setup and updating notices fall back to the interaction locale, the guild's
+preferred locale, then English.
+
 1. **User loading**: `loadOrRegisterTriggerUser()` fetches or registers the triggering user in `userRepository`.
-   It attaches the user record and preferred locale to `admission.userRow`.
+   Planning stores the record in `admission.userRow` and the turn's language in `admission.locale`.
 2. **Direct trigger checks**: `validateDirectChatTrigger()` checks whether the message explicitly mentions the
    bot, uses trigger words, or addresses a specific persona.
 3. **Access gating**: `evaluateChatAccess()` checks server channel whitelists, role gates, and member blacklist

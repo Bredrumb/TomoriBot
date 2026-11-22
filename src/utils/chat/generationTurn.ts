@@ -5,7 +5,7 @@ import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
-import type { ToolContext } from "@/types/tool/interfaces";
+import type { StreamingContext, ToolContext } from "@/types/tool/interfaces";
 import { resolveRouteTextModel } from "@/utils/provider/textModelSelection";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
@@ -185,7 +185,7 @@ async function runGenerationAttempts(
           : baseContextItems,
         isUserImpersonation: context.isUserImpersonation,
         tomoriState: attempt.tomoriState,
-        deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
+        streamContext: context.streamingContext,
         sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
@@ -1162,12 +1162,13 @@ async function prepareProviderContextItems(args: {
   contextItems: StructuredContextItem[];
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
-  deliberateToolAllowedNames: string[] | undefined;
+  streamContext: StreamingContext;
   // Must come from the built provider config rather than tomoriState because a provider's live capability catalog can
   // withdraw tools the state still allows.
   sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
-  let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, args.deliberateToolAllowedNames);
+  const deliberateToolAllowedNames = args.streamContext.deliberateToolAllowedNames;
+  let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, deliberateToolAllowedNames);
   if (!args.sendsTools) {
     contextItems = contextItems.filter((item) => !item.requiresToolCalling);
   }
@@ -1183,6 +1184,8 @@ async function prepareProviderContextItems(args: {
         tomoriState: args.tomoriState,
         contextItems,
         isUserImpersonation: args.isUserImpersonation,
+        streamContext: args.streamContext,
+        deliberateToolAllowedNames,
       });
       if (toolItem) {
         contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);

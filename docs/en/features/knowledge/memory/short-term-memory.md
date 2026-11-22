@@ -47,3 +47,6 @@ You can view or correct the current channel's summary under `/config` > `Persona
 Server managers can adjust parameters or disable short-term memory under `/config` > `Behavior` >
 `Advanced Memory`, and review or clear active channel summaries under `/memories` > `Short-Term`.
 `/refresh` clears the current channel's memory.
+
+Use `{@userId}` in a summary or category to insert the person's current persona-specific nickname
+when TomoriBot recalls it. See [Prompt Macros](/features/prompt-macros/#refer-to-a-specific-discord-user).

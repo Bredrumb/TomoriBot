@@ -14,7 +14,7 @@ export interface StructuredDocumentChunk {
   headingPath: DocumentHeadingPath | null;
 }
 
-// These measured budgets keep the fixture peak at 464 E5 tokens because CJK and dense runs count triple.
+// These character limits leave room because CJK and dense text can consume more embedding tokens per character.
 const DOCUMENT_CHUNK_TARGET = 900;
 export const DOCUMENT_CHUNK_MAX = 1400;
 // Bound repeated heading context because an authored title can exceed the entire embedding budget.
@@ -180,7 +180,6 @@ export function chunkStructuredDocument(text: string): StructuredDocumentChunk[]
       const header = `${line}\n${lines[i + 1]}`;
       i += 2;
       if (documentTextWeight(header) + 4 >= budget()) {
-        // A header larger than the chunk budget is preserved as prose because it cannot accompany any row.
         append(header);
         flush();
         while (i < lines.length && lines[i].includes("|") && lines[i].trim()) append(lines[i++]);

@@ -64,6 +64,7 @@ async function reassemble(
   nodes: CachedPresetData["nodes"],
   contextItems: StructuredContextItem[],
   macroOverrides: Partial<Parameters<typeof reassembleWithPreset>[2]> = {},
+  mentionOverrides: Partial<Parameters<typeof reassembleWithPreset>[3]> = {},
 ): Promise<StructuredContextItem[]> {
   const result = await reassembleWithPreset(
     { contextItems, tailDirectives: [], lowerPriorityTailDirectives: [] },
@@ -94,6 +95,7 @@ async function reassemble(
       botName: "Tomori",
       personalMemoriesEnabled: true,
       toolPromptMacroResolver: createToolPromptMacroResolver({ capabilities: { web_search: true } }),
+      ...mentionOverrides,
     },
   );
   applyPromptLayoutInserts(result.contextItems, []);
@@ -101,6 +103,22 @@ async function reassemble(
 }
 
 describe("reassembleWithPreset", () => {
+  test("resolves authored user references and preserves the same macro copied from chat", async () => {
+    const userId = "400000000000000001";
+    const macro = `{@${userId}}`;
+    const client = { users: { cache: new Map([[userId, { username: "mirri_username" }]]) } } as unknown as Client;
+    const items = await reassemble(
+      [customNode(`${macro} saw {{input}} and {{lastChatMessage}}`)],
+      [],
+      { lastUserMessage: macro },
+      { client, personalMemoriesEnabled: false },
+    );
+    expect(items.flatMap((item) => item.parts)).toContainEqual({
+      type: "text",
+      text: `mirri_username saw ${macro} and ${macro}`,
+    });
+  });
+
   test("routes constant lore at world-info markers and documents at the tail slot", async () => {
     const items = await reassemble(
       [

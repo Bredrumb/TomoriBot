@@ -14,6 +14,8 @@ export default {
       delivery_failed: "No se pudo publicar el resultado de los dados. No se entregó ninguna tirada con éxito.",
     },
     execution: {
+      action_unavailable: "Este turno no admite la acción `{action}` de `{tool}`.",
+      invalid_action_arguments: "Consulta el esquema de `{tool}` para ver qué campos requiere y admite esta acción.",
       channel_history_unavailable:
         "Tanto el usuario solicitante como yo necesitamos permiso para leer el historial de mensajes del canal objetivo.",
       private_channel_target:

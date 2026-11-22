@@ -22,6 +22,9 @@ aiGenerated: false
 
 如果你想讓她儲存某些內容，請直接請她記住，或自己動手新增。伺服器管理員可以在 `/config` > `權限` 下停用自動儲存。
 
+在個人或伺服器記憶中使用 `{@userId}`，即可用目前作用中人格對該成員的暱稱來指稱對方。TomoriBot 會在回想該記憶時填入名稱。
+請參閱[提示詞巨集](/features/prompt-macros/#refer-to-a-specific-discord-user)。
+
 ## 記憶數量限制
 <!-- anchor: how-many-memories -->
 

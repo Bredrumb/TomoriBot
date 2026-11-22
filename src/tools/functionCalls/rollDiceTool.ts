@@ -10,7 +10,7 @@ import { localizer } from "@/utils/text/localizer";
 export class RollDiceTool extends BaseTool {
   name = "roll_dice";
   description =
-    "Roll random dice for tabletop games, roleplay, or a requested random outcome. Use this tool instead of inventing a dice result. The roll is posted publicly in the current channel. Use the returned result when continuing the scene. Do not reroll merely to obtain a preferred outcome; reroll only when requested or required by the agreed game rules.";
+    "Roll dice publicly in this channel and use the result. Reroll only when requested or required by the agreed rules.";
   category = "discord" as const;
   requiresFeatureFlag = "dice_rolling";
   requiresFollowUp = true;
@@ -21,17 +21,17 @@ export class RollDiceTool extends BaseTool {
       dice: {
         type: "string",
         description:
-          "One dice group with an optional integer modifier, such as d20, 3d4, 2d6+3, or 1d20-2. Roll 1-100 dice with 2-1000 sides each. Modifier range: -10000 to +10000. Maximum 64 characters.",
+          "One dice group and optional integer modifier (e.g. d20 or 2d6+3). Roll 1-100 dice with 2-1000 sides, modifier -10000 to +10000. Max 64 characters.",
       },
       mode: {
         type: "string",
         enum: [...DICE_MODES],
         description:
-          "Defaults to normal. Advantage rolls two d20s and keeps the higher; disadvantage keeps the lower. These modes require 1d20 with an optional modifier, applied once after selection.",
+          "Defaults to normal. Advantage keeps the higher of two d20 rolls, disadvantage the lower. Both require 1d20 and apply the modifier once.",
       },
       reason: {
         type: "string",
-        description: "Optional short label for the roll, such as Stealth check or Fire damage. Maximum 100 characters.",
+        description: "Roll label (e.g. Stealth check). Max 100 characters.",
       },
     },
     required: ["dice"],

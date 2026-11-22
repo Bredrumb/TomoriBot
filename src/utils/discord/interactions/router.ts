@@ -20,6 +20,7 @@ import {
   personalProvidersInteractionRoute,
   providersInteractionRoute,
 } from "@/utils/discord/interactions/providersRoutes";
+import { replyControlsInteractionRoute } from "@/utils/discord/interactions/replyControlsRoute";
 import { setupInteractionRoute } from "@/utils/discord/interactions/setupRoutes";
 import { subscriptionInteractionRoute } from "@/modules/supporter-billing/subscribe/components";
 import { statusInteractionRoute } from "@/utils/discord/interactions/statusRoutes";
@@ -49,6 +50,7 @@ const registry = new InteractionRouteRegistry([
   identityMemoriesInteractionRoute,
   personalProvidersInteractionRoute,
   providersInteractionRoute,
+  replyControlsInteractionRoute,
   setupInteractionRoute,
   subscriptionInteractionRoute,
   statusInteractionRoute,

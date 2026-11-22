@@ -83,6 +83,8 @@ Lời nhắc hệ thống nằm phía trên cá tính và định hình hành vi
 - `/config` > `Hành vi` > `Hành vi chung`: chọn từ các preset chỉ dẫn hệ thống. `Default + Image Generation Expert` bổ sung hướng dẫn về thẻ anime và trang phục nhân vật chính xác vào prompt mặc định (xem [Tra cứu thẻ](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Hành vi` > `Hành vi chung`: đặt lại về mặc định. Xác nhận hiển thị lời nhắc trước đó để bạn có thể khôi phục nó nếu vô tình xóa.
 
+Dùng [macro prompt](/features/prompt-macros/) để chèn tên hoặc các công cụ khả dụng vào prompt hệ thống hoặc prefill phản hồi.
+
 Khi [preset SillyTavern](/features/integrations/sillytavern-support/) đang hoạt động, nó sẽ điều khiển prompt hệ thống. Hãy tắt preset để chỉnh sửa lại prompt máy chủ đã lưu.
 
 ## Đầu ra không kiểm duyệt

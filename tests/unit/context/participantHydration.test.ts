@@ -29,6 +29,7 @@ import { getCachedUserRow, clearUserCache } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import * as dbClient from "@/utils/db/client";
 import { createUserRow as createSharedUserRow } from "../../helpers/fixtures";
+import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 
 const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000001";
@@ -171,7 +172,7 @@ function createFixture(
   const client = {
     user: { id: BOT_ID },
     guilds: { cache: new Map([[GUILD_ID, guild]]) },
-    users: { fetch: async () => options.fallbackUser ?? null },
+    users: { cache: new Collection<string, User>(), fetch: async () => options.fallbackUser ?? null },
     options: { intents: { has: () => true } },
   } as unknown as Client;
   const activePersonaScope: ActivePersonaScope = {
@@ -615,6 +616,37 @@ describe("participant hydration", () => {
     fixture.params.tomoriConfig.personal_memories_enabled = false;
     await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
     expect(candidates).toEqual([]);
+  });
+
+  it("resolves user references in personal-memory prompt text and recall candidates", async () => {
+    const loadUser = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(null);
+    const loadPrivacy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    try {
+      const user = createMember().user;
+      const fixture = createFixture();
+      fixture.params.convertMentions = convertMentions;
+      fixture.params.client.users.cache.set(USER_ID, user);
+      const loadMemories = fixture.dependencies.loadPersonalMemories;
+      fixture.dependencies.loadPersonalMemories = async (userId, lineageId) => {
+        const [memory] = await loadMemories(userId, lineageId);
+        return [{ ...memory, content: `{@${USER_ID}} collects maps.` }];
+      };
+      const candidates: RecallCandidate[] = [];
+      fixture.params.memoryRecall = {
+        include: async (candidate) => {
+          candidates.push(candidate);
+          return true;
+        },
+      };
+      const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+      const entry = result.profiles[0]?.fields.find((field) => field.kind === "personal_memories")?.memoryEntries?.[0];
+      expect(entry?.text).toBe(`${user.username} collects maps.`);
+      expect(candidates[0]?.line).toContain(entry?.text ?? "");
+    } finally {
+      loadUser.mockRestore();
+      loadPrivacy.mockRestore();
+      clearUserCache();
+    }
   });
 
   it("preserves channel and content tag filtering", async () => {

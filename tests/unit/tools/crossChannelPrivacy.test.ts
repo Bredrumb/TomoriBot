@@ -39,8 +39,10 @@ import { CreateThreadTool } from "@/tools/functionCalls/createThreadTool";
 import * as toolDelivery from "@/utils/discord/webhook/toolPersonaDelivery";
 import * as authoredText from "@/utils/discord/modelAuthoredText";
 import { createGuildTextChannel } from "../../helpers/discordChannels";
-import { ReminderTool } from "@/tools/functionCalls/reminderTool";
+import { ManageTaskTool } from "@/tools/functionCalls/manageTaskTool";
 import { serverScheduleRepository, userRepository } from "@/utils/db/repositories";
+import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
+import * as nudgeConfigCache from "@/modules/natural-nudges/runtime/configCache";
 
 const restores: Array<() => void> = [];
 const sourceId = "source-channel";
@@ -131,6 +133,21 @@ function fixture(history: Message[], anchorLookup?: () => Promise<Collection<str
 }
 
 describe("cross-channel target authorization", () => {
+  it("rejects invalid modes and retired flags before dispatch", async () => {
+    const f = fixture([message("public-history", "author")]);
+    for (const modeArgs of [{ mode: "invalid" }, { peek_only: true }, { boomerang: true }]) {
+      const result = await new CrossChannelMessageTool().execute(
+        { target_channel: "garden", task: "Check", ...modeArgs },
+        f.context,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.data).toMatchObject({ status: "cross_channel_failed_invalid_mode" });
+    }
+    expect(f.dispatch).not.toHaveBeenCalled();
+    expect(f.fetches).toHaveLength(0);
+  });
+
   it("ignores another member's denial for classification but still enforces the requester's permissions", async () => {
     for (const deniedRequester of [false, true]) {
       const f = fixture([message("public-history", "author")]);
@@ -143,10 +160,7 @@ describe("cross-channel target authorization", () => {
       Object.assign(f.context.client.guilds, {
         fetch: async () => ({ members: { me: { id: "bot" }, fetch: async (id: string) => ({ id }) } }),
       });
-      const result = await new CrossChannelMessageTool().execute(
-        { target_channel: "garden", peek_only: true },
-        f.context,
-      );
+      const result = await new CrossChannelMessageTool().execute({ target_channel: "garden", mode: "peek" }, f.context);
       expect(result.success).toBe(!deniedRequester);
       expect(f.fetches.length > 0).toBe(!deniedRequester);
     }
@@ -181,18 +195,18 @@ describe("cross-channel target authorization", () => {
           Object.assign(f.target, { type: ChannelType.PublicThread, isThread: () => true, parent: null });
         for (const peek of [false, true]) {
           const result = await new CrossChannelMessageTool().execute(
-            { target_channel: "garden", task: "Check", peek_only: peek },
+            { target_channel: "garden", task: "Check", mode: peek ? "peek" : "dispatch" },
             f.context,
           );
           expect(result.success, `${restriction}, bypass=${bypass}, peek=${peek}`).toBe(false);
         }
-        const task = await new ReminderTool().execute(
+        const task = await new ManageTaskTool().execute(
           {
             target_channel: "garden",
+            action: "create",
             reminder_purpose: "Check",
             self_reminder: true,
             minutes_from_now: 10,
-            repetition_interval_hours: 0,
           },
           f.context,
         );
@@ -213,7 +227,7 @@ describe("cross-channel target authorization", () => {
     const outward = fixture([message("public-history", "author")]);
     outward.context.tomoriState.config.private_channel_ids = [sourceId];
     const result = await new CrossChannelMessageTool().execute(
-      { target_channel: "garden", task: "Announce", boomerang: false },
+      { target_channel: "garden", task: "Announce" },
       outward.context,
     );
     expect(result.success).toBe(true);
@@ -234,10 +248,7 @@ describe("cross-channel target authorization", () => {
         ),
     });
 
-    const result = await new CrossChannelMessageTool().execute(
-      { target_channel: "garden", task: "", peek_only: true },
-      f.context,
-    );
+    const result = await new CrossChannelMessageTool().execute({ target_channel: "garden", mode: "peek" }, f.context);
 
     expect({ success: result.success, historyReads: f.fetches.length }).toEqual({
       success: false,
@@ -258,10 +269,7 @@ describe("cross-channel target authorization", () => {
         ),
     });
 
-    const result = await new CrossChannelMessageTool().execute(
-      { target_channel: "garden", task: "", peek_only: true },
-      f.context,
-    );
+    const result = await new CrossChannelMessageTool().execute({ target_channel: "garden", mode: "peek" }, f.context);
 
     expect({ success: result.success, historyReads: f.fetches.length }).toEqual({
       success: false,
@@ -276,10 +284,7 @@ describe("cross-channel target authorization", () => {
       isThread: () => true,
     });
 
-    const result = await new CrossChannelMessageTool().execute(
-      { target_channel: "garden", task: "", peek_only: true },
-      f.context,
-    );
+    const result = await new CrossChannelMessageTool().execute({ target_channel: "garden", mode: "peek" }, f.context);
 
     expect(result.data).toMatchObject({ status: "cross_channel_failed_private_target" });
     expect(f.fetches).toEqual([]);
@@ -483,6 +488,8 @@ describe("cross-channel request attribution", () => {
             rejectedByWhitelist: borrowed,
           }),
           spyOn(errorVisibility, "shouldSurfaceChatUserErrors").mockReturnValue(false),
+          spyOn(metricSampleRepository, "recordSample").mockResolvedValue(undefined),
+          spyOn(nudgeConfigCache, "recordNaturalNudgeDirectChat").mockResolvedValue(undefined),
           spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.llm),
           spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
           spyOn(credentialResolver, "resolveCapabilityCredentials").mockImplementation(
@@ -515,7 +522,7 @@ describe("cross-channel request attribution", () => {
         });
 
         const result = await new CrossChannelMessageTool().execute(
-          { target_channel: "garden", task: "Check the conversation", boomerang: true },
+          { target_channel: "garden", task: "Check the conversation", mode: "report_back" },
           f.context,
         );
         if (borrowed) {
@@ -568,7 +575,7 @@ describe("cross-channel full privacy", () => {
     f.dispatch.mockRejectedValue(new Error("dispatch unavailable"));
 
     const result = await new CrossChannelMessageTool().execute(
-      { target_channel: "garden", task: "Check the conversation", boomerang: true },
+      { target_channel: "garden", task: "Check the conversation", mode: "report_back" },
       f.context,
     );
 
@@ -588,7 +595,7 @@ describe("cross-channel full privacy", () => {
     const controller = new AbortController();
     f.context.abortSignal = controller.signal;
     const result = new CrossChannelMessageTool()
-      .execute({ target_channel: "garden", task: "Check the conversation", boomerang: true }, f.context)
+      .execute({ target_channel: "garden", task: "Check the conversation", mode: "report_back" }, f.context)
       .then(
         () => null,
         (error: unknown) => error,
@@ -622,8 +629,7 @@ describe("cross-channel full privacy", () => {
         {
           target_channel: "garden",
           task: "Check the conversation",
-          peek_only: mode === "peek",
-          boomerang: mode === "boomerang",
+          mode: mode === "peek" ? "peek" : "report_back",
         },
         fixtureState.context,
       );
@@ -682,8 +688,7 @@ describe("cross-channel full privacy", () => {
         {
           target_channel: "garden",
           task: "Check the conversation",
-          peek_only: mode === "peek",
-          boomerang: mode === "boomerang",
+          mode: mode === "peek" ? "peek" : "report_back",
         },
         fixtureState.context,
       );

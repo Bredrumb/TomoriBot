@@ -34,25 +34,7 @@ sidebar:
 | Danbooru投稿の読み込み | - | `danbooru_enabled` | IDまたはリンクから1つのDanbooru投稿のグループ化されたタグを読み込みます。 |
 | 音声メッセージを生成 | `{voice_message_tool}` | ElevenLabsキー + ペルソナボイス + `voice_message_enabled` | Discordで音声返信を送信します。 |
 
-:::note[プロンプト作成者向け]
-システムプロンプトやペルソナの指示をカスタマイズする際は、ツール名を直接記述するのではなく、上の表の**プロンプトマクロ**で参照してください。マクロはコンテキスト組み立て時に正しい名前に展開され、ツールが利用できない場合にも適切に縮退動作します。
-`{pin_tool}` と `{timestamp_refresh_tool}` は、`{manage_message_tool}` と `{message_metadata_tool}` の互換エイリアスとして引き続き機能します。Web検索とURLツールにもマクロがあります：`{web_search_tool}`、`{image_search_tool}`、`{video_search_tool}`、`{news_search_tool}`、`{url_fetch_tool}`、`{url_metadata_tool}`。これらは、サーバーMCPによる代替品を含め、利用可能な最適なエンジンへ動的に解決されます。
-:::
-
 ### 条件付きプロンプトブロック
+<!-- anchor: conditional-prompt-blocks -->
 
-上記のツールマクロをサポートするプロンプトテキストは、スコープ付き条件文もサポートします：
-
-```text
-{{if capability:self_teaching}}
-Use {memory_tool} when a detail is worth remembering.
-{{else}}
-Do not promise to save long-term memories.
-{{/if}}
-```
-
-有効なTomoriBot設定には `capability:<name>` を使用し、アクティブなプロバイダーとモデルで正確なツールが利用可能な場合にのみテキストを表示する場合は `tool:<function_name>` を使用します。バンドルされたURLリーダーまたはサーバーMCPの代替品が利用可能な場合は、`tool_family:url_fetch` を使用します。条件を反転するには、条件の前に `!` を付けます。ブロックはネストでき、1つの `{{else}}` を含めることができます。一般的な `and`/`or` 式はサポートされていません。
-
-サポートされている機能名は、`tool_use`、`self_teaching`、`personal_memories`、`emoji_usage`、`sticker_usage`、`web_search`、`manage_message`、`thread_creation`、`image_generation`、`video_generation`、`voice_message`、`user_blocking`、`short_term_memory`、`time_awareness` です。
-
-ツールの条件には、プロバイダー/モデルのサポート、サーバー設定、構成されたバックエンド、MCPによる代替、および現在の明示的ツールモードの許可リストが反映されます。これらは、ツールの実行時に行われるDiscord権限チェックを回避したり予測したりするものではありません。不明な機能名はfalseとして評価され、ログに記録されます。不正な形式のブロックは省略されます。生のチャットメッセージ、モデル出力、ツールの結果が条件付きテンプレートとして扱われることはありません。
+保存された指示に関数名を挿入するには[ツールマクロ](/features/prompt-macros/#tool-macros)を使用します。ツールや機能が利用可能な場合にのみそれらの指示を含めるには、[条件付きブロック](/features/prompt-macros/#conditional-prompt-blocks)を使用します。

@@ -228,6 +228,8 @@ function fallbackBehaviorView(state: TomoriState): {
       alwaysReplyEnabled: state.config.always_reply_enabled ?? false,
       cooldownType: state.config.cooldown_type ?? CooldownType.OFF,
       cooldownLength: state.config.cooldown_length ?? 5,
+      fastRegenerationRetryEnabled: state.config.fast_regeneration_retry_enabled,
+      fastRegenerationContinueEnabled: state.config.fast_regeneration_continue_enabled,
     },
   };
 }
@@ -259,7 +261,9 @@ async function repaintBehavior(
         : route.action.includes("dtm") ||
             route.action.includes("always") ||
             route.action.includes("cooldown") ||
-            route.action.includes("limits")
+            route.action.includes("limits") ||
+            route.action === "behavior-retry-set" ||
+            route.action === "behavior-continue-set"
           ? "trigger"
           : "general",
     selectedPersonaId: null,
@@ -792,11 +796,23 @@ async function runTriggerWrite(
   if (!state) return null;
   const locale = route.locale;
   const repositories = await import("@/utils/db/repositories");
-  if (route.action === "behavior-dtm-set" || route.action === "behavior-always-set") {
-    const current =
-      route.action === "behavior-dtm-set"
-        ? (state.config.deliberate_trigger_mode ?? false)
-        : (state.config.always_reply_enabled ?? false);
+  const toggleSettings = {
+    "behavior-dtm-set": ["deliberate_trigger_mode", "server-config.workspace.deliberate-trigger-mode.set"],
+    "behavior-always-set": ["always_reply_enabled", "server-config.workspace.always-reply.set"],
+    "behavior-retry-set": ["fast_regeneration_retry_enabled", "server-config.workspace.fast-regeneration-retry.set"],
+    "behavior-continue-set": [
+      "fast_regeneration_continue_enabled",
+      "server-config.workspace.fast-regeneration-continue.set",
+    ],
+  } as const;
+  if (
+    route.action === "behavior-dtm-set" ||
+    route.action === "behavior-always-set" ||
+    route.action === "behavior-retry-set" ||
+    route.action === "behavior-continue-set"
+  ) {
+    const [setting, telemetry] = toggleSettings[route.action];
+    const current = state.config[setting] ?? false;
     if (current === route.enabled)
       return {
         receipt: receipt(
@@ -806,11 +822,9 @@ async function runTriggerWrite(
           "commands.config.panel.state_no_changes_detail",
         ),
       };
-    const patch =
-      route.action === "behavior-dtm-set"
-        ? { deliberate_trigger_mode: route.enabled }
-        : { always_reply_enabled: route.enabled };
-    const updated = await repositories.configRepository.updateTriggerBehaviorConfig(state.server_id, patch);
+    const updated = await repositories.configRepository.updateTriggerBehaviorConfig(state.server_id, {
+      [setting]: route.enabled,
+    });
     if (!updated) return { receipt: writeFailed(locale) };
     invalidateTomoriStateCache(scope.serverDiscId);
     return {
@@ -820,10 +834,7 @@ async function runTriggerWrite(
         "commands.config.panel.state_updated_heading",
         "commands.config.panel.state_updated_detail",
       ),
-      telemetry:
-        route.action === "behavior-dtm-set"
-          ? "server-config.workspace.deliberate-trigger-mode.set"
-          : "server-config.workspace.always-reply.set",
+      telemetry,
     };
   }
   if (route.action === "behavior-limits-submit") {
@@ -1079,7 +1090,7 @@ function fallbackD10View(state: TomoriState) {
     memory: {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
-      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      stmEnabled: state.config.short_term_memory_enabled ?? false,
       toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig: null,
       stmCategories: [],
@@ -1364,7 +1375,7 @@ async function runD10Write(
     };
   }
   if (route.action === "behavior-stm-enabled-set") {
-    if ((state.config.short_term_memory_enabled ?? true) === route.enabled)
+    if ((state.config.short_term_memory_enabled ?? false) === route.enabled)
       return {
         receipt: receipt(
           locale,

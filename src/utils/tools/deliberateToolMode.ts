@@ -11,6 +11,7 @@ import { log } from "@/utils/misc/logger";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { DELIBERATE_TOOL_PACK_KEYS, getIntentPackUnion } from "@/utils/text/localeIntentPacks";
 import { isUnspacedScriptText } from "@/utils/text/processors/regexUtils";
+import { getActionSelector } from "@/utils/tools/toolActions";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
 export type PersonalDeliberateToolMode = (typeof PERSONAL_DELIBERATE_TOOL_MODES)[number];
@@ -743,7 +744,10 @@ export function isToolAllowedByDeliberateMode(
   toolName: string,
   allowedToolNames: string[] | null | undefined,
 ): boolean {
-  return !allowedToolNames?.length || allowedToolNames.includes(toolName);
+  return (
+    !allowedToolNames?.length ||
+    allowedToolNames.some((name) => name === toolName || getActionSelector(name)?.name === toolName)
+  );
 }
 
 export function expandDeliberateToolAllowedNames(

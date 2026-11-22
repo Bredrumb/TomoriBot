@@ -28,6 +28,8 @@ import * as identity from "@/utils/discord/webhook/identity";
 import { clearPersonaAppearances, getPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
+import { clearPersonaSpriteMessageCache } from "@/utils/cache/personaSpriteMessageCache";
+import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
 import {
   clearAllChannelDeliveryContinuity,
   getChannelLastDelivery,
@@ -41,6 +43,7 @@ afterEach(() => {
   clearAllChannelDeliveryContinuity();
   clearPersonaAppearances();
   clearPersonaSpriteCache();
+  clearPersonaSpriteMessageCache();
 });
 function track<T extends { mockRestore(): void }>(spy: T): T {
   spies.push(spy);
@@ -212,6 +215,8 @@ function webhookFixture() {
       avatarUrl: persona.webhook_avatar_url ?? undefined,
     })),
   );
+  track(spyOn(personaSpriteMessageRepository, "record").mockResolvedValue(true));
+  track(spyOn(personaSpriteMessageRepository, "pruneOlderThanDays").mockResolvedValue(0));
   return { webhook, messages };
 }
 

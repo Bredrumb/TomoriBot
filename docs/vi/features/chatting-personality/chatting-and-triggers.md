@@ -13,11 +13,18 @@ TomoriBot phản hồi khi được triệu tập. Trang này trình bày các c
 Theo mặc định, cô ấy sẽ trả lời khi bạn:
 
 - **Đề cập đến cô ấy**: `@TomoriBot`
-- **Trả lời** một trong các tin nhắn của cô ấy (bao gồm tin nhắn webhook của một cá nhân)
+- **Trả lời** với `@ ON` tới tin nhắn từ tài khoản bot, hoặc trả lời tin nhắn webhook của một persona
 - **Sử dụng từ kích hoạt**: mọi từ kích hoạt đã đăng ký ở bất kỳ đâu trong tin nhắn
 - **Sử dụng `/respond`**: yêu cầu phản hồi theo cách thủ công
 
 Trong DM, hãy gửi tin nhắn trực tiếp mà không cần bất kỳ từ kích hoạt hoặc đề cập nào.
+
+### Điều khiển phản hồi
+
+Người quản lý máy chủ có thể bật thử lại và tiếp tục trong `/config` > `Hành vi` > `Hành vi kích hoạt` > `Điều khiển phản hồi`. Chỉ thành viên đã kích hoạt phản hồi mới có thể dùng các nút của phản hồi đó, và chỉ khi phản hồi nằm ở cuối cuộc trò chuyện. Tin nhắn mới sẽ ẩn các nút này. Nếu các tin nhắn đó bị xóa khiến chính phản hồi chưa sử dụng đó lại nằm ở cuối cùng, các nút sẽ xuất hiện trở lại. Việc nhấn một nút, có phản hồi mới hơn của persona hoặc dùng `/refresh` sẽ vô hiệu hóa vĩnh viễn các nút điều khiển đó.
+
+- `↻` thử lại toàn bộ phản hồi bằng cách xóa nó đi và yêu cầu chính persona đó trả lời lại. Bot cần quyền `Quản lý tin nhắn` để xóa các phản hồi được gửi bằng tài khoản của chính bot.
+- `→` yêu cầu chính persona đó tiếp tục trong một tin nhắn mới.
 
 ### Quản lý từ kích hoạt
 <!-- anchor: managing-trigger-words -->
@@ -71,7 +78,7 @@ Khi DTM hoạt động:
 
 - `@{trigger}` (từ kích hoạt có tiền tố `@`) kích hoạt phản hồi
 - Discord đề cập đến `@TomoriBot` vẫn kích hoạt phản hồi
-- Trả lời tin nhắn vẫn hoạt động
+- [Các lượt trả lời kích hoạt được cô ấy](#how-to-trigger-her) vẫn hoạt động
 - `/respond` vẫn hoạt động
 - Những từ kích hoạt đơn giản không có `@` không còn kích hoạt cô ấy nữa
 

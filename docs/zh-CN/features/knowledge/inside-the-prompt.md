@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot 将指令与记忆整合在对话上方，然后把不断变化的信息放置在最近消息附近。[NovelAI](/features/integrations/novelai/) 使用单独的布局，而 [SillyTavern 预设集](/features/integrations/sillytavern-support/) 可以重新编排较早的区块。
+TomoriBot 将指令与记忆整合在对话上方，然后把不断变化的信息放置在最近消息附近。[NovelAI](/features/integrations/novelai/) 使用单独的布局，而 [SillyTavern 预设集](/features/integrations/sillytavern-support/) 可以重新编排较早的区块。[提示词宏](/features/prompt-macros/)可以在已保存的指令中插入当前名称和工具引用。
 
 | 位置 | TomoriBot 接收的内容 | 在何处管理 |
 |---|---|---|
@@ -25,11 +25,21 @@ TomoriBot 将指令与记忆整合在对话上方，然后把不断变化的信�
 某些模型利用长提示词开头或结尾信息的效果，比利用中间信息更为可靠。对于支持上下文提醒的提供方，可以尝试将指令放在靠近最新消息的位置。具体效果取决于模型与任务。参见 [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) 与 [Lost in the Haystack](https://arxiv.org/abs/2505.18148)。
 :::
 
-`/tool prompt snapshot` 将人格的确切包转储到文件中。它是当前记忆活跃的基本事实，文档是否匹配，以及对话的实际内容有多少。
+### 查看提示词
+<!-- anchor: inspecting-the-prompt -->
 
-`/context` 绘制与模型上下文窗口的彩色网格相同的束，上面每组块一种颜色，因此你可以一目了然地看到它填充了什么以及剩余多少空间。圆圈标记小于一个正方形的组。它还显示每个回复的估计输入成本以及提供商为最后一个真实回复报告的输入令牌数量。
+- `/tool prompt snapshot` 会在裁剪适配模型后将提示词保存到文件。下载卡片会报告被裁减的内容。
+- `/context` 会展示上下文用量和预估输入费用的可视化分布。
+- `/tool estimate cost` 按大小和费用拆解提示词。
 
-`/tool estimate cost` 按大小分解同一个包，这对于在提高任何限制之前确定是什么正在消耗你的上下文很有用。
+### 上下文适配
+<!-- anchor: context-fitting -->
+
+消息上限决定了 TomoriBot 向前追溯的范围。适配从该上限内选出的历史记录开始。对于大多数提供方而言，输入预算是模型上下文窗口在为回复预留空间并考虑估算误差后剩余的部分。在 150% 的阈值下，提示词达到该输入预算的 1.5 倍才会触发裁剪。
+
+当估算值超出该预算时，TomoriBot 会按批次丢弃最早的对话轮次，并保留最新请求。诸如指令和示例对话这类固定内容，可能会在所有可裁减对话轮次都已移除后仍导致提示词超出预算。TomoriBot 会先适配文本。在检查中包含工具定义时，适配警告也会校验工具定义的估算大小。提供方会自行应用对话模板和词元计数，因此可能会进一步裁剪上下文，或拒绝过大的请求。
+
+NovelAI 根据其渲染后的提示词统计词元，并对记忆单独设限。它可能会裁减示例对话、记忆和较早的聊天轮次，然后缩减回复上限。检查与导出细节请参阅 [Prompt Snapshot](/architecture/subsystems/prompt-snapshot/)。
 
 ### 工具在哪里定义？
 

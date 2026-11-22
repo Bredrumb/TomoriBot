@@ -17,6 +17,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server speech source selections", () => {
   let serverId: number;
   let otherServerId: number;
   let personaId: number;
+  let reviseSpeechCredentials: string;
   const serverDiscId = "_speech_source_selections";
   const otherDiscId = "_speech_source_selections_other";
   const migration = path.join(process.cwd(), "src/db/migrations/101_speech_source_selections.sql");
@@ -29,6 +30,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server speech source selections", () => {
 
   beforeAll(async () => {
     await setupTestDb();
+    const [definition] = await testSql<
+      { body: string }[]
+    >`SELECT pg_get_functiondef('revise_speech_credentials()'::regprocedure) AS body`;
+    reviseSpeechCredentials = definition.body;
     await testSql`DELETE FROM servers WHERE server_disc_id IN (${serverDiscId}, ${otherDiscId})`;
     const [server] = await testSql`INSERT INTO servers (server_disc_id) VALUES (${serverDiscId}) RETURNING server_id`;
     const [other] = await testSql`INSERT INTO servers (server_disc_id) VALUES (${otherDiscId}) RETURNING server_id`;
@@ -42,6 +47,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server speech source selections", () => {
   });
 
   afterAll(async () => {
+    await testSql.unsafe(reviseSpeechCredentials);
     await testSql`DELETE FROM servers WHERE server_disc_id IN (${serverDiscId}, ${otherDiscId})`;
   });
 

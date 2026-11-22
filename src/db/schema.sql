@@ -1787,6 +1787,12 @@ CREATE TABLE IF NOT EXISTS reminders (
   repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
   repetition_interval_months INTEGER,                  -- Optional: repeat interval in calendar months; exclusive with hours
   repetition_anchor_day SMALLINT,                      -- Day a monthly series returns to after a short month; NULL = reminder_time's day
+  repetition_interval_minutes INTEGER,
+  repeat_remaining_count INTEGER,
+  repeat_until_time TIMESTAMP WITH TIME ZONE,
+  daily_window_start_minutes SMALLINT,
+  daily_window_end_minutes SMALLINT,
+  daily_window_timezone_offset DOUBLE PRECISION,
   self_reminder BOOLEAN DEFAULT false,               -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1801,6 +1807,12 @@ SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_months', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_anchor_day', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repeat_remaining_count', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'repeat_until_time', 'TIMESTAMP WITH TIME ZONE');
+SELECT add_column_if_not_exists('reminders', 'daily_window_start_minutes', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'daily_window_end_minutes', 'SMALLINT');
+SELECT add_column_if_not_exists('reminders', 'daily_window_timezone_offset', 'DOUBLE PRECISION');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 -- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.
@@ -3124,6 +3136,8 @@ CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
   deliberate_tool_mode          BOOLEAN NOT NULL DEFAULT false,
   deliberate_tool_context_turns INTEGER,
   deliberate_tool_triggers      JSONB   NOT NULL DEFAULT '{}'::JSONB,
+  fast_regeneration_retry_enabled BOOLEAN NOT NULL DEFAULT false,
+  fast_regeneration_continue_enabled BOOLEAN NOT NULL DEFAULT false,
   cooldown_type                 INT     NOT NULL DEFAULT 0,
   cooldown_length               INT     NOT NULL DEFAULT 5,
   created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3132,6 +3146,8 @@ CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_mode', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_triggers', 'JSONB', '''{}''::JSONB');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'fast_regeneration_retry_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'fast_regeneration_continue_enabled', 'BOOLEAN', 'false');
 
 DROP TRIGGER IF EXISTS update_server_trigger_behavior_configs_timestamp ON server_trigger_behavior_configs;
 CREATE TRIGGER update_server_trigger_behavior_configs_timestamp
@@ -3171,7 +3187,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
-  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
+  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT false,
   user_info_updates_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3183,6 +3199,7 @@ SELECT add_column_if_not_exists('server_capabilities_configs', 'conditioning_int
 ALTER TABLE server_capabilities_configs ALTER COLUMN conditioning_interactions_enabled SET DEFAULT true;
 SELECT add_column_if_not_exists('server_capabilities_configs', 'dice_rolling_enabled', 'BOOLEAN NOT NULL', 'true');
 ALTER TABLE server_capabilities_configs ALTER COLUMN dice_rolling_enabled SET DEFAULT true;
+ALTER TABLE server_capabilities_configs ALTER COLUMN short_term_memory_enabled SET DEFAULT false;
 
 DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
 CREATE TRIGGER update_server_capabilities_configs_timestamp

@@ -69,7 +69,7 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
       manage_message_enabled = false, thread_creation_enabled = false, imagegen_enabled = false,
       dice_rolling_enabled = false, conditioning_interactions_enabled = false,
       videogen_enabled = true, voice_message_enabled = false, user_blocking_enabled = false,
-      time_awareness_enabled = false, tool_use_enabled = false, short_term_memory_enabled = false,
+      time_awareness_enabled = false, tool_use_enabled = false, short_term_memory_enabled = true,
       user_info_updates_enabled = false
   `;
   await testSql`

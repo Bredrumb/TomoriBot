@@ -1,5 +1,5 @@
 ﻿import { readFile, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 import { auditDocProse, DOC_PROSE_DEFAULT_PATHS, DOC_PROSE_RULES_PATH } from "./lib/docProse";
 import { isVerboseOutput } from "./lib/gateOutput";
@@ -73,6 +73,7 @@ const RATIONALE_PATTERN = new RegExp(
 const UNIT_SIGNALS = ["bytes", "characters", "days", "hours", "milliseconds", "minutes", "seconds"];
 const REASON_PATTERN = new RegExp(String.raw`\b(?:${[...REASON_SIGNALS, ...UNIT_SIGNALS].join("|")})\b|[:(]`, "i");
 const SECTION_DIVIDER_PATTERN = /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
+const PROPERTY_HEADING_PATTERN = /^[\p{L}\p{N}_]+(?:[ \t:_-]+[\p{L}\p{N}_]+)*:?$/u;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 // A suppression comment repeats at every site it silences, and each one is a separate lint
@@ -127,6 +128,7 @@ export type CommentPolicyRule =
   | "numbered-narration"
   | "obvious-narration"
   | "prose-dash"
+  | "redundant-heading"
   | "rule-scaffolding"
   | "stale-exception"
   | "unexplained-comment";
@@ -143,7 +145,10 @@ export interface CommentPolicyFinding {
 export interface CommentPolicyException {
   file: string;
   reason: string;
-  rule: Exclude<CommentPolicyRule, "obvious-narration" | "stale-exception" | "unexplained-comment">;
+  rule: Exclude<
+    CommentPolicyRule,
+    "obvious-narration" | "redundant-heading" | "stale-exception" | "unexplained-comment"
+  >;
   text: string;
 }
 
@@ -236,20 +241,10 @@ export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Pr
       continue;
     }
 
-    assertParseable(source, file);
-    // The block heuristics collect their own view of the file so a JSDoc block never enters the
-    // duplicate or length comparison, and the whole corpus is grouped in one place.
+    const fileFindings = inspectCommentPolicySource(source, file, options);
     if (options.auditNarration) {
       auditBlocks.blocks.push(...collectCommentBlocks(source, file));
     }
-    const fileFindings = [
-      ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
-      ...collectStructuralCommentFindings(source, file),
-      ...collectJsDocFindings(source, file),
-      ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, auditLimits) : []),
-      ...collectNewCommentFindings(source, file, options.changedLines),
-      ...collectLocaleStringFindings(source, file),
-    ];
 
     for (const finding of applyExceptions(fileFindings)) {
       findings.push(finding);
@@ -290,13 +285,17 @@ export function inspectCommentPolicySource(
 ): CommentPolicyFinding[] {
   assertParseable(source, file);
   const limits = options.auditLimits ?? DEFAULT_AUDIT_LIMITS;
+  const headings = options.auditNarration ? collectRedundantHeadings(source, file) : [];
   return [
     ...collectLocaleStringFindings(source, file),
     ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
     ...collectStructuralCommentFindings(source, file),
     ...collectJsDocFindings(source, file),
     ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, limits) : []),
-    ...collectNewCommentFindings(source, file, options.changedLines),
+    ...headings,
+    ...collectNewCommentFindings(source, file, options.changedLines).filter(
+      (finding) => finding.rule !== "unexplained-comment" || !headings.some((heading) => heading.line === finding.line),
+    ),
   ];
 }
 
@@ -337,16 +336,6 @@ export function findDuplicateCommentBlocks(
       (block) => block.words >= limits.duplicateMinWords && block.chars >= limits.duplicateMinChars,
     );
     if (!eligible) continue;
-    // Collapse locale trees to one identity so mirrored comments across translations read as one copy while cross-scope
-    // or same-file repeats still report.
-    const identities = new Set(group.map((block) => commentScope(block.file)));
-    const files = new Set(group.map((block) => block.file));
-    if (identities.size === 1 && files.size === group.length) {
-      continue;
-    }
-
-    // The finding sits on the most recent copy, the line a reviewer changes to delete the
-    // repetition, and carries every location so one group is one reviewable item.
     const ordered = [...group].sort(
       (left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine,
     );
@@ -702,6 +691,73 @@ function collectJsDocFindings(source: string, file: string): CommentPolicyFindin
     }));
 }
 
+function normalizePropertyHeading(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/[ \t:_-]+/g, " ")
+    .trim();
+}
+
+function propertyHeadingName(property: ts.ObjectLiteralElementLike | undefined): string | undefined {
+  const name = property?.name;
+  if (name && (ts.isIdentifier(name) || ts.isStringLiteral(name))) return normalizePropertyHeading(name.text);
+}
+
+function collectRedundantHeadings(source: string, file: string): CommentPolicyFinding[] {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
+  const findings: CommentPolicyFinding[] = [];
+  const lineAt = (offset: number): number => sourceFile.getLineAndCharacterOfPosition(offset).line + 1;
+  const record = (range: ts.CommentRange, message: string): void => {
+    findings.push({
+      file,
+      line: lineAt(range.pos),
+      message,
+      rule: "redundant-heading",
+      severity: "warning",
+      text: source.slice(range.pos, range.end),
+    });
+  };
+
+  const path = normalizePath(file);
+  const fileLabels = new Set([path, path.replace(/^src\//, ""), basename(path)]);
+  for (const range of ts.getLeadingCommentRanges(source, 0) ?? []) {
+    if (range.kind !== ts.SyntaxKind.SingleLineCommentTrivia) continue;
+    const label = source
+      .slice(range.pos + 2, range.end)
+      .trim()
+      .replace(/^`([^`]+)`$/, "$1");
+    if (fileLabels.has(normalizePath(label))) record(range, "This heading repeats the file name.");
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const [index, property] of node.properties.entries()) {
+        const ranges = ts.getLeadingCommentRanges(source, property.getFullStart()) ?? [];
+        const range = ranges.at(-1);
+        if (range?.kind !== ts.SyntaxKind.SingleLineCommentTrivia) continue;
+        const line = lineAt(range.pos);
+        const previous = ranges.at(-2);
+        if (line + 1 !== lineAt(property.getStart(sourceFile)) || (previous && lineAt(previous.end) + 1 === line)) {
+          continue;
+        }
+        const label = source.slice(range.pos + 2, range.end).trim();
+        if (!PROPERTY_HEADING_PATTERN.test(label)) continue;
+        const heading = normalizePropertyHeading(label);
+        const first = propertyHeadingName(property);
+        const second = propertyHeadingName(node.properties[index + 1]);
+        const prefix = `${heading} `;
+        if (first === heading || (first?.startsWith(prefix) && second?.startsWith(prefix))) {
+          record(range, "This heading repeats the following property names.");
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return findings;
+}
+
 function isNarrationCandidate(comment: CommentLine): boolean {
   if (comment.kind !== "line" || !comment.standalone || /biome-ignore|@ts-expect-error/.test(comment.text)) {
     return false;
@@ -915,12 +971,6 @@ function blockKey(lines: string[]): { prose: string; words: number } {
 
 function countCommentWords(normalized: string): number {
   return normalized.split(/[^A-Za-z0-9_'’-]+/).filter(Boolean).length;
-}
-
-// Locale directories collapse into one scope so identical comments across translated locale trees never report as
-// duplicates.
-function commentScope(file: string): string {
-  return file.replace(/(^|\/)src\/locales\/(?!<locale>)[^/]+\//, "$1src/locales/<locale>/");
 }
 
 function normalizeCommentRange(source: string, range: ts.CommentRange): ts.CommentRange | undefined {

@@ -261,7 +261,7 @@ export default {
       change_trigger_behavior: {
         title: `调整触发行为`,
         description:
-          "默认情况下，你说我的名字、@我或回复我，我就会回应。你可以按频道 放宽、收紧或直接关掉。\n\n**我可以在哪里说话**\n你可以让我只在白名单频道里回复。 在白名单里添加即可，见 {moderationWhitelist}。\n> 不在名单里的频道我保持安静。\n\n**我自己主动开口**\n{configAutoTrigger} 让我可以每隔几条消息，或随机地 自动发一条消息。\n\n**只用提及触发我**\n明确触发模式让我不再因为叫到名字就回应， 而是等 @提及。在 {configBehaviorTrigger} 里打开。",
+          "在服务器里，默认情况下你说我的名字、@我或回复某个人格的 webhook 消息时，我就会回应。回复我的 bot 账号消息时，请把回复开关保持在 `@ ON`。你可以按频道调整我在什么时候回应。\n\n**我可以在哪里说话**\n你可以让我只在白名单频道里回复。 在白名单里添加即可，见 {moderationWhitelist}。\n> 不在名单里的频道我保持安静。\n\n**我自己主动开口**\n{configAutoTrigger} 让我可以每隔几条消息，或随机地 自动发一条消息。\n\n**只用提及触发我**\n明确触发模式让我不再因为叫到名字就回应， 而是等 @提及。在 {configBehaviorTrigger} 里打开。",
       },
       create_first_persona: {
         title: `创建你的第一个人格`,

@@ -34,25 +34,7 @@ Nếu một tính năng có vẻ không khả dụng, hãy hỏi mình lý do. M
 | Đọc bài đăng Danbooru | - | `danbooru_enabled` | Đọc các thẻ đã nhóm của một bài đăng Danbooru từ ID hoặc liên kết. |
 | Tạo tin nhắn thoại | `{voice_message_tool}` | ElevenLabs key + giọng persona + `voice_message_enabled` | Gửi câu trả lời bằng giọng nói trên Discord. |
 
-:::note[Dành cho người tạo prompt]
-Khi tùy chỉnh prompt hệ thống hoặc hướng dẫn persona, hãy tham khảo các công cụ bằng **macro prompt** từ bảng trên thay vì viết cứng tên công cụ, vì macro sẽ mở rộng thành tên chính xác khi lắp ráp ngữ cảnh và giảm dần phù hợp khi công cụ không khả dụng.
-`{pin_tool}` và `{timestamp_refresh_tool}` vẫn hoạt động như bí danh tương thích cho `{manage_message_tool}` và `{message_metadata_tool}`. Các công cụ tìm kiếm web và URL dưới đây cũng có macro: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`, `{news_search_tool}`, `{url_fetch_tool}` và `{url_metadata_tool}`. Chúng phân giải linh hoạt thành công cụ tốt nhất hiện có, bao gồm cả các công cụ thay thế MCP của máy chủ.
-:::
-
 ### Khối prompt có điều kiện
+<!-- anchor: conditional-prompt-blocks -->
 
-Văn bản prompt hỗ trợ các macro công cụ ở trên cũng hỗ trợ các điều kiện có phạm vi:
-
-```text
-{{if capability:self_teaching}}
-Use {memory_tool} when a detail is worth remembering.
-{{else}}
-Do not promise to save long-term memories.
-{{/if}}
-```
-
-Dùng `capability:<name>` cho cài đặt TomoriBot đã bật, hoặc `tool:<function_name>` khi văn bản chỉ nên xuất hiện nếu công cụ chính xác đó khả dụng với nhà cung cấp và model đang hoạt động. Dùng `tool_family:url_fetch` khi có sẵn trình đọc URL đi kèm hoặc công cụ thay thế MCP của máy chủ. Thêm dấu `!` vào trước điều kiện để phủ định. Các khối có thể lồng nhau và có thể chứa một `{{else}}`; biểu thức `and`/`or` thông thường không được hỗ trợ.
-
-Các tên tính năng được hỗ trợ là `tool_use`, `self_teaching`, `personal_memories`, `emoji_usage`, `sticker_usage`, `web_search`, `manage_message`, `thread_creation`, `image_generation`, `video_generation`, `voice_message`, `user_blocking`, `short_term_memory` và `time_awareness`.
-
-Các điều kiện công cụ phản ánh hỗ trợ của nhà cung cấp/model, cấu hình máy chủ, backend đã định cấu hình, thay thế MCP và danh sách cho phép của Chế độ công cụ có chủ ý hiện tại. Chúng không bỏ qua hoặc dự đoán kiểm tra quyền hạn Discord khi công cụ thực thi. Tên tính năng không xác định được đánh giá là sai và được ghi log; khối sai định dạng sẽ bị bỏ qua. Tin nhắn trò chuyện thô, đầu ra của model và kết quả công cụ không bao giờ được coi là mẫu có điều kiện.
+Dùng [macro công cụ](/features/prompt-macros/#tool-macros) để chèn tên hàm vào các hướng dẫn đã lưu. Dùng [khối có điều kiện](/features/prompt-macros/#conditional-prompt-blocks) để chỉ đưa các hướng dẫn đó vào khi công cụ hoặc tính năng khả dụng.

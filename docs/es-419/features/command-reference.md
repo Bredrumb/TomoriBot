@@ -394,7 +394,7 @@ Acciones de utilidad para el contexto de la conversación, prompts y diagnóstic
 |---|---|
 | `/tool delete turn` | Elimina el turno de la última persona del canal. |
 | `/tool estimate cost` | Estima los costos de API para proveedores de IA de pago |
-| `/tool prompt snapshot` | Vuelca el prompt exacto del LLM para una persona en un archivo para depuración. |
+| `/tool prompt snapshot` | Reconstruye el prompt actual de una persona y expórtalo a un archivo para depuración. |
 
 ## `/troubleshoot`
 

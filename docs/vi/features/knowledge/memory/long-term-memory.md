@@ -22,6 +22,9 @@ Bạn có thể tự lưu bộ nhớ, hoặc TomoriBot có thể quyết định
 
 Nếu bạn muốn bot lưu điều gì đó, hãy bảo bot ghi nhớ hoặc tự thêm vào. Quản lý máy chủ có thể tắt tính năng tự động lưu trong `/config` > `Permissions`.
 
+Dùng `{@userId}` trong bộ nhớ cá nhân hoặc bộ nhớ máy chủ để gọi tên một người bằng biệt danh mà persona đang hoạt động dùng cho họ. TomoriBot sẽ điền tên vào khi gợi nhớ bộ nhớ đó.
+Xem [Macro prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).
+
 ## Giới hạn bộ nhớ
 <!-- anchor: how-many-memories -->
 

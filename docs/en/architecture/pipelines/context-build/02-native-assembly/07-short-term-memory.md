@@ -20,6 +20,7 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
 3. **Render modes**:
    - `crude_summary` (default): Emits the summary or category block followed by recent raw messages.
    - `supersede`: When a summary or category block exists, raw messages for that channel are omitted.
+   - Summaries and category text resolve `{@userId}` for the active persona. Raw messages preserve this token.
 4. **Unified cadence nudge (`nudgeItem`)**:
    - Emits a prompt hint instructing the model to invoke `{short_term_memory_tool}` after responding.
    - Gated by `turnsSinceRefresh >= refreshCadence` (default 5). The same counter and condition govern both initial creation and ongoing refresh.
@@ -41,7 +42,7 @@ after native or preset assembly; presets cannot pull fresh STM into an early mar
 
 - **Out-of-band delivery**: Preserving `nudgeItem` and deferred `memoryInjectionItems` outside `contextItems` ensures that preset reassembly does not pull recency-sensitive notes into the system prefix.
 - **Sharing exception**: `stm_privacy_bypass` permits private STM to enter and leave the owning server's channels; it never changes thought-log or cross-channel tool permissions, and its stored value retains its existing meaning.
-- **Explicit memory intent suppression**: When a user explicitly asks the bot to remember or store information permanently, the short-term memory nudge is suppressed so the model selects `create_long_term_memory` instead.
+- **Explicit memory intent suppression**: When a user explicitly asks the bot to remember or store information permanently, the short-term memory nudge is suppressed so the model selects `manage_long_term_memory` instead.
 - **Fail-safe execution**: Any error during short-term memory assembly logs a warning and returns an empty list, preventing memory lookup failures from aborting the turn.
 
 ## Source pointers

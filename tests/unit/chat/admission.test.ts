@@ -2,14 +2,16 @@ import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 stubAllShardOwnership();
 import { afterEach, beforeEach, afterAll, describe, expect, it, mock, spyOn } from "bun:test";
 import * as shutdownState from "@/utils/misc/shutdownState";
-import type { Message } from "discord.js";
-import { ChannelType, DMChannel } from "discord.js";
+import type { EmbedBuilder, Message } from "discord.js";
+import { ChannelType, DMChannel, Locale } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import * as audioTranscription from "@/utils/audio/audioAttachmentTranscription";
+import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import {
   evaluateChatAdmission,
   evaluateMessageProxyOriginalSpeedbump,
+  normalizeChatInvocation,
   resolveAdmissionChannelScope,
   resolveReferencedMessage,
   shouldBlockReplyToOtherBot,
@@ -26,10 +28,13 @@ import {
   setActiveChannelTurnState,
   type QueuedMessage,
 } from "@/utils/chat/channelQueue";
+import { planChatTurns } from "@/utils/chat/turnPlanner";
 import { personaRepository } from "@/utils/db/repositories";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { stripStatusCircle } from "@/utils/discord/ui/statusTitle";
+import { initializeLocalizer } from "@/utils/text/localizer";
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
 import { clearMessageProxyGuildPresenceStateForTests } from "@/utils/messageProxy/guildPresence";
@@ -51,6 +56,7 @@ import {
 import type { ChatIncoming, RunnableChatAdmission } from "@/utils/chat/types";
 import { stallUntilAborted, stubGlobalFetch } from "../../helpers/fetchStub";
 import { createUserRow } from "../../helpers/fixtures";
+import { collectCaseFailures, localizedCopy } from "../../helpers/localeCases";
 
 const originalFetch = globalThis.fetch;
 const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
@@ -110,6 +116,105 @@ function makeReplyIncoming(cachedReference: Message | undefined, fetchedReferenc
 
   return { fetch, incoming };
 }
+
+describe("pre-setup chat notices", () => {
+  it("localizes setup and updating notices without registering a user", async () => {
+    await initializeLocalizer();
+    const authorId = "300000000000000071";
+    const invokerId = "300000000000000072";
+    const channelId = "300000000000000073";
+    const guildId = "300000000000000074";
+    const messageId = "300000000000000075";
+    const client = { user: { id: "300000000000000076" } } as ChatIncoming["client"];
+    const send = mock(async (_payload: { embeds: EmbedBuilder[] }) => ({ id: "300000000000000077", channelId }));
+    const loadUser = spyOn(userRepository, "loadByDiscordId");
+    const register = spyOn(userRepository, "register").mockResolvedValue(null);
+    const dbError = spyOn(tomoriStateCache, "getLastDbError");
+    const stubs = [
+      loadUser,
+      register,
+      dbError,
+      spyOn(personaRepository, "loadAllForServer").mockResolvedValue([]),
+      spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL),
+      spyOn(userRepository, "isBlacklisted").mockResolvedValue(false),
+    ];
+    const cases = [
+      { label: "guild locale", guildLocale: Locale.Japanese, expected: Locale.Japanese },
+      { label: "saved preference", preference: Locale.PortugueseBR, expected: Locale.PortugueseBR },
+      { label: "invoker locale", invokerLocale: Locale.Japanese, expected: Locale.Japanese },
+      {
+        label: "invoker preference takes precedence",
+        preference: Locale.PortugueseBR,
+        invokerLocale: Locale.Japanese,
+        expected: Locale.PortugueseBR,
+      },
+      { label: "database unavailable", guildLocale: Locale.Japanese, updating: true, expected: Locale.Japanese },
+    ];
+    const failures = collectCaseFailures();
+
+    try {
+      for (const { label, preference, invokerLocale, guildLocale = Locale.EnglishUS, updating, expected } of cases) {
+        invalidateUserCache(authorId);
+        invalidateUserCache(invokerId);
+        send.mockClear();
+        register.mockClear();
+        dbError.mockReturnValue(updating ? { message: "fixture-unavailable", timestamp: Date.now() } : null);
+        loadUser.mockImplementation(async (id) => {
+          const language = invokerLocale && id === authorId ? Locale.Vietnamese : preference;
+          return language ? createUserRow({ user_disc_id: id, language_pref: language }) : null;
+        });
+        const message = {
+          id: messageId,
+          channelId,
+          guildId,
+          channel: { id: channelId, type: ChannelType.PublicThread, send },
+          guild: { id: guildId, preferredLocale: guildLocale },
+          client,
+          author: { id: authorId, username: "Juno", bot: false },
+          content: `<@${client.user?.id}>`,
+          mentions: { users: new Map([[client.user?.id, client.user]]) },
+          attachments: new Map(),
+        } as unknown as Message;
+        const incoming = normalizeChatInvocation({
+          client,
+          message,
+          isFromQueue: false,
+          isManuallyTriggered: Boolean(invokerLocale),
+          manualTriggerInvoker: invokerLocale
+            ? { userDiscId: invokerId, username: "Mirri", locale: invokerLocale }
+            : undefined,
+        });
+        const admission = await evaluateChatAdmission(incoming);
+        if (admission.disposition !== "run") {
+          failures.check(label, () => expect(admission).toMatchObject({ disposition: "run" }));
+          continue;
+        }
+        const plan = await planChatTurns({
+          admission,
+          channelId,
+          lockedAt: Date.now(),
+          queueDepth: 0,
+          skipLock: false,
+        });
+        const embed = send.mock.calls[0]?.[0].embeds[0]?.toJSON();
+        const key = updating ? "general.errors.tomori_updating" : "general.errors.tomori_not_setup";
+        failures.check(label, () => {
+          expect(plan.turns).toHaveLength(0);
+          expect(register).not.toHaveBeenCalled();
+          expect(send).toHaveBeenCalledTimes(1);
+          expect(stripStatusCircle(embed?.title ?? "")).toBe(localizedCopy(expected, `${key}_title`));
+          expect(embed?.description).toBe(localizedCopy(expected, `${key}_description`));
+        });
+      }
+      failures.expectNoFailures();
+    } finally {
+      invalidateUserCache(authorId);
+      invalidateUserCache(invokerId);
+      channelLocks.delete(channelId);
+      for (const stub of stubs) stub.mockRestore();
+    }
+  });
+});
 
 describe("resolveReferencedMessage", () => {
   it("fetches a reply target the message cache no longer holds", async () => {

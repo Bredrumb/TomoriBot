@@ -394,7 +394,7 @@ TRPGやロールプレイのためにサイコロを振ります。
 |---|---|
 | `/tool delete turn` | チャンネルから最後のペルソナのターンを削除します。 |
 | `/tool estimate cost` | 有料AIプロバイダーのAPI費用を見積もる |
-| `/tool prompt snapshot` | デバッグ用に、ペルソナのLLMプロンプトをファイルに出力します。 |
+| `/tool prompt snapshot` | デバッグ用に、ペルソナの現在のプロンプトを再構成してファイルに出力します。 |
 
 ## `/troubleshoot`
 

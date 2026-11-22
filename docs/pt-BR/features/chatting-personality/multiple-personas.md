@@ -54,10 +54,9 @@ que outros personagens notariam, como aparência ou maneirismos, como públicos.
 ### Diálogos de Exemplo
 <!-- anchor: sample-dialogues -->
 
-Abra `/config` > `Persona` > `Identidade e Personalidade` para ensinar seu estilo de falar por exemplo usando os espaços reservados `{user}` e `{bot}`:
-
-- `{user}`: substituído pelo nome de exibição ou apelido do usuário real.
-- `{bot}`: substituído pelo nome de sua personalidade atual.
+Abra `/config` > `Persona` > `Identidade e Personalidade` para ensinar seu estilo de falar por exemplo.
+Use macros de nome para se referir à pessoa que acionou a resposta ou à persona ativa.
+Consulte [Macros de Prompt](/features/prompt-macros/#names).
 
 ```text
 {user}: What's your favorite hobby?

@@ -29,3 +29,6 @@ Canais que restringem a visualização por meio de permissões do Discord são p
 Você pode visualizar ou corrigir o resumo do canal atual em `/config` > `Persona` > `Memórias`.
 Quem gerencia o servidor pode ajustar parâmetros ou desativar a memória de curto prazo em `/config` > `Behavior` > `Advanced Memory`, e revisar ou limpar resumos de canais ativos em `/memories` > `Short-Term`.
 `/refresh` limpa a memória do canal atual.
+
+Use `{@userId}` em um resumo ou categoria para inserir o apelido atual específico da persona dessa pessoa
+quando a TomoriBot o recordar. Consulte [Macros de Prompt](/features/prompt-macros/#refer-to-a-specific-discord-user).

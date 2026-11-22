@@ -359,7 +359,7 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
       change_trigger_behavior: {
         title: `Cambiar comportamiento de activación`,
         description:
-          "De forma predeterminada respondo si me llamas por mi nombre, me mencionas, o me respondes. Puedes ampliar eso, limitarlo o apagarlo por canal.\n\n**Dónde tengo permitido hablar**\nPuedes hacer que solo responda en canales en la lista blanca. Agrégalos en {moderationWhitelist}.\n> Un canal que no esté en la lista permanece en silencio.\n\n**Hablar por mi cuenta**\n{configAutoTrigger} me permite enviar automáticamente un mensaje cada pocos mensajes o al azar.\n\n**Activarme solo con menciones**\nEl modo de activación deliberada evita que responda a un simple llamado por nombre. Me hace esperar por menciones. Enciéndelo en {configBehaviorTrigger}.",
+          "En servidores, respondo de forma predeterminada cuando dices mi nombre, me @mencionas o respondes al mensaje de webhook de una persona. Cuando respondas a mi cuenta de bot, mantén el interruptor de respuesta en `@ ON`. Puedes cambiar cuándo respondo por canal.\n\n**Dónde tengo permitido hablar**\nPuedes hacer que solo responda en canales en la lista blanca. Agrégalos en {moderationWhitelist}.\n> Un canal que no esté en la lista permanece en silencio.\n\n**Hablar por mi cuenta**\n{configAutoTrigger} me permite enviar automáticamente un mensaje cada pocos mensajes o al azar.\n\n**Activarme solo con menciones**\nEl modo de activación deliberada evita que responda a un simple llamado por nombre. Me hace esperar por menciones. Enciéndelo en {configBehaviorTrigger}.",
       },
       create_first_persona: {
         title: `Crea tu primera persona`,

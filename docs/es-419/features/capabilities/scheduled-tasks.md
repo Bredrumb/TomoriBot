@@ -20,7 +20,7 @@ on the 31st of every month, remind me to pay rent
 
 Ella analiza la hora solicitada y la recurrencia. Los recordatorios mencionan al usuario objetivo cuando se activan. Las tareas son acciones silenciosas que la persona lleva a cabo cuando llega el momento.
 
-Una programación puede repetirse cada pocas horas o cada pocos meses. Una mensual mantiene el mismo día y hora. En un mes que no tenga ese día, se ejecuta el último día del mes (el 30 de abril para el 31) y vuelve al 31 el mes siguiente.
+Una programación puede repetirse por minuto, hora o mes. Pide una cantidad de entregas o una hora límite para terminarla automáticamente. Si dices "recuérdame cada hora" sin indicar una hora de inicio, el primer recordatorio vence en una hora. Las programaciones por minuto y por hora también pueden usar una ventana diaria en la zona horaria del servidor, como de 09:00 a 17:00. Una activación fuera de la ventana pasa a su próxima apertura. Una programación mensual mantiene el mismo día y hora. En un mes que no tenga ese día, se ejecuta el último día del mes (el 30 de abril para el 31) y vuelve al 31 el mes siguiente.
 
 ## Zonas horarias
 
@@ -32,7 +32,7 @@ Cuando un recordatorio se dirige a un usuario cuya zona horaria personal difiere
 
 Dos comandos de barra te permiten revisar y ajustar las programaciones existentes:
 
-- `/scheduled-task edit`: cambia el contenido de una tarea, la próxima hora de activación, el intervalo de repetición (en horas o meses) o el objetivo del recordatorio. Establece el intervalo en `0` para que una tarea recurrente sea de una sola vez.
+- `/scheduled-task edit`: cambia el contenido de una tarea, la próxima hora de activación, el intervalo de repetición (en minutos, horas o meses), el límite de repeticiones o el objetivo del recordatorio. Ingresa un intervalo como `15m`, `2h` o `1mo`. Establécelo en `0` para una tarea de una sola vez. Borra el campo de límite para que se repita indefinidamente.
 - `/scheduled-task remove`: elimina un recordatorio o tarea.
 
 Ambos comandos abren un selector que enumera tus programaciones existentes por persona, hora, canal y recurrencia.

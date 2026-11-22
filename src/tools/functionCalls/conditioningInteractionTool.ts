@@ -44,7 +44,7 @@ const interactionArgs = z
 export class ConditioningInteractionTool extends BaseTool {
   name = "interact_with_target";
   description =
-    "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. An optional reason explains what prompted the action and saves conditioning when targeting a persona. Omit it for a gesture without lasting conditioning. Use at most once per turn.";
+    "Use once per turn for a deliberate gesture toward a user or persona that deserves its own moment. Keep incidental gestures in roleplay text.";
   category = "discord" as const;
   supportsSpriteSelection = true;
   requiresFeatureFlag = "conditioning_interactions";
@@ -54,16 +54,16 @@ export class ConditioningInteractionTool extends BaseTool {
       target: {
         type: "string",
         description:
-          "Exact persona nickname or natural user name from this server. Ask for clarification if the name is ambiguous; prefix persona: or user: when the intended kind is known.",
+          "Exact persona nickname or user name in this server. Use persona: or user: when the identity type is known. Ask if ambiguous.",
       },
-      action: { type: "string", enum: actionKeys, description: "The physical gesture to perform." },
+      action: { type: "string", enum: actionKeys, description: "Gesture to perform." },
       reason: {
         type: "string",
-        description: `Optional: what prompted this gesture, phrased to fit after 'because'. Saves conditioning for persona targets; omit to avoid saving conditioning. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
+        description: `What prompted the gesture, phrased after 'because'. Including this saves conditioning for a persona target. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
       food: {
         type: "string",
-        description: `What you are offering. Required when action is feed. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
+        description: `Item offered. Required for feed. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
     },
     required: ["target", "action"],

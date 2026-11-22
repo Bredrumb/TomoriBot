@@ -25,7 +25,8 @@ import {
 } from "@/modules/natural-nudges/db/types";
 import { personaSections } from "@/db/seed/catalog/personas";
 import { PRESET_NATURAL_NUDGE_DEFAULTS } from "@/db/seed/catalog/personas/naturalNudges";
-import { getTool } from "@/tools/toolRegistry";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import { getAvailableToolSelectors } from "@/utils/tools/toolActions";
 import { initializeTools } from "@/tools/toolInitializer";
 import { createCustomIdleNudge } from "../../helpers/fixtures";
 
@@ -362,9 +363,10 @@ describe("persona-authored idle nudges", () => {
 });
 
 describe("tool names", () => {
-  it("names only tools the registry provides", async () => {
+  it("resolves stored nudge selectors to available operations", async () => {
     await initializeTools();
-    const missing = NUDGE_TOOL_NAMES.filter((name) => name !== "image" && !getTool(name));
+    const selectors = new Set(ToolRegistry.getAllTools().flatMap(getAvailableToolSelectors));
+    const missing = NUDGE_TOOL_NAMES.filter((name) => name !== "image" && !selectors.has(name));
     expect(missing).toEqual([]);
   });
 });

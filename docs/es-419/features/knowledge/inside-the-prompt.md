@@ -8,6 +8,8 @@ aiGenerated: false
 TomoriBot agrupa instrucciones y memorias arriba de la conversación, y luego coloca la información cambiante
 cerca de los mensajes más recientes. [NovelAI](/features/integrations/novelai/) usa una estructura independiente, y
 los [preajustes de SillyTavern](/features/integrations/sillytavern-support/) pueden reorganizar los bloques iniciales.
+[Macros de prompt](/features/prompt-macros/) inserta nombres actuales y referencias de herramientas en las
+instrucciones guardadas.
 
 | Posición | Qué recibe TomoriBot | Dónde gestionarlo |
 |---|---|---|
@@ -36,11 +38,33 @@ evita esa alteración adicional de la caché.
 Algunos modelos usan la información cerca del principio o del final de un prompt largo de manera más confiable que la información en el medio. Para los proveedores que usan notas de contexto, prueba colocar una instrucción cerca del mensaje más reciente. El efecto depende del modelo y de la tarea. Consulta [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) y [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
 :::
 
-`/tool prompt snapshot` vuelca el paquete exacto de una persona en un archivo. Es la verdad fundamental sobre qué recuerdos están actualmente activos, si un documento coincide y qué parte de la conversación realmente encaja.
+### Inspeccionar el prompt
+<!-- anchor: inspecting-the-prompt -->
+
+`/tool prompt snapshot` guarda el prompt después de recortarlo para que quepa en el modelo. La tarjeta de descarga informa qué se recortó.
 
 `/context` dibuja el mismo paquete como una cuadrícula de colores de la ventana contextual del modelo, un color por cada grupo de bloques de arriba, para que puedas ver de un vistazo qué lo llena y cuánto espacio queda. Un círculo marca un grupo más pequeño que un cuadrado. También muestra el costo de entrada estimado por respuesta y cuántos tokens de entrada informó el proveedor para la última respuesta real.
 
 `/tool estimate cost` desglosa el mismo paquete por tamaño, lo cual es útil para determinar qué está consumiendo su contexto antes de aumentar los límites.
+
+### Ajuste de contexto
+<!-- anchor: context-fitting -->
+
+El límite de mensajes define qué tan atrás mira TomoriBot. El ajuste comienza con el historial seleccionado dentro de
+ese límite. Para la mayoría de los proveedores, el presupuesto de entrada es lo que queda de la ventana de contexto del modelo
+tras reservar espacio para la respuesta y contemplar un margen de error de estimación. Al 150%, el prompt necesita una vez y
+media ese presupuesto de entrada antes de recortarse.
+
+Cuando la estimación supera ese presupuesto, TomoriBot descarta los intercambios de chat más antiguos en lotes y
+conserva la solicitud más reciente. El contenido fijo, como las instrucciones y el diálogo de muestra, puede dejar el
+prompt por encima del presupuesto después de eliminar todos los intercambios elegibles. TomoriBot ajusta primero el texto.
+Cuando se incluyen esquemas de herramientas en una inspección, la advertencia de ajuste también verifica su tamaño estimado.
+El proveedor aplica su propia plantilla de chat y conteo de tokens. Puede recortar más contexto o rechazar
+una solicitud demasiado grande.
+
+NovelAI cuenta los tokens a partir de su prompt renderizado y limita la memoria por separado. Puede recortar el diálogo de
+muestra, las memorias y los turnos de chat más antiguos, y luego reducir el límite de respuesta. Los detalles de inspección y
+exportación están en [Instantánea del prompt](/architecture/subsystems/prompt-snapshot/).
 
 ### ¿Dónde se definen las herramientas?
 

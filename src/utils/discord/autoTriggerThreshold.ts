@@ -1,6 +1,6 @@
 export const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
 export const MIN_RANDOM_THRESHOLD = 1;
-export const MAX_THRESHOLD = 1000;
+export const MAX_THRESHOLD = 9999;
 
 export interface ThresholdValidationResult {
   isValid: boolean;
@@ -27,7 +27,7 @@ export interface ThresholdInput {
 
 const THRESHOLD_INPUT_PATTERN = /^(\d+)(?:\s*-\s*(\d+))?$/;
 
-// Modal field cap is 18 to fit a padded "1000 - 1000" range so the UI never truncates input the parser accepts.
+// Modal field cap is 18 to fit a padded "9999 - 9999" range so the UI never truncates input the parser accepts.
 export const THRESHOLD_INPUT_MAX_LENGTH = 18;
 
 // Syntax-only parser omits range checks so validateThresholdInput stays the single owner of threshold validity.

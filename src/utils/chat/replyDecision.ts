@@ -11,12 +11,14 @@ import {
   isAutochatConfiguredChannel,
   isAutochatCounterHit,
   isAutochatQualifyingMessage,
+  isDirectReplyToBot,
   isMessageProxyMessage,
   isSelfTriggerMessage,
   isMatrixRelayMessage as isTrustedMatrixRelayMessage,
 } from "@/utils/chat/triggerProcessor";
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { isManagedWebhookMessage, resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
+import { resolveWelcomeReplyPersona } from "@/utils/chat/welcomeReply";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
@@ -97,7 +99,7 @@ export function shouldBotReply(
   }
   const referenceMessage = options.referencedMessage;
   if (referenceMessage) {
-    if (referenceMessage.author.id === message.client.user?.id) {
+    if (isDirectReplyToBot(message, referenceMessage)) {
       isReplyToBot = true;
       isReplyToPersona = true;
       replyPersonaTarget = mainPersona ?? null;
@@ -135,7 +137,6 @@ export function shouldBotReply(
     (personalDtmMode === "on" || (personalDtmMode === "follow" && serverDtmEnabled)) &&
     !!message.guild &&
     !isMatrixRelayMessage;
-  // A member who opted into deliberate triggers only is never answered for merely joining a scene.
   if (options.nudgeSceneCatcherPersonaId !== undefined && !isSelfMessage && !isDtmActive) {
     return true;
   }
@@ -243,7 +244,9 @@ export function shouldBotReply(
       isAutochatQualifyingMessage(message, isSelfMessage) &&
       isPersonaAllowed(mainPersona)) ||
     isScopedAlwaysReplyHit ||
-    isPersonalAutoTriggerHit;
+    isPersonalAutoTriggerHit ||
+    resolveWelcomeReplyPersona(message, tomoriState, allPersonas, allowedPersonaIds, isSelfMessage, isDtmActive) !==
+      undefined;
 
   const isMatrixReplyToPersona = isMatrixRelayMessage && pendingMatrixReplyChannels.delete(message.channelId);
   const effectiveTriggersActive = isDtmActive ? triggersActiveDeliberate : triggersActive;

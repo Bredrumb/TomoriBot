@@ -19,6 +19,8 @@ Các gợi ý này được thiết kế để mang lại cảm giác tự nhiê
 
 Natural Nudges chỉ hoạt động trong máy chủ, không bao giờ chạy trong tin nhắn trực tiếp (DM).
 
+Cả hai loại gợi ý đều tạm dừng sau 14 ngày không có ai trò chuyện trực tiếp với TomoriBot. Một lượt nhắc tên, từ kích hoạt của persona hoặc [lượt trả lời kích hoạt được cô ấy](/features/chatting-personality/chatting-and-triggers/#how-to-trigger-her) sẽ khôi phục lại chúng.
+
 ## Gợi ý chủ động
 <!-- anchor: active-nudges -->
 

@@ -394,7 +394,7 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 |---|---|
 | `/tool delete turn` | 从频道里删除人格最近的一轮回复。 |
 | `/tool estimate cost` | 估算付费 AI 提供方的 API 费用 |
-| `/tool prompt snapshot` | 把某个人格实际的 LLM 提示词导出成文件，用于调试。 |
+| `/tool prompt snapshot` | 还原某个人格当前的提示词并导出成文件，用于调试。 |
 
 ## `/troubleshoot`
 
