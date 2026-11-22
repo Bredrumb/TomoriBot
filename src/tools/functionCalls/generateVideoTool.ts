@@ -52,8 +52,7 @@ const MAX_VIDEO_DURATION_SECONDS = 20;
 
 export class GenerateVideoTool extends BaseTool {
   name = "generate_video";
-  description =
-    "Generate a short AI video using the active provider's native video model. Provide a detailed text prompt describing the video scene, action, and style. Optionally reference a Discord message containing an image to use as the starting frame (image-to-video). Video generation takes 1-3 minutes. The video will be sent directly to the Discord channel as an MP4 file.";
+  description = "Generate a short video with the active video model. Sends an MP4 to Discord, usually in 1-3 minutes.";
   category = "utility" as const;
   requiresFeatureFlag = "video_gen";
 
@@ -62,49 +61,45 @@ export class GenerateVideoTool extends BaseTool {
     properties: {
       nsfw: {
         type: "boolean",
-        description: "Set true when the video requires a Discord spoiler, useful for NSFW videos.",
+        description: "Send as a Discord spoiler.",
       },
       prompt: {
         type: "string",
         description:
-          "A detailed text description of the video you want to generate. Describe the scene, camera movement, action, style, and any dialogue or sound effects. For image-to-video, describe the desired motion and changes from the reference image.",
+          "Describe the scene, action, style, camera motion, dialogue, and sound. With a source image, describe how it should move or change.",
       },
       media_id: {
         type: "string",
         description:
-          "Optional: The media reference ID (e.g., media_1) from the system hint for the message containing an image to use as the starting frame for image-to-video generation. The first image from this message will be used as the initial frame. If not provided, generates a video from scratch (text-to-video).",
+          "Use a media ID such as media_1. The message's first image becomes the opening frame. Omit for text-to-video.",
       },
       aspect_ratio: {
         type: "string",
-        description:
-          "Optional: The aspect ratio for the generated video. Default is '16:9'. Note: '1:1' is not supported by all providers (e.g. Google) and will fall back to '16:9'.",
+        description: "Defaults to 16:9. Providers that lack 1:1 fall back to 16:9.",
         enum: ["16:9", "9:16", "1:1"],
       },
       duration: {
         type: "number",
-        description:
-          "Optional: Target video duration in seconds. Defaults to 5. Maximum is 20 seconds. Providers may fall back to the nearest supported duration.",
+        description: "Seconds, default 5 and maximum 20. The provider may use its closest supported duration.",
       },
       resolution: {
         type: "string",
         description:
-          "Optional: Target video resolution. Defaults to '480p' for Grok Imagine Video 1.5 Lite and '720p' otherwise. Supported values are '480p' (SD), '720p' (HD), and '1080p' (FHD). Providers may fall back to the nearest supported resolution.",
+          "Defaults to 480p for Grok Imagine Video 1.5 Lite and 720p otherwise. The provider may use its closest supported resolution.",
         enum: ["480p", "720p", "1080p"],
       },
       generate_audio: {
         type: "boolean",
-        description:
-          "Optional: Whether to generate audio alongside the video. Defaults to false. Enable when the user asks for sound, music, speech, ambience, or sound effects.",
+        description: "Enable for requested sound, music, speech, or ambience. Defaults to false.",
       },
       audio_prompt: {
         type: "string",
-        description:
-          "Optional: A separate description of the desired audio, foley, ambience, music, or speech. Use this when generate_audio is true. If omitted, the video prompt is reused for audio generation.",
+        description: "Optional audio directions when generate_audio is true. Defaults to the video prompt.",
       },
       loop: {
         type: "boolean",
         description:
-          "Optional: For image-to-video, whether to make the video loop by using the reference image as both the first and last frame. Defaults to false. Set true only when the user explicitly wants a looping video.",
+          "For an explicitly requested image-to-video loop, use the source as the first and last frame. Defaults to false.",
       },
     },
     required: ["prompt"],

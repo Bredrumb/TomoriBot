@@ -41,8 +41,7 @@ type PreparedProfileImage = {
 
 export class PeekProfilePictureTool extends BaseTool {
   name = "peek_profile_picture";
-  description =
-    "Process and analyze a user's profile picture using AI vision capabilities. When available for Discord users, this also includes their profile banner as supporting visual context. ONLY use this when specifically asked to look at someone's avatar. The target may be 'self' for the current active persona, an exact persona nickname, or a natural user name from the current conversation or server. Deprecated raw IDs are still accepted at execution time for compatibility.";
+  description = "Analyze an avatar only when asked. Includes the Discord banner when available.";
   category = "utility" as const;
   requiresFollowUp = true;
 
@@ -52,12 +51,11 @@ export class PeekProfilePictureTool extends BaseTool {
       target_identity: {
         type: "string",
         description:
-          "The target identity to analyze. Accepts 'self', an exact persona nickname, or a natural user name from the current conversation or server. Deprecated raw IDs are still accepted at execution time for compatibility.",
+          "Use self for the active persona, an exact persona nickname, or a user name in context. Raw IDs also work.",
       },
       reason: {
         type: "string",
-        description:
-          "Optional brief explanation of why you want to analyze this user's profile picture. This helps with debugging and understanding AI decision-making.",
+        description: "Why the avatar is needed.",
       },
     },
     required: [],

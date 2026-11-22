@@ -12,17 +12,11 @@ import { executeWebSearchWithFallback } from "./dispatcher";
 import { resolveWebSearchToolCapabilities, type WebSearchToolCapabilities } from "./capabilities";
 import { SEARCH_CATEGORIES, type SearchCategory } from "./types";
 
-function formatCategoryList(categories: SearchCategory[]): string {
-  return categories.map((category) => `'${category}'`).join(", ");
-}
-
 export function buildWebSearchToolVariant(tool: Tool, capabilities: WebSearchToolCapabilities): Tool {
   const categoryDescription =
     capabilities.categories.length === 1 && capabilities.categories[0] === "text"
-      ? "Search category. Only 'text' is available for the active search backend this turn."
-      : `Search category. Available categories for the active search backend this turn: ${formatCategoryList(
-          capabilities.categories,
-        )}.`;
+      ? "Only 'text' is available for this search."
+      : "Choose a supported search category.";
 
   const parameters: ToolParameterSchema = {
     ...tool.parameters,
@@ -37,19 +31,14 @@ export function buildWebSearchToolVariant(tool: Tool, capabilities: WebSearchToo
   };
 
   return createToolVariant(tool, {
-    description:
-      `Search the web using ${capabilities.engineLabel}. ` +
-      `The schema only exposes categories supported by the active backend: ${formatCategoryList(
-        capabilities.categories,
-      )}.`,
+    description: `Search the web using ${capabilities.engineLabel}.`,
     parameters,
   });
 }
 
 export class WebSearchTool extends BaseTool {
   name = "web_search";
-  description =
-    "Search the web for information. The category enum is narrowed during tool assembly to the active backend's supported categories. Routes through the best available search engine automatically.";
+  description = "Search the web with the best available engine.";
 
   category = "search" as const;
   requiresFeatureFlag = "web_search";
@@ -60,23 +49,17 @@ export class WebSearchTool extends BaseTool {
     properties: {
       query: {
         type: "string" as const,
-        description:
-          "The search query to execute. " +
-          "For image/video/news categories use plain descriptive terms only — " +
-          "do NOT use operators like 'site:', 'filetype:', or quotes; they are ignored by media search engines and degrade results.",
+        description: "For image, video, or news searches, use plain terms without operators or quotes.",
       },
       category: {
         type: "string" as const,
-        description:
-          "Search category. The assembled schema only includes categories supported by the active backend for this turn.",
+        description: "Choose a supported search category.",
         enum: [...SEARCH_CATEGORIES],
       },
       count: {
         type: "number" as const,
         description:
-          "Number of results to return. For image searches this controls how many images are sent " +
-          "to Discord (max 10). For text/news/video searches it controls the result list length " +
-          "(max 20). Omit to use the server default.",
+          "Max 10 for images sent to Discord or 20 text, news, or video results. Omit for the server default.",
       },
     },
     required: ["query"],

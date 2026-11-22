@@ -359,7 +359,7 @@ async function sendSuccessNotice(
 export class UpdateUserInfoTool extends BaseTool {
   name = "update_user_info";
   description =
-    "Update a registered Discord user's stored profile. Use this instead of memory tools for requests such as 'call me X' or a pronoun change. Nickname, prefix, and suffix are yours alone, so they change only how you address them; the remaining fields are shared by every persona. A title or honorific belongs in prefix or suffix, never inside nickname. To stop using a title, list 'prefix' or 'suffix' in clear rather than resending the nickname without it. Pass only the fields you are changing.";
+    "Update a registered Discord user's profile for requests like 'call me X' or a pronoun change. Nickname, prefix, and suffix are persona-specific. Other fields are shared. Pass only changes.";
   category = "utility" as const;
   requiresFeatureFlag = "user_info_updates";
 
@@ -368,20 +368,19 @@ export class UpdateUserInfoTool extends BaseTool {
     properties: {
       target_user: {
         type: "string",
-        description:
-          "The user to update, as shown in the current conversation or server. A name, alias, mention, or Discord ID all work. Omit it to update whoever triggered this turn.",
+        description: "User name, alias, mention, or Discord ID. Defaults to the invoking user.",
       },
       nickname: {
         type: "string",
-        description: "What you call them, with no title or honorific attached.",
+        description: "Name you call the user. Put titles in prefix or suffix.",
       },
       prefix: {
         type: "string",
-        description: "Title or honorific placed before the nickname, such as Master or Dad.",
+        description: "Title before the nickname (e.g. Master or Dad).",
       },
       suffix: {
         type: "string",
-        description: "Title or honorific placed after the nickname, such as -san or Jr.",
+        description: "Title after the nickname (e.g. -san or Jr.).",
       },
       gender_identity: {
         type: "string",
@@ -394,18 +393,17 @@ export class UpdateUserInfoTool extends BaseTool {
       addressing_style: {
         type: "string",
         enum: ["masculine", "feminine", "neutral"],
-        description:
-          "Which gendered form of your titles to use for them, such as Master versus Mistress. Set it only when they say so; never infer it from their gender or pronouns.",
+        description: "Gendered form of your titles (e.g. Master or Mistress). Set only when requested explicitly.",
       },
       timezone_offset: {
         type: "number",
-        description:
-          "Their UTC offset in hours, from -12 through +14, in quarter-hour steps (5.5 for UTC+5:30, 5.75 for UTC+5:45).",
+        description: "UTC offset in hours, -12 through +14, in quarter-hour steps (e.g. 5.75 for UTC+5:45).",
       },
       clear: {
         type: "array",
         items: { type: "string", enum: [...ALL_FIELDS] },
-        description: "Fields to remove. A field listed here must not also be given a value.",
+        description:
+          "Fields to remove, including prefix or suffix to drop a title. Supply values only for fields outside this list.",
       },
     },
     required: [],

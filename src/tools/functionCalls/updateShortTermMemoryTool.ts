@@ -27,15 +27,14 @@ const SUMMARY_PARAMETERS: ToolParameterSchema = {
   properties: {
     summary: {
       type: "string",
-      description:
-        "A comprehensive summary of the current story or conversation's key points, topics, or context. Focus on what's relevant for potential future messages in this conversation, but add enough helpful details.",
+      description: "Summarize key events and details that may matter later in this conversation.",
     } satisfies ToolStringParameterSchema,
   },
   required: ["summary"],
 };
 
 export const DEFAULT_STM_TOOL_DESCRIPTION =
-  "Update your short-term working memory for the current story or conversation. Use this to remember important context from this ongoing conversation that you might need later, but don't need to store permanently. Do NOT use this when a user explicitly asks you to remember/save/store something for future conversations; use update_long_term_memory or create_long_term_memory for that.";
+  "Keep context for the current story or conversation. Use create_long_term_memory or update_long_term_memory when the user asks you to remember something across conversations.";
 
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";

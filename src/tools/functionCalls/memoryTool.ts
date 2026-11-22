@@ -10,7 +10,7 @@ import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepo
 export class MemoryTool extends BaseTool {
   name = "create_long_term_memory";
   description =
-    "Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change. Be proactive in remembering user or server preferences, interests, and facts. Do not wait for the user to ask you to remember things and be proactive but avoid saving PII (real names, addresses, and contact info)";
+    "Proactively save new facts, preferences, or instructions worth remembering across conversations. Skip duplicates and personal identifying details such as real names, addresses, or contact info.";
   category = "memory" as const;
   requiresFeatureFlag = "self_teaching";
 
@@ -20,18 +20,16 @@ export class MemoryTool extends BaseTool {
       memory_content: {
         type: "string",
         description:
-          "The specific piece of information, fact, or preference to remember. Be concise and clear. Write in third-person. Use {user} to refer to the target user and {bot} to refer to yourself; never hardcode names. Example: '{user} likes dogs' or '{bot} should greet {user} formally'.",
+          "Write concise third-person text. Use {user} for the target and {bot} for yourself, like '{user} likes dogs'.",
       },
       memory_scope: {
         type: "string",
-        description:
-          "Specify the scope of this memory. Use 'server_wide' for general information applicable to the whole server, or 'target_user' for information specific to a particular user.",
+        description: "Use server_wide for shared information or target_user for a user's memory.",
         enum: ["server_wide", "target_user"],
       },
       target_user: {
         type: "string",
-        description:
-          "If memory_scope is 'target_user', provide the target user's name as shown in the current conversation or server. Use natural names, not IDs.",
+        description: "For target_user scope, use the user's name as shown in context.",
       },
     },
     required: ["memory_content", "memory_scope"],

@@ -11,7 +11,7 @@ import {
 export class YouTubeVideoTool extends BaseTool {
   name = "process_youtube_video";
   description =
-    "Process and analyze a specific YouTube video using Google's video understanding capabilities. ONLY use this when needed as it costs a lot of processing power. Use sparingly. If you don't see any YouTube URLs in recent messages, it likely means you're already analyzing video content and should NOT call this function again.";
+    "Analyze a YouTube video with Google vision. Use sparingly when video details are needed. Call only when a user-provided YouTube URL is visible in recent messages.";
   category = "utility" as const;
   requiredModelCapabilities = {
     sees_youtube: true,
@@ -23,12 +23,11 @@ export class YouTubeVideoTool extends BaseTool {
       youtube_url: {
         type: "string",
         description:
-          "The complete YouTube URL to process. Must be a valid YouTube URL that the user provided. Supports youtube.com/watch, youtu.be, youtube.com/embed, and youtube.com/shorts formats.",
+          "Complete youtube.com/watch, youtu.be, youtube.com/embed, or youtube.com/shorts URL provided by the user.",
       },
       reason: {
         type: "string",
-        description:
-          "Optional brief explanation of why you want to process this specific video. This helps with debugging and understanding AI decision-making.",
+        description: "Why the video needs analysis.",
       },
     },
     required: ["youtube_url"],

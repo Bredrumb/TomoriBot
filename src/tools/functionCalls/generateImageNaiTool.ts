@@ -158,7 +158,7 @@ interface SuggestTagsResponse {
 export class GenerateImageNaiTool extends BaseTool {
   name = "generate_image_nai";
   description =
-    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'. When known users or personas have Physical Appearance context, copy the relevant comma-separated tags into the matching character tags.";
+    "Generate an anime-style image with NovelAI's uncensored models. Call for explicit requests to create, edit, or continue an image.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
   // Prevents an orphaned self-reply by letting the model send a follow-up text message after the image.
@@ -169,44 +169,42 @@ export class GenerateImageNaiTool extends BaseTool {
     properties: {
       nsfw: {
         type: "boolean",
-        description: "Set true when the image requires a Discord spoiler, useful for NSFW images.",
+        description: "Send as a Discord spoiler.",
       },
       prompt: {
         type: "string",
         description:
-          "Imageboard-style tags for the shared scene: background, composition, camera, lighting, atmosphere, style, and quality, separated by commas (e.g. 'indoors, wooden chair, dutch angle'). When 'characters' is provided, keep this scene-level only; put each character's appearance, action, interaction, nudity/outfit state, and other per-character details in that character's 'tags'. For inpainting, describe what should replace the masked region.",
+          "Comma-separated imageboard scene tags such as 'indoors, wooden chair, dutch angle'. When using characters, put shared setting, composition, lighting, and style here. For inpaint, describe the replacement.",
       },
       artist: {
         type: "string",
-        description:
-          "Optional comma-separated artist names to emulate their art style (e.g. 'jjune, wanke'). Do not fill up if user did not explicitly mention a style.",
+        description: "Comma-separated artist names. Use only when the user requests a style.",
       },
       location: {
         type: "string",
-        description: "Optional comma-separated location/background setting tags (e.g. 'park, cherry blossoms').",
+        description: "Comma-separated location tags.",
       },
       orientation: {
         type: "string",
         description:
-          "Image orientation/aspect ratio. 'portrait' (832x1216), 'landscape' (1216x832), or 'square' (1024x1024). Default: portrait. Ignored in inpaint mode (uses source image dimensions).",
+          "Defaults to portrait (832x1216). Landscape is 1216x832 and square is 1024x1024. Inpaint uses the source dimensions.",
         enum: ["portrait", "landscape", "square"],
       },
       characters: {
         type: "array",
-        description:
-          "Visible characters in the image. Each array item is one character instance. In multi-character scenes, give every intended visible character its own entry and its own role tags. Always describe that character's full appearance plus what they are doing in that same entry's 'tags', especially exact name tag if it exists (eg. hataya misuzu, hatsune miku). If Physical Appearance tags for a known character are shown in conversation context, copy the relevant ones into 'tags'.",
+        description: "One entry per visible character, with distinct appearance, role, and position.",
         items: {
           type: "object",
           properties: {
             tags: {
               type: "string",
               description:
-                "Required. Imageboard-style tags for this character. Include the full appearance plus that character's role in the scene: hair, eyes, outfit or nude state, body traits, pose, action, expression, gaze, and interaction as needed, and then add [brackets] to strengthen tags to the model, and {braces} to weaken them if needed (eg. '1girl, {{chibi}}, black hair, ponytail, brown eyes, medium breasts, white shirt, black skirt, [[school uniform]], eating, hotdog, sitting'). In multi-character scenes, every visible character needs their own full tags. If Physical Appearance tags for a known character are shown in conversation context, copy them here to the correct corresponding character before adding scene-specific actions or expressions. For erotic scenes, omit relevant clothing tags and directly use explicit tags saying what's visible and what the act/position is (eg. 'nude, pussy, penis, sex') when that is the intended result.",
+                "Comma-separated imageboard tags for this character's full appearance, outfit, pose, and actions. Copy matching Physical Appearance tags and use the exact name tag if known. Use [brackets] to strengthen and {braces} to weaken tags. For erotic scenes, tag visible anatomy and actions directly.",
             },
             spoken_text: {
               type: "string",
               description:
-                "Optional exact dialogue rendered in the image (e.g. 'Hello there!'). Use only if the user requests visible speech. V4/V4.5 support English; V5 also supports Japanese and Chinese. This is placed in the base prompt's final Text: section automatically.",
+                "Exact dialogue, only if the user requests visible speech. V4/V4.5 support English. V5 also supports Japanese and Chinese.",
             },
             x: {
               type: "string",

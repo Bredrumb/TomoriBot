@@ -88,7 +88,7 @@ type ReplyDeliveryContext = {
 export class InteractWithRecentMessageTool extends BaseTool {
   name = "interact_with_recent_message";
   description =
-    "Interact with a recent message in the current channel for expressive follow-up behavior. `react` adds an emoji reaction. `reply` sends a short reply or backtrack comment about an earlier message. Replies are always sent as yourself, even when the target is another persona's message. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.";
+    "React or send a short follow-up to a recent message in this channel. Replies use the active persona. Use reveal_message_metadata for fresh refs or timestamps.";
   category = "discord" as const;
 
   parameters: ToolParameterSchema = {
@@ -97,17 +97,15 @@ export class InteractWithRecentMessageTool extends BaseTool {
       action: {
         type: "string",
         enum: ["react", "reply"],
-        description:
-          "Which expressive interaction to perform: react to a recent message with an emoji, or reply to a recent message with new text.",
+        description: "Choose react or reply.",
       },
       message_id: {
         type: "string",
-        description: "The target recent message reference, usually a `ref_N` handle from recent message metadata.",
+        description: "Recent message reference, usually ref_N.",
       },
       content: {
         type: "string",
-        description:
-          "Required interaction content. For `react`, provide the emoji, it can be a custom emoji. For `reply`, provide the reply text.",
+        description: "Emoji for react (custom emoji accepted) or message text for reply.",
       },
     },
     required: ["action", "message_id", "content"],
@@ -122,7 +120,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
 
     return createToolVariant(this, {
       description:
-        "Reply to a recent message in the current channel with a short follow-up or backtrack comment. Replies are always sent as yourself, even when the target is another persona's message. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.",
+        "Send a short follow-up to a recent message in this channel as the active persona. Use reveal_message_metadata for fresh refs or timestamps.",
       parameters: {
         ...this.parameters,
         properties: {
@@ -130,9 +128,9 @@ export class InteractWithRecentMessageTool extends BaseTool {
           action: {
             type: "string",
             enum: ["reply"],
-            description: "Send a text reply to a recent message.",
+            description: "Use reply.",
           },
-          content: { type: "string", description: "The text to send in the reply." },
+          content: { type: "string", description: "Reply text." },
         },
       },
     });

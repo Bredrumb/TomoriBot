@@ -7,7 +7,7 @@ import { log } from "@/utils/misc/logger";
 export class StickerTool extends BaseTool {
   name = "select_sticker_for_response";
   description =
-    "Sends one of the server's available stickers right now, as its own message, at this point in your reply. Choose a sticker whose name or description matches the emotion or reaction you want to show. Any text you wrote before the call is already posted, so you can react before speaking, between thoughts, or after your text, and you may keep writing once the result returns. One sticker per reply: a sent sticker cannot be replaced or removed.";
+    "Post one server sticker as a separate message at this point in your reply. Match the intended emotion or reaction. You can keep writing afterward. Sent stickers are final.";
   category = "discord" as const;
   requiresFeatureFlag = "sticker_usage";
   requiresPermissions = ["SEND_MESSAGES"];
@@ -16,12 +16,11 @@ export class StickerTool extends BaseTool {
     properties: {
       sticker_name: {
         type: "string",
-        description:
-          "The sticker name to send (case-insensitive). Use the names from the provided list; do not include IDs.",
+        description: "Name from the provided sticker list, case-insensitive.",
       },
       sticker_id: {
         type: "string",
-        description: "Deprecated: The sticker ID. Use sticker_name instead (kept for compatibility).",
+        description: "Deprecated. Use sticker_name.",
       },
     },
     required: ["sticker_name"],

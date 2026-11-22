@@ -280,7 +280,7 @@ function formatReminderTime(reminderTime: Date, timezoneOffset: number, locale: 
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead (members with Manage Server may delete any reminder in the server; everyone else only their own). You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. Set one positive repeat interval in minutes, hours, or months, or set an interval to 0 for a one-time task. Omit all intervals to keep the schedule. Recurring tasks can have a count or a cutoff. Minute and hour schedules can also use a daily window. Do not use this to change target user, target channel, or whether it is a self task.";
+    "Replace or delete a scheduled task by ID. Omit time fields to keep the trigger. Relative time fields add together. Choose at most one positive repeat interval. Omit all intervals to keep recurrence or pass 0 to clear it. Target user, channel, and self-task status stay fixed.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -288,74 +288,70 @@ export class UpdateTaskTool extends BaseTool {
     properties: {
       reminder_id: {
         type: "number",
-        description: "The reminder/task ID shown in context, such as ID:42. Must be a positive integer.",
+        description: "Positive integer ID shown in context (e.g. 42 from ID:42).",
       },
       reminder_purpose: {
         type: "string",
         description:
-          "The full replacement reminder/task content. If this is empty or blank, delete the targeted reminder/task instead.",
+          "Full replacement text. Blank deletes the task. You can delete tasks you created or reminders for you. Manage Server permits deleting any task in this server.",
       },
       reminder_time: {
         type: "string",
         description:
-          "OPTIONAL: Absolute replacement trigger time in YYYY-MM-DD_HH:MM format. Pass the wall-clock time exactly as the user expressed it. do NOT convert between timezones yourself. Without 'utc_offset', this is interpreted in the server's configured timezone. If provided, this takes priority over relative time parameters.",
+          "Absolute replacement trigger in YYYY-MM-DD_HH:MM. Copy the user's wall-clock time as given. Uses the server timezone unless utc_offset is set. Takes priority over relative time.",
       },
       utc_offset: {
         type: "number",
         description:
-          "OPTIONAL: The UTC offset in hours that 'reminder_time' is expressed in (e.g., 8 for UTC+8, -5 for UTC-5, 5.5 for UTC+5:30). Set this to the target user's personal timezone offset (shown in the conversation context) when they expressed the time in their own local time. If omitted, the server's configured timezone is used. Only meaningful together with 'reminder_time'.",
+          "Offset in hours for reminder_time (e.g. 5.5 for UTC+5:30). Use the user's offset for time given in their local time.",
       },
       minutes_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Minutes from now for the replacement trigger time. Can be combined with other relative parameters.",
+        description: "Minutes from now to the replacement trigger.",
       },
       hours_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Hours from now for the replacement trigger time. Can be combined with other relative parameters.",
+        description: "Hours from now to the replacement trigger.",
       },
       days_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Days from now for the replacement trigger time. Can be combined with other relative parameters.",
+        description: "Days from now to the replacement trigger.",
       },
       months_from_now: {
         type: "number",
         description:
-          "OPTIONAL: Months from now for the replacement trigger time. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
+          "Add calendar months in the server timezone, keeping the time of day. Clamp to the last day if needed.",
       },
       repetition_interval_hours: {
         type: "number",
-        description:
-          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recurring every X hours. Omit the interval parameters to keep the current interval.",
+        description: "Repeat every X hours.",
       },
       repetition_interval_months: {
         type: "number",
         description:
-          "OPTIONAL: Set to 1+ to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly), or 0 for one-time. In months without that day it runs on the last day, then returns to the original day. Use a single positive interval.",
+          "Repeat every X calendar months (1 for monthly, 12 for yearly). Keep the original day and time, using the last day in shorter months.",
       },
       repetition_interval_minutes: {
         type: "number",
-        description: "Repeat every X minutes. Use 0 for a one-time task.",
+        description: "Repeat every X minutes.",
       },
       repeat_count: {
         type: "number",
         description:
-          "Number of deliveries left, including the next trigger. Requires recurrence. Use a count or a cutoff.",
+          "Remaining deliveries, including the next trigger. Requires recurrence. Choose a count or a cutoff.",
       },
       repeat_until_time: {
         type: "string",
-        description: "Last allowed delivery time in YYYY-MM-DD_HH:MM in the server timezone. Requires recurrence.",
+        description: "Last delivery allowed, in YYYY-MM-DD_HH:MM in the server timezone. Requires recurrence.",
       },
       daily_window_start_time: {
         type: "string",
-        description: "Daily start time in the server timezone, such as 05:00 or 5AM. Pair with daily_window_end_time.",
+        description:
+          "Start of a daily window for minute or hour repeats. Use the server timezone (e.g. 05:00 or 5AM) and supply the end too.",
       },
       daily_window_end_time: {
         type: "string",
-        description:
-          "Daily end time in the server timezone, such as 22:00 or 10PM. The window must end on the same day.",
+        description: "End of the daily window in the server timezone, on the same day as the start.",
       },
       clear_repeat_limit: {
         type: "boolean",

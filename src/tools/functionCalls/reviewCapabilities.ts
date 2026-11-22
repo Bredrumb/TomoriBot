@@ -168,7 +168,7 @@ export function formatCommandCapabilities(registrationData: ApplicationCommandDa
 export class ReviewCapabilitiesTool extends BaseTool {
   name = "review_capabilities";
   description =
-    "Check your current model, runtime capabilities, available tools, settings, or registered Discord slash commands instead of guessing. Use chat for user-safe conversational capabilities, commands for the authoritative command catalog, and settings for detailed configuration. Operational settings are redacted unless the requesting member can manage the server.";
+    "Look up the current model, tools, runtime settings, or registered slash commands. Detailed operational settings require Manage Server.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -177,7 +177,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capability_type: {
         type: "string",
         description:
-          "Use 'chat' for current conversational abilities and tools, 'commands' for registered slash commands, or 'settings' for runtime feature configuration and disabled reasons.",
+          "Use chat for user-safe capabilities, commands for the registered catalog, or settings for feature status and disabled reasons.",
         enum: ["chat", "commands", "settings"],
       },
     },

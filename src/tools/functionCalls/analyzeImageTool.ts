@@ -32,8 +32,7 @@ const VISION_ANALYSIS_TIMEOUT_MS =
 
 export class AnalyzeImageTool extends BaseTool {
   name = "analyze_image";
-  description =
-    "Analyze images in a Discord message using AI vision. Use this only when the user explicitly asks about the image or when unseen visual details are necessary to answer correctly. Do not call it just because an image is present.";
+  description = "Analyze a Discord image when asked or when unseen details are needed for the answer.";
   category = "utility" as const;
   requiresFollowUp = true;
 
@@ -45,13 +44,11 @@ export class AnalyzeImageTool extends BaseTool {
     properties: {
       media_id: {
         type: "string",
-        description:
-          "The media reference ID (e.g., media_1) from the system hint for the message containing the image(s) to analyze.",
+        description: "Media ID from context, e.g. media_1.",
       },
       prompt: {
         type: "string",
-        description:
-          "Optional question or instruction for the vision model (e.g., 'What text is in this image?' or 'Describe the mood of this photo'). Ask only for the specific visual detail needed. If omitted, a general description is returned.",
+        description: "Ask for the specific visual detail needed. Omit for a general description.",
       },
     },
     required: ["media_id"],

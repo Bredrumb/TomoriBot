@@ -154,7 +154,7 @@ async function resolveTargetChannel(
 export class CreateThreadTool extends BaseTool {
   name = "create_thread";
   description =
-    "Create a new public thread in the current server and send the first message into it as the active persona. ONLY invoke this tool when the user has explicitly and unambiguously requested the creation of a new thread. Do not infer thread creation intent from conversational context, topic changes, or suggestions. If a thread was already created earlier in this conversation, do not create another one unless the user makes a new, explicit request for a separate thread. If channel_name is omitted or blank, the thread is created in the current channel. Use channel_name to target another text or announcement channel by the same channel-name resolution rules as cross_channel_message.";
+    "Create a public thread and send its first message as the active persona. Every new thread requires a separate, explicit user request.";
   category = "discord" as const;
   requiresFeatureFlag = "thread_creation";
 
@@ -163,17 +163,16 @@ export class CreateThreadTool extends BaseTool {
     properties: {
       thread_name: {
         type: "string",
-        description: "Name of the new thread. Must be 1-100 characters.",
+        description: "1-100 characters.",
       },
       first_message: {
         type: "string",
-        description:
-          "The first message you send inside the newly created thread. This message should usually be you acknowledging and finishing the creation of the thread. Or, if in a story or roleplay, this could be the first message of the story or roleplay.",
+        description: "Acknowledge creating the thread or start the scene if the user requested roleplay.",
       },
       channel_name: {
         type: "string",
         description:
-          "Optional target channel name in the current server. If blank, defaults to the current channel. A raw Discord channel ID or copyable `#name (ID: ...)` label is also accepted.",
+          "Text or announcement channel in this server. Use its name, exact context label, or ID. Blank or omitted uses this channel.",
       },
     },
     required: ["thread_name", "first_message"],

@@ -28,7 +28,7 @@ import { getChannelPrivacyReason } from "@/utils/discord/channelPrivacy";
 export class ReminderTool extends BaseTool {
   name = "create_task";
   description =
-    "Create a scheduled task in a Discord channel. Use this for both user reminders and self tasks: a reminder is just a task that notifies a target user. Set 'repetition_interval_hours' to 0 for a one-time task. To repeat, set one positive interval in minutes, hours, or months. A recurring task can have a delivery count or a cutoff. Minute and hour schedules can also have a daily window. Use 'self_reminder' for tasks you should execute yourself on a schedule (for example daily summaries or periodic reports). For instant, one-time messages in other channels, use cross_channel_message instead as it sends immediately without scheduling. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' for natural requests like 'in 2 hours' or 'tomorrow'. Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format for specific dates/times. Pass the wall-clock time as the user expressed it. By default absolute times are interpreted in the server's configured timezone (set via /server timezone); if the user expressed the time in their own personal timezone (shown in the conversation context), set 'utc_offset' to that timezone's UTC offset and the conversion is handled for you. If both absolute and relative times are provided, absolute time takes priority. Omit all start-time fields unless the user asks for a specific first trigger. Minute and hour schedules then start after one interval. Other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
+    "Schedule a user reminder or a task for yourself. Use cross_channel_message for immediate work in another channel. Relative time fields add together. Set at most one positive repeat interval. With no first trigger specified, minute and hour repeats start after one interval and other tasks start after 1 minute. A closed daily window moves the first trigger to its opening.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -37,84 +37,79 @@ export class ReminderTool extends BaseTool {
       reminder_purpose: {
         type: "string",
         description:
-          "What the task is for. IMPORTANT: Be very descriptive and detailed (2-4 sentences) because you might not remember the context after a long time. Include WHAT the task is about, WHY it was set, and any relevant details from the conversation. The more context you provide now, the more helpful the task will be later, but do NOT include user/channel IDs or any meta information in this content.",
+          "In 2-4 sentences, record what to do, why, and the conversation details needed later. Leave out IDs and metadata.",
       },
       target_user: {
         type: "string",
-        description:
-          "OPTIONAL: Name of the user this task should notify, as shown in the current conversation or current server. Use natural names, not IDs. If omitted, the task notifies the current turn's invoking user. If this is a task for yourself instead, set self_reminder to true.",
+        description: "User name as shown in context. Defaults to the invoking user.",
       },
       reminder_time: {
         type: "string",
         description:
-          "OPTIONAL: Absolute time to trigger the task in YYYY-MM-DD_HH:MM format (e.g., '2025-09-05_15:30'). Pass the wall-clock time exactly as the user expressed it. Do NOT convert between timezones yourself. Without 'utc_offset', this is interpreted in the server's configured timezone (set via /server timezone). Use this for specific dates/times. If provided, this takes priority over 'from now' parameters.",
+          "Absolute first trigger in YYYY-MM-DD_HH:MM. Copy the user's wall-clock time as given. Uses the server timezone unless utc_offset is set. Takes priority over relative time.",
       },
       utc_offset: {
         type: "number",
         description:
-          "OPTIONAL: The UTC offset in hours that 'reminder_time' is expressed in (e.g., 8 for UTC+8, -5 for UTC-5, 5.5 for UTC+5:30). Set this to the target user's personal timezone offset (shown in the conversation context) when they expressed the time in their own local time. If omitted, the server's configured timezone is used. Only meaningful together with 'reminder_time'.",
+          "Offset in hours for reminder_time (e.g. 5.5 for UTC+5:30). Use the user's offset for time given in their local time.",
       },
       minutes_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Minutes from the current time to schedule the task. Can be combined with other 'from now' parameters.",
+        description: "Minutes from now to the first trigger.",
       },
       hours_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Hours from the current time to schedule the task. Can be combined with other 'from now' parameters.",
+        description: "Hours from now to the first trigger.",
       },
       days_from_now: {
         type: "number",
-        description:
-          "OPTIONAL: Days from the current time to schedule the task. Can be combined with other 'from now' parameters.",
+        description: "Days from now to the first trigger.",
       },
       months_from_now: {
         type: "number",
         description:
-          "OPTIONAL: Months from the current time to schedule the task. Can be combined with other 'from now' parameters. Counts calendar months in the server timezone and keeps the time of day; a date past the end of the target month lands on its last day.",
+          "Add calendar months in the server timezone, keeping the time of day. Clamp to the last day if needed.",
       },
       repetition_interval_hours: {
         type: "number",
         description:
-          "REQUIRED: Set to 0 for one-time tasks. Set to 1 or higher to make the task recurring (repeats every X hours after the first trigger). Example: 24 for daily tasks, 168 for weekly tasks. For minute or calendar month intervals, set this to 0 and use the corresponding interval.",
+          "Repeat every X hours (24 for daily, 168 for weekly). Set to 0 for one-time, minute, or calendar-month schedules.",
       },
       repetition_interval_months: {
         type: "number",
         description:
-          "OPTIONAL: Set to 1 or higher to repeat every X calendar months on the same day and time of day (1 for monthly, 12 for yearly). In months without that day it runs on the last day, then returns to the original day. Requires 'repetition_interval_hours' to be 0.",
+          "Repeat every X calendar months (1 for monthly, 12 for yearly). Keep the original day and time, using the last day in shorter months. Requires repetition_interval_hours=0.",
       },
       repetition_interval_minutes: {
         type: "number",
-        description: "Repeat every X minutes. Use 0 for a one-time task.",
+        description: "Repeat every X minutes. Use 0 for one-time.",
       },
       repeat_count: {
         type: "number",
         description:
-          "Number of deliveries left, including the next trigger. Requires recurrence. Use a count or a cutoff.",
+          "Remaining deliveries, including the next trigger. Requires recurrence. Choose a count or a cutoff.",
       },
       repeat_until_time: {
         type: "string",
-        description: "Last allowed delivery time in YYYY-MM-DD_HH:MM in the server timezone. Requires recurrence.",
+        description: "Last delivery allowed, in YYYY-MM-DD_HH:MM in the server timezone. Requires recurrence.",
       },
       daily_window_start_time: {
         type: "string",
-        description: "Daily start time in the server timezone, such as 05:00 or 5AM. Pair with daily_window_end_time.",
+        description:
+          "Start of a daily window for minute or hour repeats. Use the server timezone (e.g. 05:00 or 5AM) and supply the end too.",
       },
       daily_window_end_time: {
         type: "string",
-        description:
-          "Daily end time in the server timezone, such as 22:00 or 10PM. The window must end on the same day.",
+        description: "End of the daily window in the server timezone, on the same day as the start.",
       },
       self_reminder: {
         type: "boolean",
-        description:
-          "OPTIONAL: Set to true when this is a task for you to execute yourself. This disables user mentions and focuses the prompt on the task.",
+        description: "Set true for a task you will execute yourself. Suppresses user mentions.",
       },
       target_channel: {
         type: "string",
         description:
-          "OPTIONAL: Channel or active thread label where this task should trigger. Useful for cross-channel tasks. The channel must exist in the current server. If the prompt shows a copyable inline-code label like `#general (ID: ...)`, prefer copying that exact label to avoid ambiguity. A raw Discord channel/thread ID is also accepted. If omitted, the current channel is used.",
+          "Channel or active thread in this server. Copy the exact label in context, including any ID, or pass the channel ID. Defaults to this channel.",
       },
     },
     required: ["reminder_purpose", "repetition_interval_hours"],

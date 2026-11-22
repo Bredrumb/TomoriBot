@@ -100,7 +100,7 @@ function getDisplayAuthorName(message: Message): string {
 export class ManageMessageTool extends BaseTool {
   name = "manage_message";
   description =
-    "Manage a recent message in the current channel. `pin` can pin any recent message if Discord permissions allow it. `edit` and `delete` only work on recent messages you or another character owns. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.";
+    "Pin, edit, or delete recent messages in this channel. Discord permissions govern pinning. Edit or delete only messages owned by you or another character. Use reveal_message_metadata for fresh refs or timestamps.";
   category = "discord" as const;
   requiresFeatureFlag = "manage_message";
 
@@ -110,22 +110,19 @@ export class ManageMessageTool extends BaseTool {
       action: {
         type: "string",
         enum: ["pin", "edit", "delete"],
-        description:
-          "Which action to perform: pin a message, edit a manageable message, or delete one or more manageable messages.",
+        description: "Delete accepts a single message or a range.",
       },
       message_id: {
         type: "string",
-        description:
-          "The target message reference. Accepts a `ref_N` handle from recent message metadata or a `media_N` handle from an image or video in the current context.",
+        description: "Use ref_N from recent metadata or media_N from an image or video in context.",
       },
       end_message_id: {
         type: "string",
-        description: "Optional inclusive end of the delete range. Only valid when action is `delete`.",
+        description: "Inclusive end of a delete range.",
       },
       content: {
         type: "string",
-        description:
-          "Required new message content when action is `edit`. Content-only edits preserve existing embeds, files, and components where Discord allows.",
+        description: "Required for edit. Content edits preserve embeds, files, and components where Discord allows.",
       },
     },
     required: ["action", "message_id"],

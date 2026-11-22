@@ -145,7 +145,7 @@ export function applyStreamContextAvailability(params: {
           sprite: {
             type: "string",
             description:
-              "Optional appearance for this message. Use an exact sprite label from your available sprites. Use an empty string to return to your base appearance; omit to keep your current appearance.",
+              "Exact available sprite label. Empty string selects the base appearance. Omit to keep the current appearance.",
           },
         },
       },

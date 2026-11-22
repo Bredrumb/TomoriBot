@@ -156,7 +156,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 export class CrossChannelMessageTool extends BaseTool {
   name = "cross_channel_message";
   description =
-    "Dispatch yourself to a different channel in the same server to do work there right now, once, or silently peek its recent message history. Anything you can do here (generate an image, search, answer, say something) happens in that channel instead. For work at a later time or on a repeat, use create_task. Set peek_only to true to read what is happening there without sending any message. Optionally enable 'boomerang' to report back to the current channel about what you did.";
+    "Do one task now in another channel in this server, or peek at its recent history. Use create_task for later or recurring work.";
   category = "discord" as const;
 
   parameters: ToolParameterSchema = {
@@ -164,23 +164,20 @@ export class CrossChannelMessageTool extends BaseTool {
     properties: {
       target_channel: {
         type: "string",
-        description:
-          "Name of the target channel in the current server. If the conversation shows a channel in inline-code like `general` or `general (ID: ...)`, copy the exact name inside the backticks. A raw Discord channel ID is also accepted.",
+        description: "Copy the exact channel label shown in context, including any ID, or pass the channel ID.",
       },
       task: {
         type: "string",
         description:
-          "A descriptive task (2-4 sentences) explaining what you should do in the target channel. Be specific about the output wanted (for example, generate an image of X, or say Y), the TONE to use, and any context from the current conversation that's relevant. This instruction guides your message generation in the target channel. Not used when peek_only is true.",
+          "In 2-4 sentences, specify what to do, the desired output and tone, and relevant context. Use an empty string for peek_only.",
       },
       boomerang: {
         type: "boolean",
-        description:
-          "If true, after sending the message in the target channel, you will automatically generate a follow-up message back in the current channel reporting what you did or found. Useful when someone asked you to go check on or say something in another channel. Ignored when peek_only is true.",
+        description: "Report back in the current channel after doing the task. Ignored during a peek.",
       },
       peek_only: {
         type: "boolean",
-        description:
-          "If true, fetch and return the target channel's recent message history without sending any message there. Use this when you want to silently read what is happening in another channel to inform your response here, without making your presence known in that channel. The number of messages fetched matches the server's configured message fetch limit.",
+        description: "Read recent history without sending to the target. Uses the server's message fetch limit.",
       },
     },
     required: ["target_channel", "task"],

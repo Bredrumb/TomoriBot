@@ -53,9 +53,7 @@ async function validateFetchSize(url: string): Promise<{ allowed: boolean; reaso
 
 export class FetchUrlTool extends BaseTool {
   name = "fetch_url";
-  description =
-    "Fetch and read a specific URL or webpage. Supports pagination with start_index, " +
-    "optional max_length, and raw content when available.";
+  description = "Fetch and read a specific URL.";
 
   category = "search" as const;
   requiresFeatureFlag = "web_search";
@@ -70,15 +68,15 @@ export class FetchUrlTool extends BaseTool {
       },
       max_length: {
         type: "number" as const,
-        description: "Maximum number of characters to return. Optional.",
+        description: "Maximum characters to return.",
       },
       start_index: {
         type: "number" as const,
-        description: "Start reading from this character offset for pagination. Optional.",
+        description: "Character offset for pagination.",
       },
       raw: {
         type: "boolean" as const,
-        description: "Return less-filtered page content when supported. Optional.",
+        description: "Return less-filtered content when supported.",
       },
     },
     required: ["url"],

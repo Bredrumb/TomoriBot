@@ -9,7 +9,7 @@ import {
 export class UnblockUserTool extends BaseTool {
   name = "unblock_user";
   description =
-    "Remove an active mute/block for a Discord user from the active persona only. Use this when the persona should allow that user to trigger it again and, if they were blocked, see their future live messages in context again.";
+    "Remove the active persona's mute or block. The user can trigger it again and future live messages are visible.";
   category = "discord" as const;
   requiresFeatureFlag = "user_blocking";
 
@@ -18,8 +18,7 @@ export class UnblockUserTool extends BaseTool {
     properties: {
       blocked_user: {
         type: "string",
-        description:
-          "Name of the Discord user whose active mute/block should be removed for the active persona. Use natural names, not IDs.",
+        description: "User name as shown in this conversation or server.",
       },
     },
     required: ["blocked_user"],

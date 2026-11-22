@@ -15,8 +15,7 @@ import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtecti
 
 export class UpdateLongTermMemoryTool extends BaseTool {
   name = "update_long_term_memory";
-  description =
-    "Replace or delete an existing long-term memory (server or personal) by ID. Use this when an existing memory needs revision, or leave memory_content blank to delete the targeted memory instead. For server memories, provide the memory ID shown in context (e.g., ID:24). For personal memories, also provide the target user's name as shown in the conversation or current server, and use the ID shown next to that user's memory.";
+  description = "Replace or delete an existing server or personal memory by ID.";
   category = "memory" as const;
   requiresFeatureFlag = "self_teaching";
 
@@ -25,17 +24,15 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     properties: {
       memory_id: {
         type: "number",
-        description: "The memory ID to replace. Use the ID shown in context (e.g., ID:24).",
+        description: "Use the ID shown with the memory in context (e.g. 24 from ID:24).",
       },
       memory_content: {
         type: "string",
-        description:
-          "The full replacement memory content. This completely replaces the existing memory. If this is empty or blank, delete the targeted memory instead. Do NOT insert user IDs or any meta information here.",
+        description: "Full replacement text. Blank deletes the memory. Leave out IDs and metadata.",
       },
       target_user: {
         type: "string",
-        description:
-          "If updating a personal memory, provide the target user's name as seen in the current conversation or server. Use natural names, not IDs.",
+        description: "For a personal memory, supply the user's name as shown in context.",
       },
     },
     required: ["memory_id", "memory_content"],
