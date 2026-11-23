@@ -1041,5 +1041,68 @@
     "codename": "parallel/decisions-fast",
     "releaseDate": null,
     "offeredAt": "2026-11-16"
+  },
+  {
+    "provider": "openrouter",
+    "table": "llmSections",
+    "codename": "aion-labs/aion-3.5-mini",
+    "releaseDate": "2026-09-23",
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "llmSections",
+    "codename": "aion-labs/aion-3.5",
+    "releaseDate": "2026-09-23",
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "llmSections",
+    "codename": "aion-labs/aion-3.0",
+    "releaseDate": "2026-05-05",
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "nvidia",
+    "table": "llmSections",
+    "codename": "moonshotai/kimi-k3",
+    "releaseDate": "2026-07-16",
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/groundhog-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/bison-1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "microsoft/microsoft-decision-1.1",
+    "releaseDate": null,
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "liquid/d1.2-ultra",
+    "releaseDate": null,
+    "offeredAt": "2026-11-23"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "liquid/d1.2",
+    "releaseDate": null,
+    "offeredAt": "2026-11-23"
   }
 ]
