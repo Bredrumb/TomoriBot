@@ -3098,6 +3098,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "nvidia",
         codename: "moonshotai/kimi-k3",
+        contextWindow: 1_048_576,
         hasTools: true,
         seesImages: true,
         isReasoning: true,
