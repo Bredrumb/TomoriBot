@@ -86,13 +86,16 @@ bun run audit-comments --docs [paths]   # prose audit of Markdown, default docs/
 bun test ./scripts/checks/commentPolicy.test.ts
 ```
 
-`scripts/checks/checkCommentPolicy.ts` runs deterministic rules that fail in any mode, and heuristic
-rules that warn. `--staged` or `--base <ref>` also judges changed lines: `--base` covers everything
-since the merge base with `<ref>`, including uncommitted and untracked files, and `audit-comments`
-passes `--base HEAD`. On changed lines, `obvious-narration` becomes an error and the new-comment rules
+`scripts/checks/checkCommentPolicy.ts` scans TypeScript (`src/`, `scripts/`, `tests/`, `apps/`),
+Markdown (`docs/`), and standalone `#` comments in Dockerfiles, YAML, shell, PowerShell, Python,
+and TOML files (`Dockerfile`, `docker-compose.yaml`, `bunfig.toml`, `docker/`, `servers/`,
+`.github/`). It runs deterministic rules that fail in any mode, and heuristic rules that warn.
+`--staged` or `--base <ref>` also judges changed lines: `--base` covers everything since the merge
+base with `<ref>`, including uncommitted and untracked files, and `audit-comments` passes
+`--base HEAD`. On changed lines, `obvious-narration` becomes an error and the new-comment rules
 apply. A block counts as new when most of its lines changed, so a small edit inside an older block
-does not trigger them. Errors fail `bun run vl` (under Documentation); the checker is not part of the
-test runner.
+does not trigger them. Errors fail `bun run vl` (under Documentation); the checker is not part of
+the test runner.
 
 | Rule | Kind | Catches |
 |---|---|---|
@@ -103,11 +106,11 @@ test runner.
 | `obvious-narration` | Warning (error on changed lines) | Action-verb narration and section banners |
 | `redundant-heading` | Audit warning | A file header that repeats the file name, or a standalone label that repeats the next object key or a prefix shared by the next two keys |
 | `orphaned-comment` | Error | Cleanup damage: a continuation with no opening line, a bare divider, an empty JSDoc block |
-| `duplicate-comment` | Audit warning | Blocks with the same text after normalizing markers, whitespace, and case. Floor: 12 words and 60 characters |
+| `duplicate-comment` | Audit warning | TypeScript blocks with the same text after normalizing markers, whitespace, and case. Floor: 12 words and 60 characters |
 | `long-comment-block` | Audit warning | A non-JSDoc block of 8 lines or more outside `tests/` |
 | `long-new-comment` | Error on changed lines | A new comment over 2 lines |
 | `new-multi-sentence` | Error on changed lines | A new line-comment block with multiple sentences |
-| `unexplained-comment` | Warning on changed lines | A new `//` block with no reason, condition, or unit signal (`because`, `so`, `when`, a colon, and similar) |
+| `unexplained-comment` | Warning on changed lines | A new line-comment block with no reason, condition, or unit signal (`because`, `so`, `when`, a colon, and similar) |
 
 Each duplicate warning lists every copy, including copies across locale files. The audit skips
 suppression comments because each one is a separate lint decision.

@@ -54,7 +54,7 @@ outgoing:
   pool_maxsize: 20
   useragent_suffix: "TomoriBot"
 
-# Curated engine list â€” keep this lean to bound upstream rate-limit exposure.
+# Curated engine list: keep this lean to bound upstream rate-limit exposure.
 # Override per-engine via this section; rely on use_default_settings for the rest.
 engines:
   - name: google

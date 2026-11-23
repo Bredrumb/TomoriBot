@@ -45,15 +45,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
-
   code-quality:
     if: vars.ACTIVE_PROVIDER == 'azure' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
-
-  # ─── BUILD DOCKER IMAGE ───────────────────────────────────────────────────
 
   build-image:
     runs-on: ubuntu-24.04
@@ -98,8 +94,6 @@ jobs:
           name: docker-image
           path: tomoribot-image.tar
           retention-days: 1
-
-  # ─── SECURITY SCANNING (identical to AWS workflow) ────────────────────────
 
   security-sast:
     runs-on: ubuntu-24.04
@@ -263,8 +257,6 @@ jobs:
           else
             echo "ALL SECURITY SCANS PASSED — proceeding to Azure deployment"
           fi
-
-  # ─── AZURE DEPLOYMENT ─────────────────────────────────────────────────────
 
   push-to-docker-hub:
     runs-on: ubuntu-24.04
@@ -459,8 +451,8 @@ jobs:
       # The Terraform backend uses Microsoft Entra ID for Blob data-plane access.
       # This requires Storage Blob Data Contributor on the tfstate container.
       ARM_USE_AZUREAD: "true"
-      # Variable names must match terraform/azure/variables.tf (required inputs
-      # with no default — see terraform.ci.tfvars header).
+      # Variable names must match terraform/azure/variables.tf (required inputs with no default;
+      # see terraform.ci.tfvars header).
       TF_VAR_azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_postgres_admin_password: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
       TF_VAR_vm_admin_ssh_public_key: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
@@ -886,8 +878,7 @@ jobs:
           if [ "$ALLOW_MIGRATION_DOWNTIME" = "true" ]; then
             echo "A migration may break the running bot, so it stops before schema changes; a failed migration may leave it stopped." >> "$GITHUB_STEP_SUMMARY"
           fi
-          # 1. Assemble the migration (admin) DB credential bundle, same shape as the
-          #    role-bootstrap step (host/port/db from the runtime secret, admin login).
+          # Admin DB bundle matches the role-bootstrap shape (host/port/db from runtime secret).
           # shellcheck disable=SC2016
           migration_json=$(jq -cn \
             --arg user "$POSTGRES_ADMIN_LOGIN" \
@@ -905,7 +896,6 @@ jobs:
           migration_b64=$(printf '%s' "$migration_json" | base64 -w 0)
           echo "::add-mask::$migration_b64"
 
-          # 2. Run migrate-database.sh on the VM via Azure Run Command.
           # shellcheck disable=SC2016
           response_message=$(az vm run-command invoke \
             --resource-group "$RESOURCE_GROUP" \
@@ -1042,8 +1032,6 @@ jobs:
         run: |
           echo "hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "message=$(git log -1 --pretty=format:'%s')" >> "$GITHUB_OUTPUT"
-
-  # ─── GITHUB RELEASES (identical to AWS workflow) ──────────────────────────
 
   check-release-assets:
     runs-on: ubuntu-24.04

@@ -66,16 +66,8 @@ jobs:
         run: bun run lint:ci && bun run check
 
       - name: Audit dependencies
-        # bun audit has no working workspace filter — it always audits the whole
-        # lockfile, including apps/docs devDeps. Advisories reaching this gate via
-        # workspace:tomoribot-docs are build-time-only, but still block the job.
-        # Ignored advisories are justified in docs/en/contributing/policies/dependency-security.md;
-        # keep this list identical to auditClean.ts and vl.ts.
-        #
-        # Non-blocking here on purpose: a PR's merge-commit lockfile can carry advisories
-        # already fixed on a target branch it hasn't synced yet, which isn't something
-        # the PR author can fix. The deploy workflows' security-dependencies job runs
-        # the same audit as a hard, release-blocking gate.
+        # bun audit checks the whole lockfile including docs devDeps (keep --ignore synced with
+        # auditClean.ts and vl.ts), and stays non-blocking here because deploy workflows gate releases.
         continue-on-error: true
         run: bun audit --audit-level=high --ignore GHSA-vfj7-8cjw-p6xm
 
