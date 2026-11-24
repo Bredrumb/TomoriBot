@@ -1,6 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { createGoogleSpeechTransport } from "@/providers/google/googleSpeech";
-import { buildSeedDesignPrompt, synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
+import {
+  buildSeedDesignPrompt,
+  settleOpenRouterSpeechCost,
+  synthesizeOpenRouterSpeech,
+} from "@/providers/openrouter/openrouterSpeech";
+import { settleSpeechCostImmediately } from "../../helpers/speechCostSettlement";
 import { createVertexClient } from "@/providers/vertex/vertexClient";
 import {
   HOSTED_SPEECH_LIMITS,
@@ -418,7 +423,9 @@ describe("hosted speech transports", () => {
               headers: { "Content-Type": "audio/mpeg", "X-Generation-Id": "gen_synthetic" },
             });
       });
+      const settlement = settleSpeechCostImmediately();
       const operations: SpeechOperation[] = [];
+      const settledCosts: Array<number | undefined> = [];
       expect(
         await synthesizeOpenRouterSpeech({
           shape: "clone",
@@ -431,8 +438,11 @@ describe("hosted speech transports", () => {
           signal: signal(),
           maxBytes: HOSTED_SPEECH_LIMITS.outputBytes,
           operations,
+          onCostSettled: (settled) => settledCosts.push(settled),
         }),
       ).toEqual(mp3);
+      await settlement.settled();
+      settlement.mockRestore();
       expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
         model: "fish-audio/s2.1-pro-free:free",
         response_format: "mp3",
@@ -442,16 +452,37 @@ describe("hosted speech transports", () => {
         ],
       });
       expect(operations[0].generationId).toBe("gen_synthetic");
-      expect(operations[1].actualCost).toBe(cost ?? undefined);
+      expect(settledCosts).toEqual([cost ?? undefined]);
+      expect(calls.some(({ url }) => url.includes("/generation?"))).toBe(true);
       for (const { init } of calls) {
         const headers = new Headers(init.headers);
         expect(headers.get("HTTP-Referer")).toBe("https://tomoribot.app");
         expect(headers.get("X-OpenRouter-Title")).toBe("TomoriBot");
       }
-      if (cost !== null) expect(operations[0].usage).toEqual({ tokens_prompt: 12, native_tokens_completion: null });
       expect(calls.every(({ init }) => init.redirect === "error")).toBe(true);
       fetchSpy?.mockRestore();
     }
+  });
+
+  it("settles OpenRouter speech cost after the generation record appears with null token fields", async () => {
+    let lookups = 0;
+    stubFetch(async () => {
+      lookups += 1;
+      if (lookups === 1) return new Response(null, { status: 404 });
+      if (lookups === 2) return Response.json({ data: { total_cost: null } });
+      return Response.json({
+        data: { total_cost: 0.011, total_tokens: null, total_input_tokens: null, total_output_tokens: null },
+      });
+    });
+    expect(
+      await settleOpenRouterSpeechCost(
+        "synthetic-seed",
+        "bytedance-seed/seed-audio-1-0",
+        "gen-tts-1-synthetic",
+        [0, 0, 0, 0],
+      ),
+    ).toBe(0.011);
+    expect(lookups).toBe(3);
   });
 
   it("omits OpenRouter speech attribution when disabled", async () => {

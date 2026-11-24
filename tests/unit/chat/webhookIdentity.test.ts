@@ -205,7 +205,7 @@ describe("verified managed webhook identity", () => {
     }
   });
 
-  it("keeps foreign persona names and debug prefixes out of assembled persona history", async () => {
+  it("keeps foreign persona names, debug prefixes, and render labels out of persona identity", async () => {
     const persona = createPersona({
       config: {
         time_awareness_enabled: false,
@@ -281,6 +281,9 @@ describe("verified managed webhook identity", () => {
       expect(foreign?.content).toContain("$:");
       expect(managed?.authorType).toBe("persona");
       expect(managed?.authorPersonaId).toBe(alter.persona_id);
+      expect(managed?.authorName).toBe("Mirri (Juno)");
+      const participantNames = builder.mock.calls[0]?.[0].preparedParticipantContext?.syntheticUsers;
+      expect(participantNames?.get(String(alter.persona_id))?.displayName).toBe(alter.persona_nickname);
     } finally {
       for (const spy of [sql, read, privacy, blocks, builder]) spy.mockRestore();
     }

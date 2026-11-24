@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
 import { synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
+import { settleSpeechCostImmediately } from "../../helpers/speechCostSettlement";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { ProviderRequestDeniedError, findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
@@ -241,8 +242,9 @@ describe("provider request hook in the embedding SDK", () => {
 });
 
 describe("provider request hook in the speech adapter", () => {
-  it("takes the hold before the HTTP call and reports the generation's actual cost", async () => {
+  it("takes the hold before the HTTP call and keeps it until the generation's actual cost settles", async () => {
     const holds = installTestHook();
+    const settlement = settleSpeechCostImmediately();
     const fetchStub = stubGlobalFetch((input) => {
       if (String(input).includes("/generation?")) return Response.json({ data: { total_cost: 0.12 } });
       expect(holds).toHaveLength(1);
@@ -262,10 +264,13 @@ describe("provider request hook in the speech adapter", () => {
         path: "/audio/speech",
         body: expect.objectContaining({ model: SPEECH_MODEL }),
       });
+      expect(holds[0].released).toBe(false);
+      await settlement.settled();
       expect(holds[0].reports).toEqual([0.12]);
       expect(holds[0].releases).toEqual([true]);
     } finally {
       fetchStub.mockRestore();
+      settlement.mockRestore();
     }
   });
 

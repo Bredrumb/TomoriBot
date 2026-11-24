@@ -500,7 +500,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         authorType = "persona";
         personaName = resolvedPersona.persona.persona_nickname;
         effectiveAuthorId = String(resolvedPersona.persona.persona_id ?? resolvedPersona.persona.persona_nickname);
-        syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
+        syntheticUsers.set(effectiveAuthorId, { displayName: personaName, type: "persona" });
       } else if (webhookName) {
         authorName = webhookName;
       }

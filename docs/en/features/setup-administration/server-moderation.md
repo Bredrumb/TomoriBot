@@ -71,9 +71,10 @@ Trigger Behavior.
 - **Channel Rules**: in `/config` > `Channels` > `Channel Rules`, mark public text channels private
   or add cross-channel tool blocklists. Restricted Discord channels are private automatically.
   Private channels have no thought logs or incoming cross-channel tools, including peeks, thread
-  creation, and scheduled tasks from other channels. STM cannot enter or leave unless
-  `Private-Channel STM Sharing` is `Allowed`. You can still ask the bot to work within a private
-  channel or dispatch work outward; an outward task can include information from your conversation.
+  creation, and scheduled tasks from other channels. Their STM cannot leave unless
+  `Private-Channel STM Sharing` is `Allowed`, but they still recall STM from public channels. You
+  can still ask the bot to work within a private channel or dispatch work outward; an outward task
+  can include information from your conversation.
 
 `/config` requires `Manage Server` in servers, including viewing persona attributes, sample dialogues,
 sprites, and short-term memory. Persona attributes and sample dialogues can only be edited by server

@@ -187,8 +187,9 @@ including active member and workspace sponsorship suppression.
 
 `src/utils/provider/providerRequestHook.ts` owns the optional request hook. A registered hook returns
 an optional hold for one provider request: `reportCost` settles the request's reported cost, and
-`release(retainEstimate)` ends the hold, counting the initial estimate as spent when `retainEstimate`
-is set and no cost arrived. The stream adapter and the job-based adapters call `beginProviderRequest`
+`release(retainEstimate)` ends the hold. When `retainEstimate` is set and no cost arrived, the spend
+guard keeps the initial estimate in admission briefly but never counts it as confirmed spend in
+allowance displays or member-key lifecycle math. The stream adapter and the job-based adapters call `beginProviderRequest`
 before the HTTP call, report each cost the provider or the job reports, and release the hold on
 completion or failure. HTTP errors and pre-send aborts report zero; an in-flight failure releases
 the hold without retaining an unreported estimate. Already-reported costs survive release.

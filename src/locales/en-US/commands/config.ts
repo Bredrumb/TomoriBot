@@ -323,7 +323,7 @@ export default {
       channels_rules_description: `Set how special channel groups affect context and tools.`,
       channels_rules_private_title: `Private Channels`,
       channels_rules_private_description:
-        "Private channels have these restrictions (automatic for channels with restricted Discord access):\n- No thought logs.\n- No incoming cross-channel tools.\n- No STM entering or leaving unless `Private-Channel STM Sharing` is set to `Allowed`.",
+        "Private channels have these restrictions (automatic for channels with restricted Discord access):\n- No thought logs.\n- No incoming cross-channel tools.\n- No STM leaving unless `Private-Channel STM Sharing` is set to `Allowed`.",
       channels_rules_private_manage_button: `Mark Public Channels Private`,
       channels_rules_private_automatic: `{channel}: private automatically (Discord permissions)`,
       channels_rules_private_manual: `{channel}: marked private`,
@@ -336,7 +336,7 @@ export default {
       channels_rules_blocklist_manage_button: `Manage Blocked Channels`,
       channels_rules_stm_sharing_title: `Private-Channel STM Sharing`,
       channels_rules_stm_sharing_description:
-        "Choose whether [Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/) can enter or leave private channels. Thought logs and incoming cross-channel tools stay blocked.",
+        "Choose whether [Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/) can leave private channels. Thought logs and incoming cross-channel tools stay blocked.",
       channels_rules_private_modal_title: `Mark Public Channels Private`,
       channels_rules_private_group_label: `Private Channels`,
       channels_rules_private_group_label_continued: `Private Channels (Continued)`,

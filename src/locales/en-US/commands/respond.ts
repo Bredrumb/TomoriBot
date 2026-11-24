@@ -16,5 +16,7 @@ export default {
     cooldown_active: `This server's managers have configured a cooldown. Please wait **{seconds}** seconds before using \`/respond\` again. This cooldown is shared with message triggers.`,
     channel_not_whitelisted: `This server has whitelist restrictions active. \`/respond\` can only be used in whitelisted channels by members with whitelisted roles, and only with personas allowed in this channel.`,
     persona_access_blocked: `Your current whitelist permissions and personal spotlight settings do not leave any personas available for \`/respond\` in this channel.`,
+    persona_blocked_title: `{bot} is ignoring you`,
+    persona_blocked_description: `{bot} has blocked you, so \`/respond\` can't make {bot} reply right now. The block lifts {time}.`,
   },
 };

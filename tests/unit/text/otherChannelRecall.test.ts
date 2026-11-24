@@ -109,7 +109,7 @@ describe("other-channel short-term recall", () => {
     expect(text).toContain(`Chat quoted ${macro}.`);
   });
 
-  it("isolates private sources and destinations for summaries, categories, and crude messages unless sharing is allowed", async () => {
+  it("admits STM into private destinations but keeps private sources from leaving unless sharing is allowed", async () => {
     spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
     spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
     for (const content of [
@@ -168,14 +168,21 @@ describe("other-channel short-term recall", () => {
             createPersona({ config: { private_channel_ids: privateIds, stm_privacy_bypass: bypass } }),
           );
           expect(texts.join("\n").includes("confidential-marker"), `${restriction}, bypass=${bypass}`).toBe(
-            bypass || ["public", "member-deny-source", "member-deny-destination"].includes(restriction),
+            bypass ||
+              [
+                "public",
+                "member-deny-source",
+                "member-deny-destination",
+                "manual-destination",
+                "restricted-destination",
+              ].includes(restriction),
           );
         }
       }
     }
   });
 
-  it("keeps same-channel STM when privacy blocks recall and filters before applying the recall limit", async () => {
+  it("keeps same-channel STM in private channels and filters private sources before applying the recall limit", async () => {
     spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
     spyOn(shortTermMemoryRepository, "getStmCategories").mockResolvedValue([]);
     sameChannelEntry = hydratedEntry("channel-current", Date.now(), { summary: "local-marker" });

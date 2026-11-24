@@ -4,6 +4,7 @@ import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
+  type ProviderUsageContext,
   reportProviderUsage,
 } from "@/utils/provider/providerUsage";
 import type { CustomEndpointRow } from "@/types/db/schema";
@@ -281,6 +282,20 @@ async function synthesizeLocalVoiceMessage(
   };
 }
 
+// A module-level closure keeps the request's reference audio unreachable while settlement runs after delivery.
+function openRouterCostReporter(
+  usageContext: ProviderUsageContext | null | undefined,
+  modelCodename: string,
+  operations: SpeechOperation[],
+): (costUsd: number | undefined) => void {
+  return (costUsd) =>
+    reportProviderUsage(usageContext, {
+      modelCodename,
+      costUsd,
+      providerRequestId: operations.find((operation) => operation.operation === "synthesize")?.generationId,
+    });
+}
+
 async function synthesizeHostedVoiceMessage(
   request: VoiceMessageSynthesisRequest,
   target: Extract<SpeechTargetResult, { kind: "hosted-model" }>,
@@ -354,6 +369,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
+          onCostSettled: openRouterCostReporter(usageContext, target.model.codename, attempt.operations),
         }),
       );
     } else if (target.model.provider === "openrouter") {
@@ -396,6 +412,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
+          onCostSettled: openRouterCostReporter(usageContext, target.model.codename, attempt.operations),
         }),
       );
     } else {
@@ -431,14 +448,6 @@ async function synthesizeHostedVoiceMessage(
     }
     request.abortSignal?.throwIfAborted();
     attempt.synthesisSuccess = true;
-    if (target.model.provider === "openrouter") {
-      const synthesis = attempt.operations.find((operation) => operation.operation === "synthesize");
-      reportProviderUsage(usageContext, {
-        modelCodename: target.model.codename,
-        costUsd: attempt.operations.find((operation) => operation.operation === "cost")?.actualCost,
-        providerRequestId: synthesis?.generationId,
-      });
-    }
     return {
       success: true,
       audioBuffer: audio,

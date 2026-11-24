@@ -1345,7 +1345,8 @@ async function simplifyMessage(
       personaName = matchedPersona.persona_nickname;
       authorPersonaId = matchedPersona.persona_id ?? null;
       authorPersonaLineageId = matchedPersona.persona_lineage_id;
-      syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
+      // Participant profiles name the persona itself, so the per-message sprite or render label stays on authorName.
+      syntheticUsers.set(authorId, { displayName: matchedPersona.persona_nickname, type: "persona" });
     } else {
       const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
       if (messageProxyIdentity) {

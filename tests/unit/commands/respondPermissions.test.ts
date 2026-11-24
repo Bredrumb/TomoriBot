@@ -13,10 +13,12 @@ import { execute } from "@/commands/respond";
 import * as chat from "@/events/messageCreate/tomoriChat";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { invalidatePersonalSpotlightCache } from "@/utils/cache/personalSpotlightCache";
+import { invalidateAllPersonaUserBlockCacheForServer } from "@/utils/cache/personaUserBlockCache";
 import {
   cooldownRepository,
   llmModelRepo,
   personaRepository,
+  personaUserBlockRepository,
   userRepository,
   whitelistRepository,
 } from "@/utils/db/repositories";
@@ -34,6 +36,8 @@ beforeEach(() => {
   invalidateWhitelistCache(guildId);
   invalidateWhitelistCache("fake_user_id");
   invalidatePersonalSpotlightCache(persona.server_id);
+  invalidateAllPersonaUserBlockCacheForServer(persona.server_id);
+  spyOn(personaUserBlockRepository, "loadActiveBlocksForUser").mockResolvedValue([]);
   spyOn(personaRepository, "loadState").mockResolvedValue(persona);
   spyOn(personaRepository, "loadAllForServer").mockResolvedValue([persona]);
   spyOn(cooldownRepository, "checkMessageTriggerCooldownWithWhitelist").mockResolvedValue({
@@ -294,6 +298,38 @@ describe("/respond invocation options", () => {
       expect(description(calls)).toBe(localizedCopy("en-US", "commands.respond.invalid_persona_description"));
     }
     expect(chat.tomoriChat).not.toHaveBeenCalled();
+  });
+
+  it("explains a persona block privately instead of reporting success", async () => {
+    spyOn(personaRepository, "loadAllForServer").mockResolvedValue([persona, alter]);
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    for (const [blockedPersona, strings] of [
+      [alter, { persona: String(alter.persona_id) }],
+      [persona, {}],
+    ] as const) {
+      invalidateAllPersonaUserBlockCacheForServer(persona.server_id);
+      spyOn(personaUserBlockRepository, "loadActiveBlocksForUser").mockResolvedValue([
+        {
+          server_id: persona.server_id,
+          persona_id: blockedPersona.persona_id as number,
+          user_disc_id: "fake_user_id",
+          block_type: "mute",
+          reason: "Spam",
+          expires_at: expiresAt,
+        },
+      ]);
+      const { interaction, calls } = responseInvocation(strings);
+      await execute(client, interaction, createUserRow(), "en-US");
+      expect(description(calls)).toBe(
+        localizedCopy("en-US", "commands.respond.persona_blocked_description", {
+          bot: blockedPersona.persona_nickname,
+          time: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`,
+        }),
+      );
+      expect(calls.some((call) => call.method === "followUp")).toBe(false);
+    }
+    expect(chat.tomoriChat).not.toHaveBeenCalled();
+    expect(cooldownRepository.setMessageTriggerCooldownWithWhitelist).not.toHaveBeenCalled();
   });
 
   it("reports a missing reasoning model without triggering a turn", async () => {

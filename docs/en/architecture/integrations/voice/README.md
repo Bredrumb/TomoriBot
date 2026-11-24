@@ -248,9 +248,11 @@ synthesis do not start fallback. Delivery runs after synthesis and cannot initia
 
 Results retain provider, model, credential scope, and operation usage for every attempt, including a
 failed personal attempt before server fallback. Creation and synthesis usage remain separate.
-OpenRouter generation IDs support one bounded metadata lookup; missing cost stays unknown, and a
-failed lookup preserves generated audio. The dispatcher reports synthesis success independently of
-Discord delivery. The command and tool own delivery and `audio_generated` metrics for their connected
+OpenRouter indexes a speech generation's cost several seconds after the audio arrives, so validated
+audio returns at once while a background lookup polls the generation ID with backoff. The spend hold
+stays reserved until that lookup reports the cost and records usage. A lookup that never settles logs
+a retained warning and leaves the cost unknown. The dispatcher reports synthesis success
+independently of Discord delivery. The command and tool own delivery and `audio_generated` metrics for their connected
 custom and hosted paths. Command receipts and tool results report the final source and target label,
 including server fallback: a custom endpoint's label or a hosted model's codename.
 
