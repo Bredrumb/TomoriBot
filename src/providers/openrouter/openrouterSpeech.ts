@@ -1,19 +1,26 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 import { beginProviderRequest, type ProviderRequestHold } from "@/utils/provider/providerRequestHook";
 import { findOpenRouterSpeechModel } from "@/providers/openrouter/openrouterSpeechModels";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { log } from "@/utils/misc/logger";
 import {
   checkSpeechStatus,
   HOSTED_SPEECH_LIMITS,
   HostedSpeechError,
   readSpeechJson,
   speechErrorBody,
-  speechUsageSchema,
   validateSpeechAudio,
   type SpeechOperation,
 } from "@/utils/speech/hostedSpeech";
+
+// Live Seed and Fish generations returned 404 from the generation endpoint until 4-8 s after the audio response.
+const COST_LOOKUP_DELAYS_MS = [4_000, 2_000, 2_000, 4_000, 8_000, 16_000] as const;
+const generationCostSchema = z.object({
+  data: z.object({ total_cost: z.number().finite().nonnegative().nullable().optional() }),
+});
 
 export async function synthesizeOpenRouterSpeech(request: OpenRouterSpeechRequest): Promise<Buffer> {
   request.signal.throwIfAborted();
@@ -25,22 +32,70 @@ export async function synthesizeOpenRouterSpeech(request: OpenRouterSpeechReques
       input: buildSpeechBody(request).input,
     },
   });
-  let completed = false;
+  let settling = false;
   try {
     if (request.signal.aborted) {
       hold?.reportCost(0);
       request.signal.throwIfAborted();
     }
-    const result = await synthesizeSpeech(request, hold);
-    completed = true;
-    const costs = request.operations.flatMap((operation) =>
-      typeof operation.actualCost === "number" ? [operation.actualCost] : [],
-    );
-    if (costs.length > 0) hold?.reportCost(costs.reduce((sum, cost) => sum + cost, 0));
-    return result;
+    const { audio, generationId } = await synthesizeSpeech(request, hold);
+    settling = true;
+    // Capturing only the callback keeps a clone's reference WAV out of the settlement closure.
+    const { onCostSettled } = request;
+    // Settlement ignores the request signal because OpenRouter has already billed the audio by this point.
+    void settleOpenRouterSpeechCost(request.apiKey, request.model, generationId).then((cost) => {
+      if (cost !== undefined) hold?.reportCost(cost);
+      hold?.release(true);
+      onCostSettled?.(cost);
+    });
+    return audio;
   } finally {
-    hold?.release(completed);
+    if (!settling) hold?.release(false);
   }
+}
+
+export async function settleOpenRouterSpeechCost(
+  apiKey: string,
+  model: string,
+  generationId: string | undefined,
+  delaysMs: readonly number[] = COST_LOOKUP_DELAYS_MS,
+): Promise<number | undefined> {
+  let failure: { reason: string; status?: number; error?: unknown } = { reason: "missing_generation_id" };
+  if (generationId) {
+    const url = `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`;
+    const headers = { Authorization: `Bearer ${apiKey}`, ...buildOpenRouterAttributionHeaders() };
+    try {
+      for (const delay of delaysMs) {
+        await sleep(delay);
+        const signal = AbortSignal.timeout(HOSTED_SPEECH_LIMITS.costTimeoutMs);
+        const response = await fetch(url, { headers, redirect: "error", signal });
+        if (!response.ok) {
+          await response.body?.cancel();
+          failure = { reason: "lookup_status", status: response.status };
+          if (response.status === 404 || response.status >= 500) continue;
+          break;
+        }
+        const parsed = generationCostSchema.safeParse(
+          await readSpeechJson(response, signal, HOSTED_SPEECH_LIMITS.metadataBytes),
+        );
+        if (!parsed.success) {
+          failure = { reason: "malformed_metadata", status: response.status };
+          break;
+        }
+        if (parsed.data.data.total_cost != null) return parsed.data.data.total_cost;
+        failure = { reason: "cost_pending", status: response.status };
+      }
+    } catch (error) {
+      failure = { reason: "lookup_failed", error };
+    }
+  }
+  log.warn(
+    "OpenRouter speech cost did not settle",
+    failure.error,
+    { metadata: { model, generationId, reason: failure.reason, status: failure.status } },
+    { retain: true, redactValues: [apiKey] },
+  );
+  return undefined;
 }
 
 // Seed interprets its single prompt instead of reading it aloud and ignores OpenRouter's instructions field, so voice
@@ -58,6 +113,7 @@ type OpenRouterSpeechRequest = {
   signal: AbortSignal;
   maxBytes: number;
   operations: SpeechOperation[];
+  onCostSettled?: (cost: number | undefined) => void;
 } & (
   | { shape: "clone"; script: string; direction?: string; reference: Buffer; transcript: string | null }
   | { shape: "design"; description: string; script: string; direction?: string }
@@ -107,7 +163,10 @@ export async function throwOpenRouterAudioError(
   throw new HostedSpeechError("provider_error", response.status, body);
 }
 
-async function synthesizeSpeech(request: OpenRouterSpeechRequest, hold?: ProviderRequestHold): Promise<Buffer> {
+async function synthesizeSpeech(
+  request: OpenRouterSpeechRequest,
+  hold?: ProviderRequestHold,
+): Promise<{ audio: Buffer; generationId?: string }> {
   const spec = findOpenRouterSpeechModel(request.model);
   if (!spec || spec.shape !== request.shape) throw new HostedSpeechError("invalid_request");
   if (
@@ -146,35 +205,5 @@ async function synthesizeSpeech(request: OpenRouterSpeechRequest, hold?: Provide
   const audio = await readBoundedResponse(response, request.maxBytes, request.signal);
   await validateSpeechAudio(audio, "audio/mpeg", request.maxBytes);
   operation.success = true;
-  if (operation.generationId && !request.signal.aborted) {
-    const costSignal = AbortSignal.any([request.signal, AbortSignal.timeout(HOSTED_SPEECH_LIMITS.costTimeoutMs)]);
-    const costOperation: SpeechOperation = { operation: "cost", success: false };
-    request.operations.push(costOperation);
-    try {
-      const costResponse = await fetch(
-        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(operation.generationId)}`,
-        {
-          headers: { Authorization: `Bearer ${request.apiKey}`, ...buildOpenRouterAttributionHeaders() },
-          redirect: "error",
-          signal: costSignal,
-        },
-      );
-      costOperation.status = costResponse.status;
-      if (!costResponse.ok) {
-        await costResponse.body?.cancel();
-        return audio;
-      }
-      const result = z
-        .object({ data: speechUsageSchema.extend({ total_cost: z.number().nonnegative().nullable().optional() }) })
-        .parse(await readSpeechJson(costResponse, costSignal, HOSTED_SPEECH_LIMITS.metadataBytes));
-      operation.usage = speechUsageSchema.parse(result.data);
-      if (result.data.total_cost != null) {
-        costOperation.actualCost = result.data.total_cost;
-        costOperation.success = true;
-      }
-    } catch {
-      return audio;
-    }
-  }
-  return audio;
+  return { audio, generationId: operation.generationId };
 }

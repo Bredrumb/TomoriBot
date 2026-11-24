@@ -508,6 +508,11 @@ describe("subscription panels", () => {
     const matchedBody = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
     expect(matchedBody).toMatch(localizedProse("en-US", "commands.subscription.percent_note"));
     expect(matchedBody).not.toMatch(localizedProse("en-US", "commands.subscription.other_note"));
+
+    fixture.allowance.used += 1e-12;
+    const roundedZeroBody = collectTextDisplays(buildSubscribePanel(fixture)).join("\n");
+    expect(roundedZeroBody).not.toMatch(localizedProse("en-US", "commands.subscription.other"));
+    expect(roundedZeroBody).not.toMatch(localizedProse("en-US", "commands.subscription.other_note"));
   });
 
   it("numbers models and Other with each model's generations on its own line in every locale", () => {

@@ -27,7 +27,7 @@ import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGu
 
 async function observedUsage(row: MemberKeyRow, repository: MemberKeyRepository, usage: number): Promise<number> {
   if (!row.key_hash || !row.key_created_at) throw new MemberKeyError();
-  return Math.max(usage, await repository.loggedSpend(row), supporterSpendGuard.observedSpend(row.key_hash));
+  return Math.max(usage, await repository.loggedSpend(row), supporterSpendGuard.confirmedSpend(row.key_hash));
 }
 
 function operationName(row: MemberKeyRow): string {

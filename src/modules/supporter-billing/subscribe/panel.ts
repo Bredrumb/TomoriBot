@@ -420,6 +420,8 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
   );
   const logged = aggregates.reduce((sum, row) => sum + row.cost_usd, 0);
   const other = Math.max(0, allowance.used - logged);
+  const otherPercent = other > 0 ? percent(other, allowance.allowance) : "0.00%";
+  const hasOther = otherPercent !== "0.00%";
   const selection = resolveRangeSelection(rows, route.page, USAGE_PAGE_SIZE);
   const components: ComponentInContainerData[] = [
     text(
@@ -457,9 +459,9 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
       ? `${line} · ${localizer(locale, "commands.subscription.model_generations", { count: `\`${row.count}\`` })}`
       : line;
   });
-  if (other > 0)
+  if (hasOther)
     lines.push(
-      `${modelView ? `${lines.length + 1}. ` : "> "}${localizer(locale, "commands.subscription.other")}: \`${percent(other, allowance.allowance)}\``,
+      `${modelView ? `${lines.length + 1}. ` : "> "}${localizer(locale, "commands.subscription.other")}: \`${otherPercent}\``,
     );
   components.push(text(lines.length > 0 ? lines.join("\n") : localizer(locale, "commands.subscription.no_usage")));
   const pagination = buildPaginationRow({
@@ -477,7 +479,7 @@ function usage(input: SubscriptionPanelInput): ComponentInContainerData[] {
     text(
       [
         `-# ${localizer(locale, "commands.subscription.percent_note")}`,
-        ...(other > 0 ? [`-# ${localizer(locale, "commands.subscription.other_note")}`] : []),
+        ...(hasOther ? [`-# ${localizer(locale, "commands.subscription.other_note")}`] : []),
       ].join("\n"),
     ),
   );

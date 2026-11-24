@@ -641,6 +641,78 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
     }
   });
 
+  it("expires unsettled hold ceilings, excludes them from allowance and lifecycle math, and avoids overlap double-counting", async () => {
+    const value = snapshot("unsettled_reconcile");
+    const provider = new Provider();
+    const linked = await link(value, provider);
+    const key = await remote(value, provider);
+    const id = linked.identity.supporter_identity_id;
+    key.usage = 0.5;
+    let currentTime = new Date("2026-01-10T01:00:00Z").getTime();
+    const clock = spyOn(Date, "now").mockImplementation(() => currentTime);
+    const guard = new SupporterSpendGuard(repository, statistics, () => provider);
+    const confirmed = spyOn(supporterSpendGuard, "confirmedSpend").mockImplementation((hash) =>
+      guard.confirmedSpend(hash),
+    );
+    guard.registerCredential(key.key, funding(id), key.hash);
+    try {
+      const unreported = await guard.begin(key.key, async () => 4);
+      unreported?.release(true);
+      expect(guard.observedSpend(key.hash)).toBeCloseTo(4.5, 6);
+      expect(guard.confirmedSpend(key.hash)).toBeCloseTo(0.5, 6);
+
+      expect(
+        await loadSubscriptionAllowance(linked.identity, linked.entitlement, {
+          memberKeys: repository,
+          statistics,
+          provider: () => provider,
+          confirmedSpend: (hash) => supporterSpendGuard.confirmedSpend(hash),
+        }),
+      ).toMatchObject({ allowance: 10, used: 0.5, remaining: 9.5 });
+
+      currentTime += 30_000;
+      key.usage = 0.52;
+      const postExpiry = await guard.begin(key.key, async () => 9.48);
+      expect(postExpiry).toBeDefined();
+      expect(guard.observedSpend(key.hash)).toBeCloseTo(0.52, 6);
+      postExpiry?.reportCost(0);
+      postExpiry?.release();
+
+      const first = await guard.begin(key.key, async () => 1);
+      currentTime += 6_000;
+      key.usage = 0.92;
+      const overlapping = await guard.begin(key.key, async () => 1);
+      first?.reportCost(0.4);
+      first?.release();
+      overlapping?.reportCost(0);
+      overlapping?.release();
+      currentTime += 6_000;
+      const idleCheck = await guard.begin(key.key, async () => 0.1);
+      idleCheck?.reportCost(0);
+      idleCheck?.release();
+      expect(guard.confirmedSpend(key.hash)).toBeCloseTo(0.92, 6);
+      expect(guard.observedSpend(key.hash)).toBeCloseTo(0.92, 6);
+
+      const burst = await guard.begin(key.key, async () => 5);
+      burst?.release(true);
+      expect(guard.observedSpend(key.hash)).toBeCloseTo(5.92, 6);
+      const renewed = mappedSnapshot("unsettled_reconcile", renewal, nextRenewal, renewal);
+      await change(renewed, provider, true, renewal);
+      expect(key.limit).toBe(10.92);
+      await rotateSupporterMemberKey({
+        ...options,
+        now: renewal,
+        provider,
+        supporterIdentityId: id,
+        requestId: randomUUID(),
+      });
+      expect((await remote(value, provider)).limit).toBe(10);
+    } finally {
+      confirmed.mockRestore();
+      clock.mockRestore();
+    }
+  });
+
   it("prices cloned voice by UTF-8 bytes inside the guard and leaves provider statistics unknown", async () => {
     const value = snapshot("voice_guard");
     const provider = new Provider();
@@ -1157,7 +1229,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
         memberKeys: repository,
         statistics,
         provider: () => provider,
-        observedSpend: () => 0,
+        confirmedSpend: () => 0,
       }),
     ).toEqual({ allowance: 20, used: 6, remaining: 14, start: value.periodStart, end: renewal });
     const renewed = {
@@ -1817,7 +1889,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter member-key lifecycle", () => {
         memberKeys: repository,
         statistics,
         provider: () => provider,
-        observedSpend: () => 0,
+        confirmedSpend: () => 0,
       });
       expect(allowance).toMatchObject({
         allowance: 20,

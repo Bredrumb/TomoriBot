@@ -17,7 +17,7 @@ export interface SubscriptionAllowanceDependencies {
   memberKeys: Pick<MemberKeyRepository, "loadByIdentityId">;
   statistics: Pick<typeof supporterUsageStatisticsRepository, "totalSince">;
   provider(): Pick<MemberKeyProvider, "get">;
-  observedSpend(hash: string): number;
+  confirmedSpend(hash: string): number;
 }
 
 export function getSubscriptionAllowanceBlockKey(allowance: SubscriptionAllowance | null): string | null {
@@ -32,7 +32,7 @@ export async function loadSubscriptionAllowance(
     memberKeys: new MemberKeyRepository(),
     statistics: supporterUsageStatisticsRepository,
     provider: createMemberKeyProvider,
-    observedSpend: (hash: string) => supporterSpendGuard.observedSpend(hash),
+    confirmedSpend: (hash: string) => supporterSpendGuard.confirmedSpend(hash),
   },
 ): Promise<SubscriptionAllowance | null> {
   const key = await dependencies.memberKeys.loadByIdentityId(identity.supporter_identity_id);
@@ -52,7 +52,7 @@ export async function loadSubscriptionAllowance(
     dependencies.statistics.totalSince(identity.supporter_identity_id, key.key_created_at),
   ]);
   if (!remote || remote.disabled || remote.limit === null) return null;
-  const usage = Math.max(remote.usage, logged, dependencies.observedSpend(key.key_hash));
+  const usage = Math.max(remote.usage, logged, dependencies.confirmedSpend(key.key_hash));
   const remaining = Math.min(remote.limit, key.applied_limit) - usage;
   return {
     allowance: key.applied_allowance,

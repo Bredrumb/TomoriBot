@@ -50,7 +50,7 @@ export const speechUsageSchema = z.object({
 });
 
 export interface SpeechOperation {
-  operation: "create" | "synthesize" | "delete" | "lookup" | "cost" | "transcribe";
+  operation: "create" | "synthesize" | "delete" | "lookup" | "transcribe";
   success: boolean;
   status?: number;
   usage?: z.infer<typeof speechUsageSchema>;

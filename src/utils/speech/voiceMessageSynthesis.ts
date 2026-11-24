@@ -299,6 +299,12 @@ async function synthesizeHostedVoiceMessage(
   const startedAt = Date.now();
   let cleanupPending = false;
   let usageContext = target.usageContext;
+  const reportOpenRouterCost = (costUsd: number | undefined) =>
+    reportProviderUsage(usageContext, {
+      modelCodename: target.model.codename,
+      costUsd,
+      providerRequestId: attempt.operations.find((operation) => operation.operation === "synthesize")?.generationId,
+    });
   try {
     signal.throwIfAborted();
     if (
@@ -354,6 +360,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
+          onCostSettled: reportOpenRouterCost,
         }),
       );
     } else if (target.model.provider === "openrouter") {
@@ -396,6 +403,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
+          onCostSettled: reportOpenRouterCost,
         }),
       );
     } else {
@@ -431,14 +439,6 @@ async function synthesizeHostedVoiceMessage(
     }
     request.abortSignal?.throwIfAborted();
     attempt.synthesisSuccess = true;
-    if (target.model.provider === "openrouter") {
-      const synthesis = attempt.operations.find((operation) => operation.operation === "synthesize");
-      reportProviderUsage(usageContext, {
-        modelCodename: target.model.codename,
-        costUsd: attempt.operations.find((operation) => operation.operation === "cost")?.actualCost,
-        providerRequestId: synthesis?.generationId,
-      });
-    }
     return {
       success: true,
       audioBuffer: audio,

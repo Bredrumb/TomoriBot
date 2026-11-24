@@ -42,6 +42,7 @@ import {
   produceFundedDenial,
   settleUsage,
 } from "./utils-fundingFixtures";
+import { settleSpeechCostImmediately } from "../../../helpers/speechCostSettlement";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -379,7 +380,8 @@ function fixtureMp3(): Buffer {
 }
 
 function installVoiceHttp() {
-  return trackSpy(
+  const settlement = trackSpy(settleSpeechCostImmediately());
+  const fetchSpy = trackSpy(
     spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
         async (input: Parameters<typeof fetch>[0]) => {
@@ -399,6 +401,7 @@ function installVoiceHttp() {
       ),
     ),
   );
+  return { fetchSpy, settlement };
 }
 
 describe("hosted speech usage recording", () => {
@@ -418,9 +421,10 @@ describe("hosted speech usage recording", () => {
         funding,
       }),
     );
-    const fetchSpy = installVoiceHttp();
+    const { fetchSpy, settlement } = installVoiceHttp();
 
     const result = await synthesizeVoiceMessage(createVoiceRequest(createVoiceTarget(resolved.apiKey, funding)));
+    await settlement.settled();
     await settleUsage();
 
     expect(result).toMatchObject({
@@ -446,9 +450,10 @@ describe("hosted speech usage recording", () => {
     const resolved = createResolvedCredentials(null);
     const capture = captureUsageRecords();
     trackCleanup(capture.restore);
-    const fetchSpy = installVoiceHttp();
+    const { fetchSpy, settlement } = installVoiceHttp();
 
     const result = await synthesizeVoiceMessage(createVoiceRequest(createVoiceTarget(resolved.apiKey, null)));
+    await settlement.settled();
     await settleUsage();
 
     expect(result).toMatchObject({

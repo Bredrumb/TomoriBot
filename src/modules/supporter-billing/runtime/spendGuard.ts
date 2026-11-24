@@ -18,12 +18,20 @@ import { type ProviderRequestHold, registerProviderRequestHook } from "@/utils/p
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 const USAGE_CACHE_MS = 5_000;
+// OpenRouter key usage reflected a live speech generation about 18 s after its response, so unreported holds stay in admission for 30 s.
+const UNSETTLED_ESTIMATE_TTL_MS = 30_000;
+
+interface UnsettledSpend {
+  cost: number;
+  releasedAt: number;
+}
 
 interface KeySpend {
   baseline: number;
   completed: number;
   usage: number;
   usageReadAt: number;
+  unsettled: UnsettledSpend[];
 }
 
 function credentialDigest(apiKey: string): string {
@@ -47,9 +55,15 @@ export class SupporterSpendGuard {
     this.credentials.set(credentialDigest(apiKey), { funding, keyHash });
   }
 
-  observedSpend(hash: string): number {
+  confirmedSpend(hash: string): number {
     const state = this.keys.get(hash);
     return state ? Math.max(state.usage, state.baseline + state.completed) : 0;
+  }
+
+  observedSpend(hash: string): number {
+    const state = this.keys.get(hash);
+    if (!state) return 0;
+    return state.unsettled.reduce((sum, entry) => sum + entry.cost, this.confirmedSpend(hash));
   }
 
   pendingSpend(identityId: number): number {
@@ -82,16 +96,24 @@ export class SupporterSpendGuard {
           const logged = await this.statistics.totalSince(identityId, row.key_created_at);
           let state = this.keys.get(row.key_hash);
           if (!state) {
-            state = { baseline: logged, completed: 0, usage: 0, usageReadAt: 0 };
+            state = { baseline: logged, completed: 0, usage: 0, usageReadAt: 0, unsettled: [] };
             this.keys.set(row.key_hash, state);
           }
-          if (Date.now() - state.usageReadAt >= USAGE_CACHE_MS) {
+          const now = Date.now();
+          const hasExpiredUnsettled = state.unsettled.some(
+            (entry) => now - entry.releasedAt >= UNSETTLED_ESTIMATE_TTL_MS,
+          );
+          if (now - state.usageReadAt >= USAGE_CACHE_MS || hasExpiredUnsettled) {
             const remote = await this.provider().get(row.key_hash);
             if (!remote || remote.disabled) throw this.denied(funding, "billing_unavailable");
             state.usage = Math.max(state.usage, remote.usage);
-            state.usageReadAt = Date.now();
+            state.usageReadAt = now;
+            state.unsettled = state.unsettled.filter((entry) => now - entry.releasedAt < UNSETTLED_ESTIMATE_TTL_MS);
           }
-          state.baseline = Math.max(state.baseline, logged - state.completed, state.usage - state.completed);
+          // An in-flight request can raise remote usage before reporting its hold, so baseline advances only when idle.
+          if (this.pendingSpend(identityId) === 0) {
+            state.baseline = Math.max(state.baseline, logged - state.completed, state.usage - state.completed);
+          }
           if (Math.max(logged, this.observedSpend(row.key_hash)) + this.pendingSpend(identityId) >= row.applied_limit)
             throw this.denied(funding, "allowance_exhausted");
           let estimated: number;
@@ -140,7 +162,9 @@ export class SupporterSpendGuard {
             release: (retainEstimate = false) => {
               if (released) return;
               released = true;
-              if (reported === undefined && retainEstimate) state.completed += cost;
+              if (reported === undefined && retainEstimate && cost > 0) {
+                state.unsettled.push({ cost, releasedAt: Date.now() });
+              }
               const remaining = Math.max(0, normalizeMemberKeyLimit(this.pendingSpend(identityId) - held));
               if (remaining === 0) this.pending.delete(identityId);
               else this.pending.set(identityId, remaining);

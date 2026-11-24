@@ -11,6 +11,7 @@ import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
 import { createPersona } from "../../../helpers/fixtures";
 import { stubGlobalFetch } from "../../../helpers/fetchStub";
 import { createSpeechMp3 } from "../../../helpers/speechAudio";
+import { settleSpeechCostImmediately } from "../../../helpers/speechCostSettlement";
 import { installSpendHarness, type SpendHarness } from "./utils-fundingFixtures";
 
 const FIXTURE_ESTIMATE = 0.05;
@@ -127,8 +128,9 @@ async function drainStream(stream: AsyncIterable<unknown>): Promise<void> {
 }
 
 describe("synthesizeOpenRouterSpeech spend guard", () => {
-  it("holds spend before the provider call and reports the generation cost", async () => {
+  it("holds spend before the provider call and reports the generation cost once it settles", async () => {
     const key = harness.register();
+    const settlement = settleSpeechCostImmediately();
     const fetchStub = stubGlobalFetch((input) => {
       if (String(input).includes("/generation?")) return Response.json({ data: { total_cost: 0.12 } });
       expect(harness.pending(key.identityId)).toBeGreaterThan(0);
@@ -138,10 +140,13 @@ describe("synthesizeOpenRouterSpeech spend guard", () => {
       await expect(synthesizeOpenRouterSpeech(speechRequest(key.apiKey, AbortSignal.timeout(5_000)))).resolves.toEqual(
         mp3,
       );
+      expect(harness.pending(key.identityId)).toBeGreaterThan(0);
+      await settlement.settled();
       expect(harness.observed(key.keyHash)).toBe(0.12);
       expect(harness.pending(key.identityId)).toBe(0);
     } finally {
       fetchStub.mockRestore();
+      settlement.mockRestore();
     }
   });
 
