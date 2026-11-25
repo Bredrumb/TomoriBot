@@ -2,7 +2,6 @@
 title: "Chat y activadores"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot responde cuando se le invoca. Esta página cubre las formas en que se puede activar, cómo habilitar el chat con manos libres con activación automática y cómo evitar activaciones accidentales con el modo de activación deliberada.
@@ -16,6 +15,8 @@ De forma predeterminada, ella responde cuando tú:
 - **Responder** con `@ ON` a un mensaje de la cuenta del bot, o responder al mensaje de webhook de una persona
 - **Utilice una palabra de activación**: cualquier palabra de activación registrada en cualquier parte de un mensaje.
 - **Utilice `/respond`**: solicite una respuesta manualmente
+
+Responder con `@ OFF` solo la mantiene en silencio en los mensajes de la cuenta del bot. Los alters y las publicaciones de sprites se envían mediante un webhook, y Discord no informa el ajuste de `@ ON`/`@ OFF` en los mensajes de webhook, así que cualquier respuesta a ellos activa a esa persona. Comienza la respuesta con `!` para responder sin activar a nadie.
 
 En un DM, envíe un mensaje directamente sin ninguna palabra de activación ni mención.
 

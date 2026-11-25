@@ -358,7 +358,7 @@ export default {
         "Establece cómo los grupos de canales especiales afectan el contexto y las herramientas.",
       channels_rules_private_title: `Canales privados`,
       channels_rules_private_description:
-        "Los canales privados tienen estas restricciones (automáticas para canales con acceso restringido en Discord):\n- Sin registros de pensamiento.\n- Sin herramientas entrantes entre canales.\n- La STM no entra ni sale a menos que `Uso compartido de STM de canales privados` esté configurado en `Permitido`.",
+        "Los canales privados tienen estas restricciones (automáticas para canales con acceso restringido en Discord):\n- Sin registros de pensamiento.\n- Sin herramientas entrantes entre canales.\n- La STM no sale a menos que `Uso compartido de STM de canales privados` esté configurado en `Permitido`.",
       channels_rules_private_manage_button: `Marcar canales públicos como privados`,
       channels_rules_private_automatic: `{channel}: privado automáticamente (permisos de Discord)`,
       channels_rules_private_manual: `{channel}: marcado como privado`,
@@ -371,7 +371,7 @@ export default {
       channels_rules_blocklist_manage_button: `Gestionar canales bloqueados`,
       channels_rules_stm_sharing_title: `Uso compartido de STM de canales privados`,
       channels_rules_stm_sharing_description:
-        "Elige si la [Memoria a corto plazo](https://docs.tomoribot.app/es-419/features/knowledge/memory/short-term-memory/) puede entrar o salir de los canales privados. Los registros de pensamiento y las herramientas entrantes entre canales permanecen bloqueados.",
+        "Elige si la [Memoria a corto plazo](https://docs.tomoribot.app/es-419/features/knowledge/memory/short-term-memory/) puede salir de los canales privados. Los registros de pensamiento y las herramientas entrantes entre canales permanecen bloqueados.",
       channels_rules_private_modal_title: `Marcar canales públicos como privados`,
       channels_rules_private_group_label: `Canales privados`,
       channels_rules_private_group_label_continued: `Canales privados (continuación)`,

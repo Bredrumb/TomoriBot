@@ -16,5 +16,7 @@ export default {
     cooldown_active: `这个服务器的管理员设置了冷却。请等 **{seconds}** 秒再使用 \`/respond\`。这个冷却与消息触发共用。`,
     channel_not_whitelisted: `这个服务器开启了白名单限制。\`/respond\` 只能在白名单频道里由拥有白名单身份组的成员使用，而且只能使用这个频道允许的人格。`,
     persona_access_blocked: `按你当前的白名单权限和个人聚焦设置，这个频道里没有可用于 \`/respond\` 的人格。`,
+    persona_blocked_title: `{bot} 正在无视你`,
+    persona_blocked_description: `{bot} 屏蔽了你，所以现在没法用 \`/respond\` 让 {bot} 回复。屏蔽会在 {time} 解除。`,
   },
 };

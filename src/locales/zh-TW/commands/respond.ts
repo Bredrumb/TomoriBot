@@ -16,5 +16,7 @@ export default {
     cooldown_active: `這個伺服器的管理員設定了冷卻。請等待 **{seconds}** 秒後，再使用 \`/respond\`。這個冷卻與訊息觸發共用。`,
     channel_not_whitelisted: `這個伺服器啟用了白名單限制。\`/respond\` 只能在白名單頻道由具備白名單身分組的成員使用，而且只能使用這個頻道允許的人格。`,
     persona_access_blocked: `你目前的白名單權限與個人聚光燈設定，讓這個頻道沒有可用於 \`/respond\` 的人格。`,
+    persona_blocked_title: `{bot} 正在無視你`,
+    persona_blocked_description: `{bot} 已封鎖你，所以現在無法用 \`/respond\` 讓 {bot} 回覆。封鎖會在 {time} 解除。`,
   },
 };
