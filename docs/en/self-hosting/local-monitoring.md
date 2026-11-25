@@ -7,6 +7,12 @@ aiGenerated: true
 
 Monitor your local TomoriBot instance with prebuilt Grafana dashboards to track memory usage, cache sizes, token consumption, and command traffic.
 
+Add a Grafana password to `.env`. Compose refuses to start the monitoring overlay without one, because Grafana's database connection has full access to your data:
+
+```sh
+GRAFANA_PASSWORD=choose-a-long-random-password
+```
+
 Start TomoriBot and Grafana together:
 
 ```sh
@@ -17,7 +23,11 @@ This starts TomoriBot, PostgreSQL, and Grafana with the TomoriBot Overview dashb
 
 Open Grafana at [http://localhost:3000](http://localhost:3000):
 - **Username**: `admin`
-- **Password**: Set via `GRAFANA_PASSWORD` in `.env` (defaults to `admin` when unset)
+- **Password**: the `GRAFANA_PASSWORD` value from `.env`
+
+Grafana accepts connections only from the computer running Docker. To open it from another computer, forward the port over SSH with `ssh -L 3000:localhost:3000 <user>@<host>`, then browse to `http://localhost:3000` on your own computer.
+
+If you started Grafana before it required a password, it kept the password it first stored. Sign in with that password (`admin` if you never set one), then change it under your Grafana profile.
 
 ## The provisioned dashboard
 
