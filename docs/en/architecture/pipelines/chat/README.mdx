@@ -113,6 +113,11 @@ overlap and must not be added to reconstruct total latency.
 | `participant_candidate_reads` | Candidate-source read attempts. |
 | `participant_member_cache_hits` | Member lookups present in the discovery's initial member-cache snapshot. |
 | `participant_member_fetches` | Member lookups absent from that snapshot; a concurrent cache fill can still avoid REST. |
+| `participant_member_misses` | Member lookups that returned no member, such as a user who left the guild or never joined it. |
+| `participant_nickname_misses` | Misses on candidates admitted only by the saved-nickname branch: absent from the candidate ID list and without server activity. |
+| `participant_nickname_substring_fetches` | Lookups for nickname-branch candidates whose saved nickname appears in the history only inside a longer word, so its alias cannot match. |
+| `participant_nickname_substring_references` | Those candidates that still became referenced participants through another alias. |
+| `participant_fetched_references` | Referenced users whose member was absent from the initial cache snapshot. |
 | `participant_proxy_reads` | Proxy-identity source read attempts. |
 | `naming_ms` | The history naming projection. |
 | `reunion_ms` | Reunion note resolution; `-1` when a borrowed trigger skips it. |

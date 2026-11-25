@@ -1277,6 +1277,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           index: 0,
           delta: {
             content: guardResult.content,
+            reasoning: guardResult.spilledThought,
           },
         },
       ],

@@ -4,7 +4,8 @@ services:
     container_name: tomoribot-dashboard
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Loopback only, because this login reaches the database superuser through the provisioned datasource.
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       # Paths stay repo-root-relative because Compose resolves them against the first -f file
@@ -14,8 +15,8 @@ services:
       # dashboard JSON file.
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
     environment:
-      # Preset password so Grafana skips its first-run change-password prompt.
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      # Required with no fallback, because Grafana's built-in default password would otherwise guard superuser access.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
       # magnesium-wordcloud-panel backs the Emotion Cloud panel in the shipped dashboard;
       # without it that panel renders as "panel plugin not found".
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,googlecloud-logging-datasource,magnesium-wordcloud-panel

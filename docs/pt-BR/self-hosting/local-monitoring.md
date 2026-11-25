@@ -7,21 +7,27 @@ aiGenerated: true
 
 Monitore sua instância TomoriBot local com painéis Grafana pré-construídos para rastrear o uso de memória, tamanhos de cache, consumo de token e tráfego de comando.
 
+Adicione uma senha do Grafana ao `.env`. O Compose recusa os comandos de monitoramento sem ela, porque a conexão do Grafana com o banco de dados tem acesso total aos seus dados:
+
+```sh
+GRAFANA_PASSWORD=choose-a-long-random-password
+```
+
 Inicie TomoriBot e Grafana juntos:
 
 ```sh
 docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
-Este comando:
-- Inicia TomoriBot e PostgreSQL (com o banco de dados exposto na porta 15432)
-- Inicia o Grafana na porta 3000 com uma fonte de dados PostgreSQL pré-configurada
-- Provisiona o painel Visão geral do TomoriBot
-- Conecta todos os serviços em uma rede interna Docker
+Isso inicia o TomoriBot, o PostgreSQL e o Grafana com o painel Visão geral do TomoriBot.
 
 Abra o Grafana em [http://localhost:3000](http://localhost:3000):
 - **Nome de usuário**: `admin`
-- **Senha**: definida via `GRAFANA_PASSWORD` em `.env` (o padrão é `admin` quando não definido)
+- **Senha**: o valor de `GRAFANA_PASSWORD` no `.env`
+
+O Grafana só aceita conexões do computador que executa o Docker. Para abri-lo de outro computador, encaminhe a porta por SSH com `ssh -L 3000:localhost:3000 <user>@<host>` e depois acesse `http://localhost:3000` no seu próprio computador.
+
+Se você iniciou o Grafana antes de ele exigir uma senha, ele manteve a senha que salvou da primeira vez. Entre com essa senha (`admin` se você nunca definiu uma) e depois altere-a no seu perfil do Grafana.
 
 ## O dashboard provisionado
 

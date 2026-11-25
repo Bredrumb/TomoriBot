@@ -946,6 +946,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
             index: 0,
             delta: {
               content: guardResult.content,
+              reasoning_content: guardResult.spilledThought,
             },
           },
         ],

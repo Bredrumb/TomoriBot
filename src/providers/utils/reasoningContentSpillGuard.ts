@@ -49,7 +49,7 @@ export class ReasoningContentSpillGuard {
 
     const candidate = `${this.pendingContent}${content}`;
     this.pendingContent = "";
-    const decision = this.evaluateFirstVisibleContent(candidate);
+    const decision = this.evaluateFirstVisibleContent(candidate, false);
 
     if (decision.type === "hold") {
       this.pendingContent = candidate;
@@ -81,15 +81,23 @@ export class ReasoningContentSpillGuard {
 
     const content = this.pendingContent;
     this.pendingContent = "";
-    this.visibleContentStarted = content.length > 0;
+    const decision = this.evaluateFirstVisibleContent(content, true);
+    const emitted = decision.type === "emit" ? decision : { content, spilledThought: undefined };
+    this.visibleContentStarted = emitted.content.length > 0;
+    if (emitted.spilledThought) {
+      log.warn(`${this.loggerName}: stripped likely reasoning spill before first visible content`);
+    }
+
     return {
-      content,
+      content: emitted.content,
+      spilledThought: emitted.spilledThought,
       changed: true,
     };
   }
 
   private evaluateFirstVisibleContent(
     candidate: string,
+    isStreamEnd: boolean,
   ): { type: "hold" } | { type: "emit"; content: string; spilledThought?: string } {
     const leadingWhitespace = candidate.match(/^\s*/)?.[0] ?? "";
     const core = candidate.slice(leadingWhitespace.length);
@@ -109,6 +117,12 @@ export class ReasoningContentSpillGuard {
     // Odd backticks place the boundary inside an inline-code span, so keep dotted code identifiers intact.
     const backticksBeforeBoundary = (core.slice(0, firstBoundaryIndex).match(/`/g) ?? []).length;
     if (backticksBeforeBoundary % 2 === 1) {
+      return { type: "emit", content: candidate };
+    }
+
+    // Emit unchanged because a boundary inside a link belongs to the address, and stripping there loses reply text;
+    // pathless hosts and dotted words like node.js stay unprotected until one is reported.
+    if (isInsideLink(core, firstBoundaryIndex)) {
       return { type: "emit", content: candidate };
     }
 
@@ -133,6 +147,17 @@ export class ReasoningContentSpillGuard {
     const isGluedBoundary = remainder.length === trimmedRemainder.length;
     const fragmentIsMultiWordClause = /\s/u.test(firstSentence.trim());
     if (isGluedBoundary && (looksLikeAnswerStart(trimmedRemainder) || fragmentIsMultiWordClause)) {
+      // Hold while the glued word could still be a streaming domain label because github.com only reads as a link
+      // once its path arrives in a later delta.
+      if (
+        !isStreamEnd &&
+        core[firstBoundaryIndex] === "." &&
+        /^[\p{L}\p{N}-]+$/u.test(remainder) &&
+        !looksLikeAnswerStart(trimmedRemainder) &&
+        core.length < MAX_PENDING_CONTENT_CHARS
+      ) {
+        return { type: "hold" };
+      }
       return {
         type: "emit",
         content: trimmedRemainder,
@@ -158,6 +183,23 @@ function looksLikeAnswerStart(text: string): boolean {
 function isLowercaseStart(text: string): boolean {
   const first = text.trimStart()[0];
   return Boolean(first && first === first.toLowerCase() && first !== first.toUpperCase());
+}
+
+// Schemeless hosts need www. or a path after a lowercase TLD because a bare host.tld, or a glued "answer.Yes/No",
+// reads the same as a seam like out.hey.
+const LINK_PATTERNS = [
+  /(?:https?|ftps?):\/\/[^\s<>[\](){}'"]+|www\.[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/giu,
+  /[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.[a-z]{2,}\/\S*/gu,
+];
+
+function isInsideLink(text: string, index: number): boolean {
+  return LINK_PATTERNS.some((pattern) => {
+    for (const match of text.matchAll(pattern)) {
+      if (match.index > index) return false;
+      if (index < match.index + match[0].length) return true;
+    }
+    return false;
+  });
 }
 
 function findFirstSentenceBoundaryIndex(text: string): number {

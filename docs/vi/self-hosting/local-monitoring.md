@@ -7,21 +7,27 @@ aiGenerated: true
 
 Giám sát phiên bản TomoriBot cục bộ của bạn bằng bảng thông tin Grafana dựng sẵn để theo dõi mức sử dụng bộ nhớ, kích thước bộ đệm, mức tiêu thụ mã thông báo và lưu lượng lệnh.
 
+Thêm mật khẩu Grafana vào `.env`. Compose từ chối chạy các lệnh giám sát nếu thiếu mật khẩu này, vì kết nối cơ sở dữ liệu của Grafana có toàn quyền truy cập dữ liệu của bạn:
+
+```sh
+GRAFANA_PASSWORD=choose-a-long-random-password
+```
+
 Bắt đầu TomoriBot và Grafana cùng nhau:
 
 ```sh
 docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
-Lệnh này:
-- Khởi chạy TomoriBot và PostgreSQL (với cơ sở dữ liệu được hiển thị trên cổng 15432)
-- Khởi chạy Grafana trên cổng 3000 với nguồn dữ liệu PostgreSQL được cấu hình sẵn
-- Cung cấp bảng điều khiển Tổng quan về TomoriBot
-- Kết nối tất cả các dịch vụ trên mạng Docker nội bộ
+Lệnh này khởi chạy TomoriBot, PostgreSQL và Grafana cùng bảng điều khiển Tổng quan về TomoriBot.
 
 Mở Grafana tại [http://localhost:3000](http://localhost:3000):
 - **Tên người dùng**: `admin`
-- **Mật khẩu**: Đặt qua `GRAFANA_PASSWORD` trong `.env` (mặc định là `admin` khi không được đặt)
+- **Mật khẩu**: giá trị `GRAFANA_PASSWORD` trong `.env`
+
+Grafana chỉ chấp nhận kết nối từ máy tính đang chạy Docker. Để mở Grafana từ máy tính khác, hãy chuyển tiếp cổng qua SSH bằng `ssh -L 3000:localhost:3000 <user>@<host>`, rồi mở `http://localhost:3000` trên máy tính của bạn.
+
+Nếu bạn đã khởi động Grafana trước khi nó yêu cầu mật khẩu, Grafana vẫn giữ mật khẩu đã lưu lần đầu. Hãy đăng nhập bằng mật khẩu đó (`admin` nếu bạn chưa từng đặt), rồi đổi mật khẩu trong hồ sơ Grafana của bạn.
 
 ## Bảng điều khiển được cung cấp sẵn
 

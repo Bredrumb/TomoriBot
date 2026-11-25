@@ -1,4 +1,9 @@
-import { ApplicationCommandOptionType, PermissionsBitField, type ApplicationCommandData } from "discord.js";
+import {
+  ApplicationCommandOptionType,
+  PermissionsBitField,
+  type ApplicationCommandData,
+  type GuildMember,
+} from "discord.js";
 import { ToolRegistry, type ToolStateForContext } from "@/tools/toolRegistry";
 import type { Tool } from "@/types/tool/interfaces";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
@@ -20,6 +25,14 @@ interface CommandOptionShape {
   name?: string;
   description?: string;
   options?: CommandOptionShape[];
+}
+
+async function resolveRequestingMember(context: ToolContext): Promise<GuildMember | null> {
+  // A borrowed turn has no human requester, so its anchor author (often a manager or the bot) grants nothing.
+  if (context.borrowsTriggerMessage || !context.userId || !context.guildId) return null;
+  if (context.message?.member?.id === context.userId) return context.message.member;
+  const guild = await context.client.guilds.fetch(context.guildId).catch(() => null);
+  return guild ? await guild.members.fetch(context.userId).catch(() => null) : null;
 }
 
 function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
@@ -322,7 +335,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const { config, llm } = context.tomoriState;
     const snapshot = await loadToolSnapshot(context);
     const canViewOperationalDetails =
-      context.message?.member?.permissions.has(PermissionsBitField.Flags.ManageGuild) ?? false;
+      (await resolveRequestingMember(context))?.permissions.has(PermissionsBitField.Flags.ManageGuild) ?? false;
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
     const providerLabel = await describeProvider(context);
     const disabledFeatures = [

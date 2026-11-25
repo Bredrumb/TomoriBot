@@ -2,7 +2,7 @@
 title: "Threat Models"
 ---
 
-Updated on: 2026-11-07
+Updated on: 2026-11-26
 
 TomoriBot accepts untrusted messages and files, lets models request tools, and stores credentials
 for guilds and personal scopes. This review groups threats by four places where input can gain
@@ -99,7 +99,9 @@ what the model sees; dispatch and each tool must enforce the permissions of the 
 Provider credentials belong to guilds and personal scopes, so key custody includes tenant isolation,
 encryption, and access controls. PostgreSQL also stores managed webhook tokens and MCP
 authentication. A database dump, the corresponding encryption keys, and runtime diagnostics have
-different access requirements and must be stored separately.
+different access requirements, so no single credential may read a dump together with its keys.
+Store them apart, or encrypt them together to a key that is kept off the host that creates the
+backup.
 
 | Threat | Control and source | Residual risk or operator duty |
 | :--- | :--- | :--- |

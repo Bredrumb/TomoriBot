@@ -44,6 +44,11 @@ interface ChatTurnLatencyFields {
   participant_candidate_reads: number;
   participant_member_cache_hits: number;
   participant_member_fetches: number;
+  participant_member_misses: number;
+  participant_nickname_misses: number;
+  participant_nickname_substring_fetches: number;
+  participant_nickname_substring_references: number;
+  participant_fetched_references: number;
   participant_proxy_reads: number;
   participant_discovery: "unmeasured" | "fresh" | "reused";
   naming_ms: number;
@@ -122,6 +127,11 @@ export async function runWithChatTurnLatency<T>(
       participant_candidate_reads: 0,
       participant_member_cache_hits: 0,
       participant_member_fetches: 0,
+      participant_member_misses: 0,
+      participant_nickname_misses: 0,
+      participant_nickname_substring_fetches: 0,
+      participant_nickname_substring_references: 0,
+      participant_fetched_references: 0,
       participant_proxy_reads: 0,
       participant_discovery: "unmeasured",
       naming_ms: -1,
@@ -192,6 +202,24 @@ export function recordChatTurnParticipantLookup(kind: "candidate" | "member_cach
     proxy: "participant_proxy_reads",
   } as const;
   active.fields[field[kind]]++;
+}
+
+export interface ChatTurnParticipantMemberOutcomes {
+  misses: number;
+  nicknameMisses: number;
+  nicknameSubstringFetches: number;
+  nicknameSubstringReferences: number;
+  fetchedReferences: number;
+}
+
+export function recordChatTurnParticipantMemberOutcomes(outcomes: ChatTurnParticipantMemberOutcomes): void {
+  const active = current();
+  if (!active?.participantActive) return;
+  active.fields.participant_member_misses += outcomes.misses;
+  active.fields.participant_nickname_misses += outcomes.nicknameMisses;
+  active.fields.participant_nickname_substring_fetches += outcomes.nicknameSubstringFetches;
+  active.fields.participant_nickname_substring_references += outcomes.nicknameSubstringReferences;
+  active.fields.participant_fetched_references += outcomes.fetchedReferences;
 }
 
 function providerDimension(provider: string): LatencyProvider {

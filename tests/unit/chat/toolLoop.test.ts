@@ -1348,6 +1348,43 @@ describe("runToolLoop — contract tests", () => {
     }
   });
 
+  it("keeps text the stream already posted when /kill cancels it without drafting", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeContext();
+    const { provider } = makeProvider([]);
+    Object.assign(provider, {
+      streamToDiscord: () =>
+        new Promise<StreamResult>((resolve) => {
+          context.streamingContext.onStreamProgress?.();
+          context.streamingContext.abortSignal?.addEventListener(
+            "abort",
+            () => {
+              setTimeout(
+                () =>
+                  resolve({
+                    status: "stopped_by_user",
+                    accumulatedText: "First half of a reply that was already posted",
+                    usage: { inputTokens: 25, outputTokens: 9 },
+                  }),
+                0,
+              );
+            },
+            { once: true },
+          );
+          queueMicrotask(() => {
+            hasStopRequest = true;
+            activeStreamKill?.(new Error("SDK_CALL_TIMEOUT: killed by /kill"));
+          });
+        }),
+    });
+
+    const result = await runToolLoop(makeParams(context, provider));
+
+    expect(result.status).toBe("stopped_by_user");
+    expect(result.personaResponses[0]?.text).toContain("First half of a reply that was already posted");
+    expect(result.streamResults[0]?.answeredBeforeStop).toBe(true);
+  });
+
   it("retains reported author usage when a held stream settles after cancellation", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const context = makeReviewContext();

@@ -2,6 +2,8 @@ import { describe, expect, it, spyOn } from "bun:test";
 import { createChatLatencyInvocation, measureChatTurnStage, runWithChatTurnLatency } from "@/utils/chat/turnLatency";
 import { log } from "@/utils/misc/logger";
 import type { TomoriState } from "@/types/db/schema";
+import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
+import { createUserRow } from "../../helpers/fixtures";
 import {
   createParticipantRequestScope,
   prepareParticipantContext,
@@ -187,6 +189,86 @@ describe("participant context preparation", () => {
       });
     } finally {
       clock.mockRestore();
+      metric.mockRestore();
+      fixture.restoreRepositories();
+    }
+  });
+
+  it("attributes member misses and nickname-branch fetches to the admission path that caused them", async () => {
+    const fixture = createParticipantContextFixture();
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    const ids = {
+      cached: "600000000000000001",
+      departed: "600000000000000002",
+      stranger: "600000000000000003",
+      namedMember: "600000000000000004",
+      accidentalMember: "600000000000000005",
+    };
+    const activity = { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false };
+    const memoriesOnly = { hasServerActivity: false, hasPersonalMemories: true, hasPendingTasks: false };
+    const candidates = [
+      { id: ids.cached, nickname: "Mirri", evidence: activity },
+      { id: ids.departed, nickname: "Bau", evidence: activity },
+      { id: ids.stranger, nickname: "al", evidence: memoriesOnly },
+      { id: ids.namedMember, nickname: "Juno", evidence: memoriesOnly },
+      { id: ids.accidentalMember, nickname: "kes", evidence: memoriesOnly },
+    ].map(({ id, nickname, evidence }, index) => ({
+      userRow: createUserRow({ user_id: index + 1, user_disc_id: id, user_nickname: nickname }),
+      evidence,
+    }));
+    const members = new Map(
+      [
+        [ids.cached, "Mirri Guild", "mirri_user"],
+        [ids.namedMember, "Juno Guild", "juno_user"],
+        [ids.accidentalMember, "Kestrel Guild", "kestrel_user"],
+      ].map(([discordId, displayName, username]) => [
+        discordId,
+        { discordId, bot: false, displayName, nickname: null, globalName: null, username },
+      ]),
+    );
+    const history: SimplifiedMessageForContext[] = [
+      {
+        id: "history-1",
+        authorId: "author",
+        authorName: "Author",
+        authorType: "user",
+        content: "Juno also asked kestrel_user about it.",
+        imageAttachments: [],
+        videoAttachments: [],
+      },
+    ];
+    try {
+      const prepared = await runWithChatTurnLatency(createChatLatencyInvocation(Date.now(), "message"), 0, 0, () =>
+        measureChatTurnStage("participant_ms", () =>
+          prepareParticipantContext({
+            client: fixture.client,
+            guildId: PARTICIPANT_FIXTURE_IDS.guild,
+            simplifiedMessageHistory: history,
+            personas: fixture.personas,
+            activePersona: fixture.activePersona,
+            visibleUserIds: [],
+            candidateSource: { loadCandidates: async () => candidates },
+            memberDirectory: {
+              cachedMemberIds: () => [ids.cached],
+              resolveMember: async (discordId: string) => members.get(discordId) ?? null,
+            },
+            messageProxyIdentitySource: { loadIdentities: async () => [] },
+          }),
+        ),
+      );
+      expect(prepared.referencedUserIds).toEqual(new Set([ids.namedMember, ids.accidentalMember]));
+      const samples = metric.mock.calls.filter(([name]) => name === "chat_turn_latency").map(([, sample]) => sample);
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toMatchObject({
+        participant_member_cache_hits: 1,
+        participant_member_fetches: 4,
+        participant_member_misses: 2,
+        participant_nickname_misses: 1,
+        participant_nickname_substring_fetches: 2,
+        participant_nickname_substring_references: 1,
+        participant_fetched_references: 2,
+      });
+    } finally {
       metric.mockRestore();
       fixture.restoreRepositories();
     }

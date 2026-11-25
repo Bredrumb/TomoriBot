@@ -7,21 +7,27 @@ aiGenerated: true
 
 事前構築されたGrafanaダッシュボードを使用してローカルのTomoriBotインスタンスを監視し、メモリ使用量、キャッシュサイズ、トークン消費量、コマンドトラフィックを追跡します。
 
+`.env`にGrafanaのパスワードを追加してください。Grafanaのデータベース接続はすべてのデータにアクセスできるため、パスワードがないとComposeはモニタリング用のコマンドを実行しません。
+
+```sh
+GRAFANA_PASSWORD=choose-a-long-random-password
+```
+
 TomoriBotとGrafanaを一緒に起動します。
 
 ```sh
 docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
-このコマンド:
-- TomoriBotおよびPostgreSQLを起動します (データベースはポート15432で公開されます)
-- 事前構成されたPostgreSQLデータソースを使用してポート3000でGrafanaを起動します
-- TomoriBot概要ダッシュボードをプロビジョニングする
-- 内部Dockerネットワーク上のすべてのサービスを接続します
+これでTomoriBot、PostgreSQL、Grafanaが、TomoriBot概要ダッシュボードとともに起動します。
 
 [http://localhost:3000](http://localhost:3000) でGrafanaを開きます。
 - **ユーザー名**: `admin`
-- **パスワード**: `.env`の`GRAFANA_PASSWORD`経由で設定します (未設定の場合はデフォルトで`admin`)
+- **パスワード**: `.env`の`GRAFANA_PASSWORD`の値
+
+Grafanaは、Dockerを実行しているコンピューターからの接続だけを受け付けます。別のコンピューターから開くには、`ssh -L 3000:localhost:3000 <user>@<host>`でSSH経由でポートを転送してから、自分のコンピューターで`http://localhost:3000`を開いてください。
+
+パスワードが必須になる前にGrafanaを起動していた場合、Grafanaは最初に保存したパスワードを使い続けます。そのパスワード（設定したことがなければ`admin`）でサインインし、Grafanaのプロフィールで変更してください。
 
 ## プロビジョニング済みダッシュボード
 
