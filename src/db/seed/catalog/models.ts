@@ -3095,6 +3095,18 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 0,
         desc: "Free NVIDIA NIM Nemotron 3.5 Super VL for reasoning, tool use, and image/video understanding (262K hosted context)",
       },
+      {
+        provider: "nvidia",
+        codename: "moonshotai/kimi-k3",
+        contextWindow: 1_048_576,
+        hasTools: true,
+        seesImages: true,
+        isReasoning: true,
+        supportsStructoutput: true,
+        inputPricePerMillion: 0,
+        outputPricePerMillion: 0,
+        desc: "Moonshot AI Kimi K3 via NVIDIA NIM for multimodal reasoning, image understanding, and tool use",
+      },
     ],
   },
   // Pricing (*-flash free): https://docs.z.ai/guides/overview/pricing | Limits (GLM-4.6V has no output ceiling):
