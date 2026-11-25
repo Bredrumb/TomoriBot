@@ -7,7 +7,7 @@ import {
   type SupporterEntitlementRow,
   type SupporterIdentityRow,
 } from "@/modules/supporter-billing";
-import { handlePatreonOAuthCallbackUrl } from "@/modules/supporter-billing/patreon/callback";
+import { handlePatreonOAuthCallbackUrl, handlePatreonOAuthConfirm } from "@/modules/supporter-billing/patreon/callback";
 import {
   mapPatreonIdentityToEligibleSupporter,
   patreonConnectedDiscordUserId,
@@ -27,7 +27,11 @@ import {
 } from "@/utils/oauth/state";
 import { persistEligiblePatreonSupporter } from "@/modules/supporter-billing/patreon/persistence";
 import { initializePatreonRoutes } from "@/modules/supporter-billing/patreon/routes";
-import { PATREON_OAUTH_CALLBACK_PATH, PATREON_WEBHOOK_PATH } from "@/modules/supporter-billing/patreon/settings";
+import {
+  PATREON_OAUTH_CALLBACK_PATH,
+  PATREON_OAUTH_CONFIRM_PATH,
+  PATREON_WEBHOOK_PATH,
+} from "@/modules/supporter-billing/patreon/settings";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { patreonTokenTransport } from "@/modules/supporter-billing/patreon/tokenTransport";
 import { OAuthTokenError, requestOAuthToken } from "@/utils/oauth/tokenEndpoint";
@@ -255,6 +259,12 @@ function linkedSupporterResult() {
     identity: { supporter_identity_id: 1 } as SupporterIdentityRow,
     entitlement: { supporter_entitlement_id: 2 } as SupporterEntitlementRow,
   };
+}
+
+function confirmationForm(body: string, action: string): URLSearchParams {
+  const confirmation = body.match(/name="confirmation" value="([^"]+)"/)?.[1];
+  if (!confirmation) throw new Error("confirmation page has no token");
+  return new URLSearchParams({ confirmation, action });
 }
 
 describe("Patreon OAuth state", () => {
@@ -509,7 +519,7 @@ describe("Patreon connected Discord parsing", () => {
 });
 
 describe("Patreon OAuth callback", () => {
-  it("validates state, fetches Patreon identity, persists entitlement", async () => {
+  it("validates state, fetches Patreon identity, and persists entitlement after confirmation", async () => {
     const repository = new MemoryOAuthStateRepository();
     const createdState = await createAndPersistOAuthState({
       flow: "patreon",
@@ -560,10 +570,22 @@ describe("Patreon OAuth callback", () => {
       },
     );
 
-    expect(response.status).toBe("success");
-    expect(response.body).toContain(localizedCopy("ja", "commands.subscribe.callback.success.title"));
+    expect(response.status).toBe("confirmation_required");
     expect(captured.exchangedCode).toBe("oauth_code");
     expect(captured.fetchedToken).toBe("patreon_access_token");
+    expect(captured.persistedOptions).toBeUndefined();
+
+    const confirmed = await handlePatreonOAuthConfirm(confirmationForm(response.body, "link"), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      now,
+      persistSupporter: async (options) => {
+        captured.persistedOptions = options;
+        return linkedSupporterResult();
+      },
+    });
+    expect(confirmed.status).toBe("success");
+    expect(confirmed.body).toContain(localizedCopy("ja", "commands.subscribe.callback.success.title"));
     expect(captured.persistedOptions?.snapshot.tierKey).toBe("test_tier");
     expect(captured.persistedOptions?.snapshot.discordUserId).toBe("discord_user_1");
 
@@ -661,7 +683,7 @@ describe("Patreon OAuth callback", () => {
     expect(persistCount).toBe(0);
   });
 
-  it("links when the connected Discord account matches, is absent, or cannot be parsed", async () => {
+  it("links at once only when Patreon's connected Discord account matches the requester", async () => {
     const cases = [
       { label: "matching", socialConnections: { discord: { user_id: "discord_user_1" } } },
       { label: "absent", socialConnections: undefined },
@@ -669,6 +691,7 @@ describe("Patreon OAuth callback", () => {
       { label: "unparsable id", socialConnections: { discord: { user_id: 123 } } },
     ] as const;
     const outcomes: Record<string, string> = {};
+    const persisted: string[] = [];
 
     for (const [index, testCase] of cases.entries()) {
       const repository = new MemoryOAuthStateRepository();
@@ -680,22 +703,26 @@ describe("Patreon OAuth callback", () => {
         now,
         exchangeCodeForToken: async () => patreonOAuthToken(),
         fetchIdentity: async () => makePatreonIdentityResponse({ socialConnections: testCase.socialConnections }),
-        persistSupporter: async () => linkedSupporterResult(),
+        persistSupporter: async () => {
+          persisted.push(testCase.label);
+          return linkedSupporterResult();
+        },
       });
       outcomes[testCase.label] = response.status;
     }
 
     expect(outcomes).toEqual({
       matching: "success",
-      absent: "success",
-      "null connection": "success",
-      "unparsable id": "success",
+      absent: "confirmation_required",
+      "null connection": "confirmation_required",
+      "unparsable id": "confirmation_required",
     });
+    expect(persisted).toEqual(["matching"]);
   });
 
-  it("names the linked Discord account on the success page", async () => {
+  it("names the Discord account on the confirmation and success pages", async () => {
     const repository = new MemoryOAuthStateRepository();
-    const state = await createCallbackState(repository, "nonce_for_linked_account_name_123456", "ja");
+    const state = await createCallbackState(repository, "nonce_for_linked_account_name_123456");
     const described: string[] = [];
 
     const response = await handlePatreonOAuthCallbackUrl(callbackUrl(state), {
@@ -705,21 +732,31 @@ describe("Patreon OAuth callback", () => {
       now,
       exchangeCodeForToken: async () => patreonOAuthToken(),
       fetchIdentity: async () => makePatreonIdentityResponse(),
-      persistSupporter: async () => linkedSupporterResult(),
       describeDiscordAccount: async (discordUserId) => {
         described.push(discordUserId);
         return "@mirri";
       },
     });
 
-    expect(response.status).toBe("success");
+    expect(response.status).toBe("confirmation_required");
     expect(described).toEqual(["discord_user_1"]);
     expect(response.body).toContain(
-      localizedCopy("ja", "commands.subscribe.callback.success.linked_account", { account: "@mirri" }),
+      localizedCopy("en-US", "commands.subscribe.callback.confirm.message", { account: "@mirri" }),
+    );
+
+    const confirmed = await handlePatreonOAuthConfirm(confirmationForm(response.body, "link"), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      now,
+      persistSupporter: async () => linkedSupporterResult(),
+    });
+    expect(confirmed.status).toBe("success");
+    expect(confirmed.body).toContain(
+      localizedCopy("en-US", "commands.subscribe.callback.success.linked_account", { account: "@mirri" }),
     );
   });
 
-  it("keeps the link successful when the Discord account name is unavailable", async () => {
+  it("names the Discord user ID for confirmation when the account name is unavailable", async () => {
     const repository = new MemoryOAuthStateRepository();
     const state = await createCallbackState(repository, "nonce_for_missing_account_name_123456");
 
@@ -730,16 +767,72 @@ describe("Patreon OAuth callback", () => {
       now,
       exchangeCodeForToken: async () => patreonOAuthToken(),
       fetchIdentity: async () => makePatreonIdentityResponse(),
-      persistSupporter: async () => linkedSupporterResult(),
       describeDiscordAccount: async () => {
         throw new Error("discord unavailable");
       },
     });
 
-    expect(response.status).toBe("success");
-    expect(response.body).not.toContain(
+    expect(response.status).toBe("confirmation_required");
+    expect(response.body).toContain(
+      localizedCopy("en-US", "commands.subscribe.callback.confirm.message", { account: "discord_user_1" }),
+    );
+
+    const confirmed = await handlePatreonOAuthConfirm(confirmationForm(response.body, "link"), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      now,
+      persistSupporter: async () => linkedSupporterResult(),
+    });
+    expect(confirmed.status).toBe("success");
+    expect(confirmed.body).not.toContain(
       localizedCopy("en-US", "commands.subscribe.callback.success.linked_account", { account: "" }).trim(),
     );
+  });
+
+  it("links nothing for a forged, cancelled, replayed, or expired confirmation", async () => {
+    let persistCount = 0;
+    const confirmOptions = (at: Date) => ({
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      now: at,
+      persistSupporter: async () => {
+        persistCount += 1;
+        return linkedSupporterResult();
+      },
+    });
+    const confirmationPage = async (nonce: string) => {
+      const repository = new MemoryOAuthStateRepository();
+      const response = await handlePatreonOAuthCallbackUrl(callbackUrl(await createCallbackState(repository, nonce)), {
+        config: validSupporterConfig,
+        env: createEnabledEnv(),
+        stateRepository: repository,
+        now,
+        exchangeCodeForToken: async () => patreonOAuthToken(),
+        fetchIdentity: async () => makePatreonIdentityResponse(),
+      });
+      return response.body;
+    };
+
+    const forged = await handlePatreonOAuthConfirm(
+      new URLSearchParams({ confirmation: "forged_confirmation_token", action: "link" }),
+      confirmOptions(now),
+    );
+
+    const cancelledForm = confirmationForm(await confirmationPage("nonce_for_cancelled_confirmation_1"), "cancel");
+    const cancelled = await handlePatreonOAuthConfirm(cancelledForm, confirmOptions(now));
+    cancelledForm.set("action", "link");
+    const replayed = await handlePatreonOAuthConfirm(cancelledForm, confirmOptions(now));
+
+    const expiredForm = confirmationForm(await confirmationPage("nonce_for_expired_confirmation_1"), "link");
+    const expired = await handlePatreonOAuthConfirm(expiredForm, confirmOptions(new Date(now.getTime() + 601_000)));
+
+    expect([forged.status, cancelled.status, replayed.status, expired.status]).toEqual([
+      "expired_state",
+      "link_cancelled",
+      "expired_state",
+      "expired_state",
+    ]);
+    expect(persistCount).toBe(0);
   });
 });
 
@@ -836,10 +929,12 @@ describe("Patreon route gating", () => {
     expect(disabledResult.enabled).toBe(false);
     expect(isHealthServerRouteRegistered("GET", PATREON_OAUTH_CALLBACK_PATH)).toBe(false);
     expect(isHealthServerRouteRegistered("POST", PATREON_WEBHOOK_PATH)).toBe(false);
+    expect(isHealthServerRouteRegistered("POST", PATREON_OAUTH_CONFIRM_PATH)).toBe(false);
 
     initializePatreonRoutes({ config: validSupporterConfig, env: createEnabledEnv() });
     expect(isHealthServerRouteRegistered("GET", PATREON_OAUTH_CALLBACK_PATH)).toBe(true);
     expect(isHealthServerRouteRegistered("POST", PATREON_WEBHOOK_PATH)).toBe(true);
+    expect(isHealthServerRouteRegistered("POST", PATREON_OAUTH_CONFIRM_PATH)).toBe(true);
     clearHealthServerRoutesForTests();
   });
 });

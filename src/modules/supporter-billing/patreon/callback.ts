@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import type { SupporterBillingConfig } from "@/modules/supporter-billing/config";
 import { parseOAuthAuthorizationResponse, OAuthAuthorizationError } from "@/utils/oauth/authorizationResponse";
 import { oauthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import {
+  type EligiblePatreonSupporterSnapshot,
   mapPatreonIdentityToEligibleSupporter,
   patreonConnectedDiscordUserId,
   type PatreonMembershipRejectionReason,
@@ -19,7 +21,9 @@ import {
 } from "@/modules/supporter-billing/patreon/persistence";
 import {
   getPatreonOAuthCredentials,
+  getPatreonOAuthStateTtlSeconds,
   getPatreonUsagePeriodFallbackHours,
+  PATREON_OAUTH_CONFIRM_PATH,
 } from "@/modules/supporter-billing/patreon/settings";
 import { validateAndConsumeOAuthState, type OAuthStateNonceRepository } from "@/utils/oauth/state";
 import { localizer } from "@/utils/text/localizer";
@@ -27,8 +31,9 @@ import { log } from "@/utils/misc/logger";
 
 type EnvRecord = Readonly<Record<string, string | undefined>>;
 
-type PatreonOAuthCallbackStatus =
+type PatreonOAuthResultStatus =
   | "success"
+  | "link_cancelled"
   | "authorization_denied"
   | "missing_code"
   | "invalid_state"
@@ -39,8 +44,14 @@ type PatreonOAuthCallbackStatus =
   | "patreon_unavailable"
   | "server_error";
 
+type PatreonOAuthCallbackStatus = PatreonOAuthResultStatus | "confirmation_required";
+
 const CALLBACK_KEYS = {
   success: ["commands.subscribe.callback.success.title", "commands.subscribe.callback.success.message"],
+  link_cancelled: [
+    "commands.subscribe.callback.link_cancelled.title",
+    "commands.subscribe.callback.link_cancelled.message",
+  ],
   authorization_denied: [
     "commands.subscribe.callback.authorization_denied.title",
     "commands.subscribe.callback.authorization_denied.message",
@@ -81,7 +92,19 @@ const CALLBACK_KEYS = {
     "commands.subscribe.callback.patreon_unavailable.message",
   ],
   server_error: ["commands.subscribe.callback.server_error.title", "commands.subscribe.callback.server_error.message"],
-} satisfies Record<PatreonOAuthCallbackStatus, [string, string]>;
+} satisfies Record<PatreonOAuthResultStatus, [string, string]>;
+
+interface PendingPatreonLink {
+  expiresAt: number;
+  locale: string;
+  account: string | null;
+  snapshot: EligiblePatreonSupporterSnapshot;
+  verifiedAt: Date;
+}
+
+// Pending confirmations live in process memory, so a restart drops them and running several bot processes requires
+// moving them to shared storage.
+const pendingLinks = new Map<string, PendingPatreonLink>();
 
 export interface PatreonOAuthCallbackResponse {
   status: PatreonOAuthCallbackStatus;
@@ -113,20 +136,11 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function renderCallbackHtml(
-  status: PatreonOAuthCallbackStatus,
-  locale: string,
-  linkedAccount: string | null = null,
-): string {
-  const [titleKey, messageKey] = CALLBACK_KEYS[status];
-  const title = escapeHtml(localizer(locale, titleKey));
-  const message = escapeHtml(localizer(locale, messageKey));
-  const linkedAccountLine =
-    status === "success" && linkedAccount
-      ? `<p>${escapeHtml(
-          localizer(locale, "commands.subscribe.callback.success.linked_account", { account: linkedAccount }),
-        )}</p>`
-      : "";
+function text(locale: string, key: string, variables?: Record<string, string>): string {
+  return escapeHtml(localizer(locale, key, variables));
+}
+
+function renderDocument(locale: string, title: string, body: string): string {
   const htmlLang = escapeHtml(locale.replaceAll("_", "-"));
 
   return `<!doctype html>
@@ -139,15 +153,28 @@ function renderCallbackHtml(
 <body>
   <main>
     <h1>${title}</h1>
-    <p>${message}</p>
-    ${linkedAccountLine}
+    ${body}
   </main>
 </body>
 </html>`;
 }
 
+function renderCallbackHtml(
+  status: PatreonOAuthResultStatus,
+  locale: string,
+  linkedAccount: string | null = null,
+): string {
+  const [titleKey, messageKey] = CALLBACK_KEYS[status];
+  const linkedAccountLine =
+    status === "success" && linkedAccount
+      ? `<p>${text(locale, "commands.subscribe.callback.success.linked_account", { account: linkedAccount })}</p>`
+      : "";
+
+  return renderDocument(locale, text(locale, titleKey), `<p>${text(locale, messageKey)}</p>\n    ${linkedAccountLine}`);
+}
+
 function makeCallbackResponse(
-  status: PatreonOAuthCallbackStatus,
+  status: PatreonOAuthResultStatus,
   statusCode: number,
   locale = "en-US",
   linkedAccount: string | null = null,
@@ -160,7 +187,73 @@ function makeCallbackResponse(
   };
 }
 
-function mapStateFailureReason(reason: string): PatreonOAuthCallbackStatus {
+function renderConfirmResponse(locale: string, account: string, confirmation: string): PatreonOAuthCallbackResponse {
+  return {
+    status: "confirmation_required",
+    statusCode: 200,
+    contentType: "text/html; charset=utf-8",
+    body: renderDocument(
+      locale,
+      text(locale, "commands.subscribe.callback.confirm.title"),
+      `<p>${text(locale, "commands.subscribe.callback.confirm.message", { account })}</p>
+    <p>${text(locale, "commands.subscribe.callback.confirm.warning")}</p>
+    <form method="post" action="${escapeHtml(PATREON_OAUTH_CONFIRM_PATH)}">
+      <input type="hidden" name="confirmation" value="${escapeHtml(confirmation)}">
+      <button type="submit" name="action" value="link">${text(locale, "commands.subscribe.callback.confirm.link")}</button>
+      <button type="submit" name="action" value="cancel">${text(locale, "commands.subscribe.callback.confirm.cancel")}</button>
+    </form>`,
+    ),
+  };
+}
+
+function singleValue(params: URLSearchParams, name: string): string | undefined {
+  const values = params.getAll(name);
+  return values.length === 1 ? values[0] : undefined;
+}
+
+function pruneExpiredLinks(now: Date): void {
+  for (const [confirmation, link] of pendingLinks) {
+    if (link.expiresAt <= now.getTime()) pendingLinks.delete(confirmation);
+  }
+}
+
+async function describeAccount(
+  options: HandlePatreonOAuthCallbackOptions,
+  discordUserId: string,
+): Promise<string | null> {
+  if (!options.describeDiscordAccount) return null;
+  try {
+    return await options.describeDiscordAccount(discordUserId);
+  } catch (error) {
+    log.warn("Patreon callback could not describe the linked Discord account", error, {
+      metadata: { discordUserId },
+    });
+    return null;
+  }
+}
+
+async function completeLink(
+  options: HandlePatreonOAuthCallbackOptions,
+  link: Omit<PendingPatreonLink, "expiresAt">,
+): Promise<PatreonOAuthCallbackResponse> {
+  try {
+    await (options.persistSupporter ?? persistEligiblePatreonSupporter)({
+      config: options.config,
+      snapshot: link.snapshot,
+      verifiedAt: link.verifiedAt,
+      env: options.env ?? process.env,
+    });
+    return makeCallbackResponse("success", 200, link.locale, link.account);
+  } catch (error) {
+    if (error instanceof PatreonApiError) {
+      return makeCallbackResponse("patreon_unavailable", 502, link.locale);
+    }
+
+    return makeCallbackResponse("server_error", 500, link.locale);
+  }
+}
+
+function mapStateFailureReason(reason: string): PatreonOAuthResultStatus {
   if (reason === "expired") {
     return "expired_state";
   }
@@ -238,25 +331,20 @@ export async function handlePatreonOAuthCallbackUrl(
       return makeCallbackResponse(membershipMapping.reason, 403, locale);
     }
 
-    await (options.persistSupporter ?? persistEligiblePatreonSupporter)({
-      config: options.config,
+    const link = {
+      locale,
+      account: await describeAccount(options, stateResult.payload.subject),
       snapshot: membershipMapping.snapshot,
       verifiedAt: now,
-      env,
-    });
+    };
+    if (connectedDiscordUserId === stateResult.payload.subject) return await completeLink(options, link);
 
-    let linkedAccount: string | null = null;
-    if (options.describeDiscordAccount) {
-      try {
-        linkedAccount = await options.describeDiscordAccount(stateResult.payload.subject);
-      } catch (error) {
-        log.warn("Patreon callback could not describe the linked Discord account", error, {
-          metadata: { discordUserId: stateResult.payload.subject },
-        });
-      }
-    }
-
-    return makeCallbackResponse("success", 200, locale, linkedAccount);
+    // Without a Patreon Discord connection nothing ties this browser to the requester, and the authorize URL can be
+    // forwarded, so the browser must confirm the named Discord account before anything is linked.
+    pruneExpiredLinks(now);
+    const confirmation = randomBytes(32).toString("base64url");
+    pendingLinks.set(confirmation, { ...link, expiresAt: now.getTime() + getPatreonOAuthStateTtlSeconds(env) * 1000 });
+    return renderConfirmResponse(locale, link.account ?? stateResult.payload.subject, confirmation);
   } catch (error) {
     if (error instanceof PatreonApiError) {
       return makeCallbackResponse("patreon_unavailable", 502, locale);
@@ -264,4 +352,22 @@ export async function handlePatreonOAuthCallbackUrl(
 
     return makeCallbackResponse("server_error", 500, locale);
   }
+}
+
+export async function handlePatreonOAuthConfirm(
+  form: URLSearchParams,
+  options: HandlePatreonOAuthCallbackOptions,
+): Promise<PatreonOAuthCallbackResponse> {
+  const now = options.now ?? new Date();
+  const confirmation = singleValue(form, "confirmation");
+  const action = singleValue(form, "action");
+  const link = confirmation ? pendingLinks.get(confirmation) : undefined;
+  if (!confirmation || !link || (action !== "link" && action !== "cancel")) {
+    return makeCallbackResponse("expired_state", 400);
+  }
+  // Taken before any await, so a resubmitted form finds nothing to link.
+  pendingLinks.delete(confirmation);
+  if (link.expiresAt <= now.getTime()) return makeCallbackResponse("expired_state", 400, link.locale);
+  if (action === "cancel") return makeCallbackResponse("link_cancelled", 200, link.locale);
+  return await completeLink(options, link);
 }

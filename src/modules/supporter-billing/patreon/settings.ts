@@ -6,6 +6,7 @@ export const PATREON_OAUTH_TOKEN_URL = "https://www.patreon.com/api/oauth2/token
 export const PATREON_IDENTITY_URL = "https://www.patreon.com/api/oauth2/v2/identity";
 export const PATREON_API_BASE_URL = "https://www.patreon.com/api/oauth2/v2";
 export const PATREON_OAUTH_CALLBACK_PATH = OAUTH_CALLBACK_PATH;
+export const PATREON_OAUTH_CONFIRM_PATH = "/oauth/patreon/confirm";
 export const PATREON_WEBHOOK_PATH = "/supporter-billing/patreon/webhook";
 export const PATREON_OAUTH_SCOPES = ["identity", "identity.memberships"] as const;
 export const PATREON_USER_AGENT = "TomoriBot Supporter Billing";

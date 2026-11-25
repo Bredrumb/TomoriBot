@@ -66,6 +66,17 @@ export default {
         message: `Patreonメンバーシップを連携しました。Discordに戻り、セットアップまたはサブスクリプションパネルで「メンバーシップを確認」を選択してください。`,
         linked_account: `連携したDiscordアカウント：{account}`,
       },
+      confirm: {
+        title: `Patreonリンクの確認`,
+        message: `このPatreonメンバーシップをDiscordアカウント {account} に連携しますか？`,
+        warning: `自分のDiscordアカウントの場合のみ続けてください。他の人から送られたリンクで続けると、その人があなたのサブスクリプション利用枠を受け取ります。`,
+        link: `メンバーシップを連携`,
+        cancel: `キャンセル`,
+      },
+      link_cancelled: {
+        title: `Patreonリンクをキャンセルしました`,
+        message: `何も連携されていません。メンバーシップを連携するには、自分のDiscordアカウントから /subscribe を実行してください。`,
+      },
       authorization_denied: {
         title: `Patreonリンクをキャンセルしました`,
         message: `Patreonでリンクが承認されませんでした。Discordに戻り、セットアップまたはサブスクリプションパネルで「Patreonメンバーシップを連携」を選択してもう一度お試しください。`,

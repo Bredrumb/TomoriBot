@@ -16,7 +16,10 @@ membership and view your remaining allowance. A member with Manage Server can ch
 `/providers` also offers sponsorship.
 If your Patreon account is connected to a Discord account, that account must be the one running
 `/subscribe`. Otherwise TomoriBot refuses the link: run the command from the connected account or
-change the connection on Patreon. The success page names the Discord account it linked.
+change the connection on Patreon. If your Patreon account has no Discord connection, TomoriBot shows
+the Discord account it will link and waits for you to confirm. Confirm only your own account: a link
+someone else sent you would give them your allowance. The success page names the Discord account it
+linked.
 Each server has one active sponsor. `Server already sponsored` is disabled until that sponsorship
 is removed. You can sponsor multiple servers; they share your allowance with your personal usage.
 

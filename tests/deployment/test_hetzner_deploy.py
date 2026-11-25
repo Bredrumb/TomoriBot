@@ -182,5 +182,16 @@ class DeploymentRequestTests(unittest.TestCase):
             self.assertNotEqual(oversized.returncode, 0)
 
 
+class PostgresConfigurationTest(unittest.TestCase):
+    def test_statement_logs_omit_bind_parameters(self):
+        settings = {}
+        for line in (ROOT / "deploy/hetzner/postgres/postgresql.conf").read_text().splitlines():
+            name, separator, value = line.split("#", 1)[0].partition("=")
+            if separator:
+                settings[name.strip()] = value.strip().strip("'")
+        self.assertEqual(settings.get("log_parameter_max_length"), "0")
+        self.assertEqual(settings.get("log_parameter_max_length_on_error", "0"), "0")
+
+
 if __name__ == "__main__":
     unittest.main()

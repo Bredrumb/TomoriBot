@@ -221,7 +221,7 @@ jobs:
           bun run setup:tokenizers
           du -sh tokenizers/*/
 
-      - name: Build Docker image
+      - name: Build Docker images
         run: |
           docker buildx build \
             --platform linux/amd64 \
@@ -229,9 +229,10 @@ jobs:
             --tag tomoribot:${{ github.sha }} \
             --load \
             .
+          docker buildx build --platform linux/amd64 --load --tag tomoribot-searxng:latest servers/searxng
 
-      - name: Save Docker image
-        run: docker save tomoribot:latest -o tomoribot-image.tar
+      - name: Save Docker images
+        run: docker save tomoribot:latest tomoribot-searxng:latest -o tomoribot-image.tar
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -245,6 +246,7 @@ jobs:
     uses: ./.github/workflows/release-security.yml
     with:
       image_artifact: docker-image
+      scan_searxng: true
     secrets: inherit
 
   push-to-docker-hub:
@@ -392,7 +394,7 @@ jobs:
           fi
           echo "image_digest=${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push custom SearXNG image
+      - name: Push scanned SearXNG image
         id: searxng_image
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -400,11 +402,9 @@ jobs:
         run: |
           SEARXNG_BASE="docker.io/${DOCKERHUB_USERNAME}/tomoribot-searxng"
 
-          docker build \
-            --platform linux/amd64 \
-            --tag "${SEARXNG_BASE}:${IMAGE_TAG}" \
-            --tag "${SEARXNG_BASE}:latest" \
-            servers/searxng/
+          # Tags the image the security gate scanned, because rebuilding here would push layers Trivy never saw.
+          docker tag tomoribot-searxng:latest "${SEARXNG_BASE}:${IMAGE_TAG}"
+          docker tag tomoribot-searxng:latest "${SEARXNG_BASE}:latest"
 
           docker push "${SEARXNG_BASE}:${IMAGE_TAG}"
           docker push "${SEARXNG_BASE}:latest"

@@ -65,6 +65,17 @@ export default {
         message: `Your Patreon membership was linked. Return to Discord and choose Verify Membership in your setup or subscription panel.`,
         linked_account: `Linked Discord account: {account}`,
       },
+      confirm: {
+        title: `Confirm Patreon link`,
+        message: `Link this Patreon membership to the Discord account {account}?`,
+        warning: `Continue only if this is your Discord account. Someone who sent you this link would receive your Subscription allowance.`,
+        link: `Link membership`,
+        cancel: `Cancel`,
+      },
+      link_cancelled: {
+        title: `Patreon link cancelled`,
+        message: `Nothing was linked. To link your membership, run /subscribe from your own Discord account.`,
+      },
       authorization_denied: {
         title: `Patreon link cancelled`,
         message: `Patreon did not authorize the link. Return to Discord and choose Link Patreon Membership in your setup or subscription panel to try again.`,
