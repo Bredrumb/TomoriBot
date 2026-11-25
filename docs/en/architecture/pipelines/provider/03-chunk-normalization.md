@@ -39,7 +39,8 @@ Reasoning content travels through dedicated fields or in-band tags:
   `ThinkBlockContentStripper` redirects the enclosed text to `delta.reasoning`.
 - **Tagless reasoning spills:** When a provider concatenates reasoning directly onto content without
   tags, `ReasoningContentSpillGuard` detects unspaced sentence boundaries at the start of output. It
-  strips the leaked tail while protecting backticked code identifiers.
+  strips the leaked tail while protecting backticked code identifiers and links, holding a glued word
+  until it finishes streaming so a host can resolve into a link first.
 
 ## Tool-call normalization and recovery
 

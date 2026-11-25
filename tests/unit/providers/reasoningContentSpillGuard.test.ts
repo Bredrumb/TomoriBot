@@ -116,6 +116,60 @@ describe("ReasoningContentSpillGuard", () => {
     });
   });
 
+  it("keeps a lowercase opening whose first period sits inside a link", () => {
+    const openingChunks = [
+      ["it's https://github.com/minimax-ai/openroom\n\"a browser-based desktop\" so it's a whole fake desktop"],
+      ["found it github.com/minimax-ai/openroom so"],
+      ["it lives at www.example.com if you want it"],
+      ["found it github", ".com", "/minimax-ai/openroom", "\nso it's a fake desktop"],
+      ["found it github.", "com", "/minimax-ai/openroom", "\nso it's a fake desktop"],
+      ["it's https://github", ".com", "/minimax-ai/openroom\n"],
+    ];
+    const failures = openingChunks.flatMap((chunks) => {
+      const guard = new ReasoningContentSpillGuard("test");
+      guard.observeReasoning("hidden reasoning");
+      const results = chunks.map((chunk) => guard.filterContent(chunk));
+      const visible = results.map((result) => result.content).join("") + guard.flush().content;
+      const spilled = results.flatMap((result) => result.spilledThought ?? []);
+      return visible === chunks.join("") && spilled.length === 0 ? [] : [{ chunks, visible, spilled }];
+    });
+
+    expect(failures).toEqual([]);
+  });
+
+  it("still strips a glued seam near a slash or as the whole reply", () => {
+    const seams = [
+      {
+        content: "the link.https://github.com/minimax-ai/openroom",
+        answer: "https://github.com/minimax-ai/openroom",
+      },
+      {
+        content: "the repo.[openroom](https://github.com/minimax-ai/openroom)",
+        answer: "[openroom](https://github.com/minimax-ai/openroom)",
+      },
+      {
+        content: "check it!https://github.com/minimax-ai/openroom",
+        answer: "https://github.com/minimax-ai/openroom",
+      },
+      { content: "tone/style.Hello there!", answer: "Hello there!" },
+      { content: "answer yes/no.hey there", answer: "hey there" },
+      { content: "the answer.Yes/No is fine", answer: "Yes/No is fine" },
+      { content: "the date.11/25 is soon", answer: "11/25 is soon" },
+      { content: "respond casually.nice!", answer: "nice!" },
+      { content: "answer briefly.yep", answer: "yep" },
+    ];
+    const failures = seams.flatMap(({ content, answer }) => {
+      const guard = new ReasoningContentSpillGuard("test");
+      guard.observeReasoning("hidden reasoning");
+      const results = [guard.filterContent(content), guard.flush()];
+      const visible = results.map((result) => result.content).join("");
+      const spilled = results.flatMap((result) => result.spilledThought ?? []);
+      return visible === answer && spilled.length === 1 ? [] : [{ content, visible, spilled }];
+    });
+
+    expect(failures).toEqual([]);
+  });
+
   it("strips a single-word glued seam — word count does not matter, only the missing space", () => {
     const guard = new ReasoningContentSpillGuard("test");
     guard.reset();
