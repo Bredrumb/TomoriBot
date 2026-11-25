@@ -4,6 +4,7 @@ import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
+  type ProviderUsageContext,
   reportProviderUsage,
 } from "@/utils/provider/providerUsage";
 import type { CustomEndpointRow } from "@/types/db/schema";
@@ -281,6 +282,20 @@ async function synthesizeLocalVoiceMessage(
   };
 }
 
+// A module-level closure keeps the request's reference audio unreachable while settlement runs after delivery.
+function openRouterCostReporter(
+  usageContext: ProviderUsageContext | null | undefined,
+  modelCodename: string,
+  operations: SpeechOperation[],
+): (costUsd: number | undefined) => void {
+  return (costUsd) =>
+    reportProviderUsage(usageContext, {
+      modelCodename,
+      costUsd,
+      providerRequestId: operations.find((operation) => operation.operation === "synthesize")?.generationId,
+    });
+}
+
 async function synthesizeHostedVoiceMessage(
   request: VoiceMessageSynthesisRequest,
   target: Extract<SpeechTargetResult, { kind: "hosted-model" }>,
@@ -299,12 +314,6 @@ async function synthesizeHostedVoiceMessage(
   const startedAt = Date.now();
   let cleanupPending = false;
   let usageContext = target.usageContext;
-  const reportOpenRouterCost = (costUsd: number | undefined) =>
-    reportProviderUsage(usageContext, {
-      modelCodename: target.model.codename,
-      costUsd,
-      providerRequestId: attempt.operations.find((operation) => operation.operation === "synthesize")?.generationId,
-    });
   try {
     signal.throwIfAborted();
     if (
@@ -360,7 +369,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
-          onCostSettled: reportOpenRouterCost,
+          onCostSettled: openRouterCostReporter(usageContext, target.model.codename, attempt.operations),
         }),
       );
     } else if (target.model.provider === "openrouter") {
@@ -403,7 +412,7 @@ async function synthesizeHostedVoiceMessage(
           signal,
           maxBytes,
           operations: attempt.operations,
-          onCostSettled: reportOpenRouterCost,
+          onCostSettled: openRouterCostReporter(usageContext, target.model.codename, attempt.operations),
         }),
       );
     } else {

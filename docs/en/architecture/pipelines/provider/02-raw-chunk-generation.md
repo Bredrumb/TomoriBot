@@ -52,6 +52,12 @@ retries. Additional targeted parameter retries are capped. Recovery applies only
 stream: the next request starts with its normal payload because backend capabilities can change
 between requests.
 
+The Google and Vertex adapters share one narrower retry outside this ladder
+(`src/providers/utils/geminiImageFallback.ts`). When Gemini answers HTTP 400 "Unable to process input
+image", the adapter resends the request once with every image part replaced by a text notice, because
+Gemini does not say which image failed. One undecodable image in channel history
+would otherwise fail every turn until it leaves the context window.
+
 Fields needed to preserve the reply contract must remain mandatory. Dropping a field that changes
 tool-call or reasoning replay requirements can produce a successful response that breaks the next
 tool-loop request. The adapter declares these fields through `mandatoryBodyKeys`; safe optional

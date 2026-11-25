@@ -16,5 +16,7 @@ export default {
     cooldown_active: `Los administradores de este servidor configuraron un enfriamiento. Espera **{seconds}** segundos antes de usar \`/respond\` de nuevo. Este enfriamiento se comparte con las activaciones por mensaje.`,
     channel_not_whitelisted: `Este servidor tiene restricciones de lista blanca activas. \`/respond\` solo se puede usar en canales autorizados por miembros con roles autorizados, y solo con personas permitidas en este canal.`,
     persona_access_blocked: `Tus permisos actuales de lista blanca y tu configuración personal de spotlight no dejan ninguna persona disponible para \`/respond\` en este canal.`,
+    persona_blocked_title: `{bot} te está ignorando`,
+    persona_blocked_description: `{bot} te bloqueó, así que \`/respond\` no puede hacer que {bot} responda ahora mismo. El bloqueo se levanta {time}.`,
   },
 };

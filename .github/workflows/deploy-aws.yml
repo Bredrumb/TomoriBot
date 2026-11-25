@@ -331,7 +331,6 @@ jobs:
 
           failed=false
 
-          # Check each security scan output
           echo "SAST Scan (Semgrep): ${{ needs.security-sast.outputs.failed }}"
           if [ "${{ needs.security-sast.outputs.failed }}" == "true" ]; then
             echo "SAST scan FAILED - Semgrep found security issues"
@@ -428,7 +427,6 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
           VERSION: ${{ steps.package_version.outputs.version }}
         run: |
-          # Check if version tag exists in ECR
           if aws ecr describe-images \
             --registry-id "${ECR_REGISTRY%%.*}" \
             --repository-name "$ECR_REPOSITORY" \
@@ -467,7 +465,6 @@ jobs:
             docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:v${VERSION}"
             echo "Pushed version tag: v$VERSION"
 
-            # Use version tag for deployment
             echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:v$VERSION" >> "$GITHUB_OUTPUT"
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
@@ -507,9 +504,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      # Bun is required by the Destructive migration gate below
-      # (scripts/checks/checkPendingMigrations.ts). This job is dispatch-only,
-      # so the gate uses --all (no git diff) — no fetch-depth needed.
+      # Required by the migration gate below; dispatch-only runs use --all (no git diff), so no
+      # fetch-depth is needed.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -693,7 +689,6 @@ jobs:
         run: |
           echo "Checking ECS task health..."
 
-          # Get running tasks
           TASKS=$(aws ecs list-tasks \
             --cluster "$ECS_CLUSTER" \
             --service-name "$ECS_SERVICE" \
@@ -706,7 +701,6 @@ jobs:
             exit 1
           fi
 
-          # Describe tasks
           read -r -a task_arns <<< "$TASKS"
           aws ecs describe-tasks \
             --cluster "$ECS_CLUSTER" \
@@ -721,7 +715,6 @@ jobs:
         run: |
           echo "Fetching recent CloudWatch logs..."
 
-          # Get logs from the last 5 minutes
           START_TIME=$(($(date +%s) - 300))000
 
           aws logs tail /ecs/tomoribot \
@@ -904,8 +897,7 @@ jobs:
             exit 0
           fi
 
-          # 1. Create the forum thread (thread_name triggers forum-post creation)
-          # Extract title from first H1 line of release notes (strips leading "# ")
+          # Forum webhooks create a new thread when thread_name is supplied in the payload.
           threadTitle=$(head -1 processed-release-notes.md | sed 's/^# *//')
           firstChunk=$(cat discord_chunk_0.txt)
           echo "Creating Discord forum post: $threadTitle"
@@ -944,11 +936,9 @@ jobs:
 
           echo "Forum post created (HTTP $httpCode)"
 
-          # 2. Extract the created thread ID from the response message object;
-          #    in Discord forum webhooks the message's channel_id IS the thread ID
+          # Discord forum webhooks return the created thread ID in channel_id, so read it from there.
           threadId=$(echo "$responseBody" | jq -r '.channel_id // empty')
 
-          # 3. Send any remaining text chunks as replies inside the same thread
           if [ "$chunkCount" -gt 1 ] && [ -n "$threadId" ]; then
             i=1
             while [ "$i" -lt "$chunkCount" ]; do
@@ -975,8 +965,7 @@ jobs:
             echo "Response body: $responseBody"
           fi
 
-          # 4. Send role mention as the final message in the thread so it pings
-          #    subscribers after all release content has been posted
+          # Role mention posts last so subscribers are pinged after all release content lands.
           if [ -n "$MENTION_ROLE_ID" ] && [ -n "$threadId" ]; then
             mentionPayload=$(jq -n --arg content "<@&${MENTION_ROLE_ID}> Follow-up hotfixes or patches for this update will be posted in this Forum post, feel free to follow this post to keep track of them!" '{content: $content}')
 

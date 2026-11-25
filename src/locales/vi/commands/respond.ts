@@ -16,5 +16,7 @@ export default {
     cooldown_active: `Quản lý máy chủ đã thiết lập cooldown. Vui lòng chờ **{seconds}** giây trước khi dùng lại \`/respond\`. Cooldown này dùng chung với trigger tin nhắn.`,
     channel_not_whitelisted: `Máy chủ này đang bật giới hạn whitelist. \`/respond\` chỉ có thể được dùng trong kênh whitelist bởi thành viên có vai trò whitelist, và chỉ với persona được phép trong kênh này.`,
     persona_access_blocked: `Quyền whitelist và cài đặt spotlight cá nhân hiện tại không để lại persona nào khả dụng cho \`/respond\` trong kênh này.`,
+    persona_blocked_title: `{bot} đang phớt lờ bạn`,
+    persona_blocked_description: `{bot} đã chặn bạn, nên \`/respond\` không thể khiến {bot} phản hồi ngay lúc này. Lệnh chặn sẽ được gỡ {time}.`,
   },
 };

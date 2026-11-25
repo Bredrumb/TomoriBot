@@ -2,7 +2,6 @@
 title: "Bate-papo & Gatilhos"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot responde quando convocado. Esta página aborda as maneiras como ela pode ser acionada, como ativar o bate-papo com viva-voz com acionamento automático e como evitar ativações acidentais com o modo de acionamento deliberado.
@@ -16,6 +15,8 @@ Por padrão, ela responde quando você:
 - **Responder** com `@ ON` a uma mensagem da conta do bot, ou responder à mensagem de webhook de uma persona
 - **Use uma palavra-gatilho**: qualquer palavra-gatilho registrada em qualquer lugar da mensagem
 - **Use `/respond`**: solicite uma resposta manualmente
+
+Responder com `@ OFF` só a mantém em silêncio em mensagens da conta do bot. Personas alter e postagens de sprites são enviadas por meio de um webhook, e o Discord não informa a configuração `@ ON`/`@ OFF` para mensagens de webhook, portanto qualquer resposta a elas aciona essa persona. Comece a resposta com `!` para responder sem acionar ninguém.
 
 Em um DM, envie uma mensagem diretamente, sem qualquer palavra-gatilho ou menção.
 

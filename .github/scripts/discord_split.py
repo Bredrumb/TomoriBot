@@ -24,26 +24,21 @@ def split_text(text, max_chars):
 
 		candidate = remaining[:max_chars]
 
-		# 1. Split just before a markdown header on a new line (## / ###)
 		split_pos = -1
 		for i in range(len(candidate) - 2, 0, -1):
 			if candidate[i] == '\n' and candidate[i + 1] == '#':
 				split_pos = i
 				break
 
-		# 2. Split at a paragraph break (double newline)
 		if split_pos == -1:
 			split_pos = candidate.rfind('\n\n')
 
-		# 3. Split at a single newline
 		if split_pos == -1:
 			split_pos = candidate.rfind('\n')
 
-		# 4. Split at a word boundary (space)
 		if split_pos == -1:
 			split_pos = candidate.rfind(' ')
 
-		# 5. Hard cut as a last resort
 		if split_pos <= 0:
 			split_pos = max_chars - 1
 

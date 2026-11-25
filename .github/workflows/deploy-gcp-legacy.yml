@@ -31,8 +31,6 @@ permissions:
   contents: read
 
 jobs:
-  # ─── SECRETS VALIDATION ────────────────────────────────────────────────────
-
   validate-secrets:
     runs-on: ubuntu-24.04
     # Legacy gate retained for rollback knowledge; normal production uses Azure. Every downstream
@@ -75,15 +73,11 @@ jobs:
           echo "Application secrets: Mounted from GCP Secret Manager at runtime"
           echo "================================================"
 
-  # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
-
   code-quality:
     needs: validate-secrets
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
-
-  # ─── BUILD DOCKER IMAGE ───────────────────────────────────────────────────
 
   build-image:
     runs-on: ubuntu-24.04
@@ -134,8 +128,6 @@ jobs:
           name: docker-image
           path: tomoribot-image.tar
           retention-days: 1
-
-  # ─── SECURITY SCANNING (identical to AWS workflow) ────────────────────────
 
   security-sast:
     runs-on: ubuntu-24.04
@@ -317,8 +309,6 @@ jobs:
           else
             echo "ALL SECURITY SCANS PASSED — proceeding to GCP deployment"
           fi
-
-  # ─── GCP DEPLOYMENT ───────────────────────────────────────────────────────
 
   push-to-artifact-registry:
     runs-on: ubuntu-24.04
@@ -644,8 +634,6 @@ jobs:
             --limit=30 \
             --format="table(timestamp,severity,textPayload)" \
             || echo "No recent logs found (normal for new deployments)"
-
-  # ─── GITHUB RELEASES (identical to AWS workflow) ──────────────────────────
 
   check-release-assets:
     runs-on: ubuntu-24.04

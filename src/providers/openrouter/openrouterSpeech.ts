@@ -54,6 +54,7 @@ export async function synthesizeOpenRouterSpeech(request: OpenRouterSpeechReques
   }
 }
 
+// Settlement is process-local, so a restart inside the lookup window drops that clip's usage row; persist pending generation IDs if unattributed voice spend reappears.
 export async function settleOpenRouterSpeechCost(
   apiKey: string,
   model: string,

@@ -2,7 +2,6 @@
 title: "Trò chuyện & từ kích hoạt"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
 TomoriBot phản hồi khi được triệu tập. Trang này trình bày các cách có thể kích hoạt cô ấy, cách bật trò chuyện rảnh tay bằng trình kích hoạt tự động và cách ngăn chặn việc vô tình kích hoạt bằng Chế độ kích hoạt có chủ ý.
@@ -16,6 +15,8 @@ Theo mặc định, cô ấy sẽ trả lời khi bạn:
 - **Trả lời** với `@ ON` tới tin nhắn từ tài khoản bot, hoặc trả lời tin nhắn webhook của một persona
 - **Sử dụng từ kích hoạt**: mọi từ kích hoạt đã đăng ký ở bất kỳ đâu trong tin nhắn
 - **Sử dụng `/respond`**: yêu cầu phản hồi theo cách thủ công
+
+Việc trả lời với `@ OFF` chỉ giữ cho cô ấy im lặng đối với tin nhắn từ tài khoản bot. Các persona alter và bài đăng sprite được gửi qua webhook, và Discord không cung cấp cài đặt `@ ON`/`@ OFF` cho tin nhắn webhook, nên mọi lượt trả lời tới các tin nhắn đó đều kích hoạt persona tương ứng. Hãy bắt đầu câu trả lời bằng `!` để trả lời mà không kích hoạt ai.
 
 Trong DM, hãy gửi tin nhắn trực tiếp mà không cần bất kỳ từ kích hoạt hoặc đề cập nào.
 

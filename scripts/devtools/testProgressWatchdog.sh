@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
-# Behaviour harness for the host progress watchdog.
-#
-# The watchdog is the only thing in this deployment that can restart production unattended, and it
-# runs on the host where no unit test reaches it, so it is exercised here instead. The script under
-# test is extracted from terraform/azure/cloud-init.yaml on every run rather than kept as a copy:
-# a duplicate would drift from what actually ships, which is the failure this is meant to prevent.
-#
-# Only the two absolute paths the script cannot take as input are substituted (its config and its
-# tmpfs state file), plus stub curl and docker on PATH. Every decision is the shipped code.
-#
-# Usage: bash scripts/devtools/testProgressWatchdog.sh
+# Extracts the host watchdog from terraform/azure/cloud-init.yaml on each run so tests cannot drift
+# from what ships; only config/state paths and curl/docker stubs are substituted.
 set -u
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CLOUD_INIT="$REPO_ROOT/terraform/azure/cloud-init.yaml"

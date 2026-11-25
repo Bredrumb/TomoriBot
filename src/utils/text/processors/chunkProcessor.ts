@@ -566,30 +566,38 @@ function findBreakPoint(text: string, maxLength: number): number {
 
 const FULL_WIDTH_BREAK_MARKS = /[。！？、，．｡､]/;
 
+const CODE_FENCE = /```(?:(\w*)\n)?([\s\S]*?)```/;
+
 function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
-  const chunks: string[] = [];
-  const match = codeBlock.match(/```(\w+)?\n?([\s\S]*?)```/);
+  const match = codeBlock.match(CODE_FENCE);
   if (!match) return [codeBlock.substring(0, chunkLength)];
 
-  const language = match[1] || "";
-  const content = match[2];
-  const lines = content.split("\n");
-  let currentChunk = `\`\`\`${language}\n`;
-
+  const label = match[1] ?? "";
+  const labeledOpening = `\`\`\`${label}\n`;
+  // A label that would leave the code under half of each message is a word run the fence opens with, so it stays in
+  // the content where it cannot shrink the line limit toward zero and stall the split.
+  const keepsLabel = labeledOpening.length + 3 <= chunkLength / 2;
+  const opening = keepsLabel ? labeledOpening : "```\n";
+  const content = keepsLabel || !label ? match[2] : `${label}\n${match[2]}`;
+  const maxLineLength = chunkLength - opening.length - 3;
+  const lines = content
+    .split("\n")
+    .flatMap((line) => (line.length > maxLineLength ? splitByNewlines(line, maxLineLength) : [line]));
+  const chunks: string[] = [];
+  let chunkLines: string[] = [];
+  let chunkSize = opening.length + 3;
   for (const line of lines) {
-    if (currentChunk.length + line.length + 1 + 3 > chunkLength) {
-      currentChunk += "```";
-      chunks.push(currentChunk);
-      currentChunk = `\`\`\`${language}\n${line}`;
-    } else {
-      currentChunk += (currentChunk.endsWith("\n") || currentChunk.endsWith(`\`\`\`${language}\n`) ? "" : "\n") + line;
+    if (chunkLines.length > 0 && chunkSize + 1 + line.length > chunkLength) {
+      chunks.push(`${opening}${chunkLines.join("\n")}\`\`\``);
+      chunkLines = [];
+      chunkSize = opening.length + 3;
     }
+    chunkSize += (chunkLines.length > 0 ? 1 : 0) + line.length;
+    chunkLines.push(line);
   }
 
-  if (currentChunk.length > 0 && !currentChunk.endsWith("```")) {
-    currentChunk += "```";
-    chunks.push(currentChunk);
-  }
+  // The newline before a closing fence leaves one empty line, which alone would post an empty code block.
+  if (chunkLines.some((line) => line.length > 0)) chunks.push(`${opening}${chunkLines.join("\n")}\`\`\``);
   return chunks;
 }
 
@@ -655,7 +663,7 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
 
   const blocks: Array<{ content: string; type: BlockType; start: number; end: number }> = [];
 
-  const codeBlockRegex = /```(?:(\w+)\n)?([\s\S]*?)```/g;
+  const codeBlockRegex = new RegExp(CODE_FENCE.source, "g");
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -842,7 +850,9 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
       currentBlock.type === "markdown_inline_code" ||
       currentBlock.type === "markdown_link" ||
       // Inline emojis stay merged with adjacent text so mid-sentence tags and list items do not split apart.
-      currentBlock.type === "emoji_inline";
+      currentBlock.type === "emoji_inline" ||
+      // URLs stay merged with adjacent text because the split below has no URL case, so an unmerged link is dropped.
+      currentBlock.type === "url";
 
     if (isSemanticBlock) {
       let mergedContent = "";
@@ -919,18 +929,6 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
         prevBlockWasEmoji = true;
         break;
 
-      case "url":
-        if (currentChunk.length + block.content.length > chunkLength) {
-          if (currentChunk.length > 0) {
-            chunkedMessages.push(currentChunk);
-            currentChunk = "";
-          }
-          chunkedMessages.push(block.content);
-        } else {
-          currentChunk += (currentChunk.length > 0 && !currentChunk.endsWith(" ") ? " " : "") + block.content;
-        }
-        break;
-
       case "text": {
         let textToAdd = block.content.trim();
         if (prevBlockWasEmoji) {
@@ -939,6 +937,10 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
         }
         prevBlockWasEmoji = false;
         if (!textToAdd) continue;
+        if (currentChunk.length > 0) {
+          chunkedMessages.push(currentChunk);
+          currentChunk = "";
+        }
 
         if (splitMode === "lines") {
           const newlineAwareChunks = splitByNewlines(textToAdd, chunkLength);
@@ -950,7 +952,7 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
           const paragraphs = textToAdd.split(/\n+/);
           for (const paragraph of paragraphs) {
             if (!paragraph.trim()) continue;
-            chunkedMessages.push(paragraph);
+            chunkedMessages.push(...splitByNewlines(paragraph, chunkLength));
           }
         } else {
           // Protected spans are held out of the split for the whole block, not per paragraph: a
@@ -976,10 +978,6 @@ export function chunkMessage(inputText: string, splitMode: MessageSplitMode, chu
               processedSentence = processedSentence.replaceAll(SENTENCE_SPLIT_ELLIPSIS_PLACEHOLDER, "...");
               processedSentence = restoreSpansFromPlaceholders(processedSentence, spans);
 
-              if (currentChunk.length > 0) {
-                chunkedMessages.push(currentChunk);
-                currentChunk = "";
-              }
               // Restored spans bypass sentence-length limits, so re-split oversized results before sending to
               // Discord.
               if (processedSentence.length > chunkLength) {

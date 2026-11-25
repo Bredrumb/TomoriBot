@@ -4,19 +4,33 @@ import * as ts from "typescript";
 import { auditDocProse, DOC_PROSE_DEFAULT_PATHS, DOC_PROSE_RULES_PATH } from "./lib/docProse";
 import { isVerboseOutput } from "./lib/gateOutput";
 
-const DEFAULT_PATHS = ["src", "scripts", "tests", "apps", "docs"];
+const DEFAULT_PATHS = [
+  "src",
+  "scripts",
+  "tests",
+  "apps",
+  "docs",
+  "docker",
+  "servers",
+  ".github",
+  "Dockerfile",
+  "docker-compose.yaml",
+  "bunfig.toml",
+];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
 const POLICY_DOC_PATH = "docs/en/contributing/policies/comments.md";
 const DASH_PATTERN = /—|–| -- /;
 const DASH_SCAN_PATTERN = /—|–| -- /g;
 const LOCALE_PATH_PATTERN = /(?:^|\/)src\/locales\//;
+const HASH_COMMENT_FILE_PATTERN = /(?:^|[\\/])(?:dockerfile|[^\\/]+\.dockerfile)$|\.(?:ya?ml|sh|ps1|py|toml)$/i;
+const DOCKERFILE_PATH_PATTERN = /(?:^|[\\/])(?:dockerfile|[^\\/]+\.dockerfile)$/i;
 const NUMBERED_PREFIX_PATTERNS = [
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\.`,
   String.raw`\d+\.\d+[a-z]?`,
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\)`,
 ];
-const NUMBERED_LINE_PATTERN = new RegExp(String.raw`^//\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`);
-const RULE_HEAD_PATTERN = /^(?:\/\/|\*)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
+const NUMBERED_LINE_PATTERN = new RegExp(String.raw`^(?://|#)\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`);
+const RULE_HEAD_PATTERN = /^(?:\/\/|\*|#)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
 const ACTION_HEADS = [
   "Get",
   "Set",
@@ -45,8 +59,13 @@ const ACTION_HEADS = [
   "Query",
   "Fallback",
   "Exercise",
+  "Copy",
+  "Install",
+  "Prepare",
+  "Run",
+  "Switch",
 ];
-const ACTION_HEAD_PATTERN = new RegExp(String.raw`^//\s*(?:${ACTION_HEADS.join("|")})\b`);
+const ACTION_HEAD_PATTERN = new RegExp(String.raw`^(?://|#)\s*(?:${ACTION_HEADS.join("|")})\b`);
 const REASON_SIGNALS = [
   "because",
   "cannot",
@@ -72,13 +91,14 @@ const RATIONALE_PATTERN = new RegExp(
 // Units are contract information a caller cannot infer from a name or type.
 const UNIT_SIGNALS = ["bytes", "characters", "days", "hours", "milliseconds", "minutes", "seconds"];
 const REASON_PATTERN = new RegExp(String.raw`\b(?:${[...REASON_SIGNALS, ...UNIT_SIGNALS].join("|")})\b|[:(]`, "i");
-const SECTION_DIVIDER_PATTERN = /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
+const SECTION_DIVIDER_PATTERN = /^(?:\/\/|#)\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
 const PROPERTY_HEADING_PATTERN = /^[\p{L}\p{N}_]+(?:[ \t:_-]+[\p{L}\p{N}_]+)*:?$/u;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 // A suppression comment repeats at every site it silences, and each one is a separate lint
 // decision rather than rationale copied between call sites.
-const INLINE_SUPPRESSION_PATTERN = /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable/;
+const INLINE_SUPPRESSION_PATTERN =
+  /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable|yaml-language-server:|shellcheck\s|noqa\b|type:\s*ignore|pyright:|pylint:|ruff:|hadolint\s|pragma:\s*no\s*cover|mypy:|fmt:|isort:/i;
 const TEST_PATH_PATTERN = /(?:^|\/)tests\//;
 const NEW_COMMENT_MAX_LINES = 2;
 
@@ -242,7 +262,9 @@ export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Pr
     }
 
     const fileFindings = inspectCommentPolicySource(source, file, options);
-    if (options.auditNarration) {
+    // Standalone servers, paired installers, and per-cloud workflows cannot import shared helpers, so cross-file
+    // duplicate checks stay on TypeScript.
+    if (options.auditNarration && !isHashCommentPath(file)) {
       auditBlocks.blocks.push(...collectCommentBlocks(source, file));
     }
 
@@ -283,8 +305,24 @@ export function inspectCommentPolicySource(
   file = "fixture.ts",
   options: Pick<CommentPolicyOptions, "auditLimits" | "auditNarration" | "changedLines"> = {},
 ): CommentPolicyFinding[] {
-  assertParseable(source, file);
   const limits = options.auditLimits ?? DEFAULT_AUDIT_LIMITS;
+  if (isHashCommentPath(file)) {
+    const tokens = collectHashCommentTokens(source, file);
+    const commentLines: CommentLine[] = tokens.map((token) => ({
+      file,
+      kind: token.kind,
+      line: token.line,
+      standalone: token.standalone,
+      text: token.text,
+    }));
+    return [
+      ...commentLines.flatMap((line) => inspectCommentLine(line, options)),
+      ...collectHashStructuralCommentFindings(tokens, file),
+      ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, limits) : []),
+      ...collectNewCommentFindings(source, file, options.changedLines),
+    ];
+  }
+  assertParseable(source, file);
   const headings = options.auditNarration ? collectRedundantHeadings(source, file) : [];
   return [
     ...collectLocaleStringFindings(source, file),
@@ -397,9 +435,10 @@ export function collectNewCommentFindings(
     text,
   });
 
+  const marker = isHashCommentPath(file) ? "#" : "//";
   for (const block of collectCommentBlocks(source, file)) {
     if (!isNew(block.lineNumbers)) continue;
-    const text = `// ${block.lines[0] ?? ""}`;
+    const text = `${marker} ${block.lines[0] ?? ""}`;
     if (block.lines.length > NEW_COMMENT_MAX_LINES) {
       findings.push(lengthFinding(block.startLine, block.lines.length, text));
     }
@@ -759,7 +798,7 @@ function collectRedundantHeadings(source: string, file: string): CommentPolicyFi
 }
 
 function isNarrationCandidate(comment: CommentLine): boolean {
-  if (comment.kind !== "line" || !comment.standalone || /biome-ignore|@ts-expect-error/.test(comment.text)) {
+  if (comment.kind !== "line" || !comment.standalone || INLINE_SUPPRESSION_PATTERN.test(comment.text)) {
     return false;
   }
   if (SECTION_DIVIDER_PATTERN.test(comment.text)) {
@@ -913,10 +952,254 @@ function collectInlineCommentKeys(source: string): Set<string> {
   return keys;
 }
 
+function collectHashStructuralCommentFindings(tokens: readonly CommentToken[], file: string): CommentPolicyFinding[] {
+  const lineSet = new Set(tokens.map((token) => token.line));
+  const findings: CommentPolicyFinding[] = [];
+  const record = (line: number, message: string, text: string): void => {
+    findings.push({
+      file,
+      line,
+      message,
+      rule: "orphaned-comment",
+      severity: "error",
+      text: text.trim(),
+    });
+  };
+
+  for (const token of tokens) {
+    const previousIsComment = lineSet.has(token.line - 1);
+    const nextIsComment = lineSet.has(token.line + 1);
+    if (/^#[ \t]{2,}\S/.test(token.text) && !previousIsComment) {
+      record(
+        token.line,
+        "This looks like a continuation whose opening line was removed; restore, rewrite, or normalize the paragraph.",
+        token.text,
+      );
+    }
+    if (/^#\s*$/.test(token.text) && !(previousIsComment && nextIsComment)) {
+      record(token.line, "Remove the empty comment left at the boundary of a deleted section banner.", token.text);
+    }
+  }
+  return findings;
+}
+
+function findUnclosedPythonTripleQuote(line: string, current: '"""' | "'''" | null): '"""' | "'''" | null {
+  let state = current;
+  let singleQuote: "'" | '"' | null = null;
+  for (let index = 0; index < line.length; index += 1) {
+    const ch = line[index];
+    if (ch === "\\") {
+      index += 1;
+      continue;
+    }
+    if (state !== null) {
+      if (line.slice(index, index + 3) === state) {
+        state = null;
+        index += 2;
+      }
+      continue;
+    }
+    if (singleQuote !== null) {
+      if (ch === singleQuote) {
+        singleQuote = null;
+      }
+      continue;
+    }
+    if (ch === "#") {
+      break;
+    }
+    const triple = line.slice(index, index + 3);
+    if (triple === '"""' || triple === "'''") {
+      state = triple;
+      index += 2;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      singleQuote = ch;
+    }
+  }
+  return state;
+}
+
+function matchShellHeredocDelimiter(line: string): string | null {
+  let quote: "'" | '"' | null = null;
+  let arithDepth = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const ch = line[index];
+    if (quote === "'") {
+      if (ch === "'") {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "\\") {
+      index += 1;
+      continue;
+    }
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+    if (ch === "(" && line[index + 1] === "(") {
+      arithDepth += 1;
+      index += 1;
+      continue;
+    }
+    if (arithDepth > 0 && ch === ")" && line[index + 1] === ")") {
+      arithDepth -= 1;
+      index += 1;
+      continue;
+    }
+    if (arithDepth > 0) {
+      continue;
+    }
+    if (ch === "#" && (index === 0 || /\s/.test(line[index - 1] ?? ""))) {
+      break;
+    }
+    if (ch === "<" && line[index + 1] === "<" && line[index - 1] !== "<" && line[index + 2] !== "<") {
+      const rest = line.slice(index + 2);
+      const match = /^-?\s*(?:'([^'\s]+)'|"([^"\s]+)"|\\?([A-Za-z_][A-Za-z0-9_.-]*))(?=$|[\s;|&)><])/.exec(rest);
+      const delimiter = match?.[1] ?? match?.[2] ?? match?.[3];
+      if (delimiter) {
+        return delimiter;
+      }
+    }
+  }
+  return null;
+}
+
+// Standalone hash comments only: skipping non-run YAML block scalars, heredocs, here-strings,
+// Python triple-quoted strings, shebangs, and Dockerfile parser directives prevents false hits on data.
+function collectHashCommentTokens(source: string, file: string): CommentToken[] {
+  const isYaml = /\.ya?ml$/i.test(file);
+  const isPy = /\.py$/i.test(file);
+  const isSh = /\.sh$/i.test(file);
+  const isPs1 = /\.ps1$/i.test(file);
+  const isDocker = DOCKERFILE_PATH_PATTERN.test(file);
+  const lines = source.split(/\r?\n/);
+  const tokens: CommentToken[] = [];
+  let yamlBlock: { indent: number; isRun: boolean } | null = null;
+  let heredocEnd: string | null = null;
+  let pyTriple: '"""' | "'''" | null = null;
+  let psHereEnd: "'@" | '"@' | null = null;
+  let seenDockerInstruction = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index] ?? "";
+    const line = index + 1;
+    const trimmed = raw.trim();
+
+    if (isYaml && yamlBlock) {
+      if (trimmed.length > 0) {
+        const indent = raw.match(/^\s*/)?.[0].length ?? 0;
+        if (indent <= yamlBlock.indent) {
+          yamlBlock = null;
+          heredocEnd = null;
+        }
+      }
+      if (yamlBlock) {
+        if (!yamlBlock.isRun) {
+          continue;
+        }
+        if (heredocEnd) {
+          if (trimmed === heredocEnd) {
+            heredocEnd = null;
+          }
+          continue;
+        }
+        if (trimmed.startsWith("#")) {
+          if (!trimmed.startsWith("#!")) {
+            tokens.push({ inline: false, kind: "line", line, standalone: true, text: trimmed });
+          }
+          continue;
+        }
+        heredocEnd = matchShellHeredocDelimiter(raw);
+        continue;
+      }
+    }
+
+    if (isSh) {
+      if (heredocEnd) {
+        if (trimmed === heredocEnd) {
+          heredocEnd = null;
+        }
+        continue;
+      }
+      if (line === 1 && trimmed.startsWith("#!")) {
+        continue;
+      }
+      if (!trimmed.startsWith("#")) {
+        heredocEnd = matchShellHeredocDelimiter(raw);
+        continue;
+      }
+    }
+
+    if (isPs1) {
+      if (psHereEnd) {
+        if (raw.startsWith(psHereEnd)) {
+          psHereEnd = null;
+        }
+        continue;
+      }
+      if (!trimmed.startsWith("#")) {
+        const hereMatch = /@(['"])\s*$/.exec(raw);
+        if (hereMatch?.[1]) {
+          psHereEnd = hereMatch[1] === "'" ? "'@" : '"@';
+        }
+        continue;
+      }
+    }
+
+    if (isPy) {
+      if (line === 1 && trimmed.startsWith("#!")) {
+        continue;
+      }
+      if (pyTriple !== null) {
+        pyTriple = findUnclosedPythonTripleQuote(raw, pyTriple);
+        continue;
+      }
+      if (!trimmed.startsWith("#")) {
+        pyTriple = findUnclosedPythonTripleQuote(raw, null);
+        continue;
+      }
+    }
+
+    if (isDocker) {
+      if (!seenDockerInstruction && /^#\s*(?:syntax|escape|check)\s*=/i.test(trimmed)) {
+        continue;
+      }
+      if (trimmed.length > 0 && !trimmed.startsWith("#")) {
+        seenDockerInstruction = true;
+      }
+    }
+
+    if (isYaml && !trimmed.startsWith("#")) {
+      const scalarMatch = /^(\s*(?:-\s+)*)([A-Za-z0-9_.-]+)\s*:\s*[|>][+-]?\d*[+-]?\s*(?:#.*)?$/.exec(raw);
+      if (scalarMatch) {
+        yamlBlock = { indent: scalarMatch[1].length, isRun: scalarMatch[2] === "run" };
+        continue;
+      }
+    }
+
+    if (trimmed.startsWith("#")) {
+      tokens.push({ inline: false, kind: "line", line, standalone: true, text: trimmed });
+    }
+  }
+
+  return tokens;
+}
+
 // JSDoc blocks are excluded because the line-length rule would otherwise compete with dedicated JSDoc rules over the
 // same text.
 function collectCommentBlocks(source: string, file: string): CommentBlock[] {
-  const standalone = collectCommentTokens(source, file)
+  const isHash = isHashCommentPath(file);
+  const standalone = (isHash ? collectHashCommentTokens(source, file) : collectCommentTokens(source, file))
     .filter((token) => token.kind === "line" && token.standalone)
     .sort((left, right) => left.line - right.line);
   const blocks: CommentBlock[] = [];
@@ -941,7 +1224,7 @@ function collectCommentBlocks(source: string, file: string): CommentBlock[] {
     if (token.inline || INLINE_SUPPRESSION_PATTERN.test(token.text)) {
       continue;
     }
-    const content = token.text.replace(/^\/\/+/, "").trim();
+    const content = (isHash ? token.text.replace(/^#+/, "") : token.text.replace(/^\/\/+/, "")).trim();
     if (current && token.line === current.endLine + 1) {
       current.endLine = token.line;
       if (content) {
@@ -1009,14 +1292,17 @@ async function discoverTypeScriptFiles(repoRoot: string, paths: string[]): Promi
       continue;
     }
     if (inputStat?.isDirectory()) {
-      const glob = new Bun.Glob("**/*.{ts,tsx,md,mdx}");
-      for await (const path of glob.scan({
-        absolute: true,
-        cwd: absoluteInput,
-        onlyFiles: true,
-      })) {
-        if (isScannablePath(path) && !isExcludedPath(path)) {
-          discovered.add(resolve(path));
+      const patterns = ["**/*.{ts,tsx,md,mdx,yml,yaml,sh,ps1,py,toml,Dockerfile}", "**/Dockerfile"];
+      for (const pattern of patterns) {
+        const glob = new Bun.Glob(pattern);
+        for await (const path of glob.scan({
+          absolute: true,
+          cwd: absoluteInput,
+          onlyFiles: true,
+        })) {
+          if (isScannablePath(path) && !isExcludedPath(path)) {
+            discovered.add(resolve(path));
+          }
         }
       }
       continue;
@@ -1044,12 +1330,16 @@ function isMarkdownPath(path: string): boolean {
   return /\.mdx?$/i.test(path);
 }
 
+function isHashCommentPath(path: string): boolean {
+  return HASH_COMMENT_FILE_PATTERN.test(path);
+}
+
 function isScannablePath(path: string): boolean {
-  return isTypeScriptPath(path) || isMarkdownPath(path);
+  return isTypeScriptPath(path) || isMarkdownPath(path) || isHashCommentPath(path);
 }
 
 function isExcludedPath(path: string): boolean {
-  return /(?:^|[\\/])(?:\.git|dist|node_modules)(?:[\\/]|$)/.test(path);
+  return /(?:^|[\\/])(?:\.git|dist|node_modules|\.venv|venv|__pycache__)(?:[\\/]|$)/.test(path);
 }
 
 async function filterGitIgnoredFiles(repoRoot: string, paths: string[]): Promise<string[]> {

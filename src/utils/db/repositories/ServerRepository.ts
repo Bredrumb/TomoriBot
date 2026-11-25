@@ -565,6 +565,10 @@ class ServerRepository implements IRepository<ServerExportShape> {
     return this.sqlDeleteManagedWebhook(channelDiscId, webhookDiscId, kind);
   }
 
+  async releaseManagedWebhookFromOtherChannels(webhookDiscId: string, channelDiscId: string): Promise<string[]> {
+    return this.sqlReleaseManagedWebhookFromOtherChannels(webhookDiscId, channelDiscId);
+  }
+
   async decryptManagedWebhookToken(row: ManagedDiscordWebhookRow): Promise<string | null> {
     return this.sqlDecryptManagedWebhookToken(row);
   }
@@ -1518,6 +1522,23 @@ class ServerRepository implements IRepository<ServerExportShape> {
         error,
       );
       return false;
+    }
+  }
+
+  private async sqlReleaseManagedWebhookFromOtherChannels(
+    webhookDiscId: string,
+    channelDiscId: string,
+  ): Promise<string[]> {
+    try {
+      const released = await sql<Array<{ channel_disc_id: string }>>`
+        DELETE FROM discord_managed_webhooks
+        WHERE webhook_disc_id = ${webhookDiscId} AND channel_disc_id <> ${channelDiscId}
+        RETURNING channel_disc_id
+      `;
+      return released.map((row) => row.channel_disc_id);
+    } catch (error) {
+      log.error(`[ManagedWebhookDb] Failed to release webhook ${webhookDiscId} from other channels`, error);
+      return [];
     }
   }
 

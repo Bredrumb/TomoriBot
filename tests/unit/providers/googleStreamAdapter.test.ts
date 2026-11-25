@@ -77,6 +77,89 @@ it("records the final Google request shape on rejection without retaining its co
   }
 });
 
+it("retries without images once when Gemini cannot process an input image", async () => {
+  const info = spyOn(log, "info").mockImplementation(() => {});
+  const warn = spyOn(log, "warn").mockImplementation(() => {});
+  const section = spyOn(log, "section").mockImplementation(() => {});
+  const image =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG5kAAAAASUVORK5CYII=";
+  try {
+    for (const retrySucceeds of [true, false]) {
+      const requests: Array<{ contents: Array<{ parts: Array<Record<string, unknown>> }> }> = [];
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).startsWith("data:")) return originalFetch(input, init);
+        requests.push(JSON.parse(String(init?.body)));
+        if (requests.length === 1) {
+          return new Response(
+            JSON.stringify({
+              error: { code: 400, message: "Unable to process input image. Please retry.", status: "INVALID_ARGUMENT" },
+            }),
+            { status: 400 },
+          );
+        }
+        if (!retrySucceeds) {
+          return new Response(
+            JSON.stringify({ error: { code: 429, message: "Quota exceeded", status: "RESOURCE_EXHAUSTED" } }),
+            { status: 429 },
+          );
+        }
+        const chunk = {
+          candidates: [{ content: { role: "model", parts: [{ text: "hello" }] }, finishReason: "STOP" }],
+        };
+        return new Response(`data: ${JSON.stringify(chunk)}\r\n\r\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }) as typeof fetch;
+      const context = {
+        channel: { id: "channel-1" },
+        client: {},
+        tomoriState: createPersona({
+          llm: createLlmRow({ llm_provider: "google", llm_codename: "gemini-3.5-flash-lite", sees_images: true }),
+        }),
+        contextItems: [
+          {
+            role: "user",
+            parts: [
+              { type: "text", text: "look" },
+              { type: "image", uri: image, mimeType: "image/png" },
+            ],
+          },
+        ],
+        currentTurnModelParts: [],
+        provider: "google",
+        locale: "en-US",
+      } as unknown as StreamContext;
+      const adapter = new GoogleStreamAdapter();
+      const chunks: RawStreamChunk[] = [];
+      for await (const chunk of adapter.startStream(
+        { model: "gemini-3.5-flash-lite", apiKey: "key" } as StreamConfig,
+        context,
+      )) {
+        chunks.push(chunk);
+      }
+
+      const inlineParts = (request: (typeof requests)[number]) =>
+        request.contents.flatMap((content) => content.parts).filter((part) => "inlineData" in part);
+      expect(requests).toHaveLength(2);
+      expect(inlineParts(requests[0])).toHaveLength(1);
+      expect(inlineParts(requests[1])).toHaveLength(0);
+      expect(context.requestDiagnostics).toMatchObject({ imageFallbackRemoved: 1, lastTurn: { inlineDataParts: 0 } });
+      const processed = chunks.map((chunk) => adapter.processChunk(chunk));
+      if (retrySucceeds) {
+        expect(processed.map((chunk) => chunk.type)).not.toContain("error");
+        expect(processed.filter((chunk) => chunk.type === "text").map((chunk) => chunk.content)).toEqual(["hello"]);
+      } else {
+        expect(processed.at(-1)?.type).toBe("error");
+      }
+    }
+  } finally {
+    info.mockRestore();
+    warn.mockRestore();
+    section.mockRestore();
+  }
+});
+
 function makeGoogleChunk(data: Record<string, unknown>): RawStreamChunk {
   return { data, provider: "google", metadata: { timestamp: Date.now() } };
 }

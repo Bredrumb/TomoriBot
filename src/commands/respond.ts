@@ -14,6 +14,7 @@ import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
+import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { filterPersonasForTrigger } from "@/utils/persona/personaAccess";
@@ -259,6 +260,23 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
     return;
+  }
+
+  // Persona blocks only gate guild triggers, and chat admission drops a blocked turn without telling the invoker.
+  if (!isDMChannel) {
+    const activeBlocks = await getCachedActiveBlocksForUser(tomoriState.server_id, interaction.user.id);
+    const personaBlock = activeBlocks.find((block) => block.persona_id === selectedPersona.persona_id);
+    if (personaBlock) {
+      const blockVars = { bot: selectedPersona.persona_nickname };
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.respond.persona_blocked_title",
+        titleVars: blockVars,
+        descriptionKey: "commands.respond.persona_blocked_description",
+        descriptionVars: { ...blockVars, time: `<t:${Math.floor(personaBlock.expires_at.getTime() / 1000)}:R>` },
+        color: ColorCode.WARN,
+      });
+      return;
+    }
   }
 
   const hideEmbed = !isNoticeEmbedVisible(tomoriState.config, "respond_embed");

@@ -327,7 +327,7 @@ export default {
       channels_rules_description: `设置特殊频道分组如何影响上下文与工具。`,
       channels_rules_private_title: `私密频道`,
       channels_rules_private_description:
-        "私密频道受到以下限制（对受 Discord 权限限制的频道自动生效）：\n- 无思考日志。\n- 无调入的跨频道工具。\n- 除非将 `私密频道 STM 共享` 设为 `已允许`，否则 STM 无法进出。",
+        "私密频道受到以下限制（对受 Discord 权限限制的频道自动生效）：\n- 无思考日志。\n- 无调入的跨频道工具。\n- 除非将 `私密频道 STM 共享` 设为 `已允许`，否则 STM 无法流出。",
       channels_rules_private_manage_button: `将公开频道标为私密`,
       channels_rules_private_automatic: `{channel}：自动私密（Discord 权限）`,
       channels_rules_private_manual: `{channel}：已标为私密`,
@@ -339,7 +339,7 @@ export default {
       channels_rules_blocklist_manage_button: `管理被屏蔽频道`,
       channels_rules_stm_sharing_title: `私密频道 STM 共享`,
       channels_rules_stm_sharing_description:
-        "选择[短期记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/short-term-memory/)是否可以进出私密频道。思考日志与调入的跨频道工具仍会保持阻止。",
+        "选择[短期记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/short-term-memory/)是否可以流出私密频道。思考日志与调入的跨频道工具仍会保持阻止。",
       channels_rules_private_modal_title: `将公开频道标为私密`,
       channels_rules_private_group_label: `私密频道`,
       channels_rules_private_group_label_continued: `私密频道（续）`,

@@ -15,10 +15,10 @@ configured and SearXNG has active engines for that category.
 
 ## Files
 
-- `settings.yml` — SearXNG configuration. Mounted read-only at
+- `settings.yml`: SearXNG configuration. Mounted read-only at
   `/etc/searxng/settings.yml`. References `${SEARXNG_SECRET}` which the
   container substitutes from env at startup.
-- `limiter.toml` — Disables SearXNG's bot detection. Safe because the container
+- `limiter.toml`: Disables SearXNG's bot detection. Safe because the container
   only listens on the private container network.
 
 ## Local development

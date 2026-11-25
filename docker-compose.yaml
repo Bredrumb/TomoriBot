@@ -1,5 +1,4 @@
 services:
-  # TomoriBot's PostgreSQL database - her private storage room
   postgres:
     build:
       context: .
@@ -7,7 +6,7 @@ services:
     container_name: tomoribot-db
     env_file: .env
     environment:
-      # Hard-coded for Docker - users don't need to configure these
+      # Fixed container credentials so local Compose works without extra .env fields.
       POSTGRES_DB: tomodb
       POSTGRES_USER: tomori
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_default_password}
@@ -16,12 +15,10 @@ services:
       -c shared_preload_libraries=pg_cron
       -c cron.database_name=tomodb
     volumes:
-      # Persistent storage - data survives container restarts
       - postgres_data:/var/lib/postgresql/data
-      # Initialize pg_cron extension on container startup
       - ./docker/init-pgcron.sql:/docker-entrypoint-initdb.d/init-pgcron.sql:ro
     ports:
-      # Publish on host port 15432 for maintenance tools.
+      # Published on 15432 so host maintenance tools can connect without colliding with 5432.
       - "15432:5432"
     restart: unless-stopped
     healthcheck:
@@ -31,11 +28,9 @@ services:
       retries: 5
     networks:
       - tomori-network
-  # SearXNG metasearch server - Tomori's library research assistant
-  # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
-  # Enable with: docker compose --profile searxng up
-  # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env when enabling this profile.
-  # See servers/searxng/README.md for configuration + upgrade procedure.
+
+  # Optional profile (--profile searxng): set SEARXNG_BASE_URL=http://searxng:8080/ in .env
+  # (see servers/searxng/README.md).
   searxng:
     build:
       context: ./servers/searxng
@@ -57,10 +52,8 @@ services:
     networks:
       - tomori-network
 
-  # Crawl4AI URL-fetch server - optional browser-rendered markdown fetcher.
-  # Enable with: docker compose --profile fetch-crawl4ai up
-  # Set CRAWL4AI_BASE_URL=http://crawl4ai:11235/, CRAWL4AI_TOKEN, and FETCH_URL_ALLOW_PRIVATE_NETWORK=true
-  # in .env to let TomoriBot use it.
+  # Optional profile (--profile fetch-crawl4ai): set CRAWL4AI_BASE_URL=http://crawl4ai:11235/,
+  # CRAWL4AI_TOKEN, and FETCH_URL_ALLOW_PRIVATE_NETWORK=true in .env.
   crawl4ai:
     # Pinned: 0.9.4 requires an API token for any non-loopback bind and blocks non-global browser destinations.
     image: unclecode/crawl4ai:0.9.4
@@ -83,9 +76,8 @@ services:
     networks:
       - tomori-network
 
-  # slop-guard prose linter - optional Response Drafting rule checker.
-  # Enable with: docker compose --profile slop-guard up
-  # Then add http://slop-guard:8765/mcp in /config > Plugins > + Add MCP with Server Type "Prose Linter".
+  # Optional profile (--profile slop-guard): register http://slop-guard:8765/mcp under
+  # /config > Plugins > + Add MCP as "Prose Linter".
   slop-guard:
     build:
       context: ./servers/slop-guard
@@ -102,7 +94,6 @@ services:
     networks:
       - tomori-network
 
-  # TomoriBot application - the main apartment
   tomoribot:
     build:
       context: .
@@ -113,9 +104,8 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      # Docker-specific database connection: overrides .env values so the app
-      # connects to the compose postgres service instead of localhost or AWS RDS.
-      # The app reads individual POSTGRES_* vars, NOT POSTGRES_URL.
+      # Override .env with individual POSTGRES_* vars (the app ignores POSTGRES_URL) so Compose
+      # targets the local postgres service instead of localhost or cloud DBs.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: tomori
@@ -135,21 +125,17 @@ services:
       retries: 3
     networks:
       - tomori-network
-    # Optional: Mount logs directory for debugging
     volumes:
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
-      # Make Docker backup bundles durable and visible on the host.
       - ./backups:/app/backups:rw
       # Required by backup/restore scripts so Docker bundles include the active config.
       - ./.env:/app/.env:rw
 
-# Named volumes for persistent data
 volumes:
   postgres_data:
     driver: local
 
-# Private network for TomoriBot's services
 networks:
   tomori-network:
     driver: bridge

@@ -467,22 +467,27 @@ const novelaiDefinitionSchema = z.object({
 const NOVELAI_MAX_INPUT_CHARACTERS = 1_000_000;
 const NOVELAI_MAX_FRAGMENT_CODE_POINTS = 1024;
 const oversizedNovelaiFragment = new RegExp(`\\S{${NOVELAI_MAX_FRAGMENT_CODE_POINTS + 1}}`, "u");
-const novelaiDefinitions = new Map<NovelAITokenizerFamily, z.infer<typeof novelaiDefinitionSchema> | null>();
+// Only successful loads are cached, so a transient read failure clears on the next request instead of disabling
+// NovelAI until a restart.
+const novelaiDefinitions = new Map<NovelAITokenizerFamily, z.infer<typeof novelaiDefinitionSchema>>();
 
 export function createNovelAITokenizerEncoder(family: NovelAITokenizerFamily): LocalTokenizerEncoder {
-  if (!novelaiDefinitions.has(family)) {
+  let definition = novelaiDefinitions.get(family);
+  if (!definition) {
     try {
       const bytes = fs.readFileSync(path.join(getTokenizerAssetDir(), family, "tokenizer.json"));
       const expected = tokenizerManifest.families[family].sha256["tokenizer.json"];
       if (createHash("sha256").update(bytes).digest("hex") !== expected) throw new Error("Tokenizer hash mismatch");
-      novelaiDefinitions.set(family, novelaiDefinitionSchema.parse(JSON.parse(bytes.toString("utf8"))));
+      definition = novelaiDefinitionSchema.parse(JSON.parse(bytes.toString("utf8")));
+      novelaiDefinitions.set(family, definition);
     } catch (error) {
-      novelaiDefinitions.set(family, null);
-      log.warn("Failed to load required NovelAI tokenizer", { family, error });
+      void log.error("Failed to load required NovelAI tokenizer", error, {
+        errorType: "NovelAITokenizerLoadError",
+        metadata: { family, tokenizerAssetDir: getTokenizerAssetDir() },
+      });
+      throw new NovelAIPreparationError("tokenizer_setup");
     }
   }
-  const definition = novelaiDefinitions.get(family);
-  if (!definition) throw new NovelAIPreparationError("tokenizer_setup");
   // Upstream caches fragments without eviction, so each fitting session owns its encoder.
   const encoder = new Encoder(definition.vocab, definition.merges, definition.specialTokens, definition.config);
   return (text) => {

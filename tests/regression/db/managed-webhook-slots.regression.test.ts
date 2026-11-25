@@ -264,6 +264,26 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("managed webhook slot storage and lifecycle
     expect(await serverRepository.loadManagedWebhookByChannel(channelId)).not.toBeNull();
   });
 
+  it("adopts a primary webhook an admin moved from another channel", async () => {
+    expect(
+      await serverRepository.upsertManagedWebhook({
+        guildDiscId: guildId,
+        channelDiscId: "_old_channel",
+        webhookDiscId: "_moved",
+        rawToken: token,
+      }),
+    ).toBe(true);
+    const moved = {
+      ...makeWebhook("_moved"),
+      name: "TomoriBot Multi-Persona",
+      owner: { id: "_managed_slots_bot" },
+    } as unknown as Webhook<WebhookType.Incoming>;
+    const { channel } = makeChannel([moved]);
+    expect((await getOrCreateWebhook(channel)).webhook).toBe(moved);
+    expect((await serverRepository.loadManagedWebhookByChannel(channelId))?.webhook_disc_id).toBe(moved.id);
+    expect(await serverRepository.loadManagedWebhookByChannelAndWebhookId("_old_channel", moved.id)).toBeNull();
+  });
+
   it("adds unknown assignments on fresh and existing databases and supports migration replay and rollback", async () => {
     const [columns] = await testSql`SELECT count(*)::int AS count FROM information_schema.columns
       WHERE table_name = 'discord_managed_webhooks' AND column_name IN ('avatar_fingerprint', 'discord_avatar_hash')`;

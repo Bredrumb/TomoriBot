@@ -16,5 +16,7 @@ export default {
     cooldown_active: `このサーバーの管理者がクールダウンを設定しています。\`/respond\` を再度使用するまで、あと **{seconds}** 秒お待ちください。このクールダウンはメッセージトリガーと共有されています。`,
     channel_not_whitelisted: `このサーバーではホワイトリスト制限が有効です。\`/respond\` はホワイトリスト登録チャンネル内で、かつホワイトリスト登録ロールを持つメンバーのみ使用でき、このチャンネルで許可されたペルソナだけを使えます。`,
     persona_access_blocked: `現在のホワイトリスト権限と個人スポットライト設定では、このチャンネルで \`/respond\` に使えるペルソナがありません。`,
+    persona_blocked_title: `{bot}はあなたを無視しています`,
+    persona_blocked_description: `{bot}があなたをブロックしているため、現在 \`/respond\` で{bot}に応答させることはできません。ブロックは{time}に解除されます。`,
   },
 };

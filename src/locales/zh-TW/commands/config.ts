@@ -328,7 +328,7 @@ export default {
       channels_rules_description: `設定特殊頻道群組如何影響脈絡與工具。`,
       channels_rules_private_title: `私人頻道`,
       channels_rules_private_description:
-        "私人頻道有以下限制（Discord 存取受限的頻道會自動套用）：\n- 不產生思考紀錄。\n- 不接收來自其他頻道的跨頻道工具。\n- 除非 `私人頻道 STM 分享` 設為 `允許`，否則 STM 無法進入或離開。",
+        "私人頻道有以下限制（Discord 存取受限的頻道會自動套用）：\n- 不產生思考紀錄。\n- 不接收來自其他頻道的跨頻道工具。\n- 除非 `私人頻道 STM 分享` 設為 `允許`，否則 STM 無法離開。",
       channels_rules_private_manage_button: `將公開頻道標記為私人`,
       channels_rules_private_automatic: `{channel}：自動設為私人（Discord 權限）`,
       channels_rules_private_manual: `{channel}：標記為私人`,
@@ -340,7 +340,7 @@ export default {
       channels_rules_blocklist_manage_button: `管理封鎖頻道`,
       channels_rules_stm_sharing_title: `私人頻道 STM 分享`,
       channels_rules_stm_sharing_description:
-        "選擇[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/short-term-memory/)是否能進入或離開私人頻道。思考紀錄與傳入的跨頻道工具仍會保持封鎖。",
+        "選擇[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/short-term-memory/)是否能離開私人頻道。思考紀錄與傳入的跨頻道工具仍會保持封鎖。",
       channels_rules_private_modal_title: `將公開頻道標記為私人`,
       channels_rules_private_group_label: `私人頻道`,
       channels_rules_private_group_label_continued: `私人頻道（續）`,

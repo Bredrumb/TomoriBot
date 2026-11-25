@@ -351,7 +351,7 @@ export default {
       channels_rules_description: "Defina como grupos de canais especiais afetam o contexto e ferramentas.",
       channels_rules_private_title: `Canais Privados`,
       channels_rules_private_description:
-        "Canais privados têm estas restrições (automáticas para canais com acesso restrito no Discord):\n- Sem logs de pensamento.\n- Sem ferramentas multicanal de entrada.\n- Sem STM entrando ou saindo a menos que `Compartilhamento de STM de Canais Privados` esteja definido como `Permitido`.",
+        "Canais privados têm estas restrições (automáticas para canais com acesso restrito no Discord):\n- Sem logs de pensamento.\n- Sem ferramentas multicanal de entrada.\n- Sem STM saindo a menos que `Compartilhamento de STM de Canais Privados` esteja definido como `Permitido`.",
       channels_rules_private_manage_button: `Marcar Canais Públicos como Privados`,
       channels_rules_private_automatic: `{channel}: privado automaticamente (permissões do Discord)`,
       channels_rules_private_manual: `{channel}: marcado como privado`,
@@ -364,7 +364,7 @@ export default {
       channels_rules_blocklist_manage_button: `Gerenciar Canais Bloqueados`,
       channels_rules_stm_sharing_title: `Compartilhamento de STM de Canais Privados`,
       channels_rules_stm_sharing_description:
-        "Escolha se a [Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/short-term-memory/) pode entrar ou sair de canais privados. Logs de pensamento e ferramentas multicanal de entrada permanecem bloqueados.",
+        "Escolha se a [Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/short-term-memory/) pode sair de canais privados. Logs de pensamento e ferramentas multicanal de entrada permanecem bloqueados.",
       channels_rules_private_modal_title: `Marcar Canais Públicos como Privados`,
       channels_rules_private_group_label: `Canais Privados`,
       channels_rules_private_group_label_continued: `Canais Privados (Continuação)`,

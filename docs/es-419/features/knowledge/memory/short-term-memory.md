@@ -26,15 +26,16 @@ reciente. Consulta [Dentro del prompt](/features/knowledge/inside-the-prompt/) p
 
 - **Canales públicos:** Hablas sobre una recomendación de álbum con TomoriBot en `#music`. Unos minutos más tarde en
   `#general`, le preguntas qué álbum sugirió. Debido a que respondió en `#music`, recuerda ese contexto en `#general`.
-- **Canales privados:** De forma predeterminada, la STM no puede entrar ni salir de un canal privado. Esto se aplica a
-  resúmenes, campos de memoria y mensajes recientes sin procesar, incluido el recuerdo entre dos canales privados.
+- **Canales privados:** De forma predeterminada, la STM de un canal privado permanece allí. Esto se
+  aplica a resúmenes, campos de memoria y mensajes recientes sin procesar, incluido el recuerdo en
+  otro canal privado. Los canales privados aún recuerdan la STM de los canales públicos.
 
 Los canales que restringen la visualización mediante permisos de Discord son privados automáticamente. Los hilos privados
 y los hilos en canales privados también son privados. Los administradores pueden marcar canales de texto públicos
 como privados en `/config` > `Canales` > `Reglas de canal`.
 
 `Uso compartido de STM de canales privados` en ese panel está en `Bloqueado` de forma predeterminada. Elegir `Permitido` permite
-que la STM entre y salga de canales privados y puede exponer conversaciones privadas en otros lugares. Esta configuración nunca
+que la STM salga de los canales privados y puede exponer conversaciones privadas en otros lugares. Esta configuración nunca
 habilita registros de pensamiento ni herramientas entre canales que tengan como objetivo canales privados. Tu consentimiento
 para el recuerdo entre servidores sigue siendo necesario para recordar entre servidores, y el servidor de origen controla si la
 STM de sus canales privados puede salir.

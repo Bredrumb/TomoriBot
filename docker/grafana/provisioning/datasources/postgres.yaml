@@ -1,7 +1,6 @@
 apiVersion: 1
 
 datasources:
-  # TomoriBot PostgreSQL Database
   - name: TomoriBot Database
     # Fixed uid so provisioned dashboards can reference this datasource by name across installs.
     # Without it Grafana generates a random uid per install and every panel in a shipped

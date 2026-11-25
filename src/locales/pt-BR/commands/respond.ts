@@ -16,5 +16,7 @@ export default {
     cooldown_active: `Os gerentes deste servidor configuraram um tempo de recarga. Por favor, espere **{seconds}** segundos antes de usar \`/respond\` novamente. Este tempo de recarga é compartilhado com gatilhos de mensagem.`,
     channel_not_whitelisted: `Este servidor tem restrições de lista de permissões ativas. \`/respond\` só pode ser usado em canais permitidos por membros com cargos permitidos, e apenas com personas permitidas neste canal.`,
     persona_access_blocked: `Suas permissões atuais de lista de permissões e configurações de destaque pessoal não deixam nenhuma persona disponível para \`/respond\` neste canal.`,
+    persona_blocked_title: `{bot} está ignorando você`,
+    persona_blocked_description: `{bot} bloqueou você, então \`/respond\` não pode fazer {bot} responder agora. O bloqueio termina {time}.`,
   },
 };

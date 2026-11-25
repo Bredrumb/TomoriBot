@@ -865,3 +865,155 @@ describe("doc prose repository patterns", () => {
     expect(maskMarkdownCode(source).split("\n")).toHaveLength(source.split("\n").length);
   });
 });
+
+describe("hash-comment files", () => {
+  it("enforces policy rules on Dockerfiles while skipping parser directives", () => {
+    const source = [
+      "# syntax=docker/dockerfile:1",
+      "# --- SECURITY FIX ---",
+      "# Copy package files",
+      "# Alpine ships none — bundle fonts here",
+      "# 1. Build the image",
+      "FROM oven/bun:1.4.0-alpine",
+      "",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source, "Dockerfile", { auditNarration: true });
+
+    expect(findings.map(({ line, rule, severity }) => ({ line, rule, severity }))).toEqual([
+      { line: 2, rule: "obvious-narration", severity: "warning" },
+      { line: 3, rule: "obvious-narration", severity: "warning" },
+      { line: 4, rule: "prose-dash", severity: "error" },
+      { line: 5, rule: "numbered-narration", severity: "error" },
+    ]);
+  });
+
+  it("scans YAML comments and run scripts without mistaking prompt block scalars for comments", () => {
+    const source = [
+      "# yaml-language-server: $schema=https://example.test/schema.json",
+      "jobs:",
+      "  review:",
+      "    steps:",
+      "      - name: Prompt",
+      "        with:",
+      "          prompt: |-",
+      "            ## Heading — inside prompt data",
+      "            # 1. Not a comment",
+      "      - name: Script",
+      "        run: |",
+      "          # shellcheck disable=SC2016",
+      "          # 1. Numbered step inside run block",
+      "          cat <<'EOF'",
+      "          # 2. Not a comment inside heredoc",
+      "          EOF",
+      "",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source, ".github/workflows/ci.yml", { auditNarration: true });
+
+    expect(findings.map(({ line, rule }) => ({ line, rule }))).toEqual([{ line: 13, rule: "numbered-narration" }]);
+  });
+
+  it("skips shebangs, Python triple-quoted strings, and PowerShell here-strings", () => {
+    const pySource = [
+      "#!/usr/bin/env python3",
+      '"""',
+      "# 1. Docstring line — not a comment",
+      '"""',
+      "# 2. Real numbered comment",
+      "x = 1",
+      "",
+    ].join("\n");
+    const psSource = [
+      "$doc = @'",
+      "# 1. Here-string line — not a comment",
+      "'@",
+      "# 2. Real PowerShell comment",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(pySource, "servers/tool.py").map(({ line, rule }) => ({ line, rule }))).toEqual([
+      { line: 5, rule: "numbered-narration" },
+    ]);
+    expect(
+      inspectCommentPolicySource(psSource, "servers/install.ps1").map(({ line, rule }) => ({ line, rule })),
+    ).toEqual([{ line: 4, rule: "numbered-narration" }]);
+  });
+
+  it("enforces new-comment limits and orphaned-comment rules on hash comments", () => {
+    const source = [
+      "#    orphaned continuation",
+      "FROM alpine",
+      "# First sentence. Second sentence.",
+      "# Line two",
+      "# Line three",
+      "RUN true",
+      "",
+    ].join("\n");
+    const changedLines = new Map([["Dockerfile", new Set([3, 4, 5])]]);
+
+    const findings = inspectCommentPolicySource(source, "Dockerfile", { changedLines });
+
+    expect(findings.map(({ line, rule, severity }) => ({ line, rule, severity }))).toEqual([
+      { line: 1, rule: "orphaned-comment", severity: "error" },
+      { line: 3, rule: "long-new-comment", severity: "error" },
+      { line: 3, rule: "new-multi-sentence", severity: "error" },
+      { line: 3, rule: "unexplained-comment", severity: "warning" },
+    ]);
+  });
+
+  it("closes YAML sequence-item block scalars at the key column rather than the dash column", () => {
+    const source = [
+      "steps:",
+      "  - prompt: |-",
+      "      ## Heading — inside prompt",
+      "    run: |",
+      "      # 1. Sibling run violation",
+      "  - run: |",
+      "      echo ok",
+      "    with:",
+      "      prompt: |-",
+      "        ## Heading — inside sibling prompt",
+      "",
+    ].join("\n");
+
+    expect(
+      inspectCommentPolicySource(source, ".github/workflows/test.yml").map(({ line, rule }) => ({ line, rule })),
+    ).toEqual([{ line: 5, rule: "numbered-narration" }]);
+  });
+
+  it("tracks single-line Python quotes before treating triple quotes or hashes as delimiters", () => {
+    const source = [
+      'cleaned = text.replace(\'"""\', "")',
+      "# 1. Comment after single-quoted triple quotes",
+      'prefix = "#"; note = """',
+      "# 2. Inside multiline string — not a comment",
+      '"""',
+      "# Broken — dash after closing triple quotes",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source, "servers/test.py").map(({ line, rule }) => ({ line, rule }))).toEqual([
+      { line: 2, rule: "numbered-narration" },
+      { line: 6, rule: "prose-dash" },
+    ]);
+  });
+
+  it("handles shell bitshifts and hyphenated heredoc delimiters without swallowing later comments", () => {
+    const source = [
+      "#!/usr/bin/env bash",
+      "mask=$((1 << SHIFT))",
+      "# 1. Comment after arithmetic bitshift",
+      "cat <<'END-MARKER'",
+      "# 2. Inside hyphenated heredoc — not a comment",
+      "END-MARKER",
+      "# Broken — dash after hyphenated heredoc",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source, "scripts/test.sh").map(({ line, rule }) => ({ line, rule }))).toEqual([
+      { line: 3, rule: "numbered-narration" },
+      { line: 7, rule: "prose-dash" },
+    ]);
+  });
+});

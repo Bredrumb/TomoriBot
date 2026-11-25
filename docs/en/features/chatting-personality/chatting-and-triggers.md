@@ -22,6 +22,11 @@ empty uses the last speaker if allowed, then the channel's auto-trigger persona 
 instructions for this response, and `prefill` supplies text for the assistant to continue. Models that
 cannot continue a prefill receive it as an instruction instead.
 
+Replying with `@ OFF` keeps her quiet only on messages from the bot account. Alter personas and
+sprite posts are sent through a webhook, and Discord does not report the `@ ON`/`@ OFF` setting
+for webhook messages, so any reply to them triggers that persona. Start the reply with `!` to
+reply without triggering anyone.
+
 In a DM, send a message directly without any trigger word or mention.
 
 To make the main persona reply to every eligible message in the server without needing a mention or trigger word, enable `Always Reply` in `/config` > `Behavior` > `Trigger Behavior`.

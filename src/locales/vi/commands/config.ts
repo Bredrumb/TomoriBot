@@ -350,7 +350,7 @@ export default {
       channels_rules_description: `Đặt cách các nhóm kênh đặc biệt ảnh hưởng ngữ cảnh và công cụ.`,
       channels_rules_private_title: `Kênh riêng tư`,
       channels_rules_private_description:
-        "Các kênh riêng tư có những hạn chế sau (tự động với các kênh bị giới hạn quyền truy cập Discord):\n- Không có nhật ký suy nghĩ.\n- Không nhận công cụ liên kênh.\n- Không có STM đi vào hoặc rời khỏi trừ khi `Chia sẻ STM kênh riêng tư` được đặt thành `Được phép`.",
+        "Các kênh riêng tư có những hạn chế sau (tự động với các kênh bị giới hạn quyền truy cập Discord):\n- Không có nhật ký suy nghĩ.\n- Không nhận công cụ liên kênh.\n- STM không thể rời khỏi trừ khi `Chia sẻ STM kênh riêng tư` được đặt thành `Được phép`.",
       channels_rules_private_manage_button: `Đánh dấu kênh công khai là riêng tư`,
       channels_rules_private_automatic: `{channel}: tự động riêng tư (quyền Discord)`,
       channels_rules_private_manual: `{channel}: đã đánh dấu riêng tư`,
@@ -363,7 +363,7 @@ export default {
       channels_rules_blocklist_manage_button: `Quản lý kênh bị chặn`,
       channels_rules_stm_sharing_title: `Chia sẻ STM kênh riêng tư`,
       channels_rules_stm_sharing_description:
-        "Chọn xem [Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/) có thể đi vào hoặc rời khỏi kênh riêng tư hay không. Nhật ký suy nghĩ và công cụ liên kênh gửi đến vẫn bị chặn.",
+        "Chọn xem [Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/short-term-memory/) có thể rời khỏi kênh riêng tư hay không. Nhật ký suy nghĩ và công cụ liên kênh gửi đến vẫn bị chặn.",
       channels_rules_private_modal_title: `Đánh dấu kênh công khai là riêng tư`,
       channels_rules_private_group_label: `Kênh riêng tư`,
       channels_rules_private_group_label_continued: `Kênh riêng tư (Tiếp theo)`,

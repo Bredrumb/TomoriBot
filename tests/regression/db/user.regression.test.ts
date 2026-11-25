@@ -58,6 +58,24 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     expect(second?.user_nickname).toBeNull();
   });
 
+  it("registerUser returns the row a concurrent first registration committed", async () => {
+    const userDiscId = "_rt_user_race_001";
+    const { pending } = await testSql.begin(async (tx) => {
+      await tx`INSERT INTO users (user_disc_id, language_pref, registration_locale) VALUES (${userDiscId}, 'en', 'en')`;
+      const [holder] = await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      const registration = userRepository.register(userDiscId, "_rt_race_name", "en");
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [blocked] = await testSql<{ waiting: boolean }[]>`
+          SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE ${holder.pid} = ANY(pg_blocking_pids(pid))) AS waiting
+        `;
+        if (blocked?.waiting) return { pending: registration };
+        await Bun.sleep(10);
+      }
+      throw new Error("Registration never waited on the uncommitted insert");
+    });
+    expect((await pending)?.user_disc_id).toBe(userDiscId);
+  });
+
   it("setPrivacyLevel updates the row and returns the updated user", async () => {
     const updated = await userRepository.setPrivacyLevel(FIXTURE_IDS.regUserDiscId, PrivacyLevel.PARTIAL);
     expect(updated).not.toBeNull();
