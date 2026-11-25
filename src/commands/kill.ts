@@ -60,7 +60,7 @@ export async function execute(
 
   if (hasActiveStream) {
     StreamOrchestrator.requestStop(channelId, interaction.user.id);
-    // Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
+    // Abort the underlying HTTP request and unblock Promise.race; the turn waits at most a few seconds for already-posted text before releasing the lock.
     forceKillChannelStream(channelId);
   }
 

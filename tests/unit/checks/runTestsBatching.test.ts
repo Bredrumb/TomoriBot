@@ -1,5 +1,24 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { buildFileBatches, MAX_TEST_BATCH_ARG_CHARS, planLanes } from "../../../scripts/checks/runTests";
+
+describe("runTests focused paths", () => {
+  it("refuses a missing focused path instead of passing with the files that exist", () => {
+    const missing = "tests/unit/checks/missingFocusedPath.test.ts";
+    const result = Bun.spawnSync(
+      ["bun", "scripts/checks/runTests.ts", "tests/unit/tools/reviewCapabilities.test.ts", missing],
+      {
+        cwd: join(import.meta.dir, "../../.."),
+        env: { ...process.env, DATABASE_URL: "postgres://review@127.0.0.1/review" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain(missing);
+  }, 60_000);
+});
 
 describe("runTests batching", () => {
   it("splits shared unit and regression file lists within the command-line budget while keeping order", async () => {

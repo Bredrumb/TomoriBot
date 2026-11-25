@@ -29,8 +29,8 @@ export function extractRealDiscordMentionIds(historyText: string): Set<string> {
   return mentionIds;
 }
 
-function containsStandaloneAlias(text: string, alias: ParticipantAlias): boolean {
-  const aliasPattern = escapeRegExp(alias.normalized).replace(/\s+/gu, "\\s+");
+export function containsStandaloneAlias(text: string, normalizedAlias: string): boolean {
+  const aliasPattern = escapeRegExp(normalizedAlias).replace(/\s+/gu, "\\s+");
   return new RegExp(
     `(?:` +
       `(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}])@${aliasPattern}` +
@@ -55,7 +55,7 @@ export function resolveUniqueParticipantAliasReferences(
 
   for (const collision of collisionIndex.values()) {
     const representative = collision.aliases[0];
-    if (!representative || !containsStandaloneAlias(historyText, representative)) {
+    if (!representative || !containsStandaloneAlias(historyText, representative.normalized)) {
       diagnostics.unmatchedAliasCount += 1;
       continue;
     }

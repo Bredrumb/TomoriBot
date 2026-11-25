@@ -1,4 +1,5 @@
 import type { SQL } from "bun";
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -299,6 +300,12 @@ async function main(): Promise<void> {
   }
   if (testFiles.some((file) => !file.startsWith("tests/") || !file.endsWith(".test.ts"))) {
     console.error("[test-runner] Focused test paths must be .test.ts files under tests/.");
+    process.exit(1);
+  }
+  // bun test treats each path as a filter, so a missing one silently drops out of an otherwise green run.
+  const missingFiles = requestedFiles.filter((file) => !existsSync(file));
+  if (missingFiles.length > 0) {
+    console.error(`[test-runner] Focused test paths not found: ${missingFiles.join(", ")}`);
     process.exit(1);
   }
 

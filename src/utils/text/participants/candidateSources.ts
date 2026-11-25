@@ -23,7 +23,7 @@ export interface MessageProxyIdentityReferenceSource {
   loadIdentities(query: MessageProxyIdentityReferenceQuery): Promise<readonly MessageProxyIdentityReference[]>;
 }
 
-interface ReferenceMemberIdentity {
+export interface ReferenceMemberIdentity {
   discordId: string;
   bot: boolean;
   displayName: string;

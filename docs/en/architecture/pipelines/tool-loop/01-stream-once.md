@@ -50,8 +50,10 @@ cancellation:
 When the rolling inactivity timeout triggers:
 
 1. **Stop request check:**
-   If a user cancellation request (`/kill`) is active, the stage returns `{ status: "stopped_by_user" }`
-   immediately.
+   If a user cancellation request (`/kill`) is active, the stage runs no fallback. It still waits, for at most
+   `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` (5 s), for the aborted stream to settle, then returns
+   `{ status: "stopped_by_user" }` with the text already posted, so that text reaches short-term memory. With
+   response drafting the reply was never posted, so only its usage is kept.
 
 2. **Settling in-flight sends:**
    If the timeout is genuine, `settleAbandonedStream` waits up to 5 seconds (`STREAM_ABANDONED_SETTLE_TIMEOUT_MS`)

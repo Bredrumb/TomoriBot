@@ -7,21 +7,27 @@ aiGenerated: true
 
 使用预构建的Grafana仪表板监控本地TomoriBot实例，以跟踪内存使用情况、缓存大小、令牌消耗和命令流量。
 
+在`.env`中添加Grafana密码。Grafana的数据库连接可以访问你的全部数据，所以缺少密码时Compose会拒绝执行监控命令：
+
+```sh
+GRAFANA_PASSWORD=choose-a-long-random-password
+```
+
 一起启动TomoriBot和Grafana：
 
 ```sh
 docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
-这个命令：
-- 启动TomoriBot和PostgreSQL（数据库在端口15432上公开）
-- 使用预配置的PostgreSQL数据源在端口3000上启动Grafana
-- 配置TomoriBot概览仪表板
-- 连接内部Docker网络上的所有服务
+这会启动TomoriBot、PostgreSQL和Grafana，并加载TomoriBot概览仪表板。
 
 在 [http://localhost:3000](http://localhost:3000) 打开Grafana：
 - **用户名**：`admin`
-- **密码**：通过`.env`中的`GRAFANA_PASSWORD`设置（未设置时默认为`admin`）
+- **密码**：`.env`中`GRAFANA_PASSWORD`的值
+
+Grafana只接受来自运行Docker的那台电脑的连接。要从另一台电脑打开，请用`ssh -L 3000:localhost:3000 <user>@<host>`通过SSH转发端口，然后在你自己的电脑上访问`http://localhost:3000`。
+
+如果你在Grafana要求设置密码之前就启动过它，它会继续使用最初保存的密码。请用那个密码登录（从未设置过则为`admin`），然后在Grafana的个人资料中修改。
 
 ## 自动置备的面板
 

@@ -1,15 +1,24 @@
 import type { Client } from "discord.js";
-import { measureChatTurnStage } from "@/utils/chat/turnLatency";
+import {
+  measureChatTurnStage,
+  recordChatTurnParticipantMemberOutcomes,
+  type ChatTurnParticipantMemberOutcomes,
+} from "@/utils/chat/turnLatency";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { buildDiscordUserAliases, buildMessageProxyIdentityAliases } from "@/utils/text/participants/aliases";
+import {
+  buildDiscordUserAliases,
+  buildMessageProxyIdentityAliases,
+  normalizeParticipantAlias,
+} from "@/utils/text/participants/aliases";
 import {
   createDiscordParticipantMemberDirectory,
   repositoryMessageProxyIdentityReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
   type MessageProxyIdentityReferenceSource,
+  type ReferenceMemberIdentity,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -21,6 +30,7 @@ import {
 } from "@/utils/text/participants/discoveryPlan";
 import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import {
+  containsStandaloneAlias,
   discoverReferencedPersonaIds,
   extractRealDiscordMentionIds,
   resolveUniqueParticipantAliasReferences,
@@ -55,6 +65,39 @@ function addRejection(
   const existing = rejections.find((rejection) => rejection.reason === reason);
   if (existing) existing.count += count;
   else rejections.push({ reason, count });
+}
+
+function summarizeMemberOutcomes(params: {
+  historyText: string;
+  resolvedMembers: readonly { userRow: UserRow; member: ReferenceMemberIdentity | null }[];
+  nicknameOnlyIds: ReadonlySet<string>;
+  cachedMemberIds: ReadonlySet<string>;
+  referencedIds: ReadonlySet<string>;
+}): ChatTurnParticipantMemberOutcomes {
+  const outcomes: ChatTurnParticipantMemberOutcomes = {
+    misses: 0,
+    nicknameMisses: 0,
+    nicknameSubstringFetches: 0,
+    nicknameSubstringReferences: 0,
+    fetchedReferences: 0,
+  };
+  for (const { userRow, member } of params.resolvedMembers) {
+    const discordId = userRow.user_disc_id;
+    const nicknameOnly = params.nicknameOnlyIds.has(discordId);
+    const referenced = params.referencedIds.has(discordId);
+    if (!member) {
+      outcomes.misses += 1;
+      if (nicknameOnly) outcomes.nicknameMisses += 1;
+    }
+    if (referenced && !params.cachedMemberIds.has(discordId)) outcomes.fetchedReferences += 1;
+    if (!nicknameOnly) continue;
+    // The candidate SQL admits nicknames by bare substring, so this counts rows admitted on a nickname the alias matcher rejects.
+    const savedNickname = normalizeParticipantAlias(userRow.user_nickname ?? "");
+    if (savedNickname && containsStandaloneAlias(params.historyText, savedNickname)) continue;
+    outcomes.nicknameSubstringFetches += 1;
+    if (referenced) outcomes.nicknameSubstringReferences += 1;
+  }
+  return outcomes;
 }
 
 export function buildPublicPersonaProfiles(
@@ -142,8 +185,8 @@ export async function resolveContextReferences(params: {
   }
 
   const realMentionIds = extractRealDiscordMentionIds(historyText);
-  const candidateDiscordIds = new Set<string>(realMentionIds);
-  for (const memberId of memberDirectory.cachedMemberIds()) candidateDiscordIds.add(memberId);
+  const cachedMemberIds = new Set(memberDirectory.cachedMemberIds());
+  const candidateDiscordIds = new Set<string>([...realMentionIds, ...cachedMemberIds]);
 
   const candidateSource = params.candidateSource ?? repositoryUserReferenceCandidateSource;
   const loadedCandidates = await candidateSource.loadCandidates({
@@ -162,25 +205,31 @@ export async function resolveContextReferences(params: {
   const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()].filter(
     (row) => !isMessageProxyIdentityUserId(row.user_disc_id),
   );
+  const nicknameOnlyIds = new Set(
+    loadedCandidates
+      .filter(({ userRow, evidence }) => !candidateDiscordIds.has(userRow.user_disc_id) && !evidence.hasServerActivity)
+      .map(({ userRow }) => userRow.user_disc_id),
+  );
 
-  const eligibleMembers = (
-    await measureChatTurnStage("participant_members_ms", () =>
-      Promise.all(
-        uniqueEligibleRows.map(async (userRow) => {
-          const member = await memberDirectory.resolveMember(userRow.user_disc_id);
-          if (!member) {
-            addRejection(rejections, "non_member");
-            return null;
-          }
-          if (member.bot) {
-            addRejection(rejections, "bot");
-            return null;
-          }
-          return { member, userRow };
-        }),
-      ),
-    )
-  ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
+  const resolvedMembers = await measureChatTurnStage("participant_members_ms", () =>
+    Promise.all(
+      uniqueEligibleRows.map(async (userRow) => ({
+        userRow,
+        member: await memberDirectory.resolveMember(userRow.user_disc_id),
+      })),
+    ),
+  );
+  const eligibleMembers = resolvedMembers.flatMap(({ userRow, member }) => {
+    if (!member) {
+      addRejection(rejections, "non_member");
+      return [];
+    }
+    if (member.bot) {
+      addRejection(rejections, "bot");
+      return [];
+    }
+    return [{ member, userRow }];
+  });
 
   // Proxy identities skip Discord directory lookup so shared alias resolution catches colliding names across pools.
   const messageProxyReferences = await (
@@ -240,6 +289,15 @@ export async function resolveContextReferences(params: {
     eligibleMembers
       .filter(({ userRow }) => referencedUserIds.has(userRow.user_disc_id))
       .map(({ userRow }) => [userRow.user_disc_id, userRow]),
+  );
+  recordChatTurnParticipantMemberOutcomes(
+    summarizeMemberOutcomes({
+      historyText,
+      resolvedMembers,
+      nicknameOnlyIds,
+      cachedMemberIds,
+      referencedIds: new Set(referencedUserRows.keys()),
+    }),
   );
   const userCandidates: DiscoveredParticipantCandidate[] = [...referencedUserIds].flatMap((userId) => {
     const reasons = referencedUserReasons.get(userId);
