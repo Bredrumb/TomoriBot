@@ -152,6 +152,72 @@ describe("chunkMessage hard breaks", () => {
       expect(chunk).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
     }
   });
+
+  it("splits a paragraph longer than the limit in paragraph mode", () => {
+    const text = "word ".repeat(520).trim();
+    const chunks = chunkMessage(text, "paragraphs", 1950);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.filter((chunk) => chunk.length > 2000)).toEqual([]);
+    expect(chunks.join("")).toBe(text);
+  });
+
+  it("splits an overlong code line into non-empty fenced messages that fit Discord", () => {
+    const line = "x".repeat(2500);
+    const chunks = chunkMessage(`\`\`\`js\n${line}\n\`\`\``, "lines", 1950);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(2000);
+      expect(chunk).toMatch(/^```js\n[^`]+```$/);
+    }
+    expect(
+      chunks
+        .map((chunk) => chunk.slice("```js\n".length, -3))
+        .join("")
+        .replaceAll("\n", ""),
+    ).toBe(line);
+  });
+
+  it("keeps a fenced word run with no newline as code instead of dropping it", () => {
+    const run = "a".repeat(2000);
+    const chunks = chunkMessage(`Here it is:\n\`\`\`${run}\`\`\`\nThanks`, "lines", 1950);
+    expect(chunks.filter((chunk) => chunk.length > 2000)).toEqual([]);
+    const code = chunks.filter((chunk) => chunk.startsWith("```"));
+    expect(code.map((chunk) => chunk.slice("```\n".length, -3)).join("")).toBe(run);
+  });
+
+  it("keeps blank lines inside a code block it splits", () => {
+    const content = `${"x".repeat(1000)}${"\n".repeat(101)}${"y".repeat(1000)}\n`;
+    const chunks = chunkMessage(`\`\`\`\n${content}\`\`\``, "lines", 1950);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.map((chunk) => chunk.slice("```\n".length, -3)).join("\n")).toBe(content);
+  });
+
+  it("moves a fence label too long to leave room for code into the code", () => {
+    const label = "a".repeat(1000);
+    const body = "b".repeat(1500);
+    const chunks = chunkMessage(`\`\`\`${label}\n${body}\`\`\``, "lines", 1950);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(2000);
+      expect(chunk.startsWith("```\n")).toBe(true);
+    }
+    expect(chunks.map((chunk) => chunk.slice("```\n".length, -3)).join("\n")).toBe(`${label}\n${body}`);
+  });
+});
+
+describe("chunkMessage message order", () => {
+  const modes = ["lines", "paragraphs", "sentences"] as const;
+
+  it("sends a short code block between the text around it", () => {
+    for (const mode of modes) {
+      expect(chunkMessage("intro\n```js\nx\n```\noutro", mode, 1950)).toEqual(["intro", "```js\nx\n```", "outro"]);
+    }
+  });
+
+  it("keeps a mid-line URL inside its line", () => {
+    for (const mode of modes) {
+      expect(chunkMessage("see https://example.com/a now", mode, 1950)).toEqual(["see https://example.com/a now"]);
+    }
+  });
 });
 
 describe("chunkMessage HEAVY protected spans", () => {

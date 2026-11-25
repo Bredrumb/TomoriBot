@@ -1083,7 +1083,7 @@ class UserRepository implements IRepository<UserExportShape> {
       // retry helper.
       await withTransientDbRetry(async () => {
         await sql.begin(async (tx) => {
-          const [row] = await tx`
+          let [row] = await tx`
             WITH inserted_user AS (
               INSERT INTO users (
                 user_disc_id,
@@ -1106,6 +1106,9 @@ class UserRepository implements IRepository<UserExportShape> {
               AND NOT EXISTS (SELECT 1 FROM inserted_user)
             LIMIT 1
           `;
+          // A row committed by a concurrent registration that this insert waited on is outside the statement's READ
+          // COMMITTED snapshot, so only a new statement can read it.
+          if (!row?.user_id) [row] = await tx`SELECT user_id FROM users WHERE user_disc_id = ${userDiscId}`;
 
           if (!row?.user_id) {
             throw new Error(`User ${userDiscId} was not returned after registration upsert`);

@@ -637,6 +637,12 @@ async function getOrCreateWebhookInternal(
       });
       created = true;
       log.success(`[Webhook Manager] Created webhook for channel ${channelId} (${channel.name})`);
+    } else {
+      assertOwned();
+      // An admin can move a webhook to another channel without changing its ID, and the old channel's row would then
+      // block this binding on the unique webhook ID.
+      const releasedChannelIds = await serverRepository.releaseManagedWebhookFromOtherChannels(webhook.id, channelId);
+      for (const releasedChannelId of releasedChannelIds) invalidateWebhookCache(releasedChannelId, webhook.id);
     }
 
     assertOwned();
