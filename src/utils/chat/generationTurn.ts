@@ -549,7 +549,7 @@ async function admitServerRouteTextQuota(context: ChatTurnContext): Promise<bool
   });
 
   if (!quota.allowed) {
-    markTextQuotaRefused(context.textQuotaTriggerKey);
+    markTextQuotaRefused(context.textQuotaTriggerKey, quota.reason);
     log.info(`Refusing the server model fallback for user ${context.userDiscId}: the server text quota is exhausted.`);
     return false;
   }

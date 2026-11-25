@@ -650,6 +650,8 @@ export async function execute(
       });
       return;
     }
+    // Settled before the size check and Discord delivery, because the provider has already billed the returned video.
+    quotaConsumed = true;
 
     if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
       const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
@@ -693,8 +695,6 @@ export async function execute(
       files: [attachment],
     });
 
-    // Delivery succeeded, so the reservation is spent rather than released.
-    quotaConsumed = true;
     // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {
       statRepository.recordStat({

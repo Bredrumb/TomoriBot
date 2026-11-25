@@ -13,6 +13,7 @@ OpenRouter speech models in `/personal providers`.
 
 Ask a persona to send a voice message or use `/generate voice-message`. Enable voice messages under
 `/config` > `Permissions` and configure the persona's voice under `/config` > `Persona` > `Voice`.
+A persona sends at most one voice message per reply.
 
 There are two TTS types:
 

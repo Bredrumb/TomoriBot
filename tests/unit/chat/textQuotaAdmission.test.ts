@@ -91,7 +91,7 @@ describe("text quota admission", () => {
 
     const result = await checkTextQuotaForAdmission(admissionParams());
 
-    expect(result).toEqual({ allowed: false, state: null });
+    expect(result).toEqual({ allowed: false, state: null, reason: "unavailable" });
     expect(embeds).toContainEqual(
       expect.objectContaining({
         titleKey: "genai.text_quota_unavailable_title",
@@ -157,7 +157,7 @@ describe("text quota admission", () => {
 
       const result = await checkTextQuotaForAdmission(admissionParams());
 
-      expect(result).toEqual({ allowed: false, state: null });
+      expect(result).toEqual({ allowed: false, state: null, reason: "exceeded" });
       expect(embeds).toContainEqual(
         expect.objectContaining({
           titleKey: "genai.text_quota_exceeded_title",

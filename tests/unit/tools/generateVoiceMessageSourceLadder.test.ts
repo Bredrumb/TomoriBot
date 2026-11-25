@@ -535,3 +535,20 @@ describe("GenerateVoiceMessageTool /kill cancellation", () => {
     expect(deliveryCount).toBe(0);
   });
 });
+
+describe("GenerateVoiceMessageTool per-reply limit", () => {
+  it("refuses a second synthesis in the same reply without calling the speech provider", async () => {
+    activeEndpoint = makeEndpoint("clone");
+    hostedTargets = null;
+    synthesisRequests.length = 0;
+    const context = { ...makeContext(SAMPLE), streamContext: {} } as ToolContext;
+
+    const first = await new GenerateVoiceMessageTool().execute({ title: "one", script: "Good morning" }, context);
+    const second = await new GenerateVoiceMessageTool().execute({ title: "two", script: "Good night" }, context);
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(false);
+    expect(second.error).toBe(localizedCopy("en-US", "tools.generate_voice_message.turn_limit"));
+    expect(synthesisRequests).toHaveLength(1);
+  });
+});

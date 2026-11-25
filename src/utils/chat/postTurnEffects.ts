@@ -474,12 +474,25 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }
 
+// A provider that answered has billed the call even when no text reached the channel, so only a turn whose every
+// provider call failed gets its unit back.
+function providerAnswered(result: GenerationTurnResult): boolean {
+  return result.streamResults.some(
+    (stream) =>
+      stream.usage !== undefined ||
+      stream.answeredBeforeStop === true ||
+      stream.status === "completed" ||
+      stream.status === "function_call" ||
+      stream.status === "empty_response",
+  );
+}
+
 async function settleTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   if (
     context.shouldApplyTextQuota &&
     context.textQuotaState &&
     !context.textQuotaState.consumed &&
-    result.personaResponses.length > 0
+    (result.personaResponses.length > 0 || providerAnswered(result))
   ) {
     context.textQuotaState.consumed = true;
     context.textQuotaState.reservation = null;

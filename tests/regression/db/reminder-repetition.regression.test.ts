@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { serverScheduleRepository } from "@/utils/db/repositories/ServerScheduleRepository";
-import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
+import { cleanupFixtures, FIXTURE_IDS, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("reminder repetition", () => {
@@ -61,7 +61,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("reminder repetition", () => {
     expect(unchanged).toMatchObject({ repeat_remaining_count: 2, daily_window_start_minutes: 540 });
   });
 
-  it("carries the server offset to the scheduler and keeps the anchor while edits stay on the same local day", async () => {
+  it("carries the server offset and creator to the scheduler and keeps the anchor while edits stay on the same local day", async () => {
     const created = await serverScheduleRepository.addReminder({
       server_id: refs.serverId,
       channel_disc_id: "100000000000000001",
@@ -70,13 +70,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("reminder repetition", () => {
       reminder_purpose: "Pay rent.",
       reminder_time: new Date(Date.now() - 1_000),
       repetition: { unit: "months", interval: 1 },
-      created_by_user_id: null,
+      created_by_user_id: refs.userId,
     });
     const reminderId = created?.reminder_id as number;
     expect(created).toMatchObject({ repetition_interval_months: 1, repetition_interval_hours: null });
 
     const due = (await serverScheduleRepository.getDueReminders())?.find((row) => row.reminder_id === reminderId);
     expect(due?.server_timezone_offset).toBe(9);
+    expect(due?.created_by_user_disc_id).toBe(FIXTURE_IDS.userDiscId);
 
     // Relative-time reminders store seconds; at UTC+9 this is Feb 28 09:00:37 on the server's calendar.
     const clampedOccurrence = new Date("2099-02-28T00:00:37.123Z");

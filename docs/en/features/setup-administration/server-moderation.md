@@ -23,6 +23,14 @@ usage per user and server-wide:
 
 Server-wide pools reset automatically on a configurable interval in days.
 
+What counts:
+
+- **Text** counts replies, not cost. Each message the bot answers uses one unit, however many tool steps the
+  answer takes, even if it sends no text or someone stops it with `/kill` once the model has started answering.
+  A message whose model request fails outright, or that is stopped before the model answers, is refunded. Each run of a member's scheduled task uses one of that member's units.
+- **Images and videos** use a unit once the provider accepts the request, even if the result is killed or too
+  large to post, because the provider still bills it.
+
 ## User BYOK (Bring Your Own Key)
 <!-- anchor: user-byok-bring-your-own-key -->
 
@@ -30,9 +38,8 @@ In `/moderation` > Member Access, you can control whether members may use server
 
 - **Server Models Allowed** (default): members use server-configured providers.
 - **Personal Providers Required**: members must configure their own API keys via
-  `/personal providers`. The server pays nothing for member-initiated messages.
-  Server-initiated actions (such as automated greetings or scheduled tasks) still use the server
-  provider.
+  `/personal providers`. The server pays nothing for member-initiated messages or members' scheduled
+  tasks. Server-initiated actions (such as automated greetings) still use the server provider.
 
 Members configure their personal providers under
 [Personalization](/features/knowledge/personalization/#your-own-providers).

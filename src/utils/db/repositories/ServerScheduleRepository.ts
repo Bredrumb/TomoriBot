@@ -302,10 +302,12 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
             r.*,
             s.server_disc_id,
             s.is_dm_channel AS server_is_dm_channel,
-            COALESCE(scc.timezone_offset, 0)::float8 AS server_timezone_offset
+            COALESCE(scc.timezone_offset, 0)::float8 AS server_timezone_offset,
+            creator.user_disc_id AS created_by_user_disc_id
           FROM reminders r
           JOIN servers s ON s.server_id = r.server_id
           LEFT JOIN server_chat_configs scc ON scc.server_id = r.server_id
+          LEFT JOIN users creator ON creator.user_id = r.created_by_user_id
           WHERE COALESCE(r.next_attempt_at, r.reminder_time) <= CURRENT_TIMESTAMP
             AND ${ownedServersOnly(topology)}
           ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC

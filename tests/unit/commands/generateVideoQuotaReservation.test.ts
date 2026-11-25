@@ -40,6 +40,7 @@ let modal: ReturnType<typeof makeFakeInteraction>;
 let reserveResult: Awaited<ReturnType<typeof videoQuota.reserveVideoQuota>>;
 let reserveError: Error | null;
 let providerError: Error | null;
+let providerVideo: Buffer;
 let providerCalls: number;
 const release = { calls: [] as Array<{ serverId: number; userDiscId: string; reservation: QuotaReservation }> };
 
@@ -50,6 +51,7 @@ beforeEach(() => {
   providerCalls = 0;
   reserveError = null;
   providerError = null;
+  providerVideo = Buffer.from("fixture video");
   release.calls = [];
   reserveResult = { allowed: true, reservation };
 
@@ -106,7 +108,7 @@ beforeEach(() => {
     providerCalls++;
     if (providerError) throw providerError;
     return {
-      videoData: Buffer.from("fixture video"),
+      videoData: providerVideo,
       mimeType: "video/mp4",
       filename: "generated.mp4",
     };
@@ -152,6 +154,16 @@ describe("generate video quota reservation", () => {
 
     expect(providerCalls).toBe(1);
     expect(release.calls).toEqual([{ serverId: state.server_id, userDiscId: "fake_user_id", reservation }]);
+  });
+
+  it("keeps the reservation when the returned video is too large to post", async () => {
+    providerVideo = Buffer.alloc(25 * 1024 * 1024 + 1);
+
+    await executeVideo();
+
+    expect(providerCalls).toBe(1);
+    expect(modalPayloadText()).toContain(localizedCopy("en-US", "commands.generate.video.file_too_large_title"));
+    expect(release.calls).toEqual([]);
   });
 
   it("refuses a claimed unit and never calls the provider when the cap was reached", async () => {

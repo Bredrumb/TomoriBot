@@ -673,14 +673,18 @@ async function streamOnce(
     // Leaving the chunk loop closes the provider generator, but an adapter that does not cancel its
     // reader on early return would keep the request generating text nobody can deliver.
     if (result.stopReason === "pending_response_limit") abortController.abort();
-    return result;
+    return result.status === "stopped_by_user" && sawStreamProgress ? { ...result, answeredBeforeStop: true } : result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
       // Return immediately on a pending stop (such as /kill) because no fallback runs to continue in-flight
       // sends.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         const settled = params.context.responseReview ? await settleAbandonedStream(streamPromise) : undefined;
-        return { status: "stopped_by_user", usage: settled?.usage };
+        return {
+          status: "stopped_by_user",
+          usage: settled?.usage,
+          ...(sawStreamProgress ? { answeredBeforeStop: true } : {}),
+        };
       }
 
       const providerName = params.tomoriState.llm.llm_provider;
@@ -729,7 +733,11 @@ async function streamOnce(
     }
     if (params.context.responseReview && StreamOrchestrator.hasStopRequest(channelId)) {
       const settled = await settleAbandonedStream(streamPromise);
-      return { status: "stopped_by_user", usage: settled?.usage };
+      return {
+        status: "stopped_by_user",
+        usage: settled?.usage,
+        ...(sawStreamProgress ? { answeredBeforeStop: true } : {}),
+      };
     }
     throw error;
   } finally {

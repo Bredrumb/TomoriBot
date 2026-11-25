@@ -32,6 +32,7 @@ import type { ChatIncoming } from "@/utils/chat/types";
 import {
   buildTextQuotaResetInfo,
   textQuotaTriggerStates,
+  type TextQuotaRefusalReason,
   type TextQuotaTriggerState,
 } from "@/utils/chat/textQuotaState";
 import { getServerActiveMessageCount, getUserActiveMessageCount } from "@/utils/chat/channelActivity";
@@ -237,13 +238,11 @@ export async function enforceServerTriggerCooldownForAdmission(params: {
 // Intentionally ignores credential route, because a turn planned on personal credentials only hits server text quota
 // when it falls back to server.
 export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
-  return (
-    incoming.textQuotaSource === "user" &&
-    !isDMChannel &&
-    !incoming.isStopResponse &&
-    !incoming.reminderRecipientID &&
-    !incoming.reminderData?.self_reminder
-  );
+  if (isDMChannel || incoming.isStopResponse) return false;
+  // Every occurrence of a member's scheduled task spends the server model, so it charges that member; tasks without a
+  // creator stay exempt.
+  if (incoming.reminderData) return incoming.reminderData.created_by_user_id != null;
+  return incoming.textQuotaSource === "user";
 }
 
 export async function checkTextQuotaForAdmission(params: {
@@ -255,7 +254,10 @@ export async function checkTextQuotaForAdmission(params: {
   channel: TextChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel;
   locale: string;
   notifyUser?: boolean;
-}): Promise<{ allowed: true; state: TextQuotaTriggerState | null } | { allowed: false; state: null }> {
+}): Promise<
+  | { allowed: true; state: TextQuotaTriggerState | null }
+  | { allowed: false; state: null; reason: TextQuotaRefusalReason }
+> {
   if (!params.shouldApplyTextQuota) {
     return { allowed: true, state: null };
   }
@@ -288,7 +290,7 @@ export async function checkTextQuotaForAdmission(params: {
         descriptionKey: "genai.text_quota_unavailable_description",
       });
     }
-    return { allowed: false, state: null };
+    return { allowed: false, state: null, reason: "unavailable" };
   }
 
   if (!quotaCheck.allowed) {
@@ -320,7 +322,7 @@ export async function checkTextQuotaForAdmission(params: {
         tipKeys,
       });
     }
-    return { allowed: false, state: null };
+    return { allowed: false, state: null, reason: "exceeded" };
   }
 
   const textQuotaStateForTrigger: TextQuotaTriggerState = existingTextQuotaState ?? {

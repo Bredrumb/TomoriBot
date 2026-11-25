@@ -786,7 +786,8 @@ export class GenerateImageNaiTool extends BaseTool {
     let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let failureScope: "server" | "personal" | undefined;
     let quotaReservation: QuotaReservation | null = null;
-    let quotaDelivered = false;
+    let providerRequested = false;
+    let quotaSpent = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -1097,6 +1098,8 @@ export class GenerateImageNaiTool extends BaseTool {
 
         const inpaintModel = generationSource.model;
 
+        context.abortSignal?.throwIfAborted();
+        providerRequested = true;
         imageBuffer = await withProviderUsageContext(creds.usageContext, () =>
           this.generateInpaintImage(
             apiKey,
@@ -1114,6 +1117,8 @@ export class GenerateImageNaiTool extends BaseTool {
 
         log.success(`[NAI] Inpainting complete with model "${inpaintModel}"`);
       } else {
+        context.abortSignal?.throwIfAborted();
+        providerRequested = true;
         imageBuffer = await withProviderUsageContext(creds.usageContext, () =>
           generateNovelAiImage({
             apiKey,
@@ -1127,9 +1132,10 @@ export class GenerateImageNaiTool extends BaseTool {
           }),
         );
       }
+      quotaSpent = true;
 
       // /kill stops awaiting this tool but cannot stop it (the inpaint path takes no signal), so
-      // posting now would deliver and charge for a reply the user killed.
+      // posting now would deliver a reply the user killed.
       if (context.abortSignal?.aborted) {
         return { success: false, error: "NAI image generation was cancelled." };
       }
@@ -1157,7 +1163,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1203,6 +1208,7 @@ export class GenerateImageNaiTool extends BaseTool {
       }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
+        quotaSpent ||= providerRequested;
         return { success: false, error: "NAI image generation was cancelled." };
       }
       const errorKind = classifyNaiImageError(error);
@@ -1237,7 +1243,7 @@ export class GenerateImageNaiTool extends BaseTool {
                 : undefined,
       });
     } finally {
-      if (quotaReservation && !quotaDelivered) {
+      if (quotaReservation && !quotaSpent) {
         await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
       }
     }

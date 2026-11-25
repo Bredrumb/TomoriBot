@@ -5,12 +5,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock,
 // process-global `bun test` runs.
 import * as realMatrix from "@/utils/bridges/matrix";
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realUserCache from "@/utils/cache/userCache";
 import * as realRepositories from "@/utils/db/repositories";
 import * as realMentionHelper from "@/utils/discord/mentionHelper";
 import * as realWebhookManager from "@/utils/discord/webhookManager";
 import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
 import * as realLogger from "@/utils/misc/logger";
-import type { QueuedMessageDiscardHandler } from "@/utils/chat/types";
+import type { ChatIncoming, QueuedMessageDiscardHandler } from "@/utils/chat/types";
+import { markTextQuotaRefused, type TextQuotaRefusalReason } from "@/utils/chat/textQuotaState";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 import type { ReminderOccurrence } from "@/utils/text/processors/reminderRepetition";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
@@ -31,12 +35,14 @@ const scheduleReminderRetryMock = mock(
 const deleteReminderByIdMock = mock(async () => true);
 const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
 const ensureDiscordUserMentionMock = mock(async () => {});
+const blacklistedCreators = new Set<string>();
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/events/messageCreate/tomoriChat": realTomoriChat,
   "@/utils/discord/mentionHelper": realMentionHelper,
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/cache/userCache": realUserCache,
   "@/utils/discord/webhookManager": realWebhookManager,
   "@/utils/bridges/matrix": realMatrix,
 });
@@ -66,6 +72,11 @@ scopedMock.module("@/utils/discord/mentionHelper", () => ({
 scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
   ...realTomoriStateCache,
   getCachedAllPersonas: mock(async () => []),
+}));
+
+scopedMock.module("@/utils/cache/userCache", () => ({
+  ...realUserCache,
+  getCachedBlacklistStatus: async (_serverDiscId: string, userDiscId: string) => blacklistedCreators.has(userDiscId),
 }));
 
 scopedMock.module("@/utils/discord/webhookManager", () => ({
@@ -705,5 +716,131 @@ describe("ReminderProcessor delivery retry cap", () => {
       const innerContent = description.slice(fenceStart + "```text\n".length, fenceEnd);
       expect(innerContent).not.toContain("``");
     }
+  });
+});
+
+describe("ReminderProcessor scheduled task text quota", () => {
+  beforeAll(initializeLocalizer);
+
+  afterEach(() => {
+    blacklistedCreators.clear();
+    getDueRemindersMock.mockImplementation(async () => []);
+    tomoriChatMock.mockImplementation(async () => "run");
+    tomoriChatMock.mockClear();
+    deleteReminderByIdMock.mockClear();
+    rescheduleReminderMock.mockClear();
+    scheduleReminderRetryMock.mockClear();
+  });
+
+  function refuseQuota(reason: TextQuotaRefusalReason) {
+    tomoriChatMock.mockImplementation(async (input) => {
+      if (input.textQuotaTriggerKey) markTextQuotaRefused(input.textQuotaTriggerKey, reason);
+      await input.onGenerationResult?.({ status: "skipped", streamResults: [], personaResponses: [] });
+      return "run";
+    });
+  }
+
+  function sentNotice(channel: { send: { mock: { calls: unknown[][] } } }) {
+    const payload = channel.send.mock.calls[0]?.[0] as
+      | { content?: string; embeds?: Array<{ toJSON(): { title?: string } }> }
+      | undefined;
+    return { content: payload?.content, title: payload?.embeds?.[0]?.toJSON().title ?? "" };
+  }
+
+  it("posts the no-AI notice at once when the creator's quota is used up, pinging the creator for a task", async () => {
+    refuseQuota("exceeded");
+    for (const { selfReminder, mention, titleKey } of [
+      { selfReminder: true, mention: "<@member_007>", titleKey: "reminders.task_quota_title" },
+      { selfReminder: false, mention: "<@user_001>", titleKey: "reminders.reminder_quota_title" },
+    ]) {
+      getDueRemindersMock.mockImplementation(async () => [
+        makeReminder({
+          server_disc_id: "guild_001",
+          self_reminder: selfReminder,
+          created_by_user_id: 7,
+          created_by_user_disc_id: "member_007",
+          reminder_time: new Date(Date.now() - (selfReminder ? 1_000 : 2_000)),
+        }),
+      ]);
+      const client = makeClient();
+      const channel = await client.channels.fetch();
+
+      await new ReminderProcessor(client as never).processDueReminders();
+
+      expect(scheduleReminderRetryMock).not.toHaveBeenCalled();
+      expect(sentNotice(channel).content).toBe(mention);
+      expect(sentNotice(channel).title).toContain(localizedCopy("en-US", titleKey));
+    }
+  });
+
+  it("keeps a recurring schedule's failure count when the quota notice posts", async () => {
+    refuseQuota("exceeded");
+    getDueRemindersMock.mockImplementation(async () => [
+      makeReminder({
+        server_disc_id: "guild_001",
+        repetition_interval_hours: 1,
+        failed_occurrence_count: 2,
+        created_by_user_id: 7,
+        created_by_user_disc_id: "member_007",
+      }),
+    ]);
+
+    await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+    expect(rescheduleReminderMock.mock.calls.map(([id, , failed]) => [id, failed])).toEqual([[42, 2]]);
+  });
+
+  it("keeps retrying when the quota counters are unavailable", async () => {
+    refuseQuota("unavailable");
+    getDueRemindersMock.mockImplementation(async () => [
+      makeReminder({ server_disc_id: "guild_001", created_by_user_id: 7, created_by_user_disc_id: "member_007" }),
+    ]);
+    const client = makeClient();
+    const channel = await client.channels.fetch();
+
+    await new ReminderProcessor(client as never).processDueReminders();
+
+    expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(1);
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it("charges each member-created occurrence to its creator and leaves creator-less tasks exempt", async () => {
+    const { shouldApplyServerTextQuota } = await import("@/utils/chat/admissionGuards");
+    getDueRemindersMock.mockImplementation(async () => [
+      makeReminder({
+        server_disc_id: "guild_001",
+        self_reminder: true,
+        repetition_interval_minutes: 1,
+        created_by_user_id: 7,
+        created_by_user_disc_id: "member_007",
+      }),
+      makeReminder({ reminder_id: 43, server_disc_id: "guild_001", created_by_user_id: null }),
+    ]);
+
+    await new ReminderProcessor(makeClient() as never).processDueReminders();
+
+    const [memberTask, relayTask] = tomoriChatMock.mock.calls.map(([input]) => input as ChatIncoming);
+    expect(memberTask?.textQuotaUserDiscId).toBe("member_007");
+    expect(memberTask && shouldApplyServerTextQuota(memberTask, false)).toBe(true);
+    expect(relayTask && shouldApplyServerTextQuota(relayTask, false)).toBe(false);
+  });
+
+  it("pauses a blacklisted creator's schedules silently without counting a failure", async () => {
+    blacklistedCreators.add("member_007");
+    const creator = { server_disc_id: "guild_001", created_by_user_id: 7, created_by_user_disc_id: "member_007" };
+    getDueRemindersMock.mockImplementation(async () => [
+      makeReminder({ ...creator, failed_occurrence_count: 1, repetition_interval_hours: 1 }),
+      makeReminder({ ...creator, reminder_id: 43 }),
+    ]);
+    const client = makeClient();
+    const channel = await client.channels.fetch();
+
+    await new ReminderProcessor(client as never).processDueReminders();
+
+    expect(tomoriChatMock).not.toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(rescheduleReminderMock.mock.calls.map(([id, , failed]) => [id, failed])).toEqual([[42, 1]]);
+    expect(deleteReminderByIdMock).toHaveBeenCalledTimes(1);
+    expect(deleteReminderByIdMock).toHaveBeenCalledWith(43);
   });
 });

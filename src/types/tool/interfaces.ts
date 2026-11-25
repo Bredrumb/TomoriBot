@@ -107,6 +107,7 @@ export interface StreamingContext {
   deliberateToolAllowedNames?: string[];
   disableReminderTool?: boolean;
   disableTaskCreation?: boolean;
+  voiceMessagesSynthesized?: number;
   // Written per attempt by applyAssistantPrefill, so the stream layer can strip any echoed prefix instead of
   // displaying it.
   outputPrefill?: string;

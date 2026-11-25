@@ -140,7 +140,7 @@ Tool dispatch rechecks provider/model support, declared flags, live context, and
 ## Runtime guardrails and anti-abuse
 
 - **Cooldown system**: rate-limits slash commands by category and message triggers by user, channel, or guild.
-- **Generation quotas**: text, image, and video generation quotas tracked by `QuotaRepository` reserve one unit atomically before paid work, refuse the request when the counters are unavailable, and prevent token and resource exhaustion.
+- **Generation quotas**: text, image, and video generation quotas tracked by `QuotaRepository` reserve one unit atomically before paid work, refuse the request when the counters are unavailable, and prevent token and resource exhaustion. A unit is refunded only when no provider call succeeded (text) or the request was never accepted (image and video), because killed, silent, or unpostable work is still billed. Each occurrence of a member's scheduled task charges that member.
 - **Stream flood guard**: limits streaming update chunks via `STREAMING_LIMITS.MAX_FLUSH_COUNT`.
 - **Memory pressure guard**: `memoryGuard` monitors container RSS. Approaching critical thresholds initiates `clearEmergencyCaches()` and forced garbage collection.
 - **Bounded media downloads**: `safeDownload()` enforces byte ceilings, timeouts, and content-type validation for external attachments, avatar imports, and provider media.

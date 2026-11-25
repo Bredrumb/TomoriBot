@@ -38,6 +38,9 @@ import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { notifyProviderToolFailure } from "@/utils/provider/providerUsage";
 
+// One per reply because text quota counts replies while each synthesis is billed on its own.
+const MAX_VOICE_MESSAGES_PER_TURN = 1;
+
 // Keys match the speech endpoint's script_markup setting so the tool registry can proxy variants, defaulting to
 // "bracket-tags" for ElevenLabs or unset endpoints.
 export const VOICE_TOOL_VARIANTS = {
@@ -242,6 +245,9 @@ export class GenerateVoiceMessageTool extends BaseTool {
           : { kind: "elevenlabs", voiceId: candidate.voiceId ?? "" };
     const elevenLabsApiKey = source.kind === "elevenlabs" ? speechEndpoint?.apiKey || legacyKey : "";
     const endpointApiKey = speechEndpoint?.apiKey ?? "";
+    if ((context.streamContext?.voiceMessagesSynthesized ?? 0) >= MAX_VOICE_MESSAGES_PER_TURN) {
+      return { success: false, error: localizer(context.locale, "tools.generate_voice_message.turn_limit") };
+    }
 
     const synthesisResult = await synthesizeVoiceMessage({
       target: speechEndpoint ?? undefined,
@@ -269,6 +275,9 @@ export class GenerateVoiceMessageTool extends BaseTool {
       },
       ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
     });
+    if (synthesisResult.success && synthesisResult.audioBuffer && context.streamContext) {
+      context.streamContext.voiceMessagesSynthesized = (context.streamContext.voiceMessagesSynthesized ?? 0) + 1;
+    }
 
     // /kill stops awaiting this tool but cannot stop it, so synthesis that finished before the abort
     // landed still reaches here; delivering now would post a voice message the user killed.
