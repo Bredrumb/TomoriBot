@@ -187,7 +187,7 @@ The `update_user_info` tool (`src/tools/functionCalls/updateUserInfoTool.ts`) up
 The `review_capabilities` tool inspects system configuration dynamically:
 
 - **Inventory sources:** Gathers active tools from `ToolRegistry` runtime availability and registered commands from cached `loadCommandData()`.
-- **Privilege boundaries:** General members receive safe reports detailing commands and feature states. Detailed reports containing credential presence, rotation pool counts, internal identifiers, and system-prompt metadata require the requesting member to hold `ManageGuild` permissions. Invocations without verified member context fail closed with the redacted report.
+- **Privilege boundaries:** General members receive safe reports detailing commands and feature states. Detailed reports containing credential presence, rotation pool counts, internal identifiers, and system-prompt metadata require the requesting member to hold `ManageGuild` permissions. Invocations without verified member context fail closed with the redacted report, including scheduled tasks and other turns that borrow an anchor message, whose author is not the requester.
 
 ## NovelAI constraints
 
