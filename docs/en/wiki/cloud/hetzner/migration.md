@@ -107,6 +107,14 @@ the schema owner's `admin-secrets.json`, runtime `secrets.db.json`, and the back
 file. It starts only PostgreSQL and SearXNG. Migration containers use the owner identity;
 the bot receives only the DML identity. PostgreSQL's superuser uses peer authentication.
 
+PostgreSQL preloads `pg_stat_statements` with utility statements untracked. Bootstrap creates the
+extension in the `postgres` database, so a restore that recreates `tomoribot` keeps it, and only
+the superuser can read it. To list the statements using the most database time, run as root:
+
+```bash
+docker exec -u postgres tomoribot-postgres psql -X -d postgres -c "SELECT calls, round(total_exec_time) AS total_ms, round(mean_exec_time::numeric, 1) AS mean_ms, left(query, 100) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 15"
+```
+
 Install the dedicated Vertex service-account key through
 `sudo /usr/local/sbin/tomoribot-install-vertex-key`, supplying JSON on stdin over SSH. The host
 must have only Vertex AI User and Service Usage Consumer access for that identity, plus any

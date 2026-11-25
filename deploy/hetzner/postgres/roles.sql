@@ -18,3 +18,7 @@ GRANT CONNECT ON DATABASE tomoribot TO tomoribot_runtime, tomori_backup;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- pg_stat_statements lives in the postgres database so a restore that recreates tomoribot cannot drop it.
+\connect postgres
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
