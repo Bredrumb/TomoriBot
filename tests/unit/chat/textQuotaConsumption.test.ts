@@ -132,6 +132,50 @@ describe("text quota settlement after a turn", () => {
     expect(context.textQuotaState.reservationReleased).toBe(true);
   });
 
+  it("keeps the reservation when billed provider calls deliver no text", async () => {
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+    const { MAX_FUNCTION_CALL_ITERATIONS } = await import("@/utils/chat/toolLoop");
+    const billedToolCalls = (count: number): GenerationTurnResult["streamResults"] =>
+      Array.from({ length: count }, () => ({
+        status: "function_call",
+        data: { name: "search_memories", args: { query: "fixture" } },
+        usage: { inputTokens: 40_000, outputTokens: 60 },
+      }));
+    const results: GenerationTurnResult[] = [
+      { status: "timeout", streamResults: billedToolCalls(MAX_FUNCTION_CALL_ITERATIONS), personaResponses: [] },
+      { status: "stopped_by_user", streamResults: billedToolCalls(3), personaResponses: [] },
+      {
+        status: "stopped_by_user",
+        streamResults: [{ status: "stopped_by_user", answeredBeforeStop: true }],
+        personaResponses: [],
+      },
+    ];
+
+    for (const result of results) {
+      releaseCalls.length = 0;
+      const context = makeArmedContext();
+
+      await runPostTurnEffects(context, result);
+
+      expect(releaseCalls).toEqual([]);
+      expect(context.textQuotaState.consumed).toBe(true);
+    }
+  });
+
+  it("releases the reservation when a stop lands before the provider answers", async () => {
+    releaseCalls.length = 0;
+    const context = makeArmedContext();
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    await runPostTurnEffects(context, {
+      status: "stopped_by_user",
+      streamResults: [{ status: "stopped_by_user" }],
+      personaResponses: [],
+    });
+
+    expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
+  });
+
   it("does not release a trigger that already consumed its reservation", async () => {
     releaseCalls.length = 0;
     const context = makeArmedContext();

@@ -515,7 +515,11 @@ describe("per-persona planning", () => {
   });
 
   it("limits refused quota notices across matched personas", async () => {
-    const quota = spyOn(guards, "checkTextQuotaForAdmission").mockResolvedValue({ allowed: false, state: null });
+    const quota = spyOn(guards, "checkTextQuotaForAdmission").mockResolvedValue({
+      allowed: false,
+      state: null,
+      reason: "exceeded",
+    });
     try {
       resolutions.push(resolved("server"), resolved("server"));
       expect((await planChatTurns(lockedTurn())).turns).toEqual([]);

@@ -873,7 +873,8 @@ export class GenerateImageTool extends BaseTool {
     let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let quotaReservation: QuotaReservation | null = null;
-    let quotaDelivered = false;
+    let providerRequested = false;
+    let quotaSpent = false;
     let generationRoute:
       | { provider: string; modelId: number; model: string; credentialSource: "server" | "personal" }
       | undefined;
@@ -1198,6 +1199,11 @@ export class GenerateImageTool extends BaseTool {
           ? await resolveNativeImageGenerationCapability(executionProvider)
           : null;
 
+      const submitToProvider = <T>(request: () => Promise<T>): Promise<T> => {
+        context.abortSignal?.throwIfAborted();
+        providerRequested = true;
+        return withProviderUsageContext(usageContext, request);
+      };
       if (creds.customEndpoint) {
         const endpoint = creds.customEndpoint;
         const handoff =
@@ -1208,7 +1214,7 @@ export class GenerateImageTool extends BaseTool {
               })
             : null;
         try {
-          const result = await withProviderUsageContext(usageContext, () =>
+          const result = await submitToProvider(() =>
             generateCustomImageViaEndpoint({
               endpoint,
               apiKey,
@@ -1253,7 +1259,7 @@ export class GenerateImageTool extends BaseTool {
           if (tooLarge && providerReferenceImages.length > 0) {
             log.warn("Custom endpoint request was too large; retrying with tiny single-reference payload");
             const tinyRef = await this.buildTinyReferenceImage(providerReferenceImages[0]);
-            const retryResult = await withProviderUsageContext(usageContext, () =>
+            const retryResult = await submitToProvider(() =>
               generateCustomImageViaEndpoint({
                 endpoint,
                 apiKey,
@@ -1296,7 +1302,7 @@ export class GenerateImageTool extends BaseTool {
           void handoff?.restore();
         }
       } else if (nativeImageProvider) {
-        const result = await withProviderUsageContext(usageContext, () =>
+        const result = await submitToProvider(() =>
           nativeImageProvider.generateNativeImage({
             apiKey,
             model: modelCodename,
@@ -1308,7 +1314,7 @@ export class GenerateImageTool extends BaseTool {
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "openrouter") {
-        const result = await withProviderUsageContext(usageContext, async () =>
+        const result = await submitToProvider(async () =>
           generateOpenRouterImage({
             apiKey,
             modelCodename,
@@ -1326,7 +1332,7 @@ export class GenerateImageTool extends BaseTool {
           model: modelCodename,
         });
 
-        const response = await withProviderUsageContext(usageContext, () =>
+        const response = await submitToProvider(() =>
           chat.sendMessage({
             message: buildGeminiImagePromptParts(effectivePrompt, providerReferenceImages),
             config: {
@@ -1356,7 +1362,7 @@ export class GenerateImageTool extends BaseTool {
             " Reference images were ignored because the active provider's image endpoint is text-to-image only.";
         }
         const { generateZaiNativeImage } = await import("@/providers/zai/zaiImageGeneration");
-        const result = await withProviderUsageContext(usageContext, () =>
+        const result = await submitToProvider(() =>
           generateZaiNativeImage({
             apiKey,
             model: modelCodename,
@@ -1377,7 +1383,7 @@ export class GenerateImageTool extends BaseTool {
             " Reference images were ignored because the active provider's image endpoint is text-to-image only.";
         }
         const { generateNvidiaNativeImage } = await import("@/providers/nvidia/nvidiaImageGeneration");
-        const result = await withProviderUsageContext(usageContext, () =>
+        const result = await submitToProvider(() =>
           generateNvidiaNativeImage({
             apiKey,
             model: modelCodename,
@@ -1401,9 +1407,10 @@ export class GenerateImageTool extends BaseTool {
           error: "No image data received from API. The generation may have been blocked or failed.",
         };
       }
+      quotaSpent = true;
 
       // /kill stops awaiting this tool but cannot stop it, so a backend that ignores the signal
-      // still finishes here; posting now would deliver and charge for a reply the user killed.
+      // still finishes here; posting now would deliver a reply the user killed.
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Image generation was cancelled." };
       }
@@ -1431,7 +1438,6 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1476,6 +1482,8 @@ export class GenerateImageTool extends BaseTool {
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return notifyProviderToolFailure(context, denied);
       if (context.abortSignal?.aborted) {
+        // Cancellation cannot recall a submitted request, so the provider still bills it and the unit stays spent.
+        quotaSpent ||= providerRequested;
         return { success: false, error: "Image generation was cancelled." };
       }
       const toolFailure = createProviderToolFailure(error, {
@@ -1518,7 +1526,7 @@ export class GenerateImageTool extends BaseTool {
 
       return toolFailure;
     } finally {
-      if (quotaReservation && !quotaDelivered) {
+      if (quotaReservation && !quotaSpent) {
         await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
       }
     }

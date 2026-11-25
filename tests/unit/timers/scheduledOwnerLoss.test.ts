@@ -4,6 +4,7 @@ import { ChannelType, Client, ClientUser, Collection, Guild, Message, TextChanne
 import { registerShutdown } from "@/init/shutdown";
 import * as chat from "@/events/messageCreate/tomoriChat";
 import { ScheduledWorkCoordinator } from "@/timers/scheduledWorkCoordinator";
+import { waitForScheduledWorkLanes } from "@/timers/scheduledWorkLanes";
 import { reminderSchema, randomTriggerSchema } from "@/types/db/schema";
 import { LEASE_RENEW_MS, type LeaseStore } from "@/utils/cluster/leaseKeeper";
 import { ShardLeaseCoordinator } from "@/utils/cluster/shardLeases";
@@ -17,6 +18,10 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 const spies: Array<{ mockRestore(): void }> = [];
+const runAndSettle = async (coordinator: ScheduledWorkCoordinator) => {
+  await coordinator.runNow();
+  await waitForScheduledWorkLanes();
+};
 let draining = false;
 
 beforeAll(initializeLocalizer);
@@ -200,7 +205,7 @@ it("preserves the pending reminder in Task 07's immediate owner-loss shutdown re
     reached.resolve();
     return pending.promise;
   });
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("lost");
@@ -235,7 +240,7 @@ it.each([
       await resume.promise;
       return createUserRow();
     });
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("uncertain");
@@ -246,7 +251,7 @@ it.each([
     expect(f.send).not.toHaveBeenCalled();
     f.expectUnconsumed();
     f.fetch.mockRejectedValueOnce(new Error("Controlled lookup failure after recovery"));
-    await f.coordinator.runNow();
+    await runAndSettle(f.coordinator);
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(f.deleted).toHaveBeenCalledWith(f.reminder.reminder_id);
   } finally {
@@ -279,7 +284,7 @@ it.each([
     await resume.promise;
     return new Collection<string, Message<true>>();
   }) as typeof f.channel.messages.fetch);
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("uncertain");
@@ -334,7 +339,7 @@ it.each([
     return "run";
   });
   try {
-    await f.coordinator.runNow();
+    await runAndSettle(f.coordinator);
     expect(f.triggerWrite).toHaveBeenCalledTimes(lostOwner ? 0 : 1);
   } finally {
     await f.close();
@@ -356,7 +361,7 @@ it("does not DM the recipient when ownership becomes uncertain during recipient 
   f.reminder.repetition_interval_hours = 1;
   f.reminder.failed_occurrence_count = 24;
   f.fetch.mockRejectedValueOnce(new Error("Controlled lookup failure")).mockResolvedValue(null);
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("uncertain");
@@ -391,7 +396,7 @@ it("does not spend an exhausted retry budget after its generation callback is ca
     await input.onGenerationResult?.({ status: "stopped_by_user", streamResults: [], personaResponses: [] });
     return "run";
   });
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("uncertain");
@@ -400,7 +405,7 @@ it("does not spend an exhausted retry budget after its generation callback is ca
     expect(f.send).not.toHaveBeenCalled();
     f.expectUnconsumed();
     await f.transition("active");
-    await f.coordinator.runNow();
+    await runAndSettle(f.coordinator);
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(f.deleted).toHaveBeenCalledWith(f.reminder.reminder_id);
   } finally {
@@ -433,7 +438,7 @@ it("does not send a recipient mention after cancellation during mention verifica
     await input.onGenerationResult?.({ status: "completed", streamResults: [], personaResponses: [] });
     return "run";
   });
-  const work = f.coordinator.runNow();
+  const work = runAndSettle(f.coordinator);
   try {
     await reached.promise;
     await f.transition("uncertain");

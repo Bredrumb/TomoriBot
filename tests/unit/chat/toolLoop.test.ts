@@ -1324,6 +1324,30 @@ describe("runToolLoop — contract tests", () => {
     expect(toolExecuteCalls).toHaveLength(0);
   });
 
+  it("marks a /kill as answered only when the provider had already started streaming", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    for (const progressed of [true, false]) {
+      hasStopRequest = false;
+      const context = makeContext();
+      const { provider } = makeProvider([]);
+      Object.assign(provider, {
+        streamToDiscord: () =>
+          new Promise<StreamResult>(() => {
+            if (progressed) context.streamingContext.onStreamProgress?.();
+            queueMicrotask(() => {
+              hasStopRequest = true;
+              activeStreamKill?.(new Error("SDK_CALL_TIMEOUT: killed by /kill"));
+            });
+          }),
+      });
+
+      const result = await runToolLoop(makeParams(context, provider));
+
+      expect(result.status).toBe("stopped_by_user");
+      expect(result.streamResults[0]?.answeredBeforeStop).toBe(progressed ? true : undefined);
+    }
+  });
+
   it("retains reported author usage when a held stream settles after cancellation", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const context = makeReviewContext();

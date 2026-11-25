@@ -17,14 +17,20 @@ export const textQuotaTriggerStates = new Map<string, TextQuotaTriggerState>();
 
 // Separate from textQuotaTriggerStates because refusals store no grant, preventing multi-persona replies from posting
 // repeated quota embeds.
-const refusedTextQuotaTriggers = new Map<string, number>();
+const refusedTextQuotaTriggers = new Map<string, { refusedAt: number; reason: TextQuotaRefusalReason }>();
 
-export function markTextQuotaRefused(triggerKey: string): void {
-  refusedTextQuotaTriggers.set(triggerKey, Date.now());
+export type TextQuotaRefusalReason = "exceeded" | "unavailable";
+
+export function markTextQuotaRefused(triggerKey: string, reason: TextQuotaRefusalReason): void {
+  refusedTextQuotaTriggers.set(triggerKey, { refusedAt: Date.now(), reason });
 }
 
 export function hasTextQuotaBeenRefused(triggerKey: string): boolean {
   return refusedTextQuotaTriggers.has(triggerKey);
+}
+
+export function getTextQuotaRefusalReason(triggerKey: string): TextQuotaRefusalReason | undefined {
+  return refusedTextQuotaTriggers.get(triggerKey)?.reason;
 }
 
 const reportedCredentialRefusals = new Map<string, number>();
@@ -54,7 +60,7 @@ export function cleanupTextQuotaTriggerStates(): void {
       textQuotaTriggerStates.delete(triggerKey);
     }
   }
-  for (const [triggerKey, refusedAt] of refusedTextQuotaTriggers.entries()) {
+  for (const [triggerKey, { refusedAt }] of refusedTextQuotaTriggers.entries()) {
     if (now - refusedAt >= TEXT_QUOTA_TRIGGER_TTL_MS) {
       refusedTextQuotaTriggers.delete(triggerKey);
     }

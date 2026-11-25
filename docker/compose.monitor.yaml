@@ -23,7 +23,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DB=tomodb
       - POSTGRES_USER=tomori
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_default_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     networks:
       - tomori-network
 

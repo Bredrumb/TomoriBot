@@ -1499,6 +1499,7 @@ export const reminderSchema = z.object({
   repetition_anchor_day: z.number().int().nullable().optional(),
   self_reminder: z.boolean().nullable().optional(),
   created_by_user_id: z.number().nullable(),
+  created_by_user_disc_id: z.string().nullable().optional(),
   // Falls back to the main persona when NULL.
   persona_id: z.number().nullable().optional(),
   created_at: z.date().optional(),

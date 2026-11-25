@@ -22,7 +22,7 @@ import { calculateLateness } from "@/utils/text/processors/timeUtils";
 import { tomoriChat } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed, truncateForEmbedDescription } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
-import { getCachedUserRow } from "../utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedUserRow } from "../utils/cache/userCache";
 import { ensureDiscordUserMention, sendPersonaMention } from "../utils/discord/mentionHelper";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 import { isBridgeUserId } from "../utils/bridges";
@@ -32,6 +32,7 @@ import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 import { isCredentialRejection } from "@/utils/provider/providerErrorClassification";
+import { getTextQuotaRefusalReason } from "@/utils/chat/textQuotaState";
 import {
   getNextReminderOccurrence,
   alignReminderToDailyWindow,
@@ -57,6 +58,23 @@ const REMINDER_REMOVAL_MIN_STREAK_HOURS = 24;
 
 // Conservative 28-day month because the removal streak only needs a monthly lower bound.
 const HOURS_PER_SHORTEST_MONTH = 28 * 24;
+
+const FALLBACK_FOOTER_KEYS = {
+  generation: {
+    retained: "reminders.triggered_footer_recurring_retained",
+    completed: "reminders.triggered_footer_recurring_completed",
+    removed: "reminders.triggered_footer_recurring_removed",
+    oneTime: "reminders.triggered_footer_one_time",
+  },
+  quota: {
+    retained: "reminders.quota_footer_recurring_retained",
+    completed: "reminders.quota_footer_recurring_completed",
+    removed: "reminders.quota_footer_recurring_removed",
+    oneTime: "reminders.quota_footer_one_time",
+  },
+} as const;
+
+type FallbackCause = keyof typeof FALLBACK_FOOTER_KEYS;
 
 function isDeadRecurringReminder(failedOccurrences: number, repetition: NonNullable<ReminderRepetition>): boolean {
   const intervalHours =
@@ -123,27 +141,19 @@ export class ReminderProcessor {
     this.client = client;
   }
 
-  public async processDueReminders(work?: ScheduledWorkContext): Promise<void> {
-    if (!canRunScheduledWork(work)) return;
+  public async loadDueReminders(work?: ScheduledWorkContext): Promise<ReminderRow[]> {
+    if (!canRunScheduledWork(work)) return [];
     try {
-      const dueReminders = await serverScheduleRepository.getDueReminders(this.topology);
-
-      if (!dueReminders || dueReminders.length === 0) {
-        return;
-      }
-
-      log.info(`Processing ${dueReminders.length} due reminder(s)`);
-
-      for (const reminder of dueReminders) {
-        if (!canRunScheduledWork(work)) return;
-        await this.executeReminder(reminder, work);
-      }
+      const dueReminders = (await serverScheduleRepository.getDueReminders(this.topology)) ?? [];
+      if (dueReminders.length > 0) log.info(`Processing ${dueReminders.length} due reminder(s)`);
+      return dueReminders;
     } catch (error) {
       if (canRunScheduledWork(work)) log.error("Error checking for due reminders:", error);
+      return [];
     }
   }
 
-  private async executeReminder(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
+  public async executeReminder(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
     return runWithErrorContext(
       {
         source: "reminder",
@@ -181,6 +191,19 @@ export class ReminderProcessor {
           );
           return;
         }
+      }
+
+      const creatorDiscId = reminder.created_by_user_disc_id ?? undefined;
+      if (
+        creatorDiscId &&
+        reminder.server_disc_id &&
+        !reminder.server_is_dm_channel &&
+        (await getCachedBlacklistStatus(reminder.server_disc_id, creatorDiscId))
+      ) {
+        assertScheduledWorkActive(work);
+        log.info(`Reminder ${reminder.reminder_id} skipped because its creator is blacklisted in this server.`);
+        await this.skipOccurrenceSilently(reminder);
+        return;
       }
 
       log.info(
@@ -250,6 +273,7 @@ export class ReminderProcessor {
 
       const reminderStartTime = Date.now();
       const isSelfReminder = reminder.self_reminder === true;
+      const textQuotaTriggerKey = `reminder:${reminder.reminder_id}:${reminder.reminder_time.getTime()}`;
       this.markReminderDeliveryActive(reminder);
       const deliveryTracker = this.createReminderDeliveryTracker({
         reminder,
@@ -257,6 +281,7 @@ export class ReminderProcessor {
         afterMessageId: lastMessage.id,
         reminderStartTime,
         isSelfReminder,
+        textQuotaTriggerKey,
         work,
       });
 
@@ -280,6 +305,8 @@ export class ReminderProcessor {
         isPersonaJob: false,
         isUserImpersonation: false,
         textQuotaSource: "system",
+        textQuotaUserDiscId: creatorDiscId,
+        textQuotaTriggerKey,
         shouldSurfaceUserErrors: false,
         systemTriggerIdentity:
           reminder.server_is_dm_channel && reminder.server_disc_id
@@ -329,6 +356,7 @@ export class ReminderProcessor {
     afterMessageId: string;
     reminderStartTime: number;
     isSelfReminder: boolean;
+    textQuotaTriggerKey: string;
     work?: ScheduledWorkContext;
   }): {
     isSettled: () => boolean;
@@ -367,6 +395,20 @@ export class ReminderProcessor {
           await settle(async () => {
             await this.completeReminderDelivery(args);
           }, true);
+          return;
+        }
+
+        // Quota will not come back within the retry window, so the no-AI notice posts now instead of after five retries.
+        if (getTextQuotaRefusalReason(args.textQuotaTriggerKey) === "exceeded") {
+          await settle(async () => {
+            await this.handleReminderExecutionFailure(
+              args.reminder,
+              "Creator's text quota is used up",
+              args.work,
+              true,
+              "quota",
+            );
+          });
           return;
         }
 
@@ -485,6 +527,23 @@ export class ReminderProcessor {
     }
   }
 
+  // A blacklisted creator is ignored without posting their content or counting a failure, so the schedule resumes if the
+  // blacklist is lifted.
+  private async skipOccurrenceSilently(reminder: ReminderRow): Promise<void> {
+    if (!reminder.reminder_id) return;
+    const repetition = getReminderRepetition(reminder);
+    const nextOccurrence = repetition ? getNextRecurringOccurrence(reminder, repetition, false) : null;
+    if (nextOccurrence) {
+      await serverScheduleRepository.rescheduleReminder(
+        reminder.reminder_id,
+        nextOccurrence,
+        reminder.failed_occurrence_count ?? 0,
+      );
+    } else {
+      await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+    }
+  }
+
   private markReminderDeliveryActive(reminder: ReminderRow): void {
     if (reminder.reminder_id) {
       this.activeReminderIds.add(reminder.reminder_id);
@@ -553,6 +612,7 @@ export class ReminderProcessor {
     errorReason: string,
     work?: ScheduledWorkContext,
     attemptFallback = true,
+    cause: FallbackCause = "generation",
   ): Promise<void> {
     try {
       assertScheduledWorkActive(work);
@@ -560,8 +620,8 @@ export class ReminderProcessor {
       const isRecurring = repetition !== null;
       const nextIfDelivered = repetition ? getNextRecurringOccurrence(reminder, repetition, true) : null;
       const retainsSchedule = nextIfDelivered !== null && Boolean(reminder.reminder_id);
-      const failedOccurrences = (reminder.failed_occurrence_count ?? 0) + 1;
       let recurringScheduleRetained = false;
+      const footerKeys = FALLBACK_FOOTER_KEYS[cause];
 
       // Sent before the schedule write because removing a dead reminder depends on whether this reached the channel.
       const fallbackDelivered =
@@ -569,15 +629,20 @@ export class ReminderProcessor {
         (await this.sendFallbackReminderEmbed(
           reminder,
           retainsSchedule
-            ? "reminders.triggered_footer_recurring_retained"
+            ? footerKeys.retained
             : isRecurring
               ? reminder.reminder_id
-                ? "reminders.triggered_footer_recurring_completed"
-                : "reminders.triggered_footer_recurring_removed"
-              : "reminders.triggered_footer_one_time",
+                ? footerKeys.completed
+                : footerKeys.removed
+              : footerKeys.oneTime,
           work,
+          cause,
         ));
       assertScheduledWorkActive(work);
+      // A posted quota notice is not a provider failure, so it must not push the schedule toward degraded retries or
+      // dead-schedule removal.
+      const failedOccurrences =
+        (reminder.failed_occurrence_count ?? 0) + (cause === "quota" && fallbackDelivered ? 0 : 1);
 
       const nextOccurrence = repetition && getNextRecurringOccurrence(reminder, repetition, fallbackDelivered);
       if (reminder.reminder_id) {
@@ -628,6 +693,7 @@ export class ReminderProcessor {
     reminder: ReminderRow,
     footerKey: string,
     work?: ScheduledWorkContext,
+    cause: FallbackCause = "generation",
   ): Promise<boolean> {
     try {
       assertScheduledWorkActive(work);
@@ -638,25 +704,44 @@ export class ReminderProcessor {
       }
 
       const isSelfReminder = reminder.self_reminder === true;
+      const isQuota = cause === "quota";
       const locale = await this.resolveReminderLocale(reminder, channel);
       assertScheduledWorkActive(work);
       const embed = createStandardEmbed(locale, {
         color: ColorCode.WARN,
-        titleKey: isSelfReminder ? "reminders.task_triggered_title" : "reminders.reminder_triggered_title",
-        description: buildFallbackDescription(locale, reminder),
+        titleKey: isQuota
+          ? isSelfReminder
+            ? "reminders.task_quota_title"
+            : "reminders.reminder_quota_title"
+          : isSelfReminder
+            ? "reminders.task_triggered_title"
+            : "reminders.reminder_triggered_title",
+        description: isQuota
+          ? buildFallbackDescription(
+              locale,
+              reminder,
+              isSelfReminder ? "reminders.task_quota_description" : "reminders.reminder_quota_description",
+            )
+          : buildFallbackDescription(locale, reminder),
         footerKey,
       });
 
-      const mentionContent =
-        !isSelfReminder && !isBridgeUserId(reminder.user_discord_id) ? `<@${reminder.user_discord_id}>` : undefined;
+      // A self-task's target is the bot itself, so a quota notice pings the member whose quota ran out.
+      const mentionUserId = isSelfReminder
+        ? isQuota
+          ? (reminder.created_by_user_disc_id ?? undefined)
+          : undefined
+        : isBridgeUserId(reminder.user_discord_id)
+          ? undefined
+          : reminder.user_discord_id;
 
       await (channel as TextChannel).send({
-        ...(mentionContent ? { content: mentionContent } : {}),
+        ...(mentionUserId ? { content: `<@${mentionUserId}>` } : {}),
         embeds: [embed],
-        ...(mentionContent
+        ...(mentionUserId
           ? {
               allowedMentions: {
-                users: [reminder.user_discord_id],
+                users: [mentionUserId],
                 roles: [],
                 parse: [],
               },

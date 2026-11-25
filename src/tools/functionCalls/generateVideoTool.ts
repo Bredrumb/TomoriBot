@@ -273,7 +273,8 @@ export class GenerateVideoTool extends BaseTool {
     let failureProvider: string | undefined;
     let failureScope: "server" | "personal" | undefined;
     let quotaReservation: QuotaReservation | null = null;
-    let quotaDelivered = false;
+    let providerRequested = false;
+    let quotaSpent = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -406,6 +407,11 @@ export class GenerateVideoTool extends BaseTool {
       let videoFilename = `generated_${Date.now()}.mp4`;
       const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
+      const submitToProvider = <T>(request: () => Promise<T>): Promise<T> => {
+        context.abortSignal?.throwIfAborted();
+        providerRequested = true;
+        return withProviderUsageContext(usageContext, request);
+      };
       if (creds.customEndpoint) {
         const endpoint = creds.customEndpoint;
         const handoff =
@@ -416,7 +422,7 @@ export class GenerateVideoTool extends BaseTool {
               })
             : null;
         try {
-          const result = await withProviderUsageContext(usageContext, () =>
+          const result = await submitToProvider(() =>
             generateCustomVideoViaEndpoint({
               endpoint,
               apiKey,
@@ -438,7 +444,7 @@ export class GenerateVideoTool extends BaseTool {
         }
       } else if (videoImplementation === "google") {
         const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
-        const result = await withProviderUsageContext(usageContext, () =>
+        const result = await submitToProvider(() =>
           generateGoogleNativeVideo({
             apiKey,
             model: modelCodename,
@@ -457,7 +463,7 @@ export class GenerateVideoTool extends BaseTool {
         videoFilename = result.filename ?? videoFilename;
       } else if (videoImplementation === "openrouter") {
         const { generateOpenRouterNativeVideo } = await import("@/providers/openrouter/openrouterVideoGeneration");
-        const result = await withProviderUsageContext(usageContext, async () =>
+        const result = await submitToProvider(async () =>
           generateOpenRouterNativeVideo({
             apiKey,
             model: modelCodename,
@@ -481,7 +487,7 @@ export class GenerateVideoTool extends BaseTool {
         videoFilename = result.filename ?? videoFilename;
       } else if (videoImplementation === "zai") {
         const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
-        const result = await withProviderUsageContext(usageContext, () =>
+        const result = await submitToProvider(() =>
           generateZaiNativeVideo({
             apiKey,
             model: modelCodename,
@@ -511,9 +517,10 @@ export class GenerateVideoTool extends BaseTool {
           error: "No video data received from API. The generation may have been blocked or failed.",
         };
       }
+      quotaSpent = true;
 
       // /kill stops awaiting this tool but cannot stop it, so a native provider that ignores the
-      // signal still finishes here; posting now would deliver and charge for a reply the user killed.
+      // signal still finishes here; posting now would deliver a reply the user killed.
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Video generation was cancelled." };
       }
@@ -551,7 +558,6 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -589,11 +595,13 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
-      if (context.abortSignal?.aborted) {
-        return { success: false, error: "Video generation was cancelled." };
-      }
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return notifyProviderToolFailure(context, denied);
+      if (context.abortSignal?.aborted) {
+        // Cancellation cannot recall a submitted job, so the provider still bills it and the unit stays spent.
+        quotaSpent ||= providerRequested;
+        return { success: false, error: "Video generation was cancelled." };
+      }
       const toolFailure = createProviderToolFailure(error, {
         locale: context.locale,
         provider: failureProvider ?? "unknown",
@@ -634,7 +642,7 @@ export class GenerateVideoTool extends BaseTool {
 
       return toolFailure;
     } finally {
-      if (quotaReservation && !quotaDelivered) {
+      if (quotaReservation && !quotaSpent) {
         await releaseVideoQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
       }
     }

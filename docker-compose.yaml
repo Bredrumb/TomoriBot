@@ -4,12 +4,12 @@ services:
       context: .
       dockerfile: docker/postgres.Dockerfile
     container_name: tomoribot-db
-    env_file: .env
+    # No env_file: the database container must not hold the bot's secrets, and a known fallback password would
+    # make the superuser guessable, so the image refuses first start until .env sets POSTGRES_PASSWORD.
     environment:
-      # Fixed container credentials so local Compose works without extra .env fields.
       POSTGRES_DB: tomodb
       POSTGRES_USER: tomori
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_default_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     command: >
       postgres
       -c shared_preload_libraries=pg_cron
@@ -18,8 +18,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-pgcron.sql:/docker-entrypoint-initdb.d/init-pgcron.sql:ro
     ports:
-      # Published on 15432 so host maintenance tools can connect without colliding with 5432.
-      - "15432:5432"
+      # Loopback only, so host maintenance tools reach 15432 without exposing the superuser to the network.
+      - "127.0.0.1:15432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tomori -d tomodb"]
@@ -109,7 +109,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: tomori
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_default_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: tomodb
       NODE_ENV: development
       # Local HTTP endpoints and .env secrets require development mode in Compose.

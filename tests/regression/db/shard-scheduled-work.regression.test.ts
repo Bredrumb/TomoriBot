@@ -167,6 +167,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("shard-owned scheduled work", () => {
     expect(sorted(triggerUnion)).toEqual(sorted(allTriggers.map((t) => t.trigger_id)));
   });
 
+  it("leaves servers with a running scheduled-work lane out of the next wake", async () => {
+    const reminders = (await serverScheduleRepository.getDueReminders()) ?? [];
+    const triggers = await serverScheduleRepository.getDueTriggers();
+    const busy = [reminders[0]?.server_id, triggers[0]?.server_id].filter((id): id is number => id !== undefined);
+    expect(busy).toHaveLength(2);
+    const reminder = reminders.find((row) => !busy.includes(row.server_id));
+    const trigger = triggers.find((row) => !busy.includes(row.server_id));
+    if (!reminder || !trigger) throw new Error("Fixtures need due rows on servers without a lane");
+    expect(await serverScheduleRepository.getNextReminderTime(undefined, busy)).toEqual(
+      reminder.next_attempt_at ?? reminder.reminder_time,
+    );
+    expect(await serverScheduleRepository.getNextTriggerTime(undefined, busy)).toEqual(trigger.next_trigger_at);
+  });
+
   it("partitions enabled idle nudges and unique presence pairs across shard groups", async () => {
     const allNudges = await naturalNudgeRepository.listEnabledIdleNudgeServers(now);
     const allPairs = await statRepository.getPresenceRetentionPairs();
@@ -332,7 +346,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("shard-owned scheduled work", () => {
     });
     const controller = new AbortController();
     const processor = new ReminderProcessor(client, topology);
-    const work = processor.processDueReminders({ signal: controller.signal, hasOwnership: () => true });
+    const cancellable = { signal: controller.signal, hasOwnership: () => true };
+    const work = (async () => {
+      for (const due of await processor.loadDueReminders(cancellable))
+        await processor.executeReminder(due, cancellable);
+    })();
     try {
       await reached.promise;
       controller.abort();

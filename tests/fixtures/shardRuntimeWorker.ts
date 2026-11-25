@@ -7,6 +7,7 @@ import {
   runScheduledWorkNow,
   stopScheduledWorkCoordinator,
 } from "@/timers/scheduledWorkCoordinator";
+import { waitForScheduledWorkLanes } from "@/timers/scheduledWorkLanes";
 import { initializeShardTopology } from "@/utils/discord/shardOwnership";
 import { acquireShardLeases, clusterHolderId, releaseShardLeases } from "@/utils/cluster/shardLeases";
 import { startInvalidationBus, stopInvalidationBus } from "@/utils/cache/invalidationBus";
@@ -118,6 +119,7 @@ process.on("message", (input: unknown) => {
     if (command.action === "schedule") {
       initializeScheduledWorkCoordinator(client);
       await runScheduledWorkNow("two-process-exercise");
+      await waitForScheduledWorkLanes();
       stopScheduledWorkCoordinator();
       send("scheduled");
       return;

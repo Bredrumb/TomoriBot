@@ -1089,7 +1089,7 @@ async function prepareTextQuota(
     locale: lockedTurn.admission.locale,
     notifyUser: shouldSurfaceUserErrors && !hasTextQuotaBeenRefused(triggerKey),
   });
-  if (!quota.allowed) markTextQuotaRefused(triggerKey);
+  if (!quota.allowed) markTextQuotaRefused(triggerKey, quota.reason);
 
   return {
     allowed: quota.allowed,

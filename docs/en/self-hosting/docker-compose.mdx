@@ -58,7 +58,17 @@ Generate a random 32-character value for `CRYPTO_SECRET` using Docker, then copy
 docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 ```
 
-Generate a separate password for `POSTGRES_PASSWORD`. You can copy optional tuning settings from `.env.optional.example`.
+Generate a separate password for `POSTGRES_PASSWORD`. Compose has no fallback, so PostgreSQL refuses its first start without one. Its port 15432 accepts connections only from this computer. You can copy optional tuning settings from `.env.optional.example`.
+
+:::caution[Database first started without a password]
+Older versions of `docker-compose.yaml` fell back to the password `secure_default_password`, and PostgreSQL keeps the password it was first started with. If your database volume was created that way, set a new `POSTGRES_PASSWORD` in `.env`, start only the database with `docker compose up -d postgres`, then change the stored password to the same value:
+
+```sh
+docker compose exec postgres psql -U tomori -d tomodb -c "ALTER ROLE tomori PASSWORD 'your-new-password'"
+```
+
+Then start the rest of the stack.
+:::
 
 :::note[Database connection is automatic]
 Do not set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, or `POSTGRES_DB` in `.env`; Compose configures them automatically.

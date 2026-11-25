@@ -66,6 +66,14 @@ created or ones that remind you, and members with `Manage Server` can delete any
 A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot
 tells you instead of adding another; remove old ones with `/scheduled-task remove` to make room.
 
+Each time a schedule you created runs on the server's AI model, it uses one of your text replies
+from the server's [quota](/features/setup-administration/server-moderation/#cost-control-quotas).
+When your quota is used up, a reminder still arrives as a plain message without AI, and a task
+posts a notice that pings you instead of running. Its next occurrence keeps its usual time.
+
+If a moderator blacklists you, your schedules pause silently: recurring ones skip their runs and
+resume if the blacklist is lifted, and one-time ones that come due are dropped.
+
 ## How Delivery Works
 
 Reminders are only marked complete after delivery succeeds. If delivery is interrupted,

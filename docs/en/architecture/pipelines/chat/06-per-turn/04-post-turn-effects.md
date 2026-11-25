@@ -36,8 +36,9 @@ flowchart TD
      expression delivery receipts so already-posted stickers or reactions are not duplicated.
    - Upon retry exhaustion, deliberate turns post a warning embed while passive autochat turns stay silent.
 3. **Text quota settlement**: `settleTextQuota()` checks whether text quota was reserved during admission
-   and the response was non-empty. A reply keeps the reserved unit as the charge and marks the trigger key
-   consumed in `textQuotaTriggerStates`. The last turn of a plan releases an unspent reservation through
+   and whether the turn delivered text or any provider call answered. Either keeps the reserved unit as the
+   charge and marks the trigger key consumed in `textQuotaTriggerStates`, so a turn that only called tools,
+   hit the iteration cap, or was stopped still counts as one reply. The last turn of a plan releases an unspent reservation through
    `releaseTextQuotaForTrigger()`. A lone personal-route turn keeps it, because a queued server persona job
    from the same trigger may still spend it.
 4. **Self-reply bookkeeping**: on non-empty responses, `setLastRespondedPersona()` records which persona
@@ -71,7 +72,8 @@ flowchart TD
 - **Non-blocking failure tolerance**: errors in secondary side effects (such as memory writes, thought logs,
   or usage stats) are caught and logged, so completed replies are never disrupted by cache or logging errors.
 - **Single quota settlement**: a trigger sequence reserves at most one text quota unit and settles it
-  once, keeping the charge only for a successful, non-empty response.
+  once. It refunds the unit only when no provider call succeeded, because a provider that answered has billed
+  the work even when no text reached the channel.
 - **Coordinated re-entrancy**: recursive calls explicitly declare lock behavior: empty-response retries reuse
   the active lock (`skipLock=true`), whereas cross-channel boomerangs defer execution until after lock release
   via `setImmediate`.
