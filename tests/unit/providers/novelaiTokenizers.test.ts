@@ -66,26 +66,26 @@ describe("required NovelAI tokenizers", () => {
     if (!resolve(root).startsWith(`${resolve(tmpdir())}${sep}tomori-nai-tokenizer-`))
       throw new Error("Unexpected temporary directory");
     try {
+      const source = join(getTokenizerAssetDir(), "novelai_glm", "tokenizer.json");
+      const target = join(root, "novelai_glm");
       const result = Bun.spawnSync(
         [
           process.execPath,
           "-e",
           `
+            import { copyFileSync, mkdirSync } from "node:fs";
+            import { join } from "node:path";
             import { createNovelAITokenizerEncoder } from "@/utils/provider/localTokenizerRegistry";
             try { createNovelAITokenizerEncoder("novelai_glm"); process.exit(1); }
             catch (error) { if (error.code !== "tokenizer_setup") process.exit(2); }
-            process.env.TOKENIZER_ASSET_DIR = process.env.READABLE_TOKENIZER_DIR;
+            mkdirSync(${JSON.stringify(target)}, { recursive: true });
+            copyFileSync(${JSON.stringify(source)}, join(${JSON.stringify(target)}, "tokenizer.json"));
             process.exit(createNovelAITokenizerEncoder("novelai_glm")("hello").length > 0 ? 0 : 3);
           `,
         ],
         {
           cwd: process.cwd(),
-          env: {
-            ...process.env,
-            TOKENIZER_ASSET_DIR: root,
-            READABLE_TOKENIZER_DIR: getTokenizerAssetDir(),
-            ERROR_DB_LOGGING_ENABLED: "false",
-          },
+          env: { ...process.env, TOKENIZER_ASSET_DIR: root, ERROR_DB_LOGGING_ENABLED: "false" },
         },
       );
       expect(result.exitCode).toBe(0);
