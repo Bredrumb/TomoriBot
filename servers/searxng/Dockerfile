@@ -1,4 +1,4 @@
-FROM searxng/searxng@sha256:b8ca38ba06eea544d7555e88321e212ddc0d5c3c7de055419cfb2e5c6bf30812
+FROM searxng/searxng@sha256:a7fc607aa6723f5a8982105bcc5ffba4d1b9fc7c6922a31a88d6e4cba49ef12a
 
 # TomoriBot's settings enable the JSON format and disable the bot-limiter.
 #
