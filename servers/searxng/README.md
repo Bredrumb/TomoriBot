@@ -66,8 +66,9 @@ this mode.
 
 ## Upgrade procedure
 
-The image is **pinned by digest** in `docker-compose.yaml`, Terraform, and the
-AWS task definition. To upgrade:
+The base image is **pinned by digest** in this folder's `Dockerfile`. Docker
+Compose and the Azure, Hetzner, and GCP deploy workflows build from it, and the
+Azure and Hetzner release gates scan the result with Trivy. To upgrade:
 
 1. Pull the latest upstream tag and resolve its digest:
    ```bash
@@ -75,11 +76,11 @@ AWS task definition. To upgrade:
    docker inspect --format='{{index .RepoDigests 0}}' searxng/searxng:latest
    ```
 2. Replace `searxng/searxng@sha256:<OLD>` with `searxng/searxng@sha256:<NEW>`
-   in:
-   - `docker-compose.yaml`
-   - `terraform/gcp/variables.tf` (`searxng_image` default)
-   - `.github/workflows/deploy-aws.yml` task-def container image
-3. Smoke test locally with `docker compose up`.
+   in `servers/searxng/Dockerfile`. On `release`, the same digest also appears as
+   the unbuilt fallback in `deploy/azure/docker-compose.yml` (`SEARXNG_IMAGE`) and
+   the `searxng_image` default in `terraform/aws/variables.tf`.
+3. Smoke test locally with `docker compose --profile searxng up`, and check the
+   SearXNG log for engines that fail to load after the upgrade.
 4. Open a PR. CI build + deploy will roll the new digest forward.
 
 ## Configuration knobs
