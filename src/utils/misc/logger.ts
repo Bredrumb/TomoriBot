@@ -213,7 +213,11 @@ const CREDENTIAL_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(sk-(?:proj-|ant-|or-)?(?:live-)?[a-zA-Z0-9_-]{20,})\b/gi, REDACTED],
   [/\b(AIza[0-9A-Za-z\-_]{30,40})\b/g, REDACTED],
   [/\b(nvapi-[a-zA-Z0-9_-]{20,})\b/gi, REDACTED],
-  [/(https:\/\/(?:canary\.)?discord(?:app)?\.com\/api\/webhooks\/[^/\s]+\/)[^/?\s]+/gi, `$1${REDACTED}`],
+  // discord.js request URLs carry the API version (`/api/v10/webhooks/<id>/<token>`), unlike pasted webhook URLs.
+  [
+    /(https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/[^/\s]+\/)[^/?\s]+/gi,
+    `$1${REDACTED}`,
+  ],
 ];
 
 // Key: value and Basic heuristics from redactLogString are omitted because they match ordinary prose such as basic
