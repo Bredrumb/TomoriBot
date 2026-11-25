@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import vectors from "../../fixtures/novelaiTokenVectors.json";
 import { createNovelAITokenizerEncoder, type NovelAITokenizerFamily } from "@/utils/provider/localTokenizerRegistry";
+import { getTokenizerAssetDir } from "@/utils/provider/tokenizerAssetDir";
 
 describe("required NovelAI tokenizers", () => {
   it("matches pinned upstream token IDs on multilingual text, whitespace, code, and rendered templates", () => {
@@ -47,11 +48,47 @@ describe("required NovelAI tokenizers", () => {
             catch (error) { process.exit(error.code === "tokenizer_setup" ? 0 : 2); }
           `,
             ],
-            { cwd: process.cwd(), env: { ...process.env, TOKENIZER_ASSET_DIR: root } },
+            {
+              cwd: process.cwd(),
+              env: { ...process.env, TOKENIZER_ASSET_DIR: root, ERROR_DB_LOGGING_ENABLED: "false" },
+            },
           );
           expect(result.exitCode, `${family}:${corrupt ? "corrupt" : "missing"}`).toBe(0);
         }
       }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("loads a tokenizer once its asset becomes readable without a restart", () => {
+    const root = mkdtempSync(join(tmpdir(), "tomori-nai-tokenizer-"));
+    if (!resolve(root).startsWith(`${resolve(tmpdir())}${sep}tomori-nai-tokenizer-`))
+      throw new Error("Unexpected temporary directory");
+    try {
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          `
+            import { createNovelAITokenizerEncoder } from "@/utils/provider/localTokenizerRegistry";
+            try { createNovelAITokenizerEncoder("novelai_glm"); process.exit(1); }
+            catch (error) { if (error.code !== "tokenizer_setup") process.exit(2); }
+            process.env.TOKENIZER_ASSET_DIR = process.env.READABLE_TOKENIZER_DIR;
+            process.exit(createNovelAITokenizerEncoder("novelai_glm")("hello").length > 0 ? 0 : 3);
+          `,
+        ],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            TOKENIZER_ASSET_DIR: root,
+            READABLE_TOKENIZER_DIR: getTokenizerAssetDir(),
+            ERROR_DB_LOGGING_ENABLED: "false",
+          },
+        },
+      );
+      expect(result.exitCode).toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

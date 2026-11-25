@@ -102,6 +102,7 @@ export interface StreamContext {
     toolCount: number;
     chunksReceived: number;
     elapsedMs: number;
+    imageFallbackRemoved?: number;
   };
   deliveryMode?: PersonaDeliveryMode;
   deliveryReceipts?: PersonaDeliveryReceipt[];

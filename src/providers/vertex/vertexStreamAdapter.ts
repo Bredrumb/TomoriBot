@@ -30,6 +30,7 @@ import {
   buildGifUrlPlaceholder,
   buildInlineGifPlaceholder,
 } from "@/providers/utils/gifContextPlaceholders";
+import { generateGeminiStreamWithImageFallback } from "@/providers/utils/geminiImageFallback";
 import { buildGeminiToolMediaParts } from "@/providers/utils/geminiToolMediaParts";
 import { isSystemInstructionContextItem, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
@@ -271,11 +272,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
-      const stream = await genAI.models.generateContentStream({
-        model: config.model,
-        contents: finalContents,
-        config: requestConfig,
-      });
+      const stream = await generateGeminiStreamWithImageFallback(
+        genAI,
+        { model: config.model, contents: finalContents, config: requestConfig },
+        { adapterName: "VertexStreamAdapter", provider: this.providerName },
+      );
 
       for await (const chunkResponse of stream) {
         const usageMetadata = (chunkResponse as { usageMetadata?: Record<string, unknown> }).usageMetadata;

@@ -31,6 +31,7 @@ import {
   buildGifUrlPlaceholder,
   buildInlineGifPlaceholder,
 } from "@/providers/utils/gifContextPlaceholders";
+import { generateGeminiStreamWithImageFallback } from "@/providers/utils/geminiImageFallback";
 import { buildGeminiToolMediaParts } from "@/providers/utils/geminiToolMediaParts";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
@@ -53,6 +54,19 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
 
 // Keep the word boundary because Google echoes "StreamGenerateContent" in ErrorInfo metadata, which contains "rate".
 const GOOGLE_RATE_LIMIT_MESSAGE_PATTERN = /\brate[-\s]?limit|\bquota/i;
+
+type GoogleRequestDiagnostics = NonNullable<StreamContext["requestDiagnostics"]>;
+
+function summarizeLastTurn(contents: Content[]): GoogleRequestDiagnostics["lastTurn"] {
+  const lastParts = contents.at(-1)?.parts ?? [];
+  return {
+    textParts: lastParts.filter((part) => part.text !== undefined).length,
+    inlineDataParts: lastParts.filter((part) => part.inlineData !== undefined).length,
+    fileDataParts: lastParts.filter((part) => part.fileData !== undefined).length,
+    functionCallParts: lastParts.filter((part) => part.functionCall !== undefined).length,
+    functionResponseParts: lastParts.filter((part) => part.functionResponse !== undefined).length,
+  };
+}
 
 // `@google/genai` (1.x through 2.32) only recognizes Google's unframed mid-stream error object when
 // it arrives in a single read, so one split across reads ends the body with this and its status lost.
@@ -302,21 +316,14 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     const startedAt = Date.now();
-    const lastParts = finalContents.at(-1)?.parts ?? [];
-    context.requestDiagnostics = {
+    const diagnostics: GoogleRequestDiagnostics = {
       model: config.model,
       contextItemCount: context.contextItems.length,
       contentsCount: finalContents.length,
       tailRoles: finalContents
         .slice(-REQUEST_DIAGNOSTIC_TAIL_TURNS)
         .map((content) => (content.role === "user" ? "user" : content.role === "model" ? "model" : "unknown")),
-      lastTurn: {
-        textParts: lastParts.filter((part) => part.text !== undefined).length,
-        inlineDataParts: lastParts.filter((part) => part.inlineData !== undefined).length,
-        fileDataParts: lastParts.filter((part) => part.fileData !== undefined).length,
-        functionCallParts: lastParts.filter((part) => part.functionCall !== undefined).length,
-        functionResponseParts: lastParts.filter((part) => part.functionResponse !== undefined).length,
-      },
+      lastTurn: summarizeLastTurn(finalContents),
       functionHistoryCount: context.functionInteractionHistory?.length ?? 0,
       currentTurnModelPartCount: context.currentTurnModelParts.length,
       prefillPresent: Boolean(context.outputPrefill),
@@ -325,12 +332,20 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       chunksReceived: 0,
       elapsedMs: 0,
     };
+    context.requestDiagnostics = diagnostics;
     try {
-      const stream = await genAI.models.generateContentStream({
-        model: config.model,
-        contents: finalContents,
-        config: requestConfig,
-      });
+      const stream = await generateGeminiStreamWithImageFallback(
+        genAI,
+        { model: config.model, contents: finalContents, config: requestConfig },
+        {
+          adapterName: "GoogleStreamAdapter",
+          provider: "google",
+          onFallback: (contents, removed) => {
+            diagnostics.lastTurn = summarizeLastTurn(contents);
+            diagnostics.imageFallbackRemoved = removed;
+          },
+        },
+      );
 
       for await (const chunkResponse of stream) {
         context.requestDiagnostics.chunksReceived++;
