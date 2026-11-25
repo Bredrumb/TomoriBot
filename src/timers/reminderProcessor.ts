@@ -141,27 +141,19 @@ export class ReminderProcessor {
     this.client = client;
   }
 
-  public async processDueReminders(work?: ScheduledWorkContext): Promise<void> {
-    if (!canRunScheduledWork(work)) return;
+  public async loadDueReminders(work?: ScheduledWorkContext): Promise<ReminderRow[]> {
+    if (!canRunScheduledWork(work)) return [];
     try {
-      const dueReminders = await serverScheduleRepository.getDueReminders(this.topology);
-
-      if (!dueReminders || dueReminders.length === 0) {
-        return;
-      }
-
-      log.info(`Processing ${dueReminders.length} due reminder(s)`);
-
-      for (const reminder of dueReminders) {
-        if (!canRunScheduledWork(work)) return;
-        await this.executeReminder(reminder, work);
-      }
+      const dueReminders = (await serverScheduleRepository.getDueReminders(this.topology)) ?? [];
+      if (dueReminders.length > 0) log.info(`Processing ${dueReminders.length} due reminder(s)`);
+      return dueReminders;
     } catch (error) {
       if (canRunScheduledWork(work)) log.error("Error checking for due reminders:", error);
+      return [];
     }
   }
 
-  private async executeReminder(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
+  public async executeReminder(reminder: ReminderRow, work?: ScheduledWorkContext): Promise<void> {
     return runWithErrorContext(
       {
         source: "reminder",

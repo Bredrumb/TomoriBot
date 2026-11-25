@@ -29,27 +29,19 @@ export class RandomTriggerProcessor {
     this.client = client;
   }
 
-  public async processDueRandomTriggers(work?: ScheduledWorkContext): Promise<void> {
-    if (!canRunScheduledWork(work)) return;
+  public async loadDueTriggers(work?: ScheduledWorkContext): Promise<RandomTriggerRow[]> {
+    if (!canRunScheduledWork(work)) return [];
     try {
       const dueTriggers = await serverScheduleRepository.getDueTriggers(this.topology);
-
-      if (!dueTriggers || dueTriggers.length === 0) {
-        return;
-      }
-
-      log.info(`Processing ${dueTriggers.length} due random trigger(s)`);
-
-      for (const trigger of dueTriggers) {
-        if (!canRunScheduledWork(work)) return;
-        await this.executeTrigger(trigger, work);
-      }
+      if (dueTriggers.length > 0) log.info(`Processing ${dueTriggers.length} due random trigger(s)`);
+      return dueTriggers;
     } catch (error) {
       if (canRunScheduledWork(work)) log.error("Error checking for due random triggers:", error);
+      return [];
     }
   }
 
-  private async executeTrigger(trigger: RandomTriggerRow, work?: ScheduledWorkContext): Promise<void> {
+  public async executeTrigger(trigger: RandomTriggerRow, work?: ScheduledWorkContext): Promise<void> {
     return runWithErrorContext(
       {
         source: "random_trigger",

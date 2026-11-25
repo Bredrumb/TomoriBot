@@ -153,8 +153,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlGetDueReminders(topology);
   }
 
-  async getNextReminderTime(topology?: ShardTopology): Promise<Date | null> {
-    return this.sqlGetNextReminderTime(topology);
+  async getNextReminderTime(topology?: ShardTopology, excludedServerIds: readonly number[] = []): Promise<Date | null> {
+    return this.sqlGetNextReminderTime(topology, excludedServerIds);
   }
 
   async getReminderById(reminderId: number): Promise<ReminderRow | null> {
@@ -253,8 +253,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlGetDueRandomTriggers(topology);
   }
 
-  async getNextTriggerTime(topology?: ShardTopology): Promise<Date | null> {
-    return this.sqlGetNextRandomTriggerTime(topology);
+  async getNextTriggerTime(topology?: ShardTopology, excludedServerIds: readonly number[] = []): Promise<Date | null> {
+    return this.sqlGetNextRandomTriggerTime(topology, excludedServerIds);
   }
 
   async getServerTriggers(serverId: number): Promise<RandomTriggerRow[]> {
@@ -343,7 +343,10 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  private async sqlGetNextReminderTime(topology?: ShardTopology): Promise<Date | null> {
+  private async sqlGetNextReminderTime(
+    topology: ShardTopology | undefined,
+    excludedServerIds: readonly number[],
+  ): Promise<Date | null> {
     try {
       return await withTransientDbRetry(async () => {
         const [result] = await sql<{ next_reminder_time: Date | string | null }[]>`
@@ -351,6 +354,7 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
           FROM reminders r
           JOIN servers s ON s.server_id = r.server_id
           WHERE ${ownedServersOnly(topology)}
+            AND NOT (r.server_id = ANY(${sql.array([...excludedServerIds], "INT")}))
           ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC
           LIMIT 1
         `;
@@ -1107,13 +1111,17 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
-  private async sqlGetNextRandomTriggerTime(topology?: ShardTopology): Promise<Date | null> {
+  private async sqlGetNextRandomTriggerTime(
+    topology: ShardTopology | undefined,
+    excludedServerIds: readonly number[],
+  ): Promise<Date | null> {
     try {
       const [result] = await sql<{ next_trigger_time: Date | string | null }[]>`
         SELECT t.next_trigger_at AS next_trigger_time
         FROM random_triggers t
         JOIN servers s ON s.server_id = t.server_id
         WHERE ${ownedServersOnly(topology)}
+          AND NOT (t.server_id = ANY(${sql.array([...excludedServerIds], "INT")}))
         ORDER BY t.next_trigger_at ASC
         LIMIT 1
       `;

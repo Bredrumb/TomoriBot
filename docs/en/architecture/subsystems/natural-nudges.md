@@ -18,7 +18,7 @@ calls never delay reminders.
 
 | Phase | Owner | Work |
 |---|---|---|
-| A, decide | `NaturalNudgeProcessor` (`runtime/processor.ts`), the third processor in `ScheduledWorkCoordinator` | Plain code, no model call: due time, waking hours, lull, persona and category raffles, then a weighted shortlist within that category with allowed channels |
+| A, decide | `NaturalNudgeProcessor` (`runtime/processor.ts`), the coordinator step after reminder and random-trigger dispatch | Plain code, no model call: due time, waking hours, lull, persona and category raffles, then a weighted shortlist within that category with allowed channels. A server whose scheduled-work lane is running is skipped |
 | B, plan | `planIdleNudge` (`runtime/planner.ts`) | One structured-output call to the planner model (`resolvePlannerModel`): nudge and channel within the drawn category, opener direction, agenda, or `proceed: false` |
 | C, speak | `runIdleNudgeAttempt` (`runtime/runner.ts`) | Fresh re-checks, then a normal `tomoriChat` turn on the channel's latest message, run like reminders |
 

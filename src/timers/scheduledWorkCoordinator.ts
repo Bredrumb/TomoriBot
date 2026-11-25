@@ -8,6 +8,11 @@ import { RandomTriggerProcessor } from "./randomTriggerProcessor";
 import { ReminderProcessor } from "./reminderProcessor";
 import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processor";
 import { clearScheduledWorkNudgeHandler, registerScheduledWorkNudgeHandler } from "./scheduledWorkSignals";
+import {
+  getScheduledWorkLaneServerIds,
+  isScheduledWorkLaneCapacityFull,
+  startScheduledWorkLanes,
+} from "@/timers/scheduledWorkLanes";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const SCHEDULED_WORK_RECONCILE_INTERVAL_MS = 60_000;
@@ -109,6 +114,7 @@ export class ScheduledWorkCoordinator {
     this.clearWakeTimeout();
     this.nextWakeAt = new Date();
     this.wakeTimeout = setTimeout(() => {
+      this.wakeTimeout = null;
       this.runCycle(reason).catch((error) => {
         log.error(`Scheduled work cycle failed (${reason})`, error);
       });
@@ -152,12 +158,7 @@ export class ScheduledWorkCoordinator {
 
     this.clearWakeTimeout();
     this.nextWakeAt = null;
-    const ownerSignal = this.owner.getWorkSignal();
-    const work: ScheduledWorkContext = {
-      signal: ownerSignal ? AbortSignal.any([this.lifetime.signal, ownerSignal]) : this.lifetime.signal,
-      ownerSignal: ownerSignal ?? new AbortController().signal,
-      hasOwnership: this.owner.hasOwnership,
-    };
+    const work = this.createWorkContext();
     this.isProcessing = true;
 
     try {
@@ -167,9 +168,7 @@ export class ScheduledWorkCoordinator {
         if (reason !== "reconcile") {
           log.info(`Running scheduled work cycle (${reason})`);
         }
-        await this.reminderProcessor.processDueReminders(work);
-        if (!canRunScheduledWork(work)) return;
-        await this.randomTriggerProcessor.processDueRandomTriggers(work);
+        await this.dispatchDueWork(work);
         if (!canRunScheduledWork(work)) return;
         // Natural Nudges has no due-time column to wake on, so the 60 s reconcile is its only clock.
         await this.naturalNudgeProcessor.processDueIdleNudges(work);
@@ -184,32 +183,78 @@ export class ScheduledWorkCoordinator {
     await this.scheduleNextWake(work);
   }
 
+  private createWorkContext(): ScheduledWorkContext {
+    const ownerSignal = this.owner.getWorkSignal();
+    return {
+      signal: ownerSignal ? AbortSignal.any([this.lifetime.signal, ownerSignal]) : this.lifetime.signal,
+      ownerSignal: ownerSignal ?? new AbortController().signal,
+      hasOwnership: this.owner.hasOwnership,
+    };
+  }
+
+  private async dispatchDueWork(work: ScheduledWorkContext): Promise<void> {
+    const reminders = await this.reminderProcessor.loadDueReminders(work);
+    if (!canRunScheduledWork(work)) return;
+    const triggers = await this.randomTriggerProcessor.loadDueTriggers(work);
+    if (!canRunScheduledWork(work)) return;
+    startScheduledWorkLanes(
+      [
+        ...reminders.map((reminder) => ({
+          serverId: reminder.server_id,
+          dueAt: (reminder.next_attempt_at ?? reminder.reminder_time).getTime(),
+          run: () => this.reminderProcessor.executeReminder(reminder, work),
+        })),
+        ...triggers.map((trigger) => ({
+          serverId: trigger.server_id,
+          dueAt: trigger.next_trigger_at.getTime(),
+          run: () => this.randomTriggerProcessor.executeTrigger(trigger, work),
+        })),
+      ],
+      work,
+      () => this.handleLaneSettled(),
+    );
+  }
+
+  // A lane from a replaced coordinator settles into a stopped instance, so that server waits for the new reconcile
+  // tick (one interval at most); route this through a module-level handler if lease swaps become routine.
+  private handleLaneSettled(): void {
+    if (!this.isRunning || this.isProcessing) return;
+    this.scheduleNextWake(this.createWorkContext()).catch((error) => {
+      log.error("Scheduled work wake failed after a lane settled", error);
+    });
+  }
+
   private async scheduleNextWake(work: ScheduledWorkContext): Promise<void> {
     if (!canRunScheduledWork(work)) {
       return;
     }
 
-    this.clearWakeTimeout();
+    // A due row waiting for a free lane would otherwise arm a zero-delay wake that dispatches nothing.
+    if (isScheduledWorkLaneCapacityFull()) return;
 
-    const nextReminderTime = await serverScheduleRepository.getNextReminderTime(this.topology);
-    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime(this.topology);
-    if (!canRunScheduledWork(work)) return;
+    // Running lanes are skipped because their still-due rows would arm a zero-delay spin until each lane settles.
+    const busyServerIds = getScheduledWorkLaneServerIds();
+    const nextReminderTime = await serverScheduleRepository.getNextReminderTime(this.topology, busyServerIds);
+    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime(this.topology, busyServerIds);
+    if (!canRunScheduledWork(work) || this.isProcessing || isScheduledWorkLaneCapacityFull()) return;
     const nextDueTime = this.getEarliestDate(nextReminderTime, nextRandomTriggerTime);
-
-    if (!nextDueTime) {
-      this.nextWakeAt = null;
-      return;
-    }
+    if (!nextDueTime) return;
 
     const delayMs = Math.max(0, nextDueTime.getTime() - Date.now());
     const clampedDelayMs = Math.min(delayMs, MAX_TIMEOUT_MS);
+    const wakeAt = Date.now() + clampedDelayMs;
+    // Refreshes overlap with each other and with immediate runs, so one may only bring the armed wake forward; only a
+    // cycle start or stop cancels a wake.
+    if (this.wakeTimeout && this.nextWakeAt && this.nextWakeAt.getTime() <= wakeAt) return;
 
-    this.nextWakeAt = new Date(Date.now() + clampedDelayMs);
+    this.clearWakeTimeout();
+    this.nextWakeAt = new Date(wakeAt);
     log.info(
       `Scheduled work coordinator next wake scheduled for ${nextDueTime.toISOString()} (in ${clampedDelayMs}ms)`,
     );
 
     this.wakeTimeout = setTimeout(() => {
+      this.wakeTimeout = null;
       this.runCycle("due").catch((error) => {
         log.error("Scheduled work cycle failed (due)", error);
       });

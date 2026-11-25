@@ -82,6 +82,14 @@ fan-out select owned guilds. Scheduled continuations carry cancellation through 
 check again before dispatch or consuming a schedule. Delivered reminders, random triggers, and Natural Nudges can settle during graceful drain while their captured owner epoch remains valid. A process-local wake signal accelerates local
 changes; periodic reconciliation discovers changes written by a peer.
 
+A coordinator cycle only dispatches. Due reminders and random triggers go into one lane per server
+(`src/timers/scheduledWorkLanes.ts`), which runs that server's items one at a time in due order, and
+at most `MAX_SCHEDULED_WORK_LANES` lanes run at once. The cycle returns without waiting, so one
+server's slow turn never delays another server's scheduled work. Next-wake reads skip servers with a
+running lane, whose rows are usually still due, and a settling lane refreshes the wake. Overlapping
+refreshes may only bring an armed wake forward. Lanes live at module scope so a lease swap that replaces the coordinator cannot start a
+second lane for a server, and graceful shutdown waits for running lanes inside the turn drain window.
+
 Subset status totals come from fresh `cache_sizes` samples covering every shard exactly once.
 Missing, stale, overlapping, or invalid peer evidence produces no total; status uses count-free
 activity and the primary defers Top.gg posting until a complete total exists. All-owner mode uses

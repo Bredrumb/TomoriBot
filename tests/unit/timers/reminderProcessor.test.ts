@@ -12,6 +12,7 @@ import * as realWebhookManager from "@/utils/discord/webhookManager";
 import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
 import * as realLogger from "@/utils/misc/logger";
 import type { ChatIncoming, QueuedMessageDiscardHandler } from "@/utils/chat/types";
+import type { ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import { markTextQuotaRefused, type TextQuotaRefusalReason } from "@/utils/chat/textQuotaState";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
@@ -92,6 +93,10 @@ scopedMock.module("@/utils/bridges/matrix", () => ({
 }));
 
 let ReminderProcessor: typeof import("@/timers/reminderProcessor").ReminderProcessor;
+
+async function runDueReminders(processor: InstanceType<typeof ReminderProcessor>, work?: ScheduledWorkContext) {
+  for (const reminder of await processor.loadDueReminders(work)) await processor.executeReminder(reminder, work);
+}
 
 // Log silencing uses spyOn on the live singleton rather than mock.module because mock.module persists across files
 // and breaks later spyOn calls.
@@ -208,7 +213,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     });
 
     const before = Date.now();
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(1);
@@ -230,7 +235,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
       return "run";
     });
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(rescheduleReminderMock).not.toHaveBeenCalled();
     expect(scheduleReminderRetryMock).not.toHaveBeenCalled();
@@ -245,7 +250,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     });
     getDueRemindersMock.mockImplementation(async () => [reminder]);
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
     expect(tomoriChatMock).not.toHaveBeenCalled();
@@ -263,7 +268,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
       });
       getDueRemindersMock.mockImplementation(async () => [reminder]);
 
-      await new ReminderProcessor(makeClient() as never).processDueReminders();
+      await runDueReminders(new ReminderProcessor(makeClient() as never));
 
       expect(tomoriChatMock).not.toHaveBeenCalled();
       expect(deleteReminderByIdMock).not.toHaveBeenCalled();
@@ -285,7 +290,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
       return "run";
     });
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(rescheduleReminderMock.mock.calls[0]?.[1]).toMatchObject({ consumeRepeatCount: true });
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(finishing.reminder_id);
@@ -308,7 +313,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
         });
         return "run";
       });
-      await new ReminderProcessor(makeClient() as never).processDueReminders({
+      await runDueReminders(new ReminderProcessor(makeClient() as never), {
         signal: scheduler.signal,
         ownerSignal: owner.signal,
         hasOwnership: () => true,
@@ -329,8 +334,8 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     });
     const processor = new ReminderProcessor(makeClient() as never);
 
-    await processor.processDueReminders();
-    await processor.processDueReminders();
+    await runDueReminders(processor);
+    await runDueReminders(processor);
 
     expect(tomoriChatMock).toHaveBeenCalledTimes(1);
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
@@ -349,7 +354,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     });
     getDueRemindersMock.mockImplementation(async () => [reminder]);
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(tomoriChatMock.mock.calls[0]?.[0].systemTriggerIdentity).toEqual({
       serverDiscId: "human_001",
@@ -360,7 +365,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
   it("treats the latest channel message as a bystander anchor and credits the reminder's creator", async () => {
     getDueRemindersMock.mockImplementation(async () => [makeReminder({ created_by_user_id: 7 })]);
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     const input = tomoriChatMock.mock.calls[0]?.[0];
     expect(input?.borrowsTriggerMessage).toBeTrue();
@@ -426,14 +431,14 @@ describe("ReminderProcessor delivery retry cap", () => {
     const processor = new ReminderProcessor(client as never);
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      await processor.processDueReminders();
+      await runDueReminders(processor);
     }
 
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(5);
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
     expect(channel.send).not.toHaveBeenCalled();
 
-    await processor.processDueReminders();
+    await runDueReminders(processor);
 
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(5);
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
@@ -461,7 +466,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     const channel = await client.channels.fetch();
     const processor = new ReminderProcessor(client as never);
     for (let attempt = 0; attempt <= 5; attempt++) {
-      await processor.processDueReminders();
+      await runDueReminders(processor);
     }
 
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(5);
@@ -491,7 +496,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     const channel = await client.channels.fetch();
     const processor = new ReminderProcessor(client as never);
     for (let attempt = 0; attempt <= 5; attempt++) {
-      await processor.processDueReminders();
+      await runDueReminders(processor);
     }
 
     const fallbackPayload = channel.send.mock.calls[0]?.[0] as { content?: string } | undefined;
@@ -507,15 +512,15 @@ describe("ReminderProcessor delivery retry cap", () => {
 
     alwaysFailDelivery();
     for (let attempt = 0; attempt < 3; attempt++) {
-      await processor.processDueReminders();
+      await runDueReminders(processor);
     }
 
     alwaysSucceedDelivery();
-    await processor.processDueReminders();
+    await runDueReminders(processor);
 
     alwaysFailDelivery();
     for (let attempt = 0; attempt < 3; attempt++) {
-      await processor.processDueReminders();
+      await runDueReminders(processor);
     }
 
     // Six failures total: without the reset the cap would have fired on the last one.
@@ -529,7 +534,7 @@ describe("ReminderProcessor delivery retry cap", () => {
 
     const client = makeClient();
     const channel = await client.channels.fetch();
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(scheduleReminderRetryMock).not.toHaveBeenCalled();
     expect(channel.send).toHaveBeenCalledTimes(1);
@@ -547,7 +552,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     channel.send.mockImplementation(async () => {
       throw new Error("Missing Permissions");
     });
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
     expect(rescheduleReminderMock).not.toHaveBeenCalled();
@@ -573,7 +578,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       });
       const client = makeClient();
       const channel = await client.channels.fetch();
-      await new ReminderProcessor(client as never).processDueReminders();
+      await runDueReminders(new ReminderProcessor(client as never));
 
       expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(retries);
       expect(channel.send).toHaveBeenCalledTimes(1 - retries);
@@ -600,7 +605,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       channel.send.mockImplementation(async () => {
         throw fallbackError;
       });
-      await new ReminderProcessor(client as never).processDueReminders();
+      await runDueReminders(new ReminderProcessor(client as never));
 
       expect(logged(errorLog, "Reminder 42 exhausted")).toBe(0);
       expect(logged(warnLog, "Reminder 42 exhausted")).toBe(1);
@@ -619,7 +624,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     channel.send.mockImplementation(async () => {
       throw new Error("Missing Permissions");
     });
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
     expect(client.users.fetch).not.toHaveBeenCalled();
@@ -633,7 +638,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     client.channels.fetch.mockImplementation(async () => {
       throw new Error("Missing Access");
     });
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
     expect(rescheduleReminderMock.mock.calls[0]?.[2]).toBe(1);
@@ -656,7 +661,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       ),
     );
 
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(client.channels.fetch).toHaveBeenCalledTimes(1);
     expect(errorLog).not.toHaveBeenCalled();
@@ -674,7 +679,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     channel.send.mockImplementation(async () => {
       throw new Error("Missing Permissions");
     });
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
     expect(rescheduleReminderMock.mock.calls[0]?.[2]).toBe(4);
@@ -685,7 +690,7 @@ describe("ReminderProcessor delivery retry cap", () => {
     getDueRemindersMock.mockImplementation(async () => [reminder]);
     alwaysSucceedDelivery();
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(rescheduleReminderMock.mock.calls[0]?.[2] ?? 0).toBe(0);
     expect(reminder.failed_occurrence_count).toBe(0);
@@ -702,7 +707,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       const channel = await client.channels.fetch();
       const processor = new ReminderProcessor(client as never);
       for (let attempt = 0; attempt <= 5; attempt++) {
-        await processor.processDueReminders();
+        await runDueReminders(processor);
       }
 
       const fallbackPayload = channel.send.mock.calls[0]?.[0] as
@@ -765,7 +770,7 @@ describe("ReminderProcessor scheduled task text quota", () => {
       const client = makeClient();
       const channel = await client.channels.fetch();
 
-      await new ReminderProcessor(client as never).processDueReminders();
+      await runDueReminders(new ReminderProcessor(client as never));
 
       expect(scheduleReminderRetryMock).not.toHaveBeenCalled();
       expect(sentNotice(channel).content).toBe(mention);
@@ -785,7 +790,7 @@ describe("ReminderProcessor scheduled task text quota", () => {
       }),
     ]);
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     expect(rescheduleReminderMock.mock.calls.map(([id, , failed]) => [id, failed])).toEqual([[42, 2]]);
   });
@@ -798,7 +803,7 @@ describe("ReminderProcessor scheduled task text quota", () => {
     const client = makeClient();
     const channel = await client.channels.fetch();
 
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(1);
     expect(channel.send).not.toHaveBeenCalled();
@@ -817,7 +822,7 @@ describe("ReminderProcessor scheduled task text quota", () => {
       makeReminder({ reminder_id: 43, server_disc_id: "guild_001", created_by_user_id: null }),
     ]);
 
-    await new ReminderProcessor(makeClient() as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(makeClient() as never));
 
     const [memberTask, relayTask] = tomoriChatMock.mock.calls.map(([input]) => input as ChatIncoming);
     expect(memberTask?.textQuotaUserDiscId).toBe("member_007");
@@ -835,7 +840,7 @@ describe("ReminderProcessor scheduled task text quota", () => {
     const client = makeClient();
     const channel = await client.channels.fetch();
 
-    await new ReminderProcessor(client as never).processDueReminders();
+    await runDueReminders(new ReminderProcessor(client as never));
 
     expect(tomoriChatMock).not.toHaveBeenCalled();
     expect(channel.send).not.toHaveBeenCalled();

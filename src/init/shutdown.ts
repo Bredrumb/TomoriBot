@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import { abortChannelTurns, waitForChannelTurns } from "@/utils/chat/channelQueue";
+import { waitForScheduledWorkLanes } from "@/timers/scheduledWorkLanes";
 import { log } from "@/utils/misc/logger";
 import { beginDrain } from "@/utils/misc/shutdownState";
 
@@ -60,6 +61,8 @@ export function registerShutdown(
     const drainTimeout = setTimeout(() => drainController.abort(), TURN_DRAIN_MS);
     try {
       await waitForChannelTurns(drainController.signal);
+      // A delivered random trigger reschedules after its channel lock releases, so the lane outlives the turn.
+      await waitForScheduledWorkLanes(drainController.signal);
       clearTimeout(drainTimeout);
       if (drainController.signal.aborted) abortChannelTurns();
       await boundedStep("stats", cleanup.flushStats);

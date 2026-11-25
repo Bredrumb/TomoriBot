@@ -71,6 +71,7 @@ import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
 import { NudgeRequestBudget } from "@/modules/natural-nudges/runtime/requestBudget";
 import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { claimNudgeServer, isNudgeServerBusy, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
+import { hasScheduledWorkLane } from "@/timers/scheduledWorkLanes";
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
 import { runIdleNudgeAttempt, type IdleNudgeAttempt } from "@/modules/natural-nudges/runtime/runner";
 import type { PlannerCandidate, ScenePartner } from "@/modules/natural-nudges/runtime/planner";
@@ -146,7 +147,7 @@ export class NaturalNudgeProcessor {
     }
     for (const server of servers) {
       if (!canRunScheduledWork(work)) return;
-      if (isNudgeServerBusy(server.server_id)) continue;
+      if (isNudgeServerBusy(server.server_id) || hasScheduledWorkLane(server.server_id)) continue;
       try {
         await runWithErrorContext({ source: "natural_nudge", serverId: server.server_id }, () =>
           this.evaluateServer(server, work),
