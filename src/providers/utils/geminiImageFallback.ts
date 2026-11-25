@@ -12,6 +12,14 @@ function isImagePart(part: Part): boolean {
   return Boolean(part.inlineData?.mimeType?.startsWith("image/") || part.fileData?.mimeType?.startsWith("image/"));
 }
 
+function describeImagePart(part: Part): { mimeType?: string; bytes?: number } {
+  const data = part.inlineData?.data;
+  return {
+    mimeType: part.inlineData?.mimeType ?? part.fileData?.mimeType,
+    ...(data && { bytes: Buffer.byteLength(data, "base64") }),
+  };
+}
+
 function replaceImagePartsWithNotice(contents: Content[]): { contents: Content[]; removed: number } {
   let removed = 0;
   const replaced = contents.map((content) => {
@@ -35,6 +43,7 @@ export async function generateGeminiStreamWithImageFallback(
   options: {
     adapterName: string;
     provider: string;
+    channelId: string;
     onFallback?: (contents: Content[], removed: number) => void;
   },
 ) {
@@ -45,10 +54,14 @@ export async function generateGeminiStreamWithImageFallback(
     const fallback = replaceImagePartsWithNotice(request.contents);
     if (fallback.removed === 0) throw error;
     options.onFallback?.(fallback.contents, fallback.removed);
+    const images = request.contents.flatMap((content) =>
+      (content.parts ?? []).filter(isImagePart).map(describeImagePart),
+    );
     log.warn(
       `${options.adapterName}: Gemini could not process an input image; retrying without ${fallback.removed} image(s)`,
       error,
-      { metadata: { model: request.model } },
+      { metadata: { model: request.model, channelId: options.channelId, images } },
+      { retain: true },
     );
     log.metric("provider_image_strip_retry", {
       provider: options.provider,

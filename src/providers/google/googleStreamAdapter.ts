@@ -340,6 +340,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         {
           adapterName: "GoogleStreamAdapter",
           provider: "google",
+          channelId: context.channel.id,
           onFallback: (contents, removed) => {
             diagnostics.lastTurn = summarizeLastTurn(contents);
             diagnostics.imageFallbackRemoved = removed;

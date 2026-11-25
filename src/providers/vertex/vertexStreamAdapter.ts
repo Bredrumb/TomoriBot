@@ -275,7 +275,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       const stream = await generateGeminiStreamWithImageFallback(
         genAI,
         { model: config.model, contents: finalContents, config: requestConfig },
-        { adapterName: "VertexStreamAdapter", provider: this.providerName },
+        { adapterName: "VertexStreamAdapter", provider: this.providerName, channelId: context.channel.id },
       );
 
       for await (const chunkResponse of stream) {
