@@ -45,6 +45,10 @@ Pedir à TomoriBot no chat para excluir um agendamento segue a mesma regra: voc�
 
 Um servidor pode conter até 100 lembretes e tarefas pendentes por vez. Quando estiver cheio, a TomoriBot avisará você em vez de adicionar outro; remova os antigos com `/scheduled-task remove` para liberar espaço.
 
+Cada vez que um agendamento criado por você é executado no modelo de IA do servidor, ele consome uma das suas respostas de texto da [cota](/features/setup-administration/server-moderation/#cost-control-quotas) do servidor. Quando sua cota acaba, um lembrete ainda chega como uma mensagem simples sem IA, e uma tarefa publica um aviso mencionando você em vez de ser executada. A próxima ocorrência mantém seu horário habitual.
+
+Se um moderador colocar você na lista negra, seus agendamentos serão pausados silenciosamente: os recorrentes pulam suas execuções e são retomados se a lista negra for removida, e os únicos que vencerem durante esse período são descartados.
+
 ## Como Funciona a Entrega
 
 Os lembretes só são marcados como concluídos após a entrega ser bem-sucedida. Se a entrega for interrompida, TomoriBot tenta novamente automaticamente sem alterar a programação recorrente.

@@ -20,7 +20,7 @@ Use uma chave de API para o provedor no mesmo escopo da seleção. Uma assinatur
 
 Em `/config` > Persona > Voz, escolha `Descrever Voz` para salvar uma descrição de até 1.000 caracteres. Você pode redigi-la antes de escolher um modelo. Para usar o Fish ou um modelo de clonagem local, adicione uma referência em `/config` > Modelos > Parâmetros TTS e Vozes e atribua-a na página Voz da persona. Ambas as entradas permanecem salvas ao trocar de provedor. Escolha `Design de Voz` ou `Clone de Voz` para definir a prioridade; se a entrada preferida não tiver um modelo correspondente ou uma voz utilizável, a outra entrada salva poderá ser usada. A página explica qual fonte é efetiva para as seleções do servidor.
 
-Execute `/generate voice-message` para inserir um roteiro curto, ou peça à persona para enviar uma mensagem de voz. O comando também aceita uma descrição única ou o upload de uma referência.
+Execute `/generate voice-message` para inserir um roteiro curto, ou peça à persona para enviar uma mensagem de voz. O comando também aceita uma descrição única ou o upload de uma referência. Uma persona envia no máximo uma mensagem de voz por resposta.
 
 O parâmetro opcional `model` escolhe um modelo de fala compatível ou endpoint do servidor para esta mensagem.
 Entradas pessoais mostram `(via provedor pessoal)`. Ele mantém seus padrões salvos, e uma seleção explícita

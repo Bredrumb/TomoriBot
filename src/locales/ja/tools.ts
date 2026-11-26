@@ -32,6 +32,7 @@ export default {
     generate_voice_message: {
       persona_missing: `このペルソナはもう利用できません。`,
       stale: `このターンの間に音声モデル、認証情報、またはペルソナの声が変更されました。ボイスメッセージを生成する前に新しいターンを始めてください。`,
+      turn_limit: `この返信にはすでにボイスメッセージがあります。テキストで続けてください。`,
     },
     generate_image: {
       quota_exceeded_generic: `画像生成クォータを超過しました。`,

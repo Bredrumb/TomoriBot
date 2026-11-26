@@ -10,6 +10,6 @@ export default {
     success_full_title: `服务器已清空`,
     success_full_description: `所有服务器数据都已清空，包括人格。Discord 侧的 Webhook 已删除：**{webhooks_deleted}**（失败：**{webhooks_failed}**）。运行 \`/setup\` 重新开始。`,
     success_preserved_title: `服务器已清空（保留人格）`,
-    success_preserved_description: `服务器设置、白名单、配额、触发和集成都已清空。人格及其属性和记忆都保留。Discord 侧的 Webhook 已删除：**{webhooks_deleted}**（失败：**{webhooks_failed}**）。运行 \`/setup\` 重新配置服务器级设置。`,
+    success_preserved_description: `服务器设置、白名单、配额、触发和集成都已清空。人格及其属性和记忆已保留。Discord 侧的 Webhook 已删除：**{webhooks_deleted}**（失败：**{webhooks_failed}**）。设置已恢复为默认值：请用 \`/providers\` 重新添加提供方，再用 \`/config\` 调整其余设置。`,
   },
 };

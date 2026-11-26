@@ -58,7 +58,17 @@ Tạo một giá trị ngẫu nhiên 32 ký tự cho `CRYPTO_SECRET` bằng Dock
 docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 ```
 
-Tạo một mật khẩu riêng cho `POSTGRES_PASSWORD`. Bạn có thể sao chép thêm các cài đặt tinh chỉnh tùy chọn từ `.env.optional.example`.
+Tạo một mật khẩu riêng cho `POSTGRES_PASSWORD`. Compose không có giá trị dự phòng, vì vậy PostgreSQL sẽ từ chối khởi động lần đầu nếu thiếu mật khẩu này. Cổng 15432 của nó chỉ chấp nhận kết nối từ chính máy tính này. Bạn có thể sao chép thêm các cài đặt tinh chỉnh tùy chọn từ `.env.optional.example`.
+
+:::caution[Cơ sở dữ liệu từng khởi động lần đầu mà không có mật khẩu]
+Các phiên bản cũ hơn của `docker-compose.yaml` dùng mật khẩu dự phòng `secure_default_password`, và PostgreSQL sẽ giữ nguyên mật khẩu từ lần khởi động đầu tiên. Nếu volume cơ sở dữ liệu của bạn được tạo theo cách đó, hãy đặt một `POSTGRES_PASSWORD` mới trong `.env`, chỉ khởi động cơ sở dữ liệu bằng `docker compose up -d postgres`, rồi đổi mật khẩu đã lưu sang cùng giá trị đó:
+
+```sh
+docker compose exec postgres psql -U tomori -d tomodb -c "ALTER ROLE tomori PASSWORD 'your-new-password'"
+```
+
+Sau đó khởi động phần còn lại của stack.
+:::
 
 :::note[Kết nối cơ sở dữ liệu là tự động]
 Không đặt `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`; Compose tự động cấu hình chúng.

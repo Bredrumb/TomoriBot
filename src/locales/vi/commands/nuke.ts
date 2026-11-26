@@ -10,6 +10,6 @@ export default {
     success_full_title: `Đã xóa sạch máy chủ`,
     success_full_description: `Toàn bộ dữ liệu máy chủ đã bị xóa, bao gồm cả persona. Webhook phía Discord đã xóa: **{webhooks_deleted}** (thất bại: **{webhooks_failed}**). Chạy \`/setup\` để bắt đầu lại.`,
     success_preserved_title: `Đã xóa sạch máy chủ (Giữ lại persona)`,
-    success_preserved_description: `Cài đặt máy chủ, whitelist, hạn ngạch, trigger và tích hợp đã bị xóa. Persona cùng thuộc tính/bộ nhớ được giữ lại. Webhook phía Discord đã xóa: **{webhooks_deleted}** (thất bại: **{webhooks_failed}**). Chạy \`/setup\` để cấu hình lại cài đặt cấp máy chủ.`,
+    success_preserved_description: `Cài đặt máy chủ, whitelist, hạn ngạch, trigger và tích hợp đã bị xóa. Persona cùng thuộc tính/bộ nhớ được giữ lại. Webhook phía Discord đã xóa: **{webhooks_deleted}** (thất bại: **{webhooks_failed}**). Cài đặt đã trở về mặc định: hãy thêm lại nhà cung cấp bằng \`/providers\`, sau đó điều chỉnh phần còn lại bằng \`/config\`.`,
   },
 };

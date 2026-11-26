@@ -11,6 +11,8 @@ Elige proveedores de voz en `/providers`, o usa `/personal providers` para tus p
 ## Texto a voz
 <!-- anchor: text-to-speech -->
 
+Una persona envía como máximo un mensaje de voz por respuesta.
+
 ### Voces de Google y OpenRouter
 
 Agregar Google selecciona Gemini Flash TTS para `TTS (Diseño de voz)`. Agregar OpenRouter selecciona el modelo de pago Fish S2.1 Pro para `TTS (Clon de voz)`, y completa `TTS (Diseño de voz)` con Seed Audio 1.0 únicamente cuando esa ranura está vacía. OpenRouter nunca reemplaza un diseño de Gemini o Vertex que ya hayas elegido, por lo que ambos proveedores pueden permanecer activos al mismo tiempo. Si agregaste OpenRouter antes de que Seed estuviera disponible, tu ranura de Diseño permanecerá vacía hasta que elijas Seed. Agregar la clave de OpenRouter de nuevo también llenará una ranura de Diseño vacía con Seed, incluida una que hayas limpiado a propósito. Flash-Lite y Fish gratuito requieren una selección de modelo explícita; la disponibilidad y las cuotas de los proveedores siguen aplicando. Usa `/config` > Modelos > Cambiar modelos para cambiar o limpiar cualquiera de las dos ranuras.

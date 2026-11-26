@@ -30,6 +30,7 @@ export default {
     generate_voice_message: {
       persona_missing: `La persona ya no está disponible.`,
       stale: `El modelo de voz, las credenciales o la voz de la persona cambiaron durante este turno. Inicia un nuevo turno antes de generar un mensaje de voz.`,
+      turn_limit: `Esta respuesta ya tiene un mensaje de voz. Continúa en texto.`,
     },
     generate_image: {
       quota_exceeded_generic: `Se agotó la cuota de generación de imágenes.`,

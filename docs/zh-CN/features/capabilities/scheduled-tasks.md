@@ -45,6 +45,10 @@ on the 31st of every month, remind me to pay rent
 
 一个服务器最多可以同时保留 100 个待处理的提醒和任务。达到上限时，TomoriBot 会通知你而不是继续添加；使用 `/scheduled-task remove` 删除旧的即可腾出空间。
 
+每次你创建的计划在服务器的 AI 模型上运行时，都会消耗你在服务器[配额](/features/setup-administration/server-moderation/#cost-control-quotas)中的一次文本回复次数。当你的配额用完时，提醒仍会以不使用 AI 的普通消息送达，而定时任务会改为发送一条通知来 @提及你，不会实际执行。下一次触发仍保持原定时间。
+
+如果管理员将你列入黑名单，你的计划会静默暂停：重复计划会跳过运行，并在移出黑名单后恢复；到期的一次性计划则会被丢弃。
+
 ## 投递是怎么工作的
 
 仅在发送成功后，提醒才会标记为完成。如果交付中断，TomoriBot会自动重试，而不会更改重复计划。

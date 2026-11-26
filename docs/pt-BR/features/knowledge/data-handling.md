@@ -97,7 +97,7 @@ Estas ações removem ou redefinem permanentemente os dados armazenados:
   exigem `Gerenciar Servidor`. Com o ensino por membros ativado, os membros podem ver, editar ou remover
   suas próprias memórias do servidor. Quando desativado, ver e gerenciar memórias do servidor exige `Gerenciar Servidor`.
 - `/personal nuke`: exclui permanentemente todos os dados pessoais dos servidores.
-- `/nuke`: limpa os dados do servidor, incluindo expressões personalizadas e regras de acesso pessoal. Defina `preserve_personas: true` para manter personas enquanto remove expressões e mídia personalizadas.
+- `/nuke`: limpa os dados do servidor, incluindo expressões personalizadas e regras de acesso de persona. Defina `preserve_personas: true` para manter personas enquanto remove expressões e mídias personalizadas. As configurações do servidor retornam aos padrões, e provedores e chaves de API precisam ser adicionados novamente.
 - `/reset config`: restaura a configuração do servidor para os padrões do banco de dados.
   - **Preserva**: atribuições de modelos ativos, chaves API, endpoints personalizados, personas, memórias de servidor e integrações.
   - **Limpas**: substituições de canais, regras de acionamento automático, listas negras de usuários e listas brancas de canais.

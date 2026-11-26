@@ -14,6 +14,6 @@ export default {
       "Todos os dados do servidor foram apagados, incluindo personas. Webhooks do Discord apagados: **{webhooks_deleted}** (falhas: **{webhooks_failed}**). Execute `/setup` para começar de novo.",
     success_preserved_title: "Servidor Apagado (Personas Preservadas)",
     success_preserved_description:
-      "Configurações do servidor, listas de permissões, cotas, gatilhos e integrações foram apagados. Personas e seus atributos/memórias foram mantidos. Webhooks do Discord apagados: **{webhooks_deleted}** (falhas: **{webhooks_failed}**). Execute `/setup` para reconfigurar as definições do servidor.",
+      "Configurações do servidor, listas de permissões, cotas, gatilhos e integrações foram apagados. Personas e seus atributos/memórias foram mantidos. Webhooks do Discord apagados: **{webhooks_deleted}** (falhas: **{webhooks_failed}**). As configurações voltaram aos padrões: adicione um provedor novamente com `/providers` e ajuste o restante com `/config`.",
   },
 };
