@@ -472,6 +472,7 @@ export default defineConfig({
     ),
     "/features/knowledge/lorebooks/": "/en/features/knowledge/memory/lorebooks/",
     "/features/knowledge/prompt-macros/": "/en/features/prompt-macros/",
+    "/architecture/introduction/": "/en/introduction/",
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
     "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",

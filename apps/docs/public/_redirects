@@ -342,3 +342,29 @@
 /zh-CN/self-hosting/local-endpoints/setup-local-mcp/ /zh-CN/self-hosting/mcp-servers/setup-local-mcp/ 301
 /vi/self-hosting/local-endpoints/setup-local-mcp /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
 /vi/self-hosting/local-endpoints/setup-local-mcp/ /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
+
+# Splats for bare routes from before the /en/ split stay last so the exact rules above them win,
+# and a new top-level docs section needs its own lines here.
+/architecture/introduction /en/introduction/ 301
+/architecture/introduction/ /en/introduction/ 301
+/architecture/integrations/novelai/tool-calling /en/architecture/integrations/novelai/limitations/ 301
+/architecture/integrations/novelai/tool-calling/ /en/architecture/integrations/novelai/limitations/ 301
+/architecture /en/architecture/ 301
+/architecture/ /en/architecture/ 301
+/architecture/* /en/architecture/:splat 301
+/contributing /en/contributing/ 301
+/contributing/ /en/contributing/ 301
+/contributing/* /en/contributing/:splat 301
+/features /en/features/ 301
+/features/ /en/features/ 301
+/features/* /en/features/:splat 301
+/introduction /en/introduction/ 301
+/introduction/ /en/introduction/ 301
+/introduction/* /en/introduction/:splat 301
+/meet-tomori /en/meet-tomori/ 301
+/meet-tomori/ /en/meet-tomori/ 301
+/meet-tomori/* /en/meet-tomori/:splat 301
+/self-hosting /en/self-hosting/ 301
+/self-hosting/ /en/self-hosting/ 301
+/self-hosting/* /en/self-hosting/:splat 301
+/legal/* /en/legal/:splat 301

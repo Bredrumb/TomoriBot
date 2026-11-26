@@ -165,7 +165,8 @@ link sweep, resets the baseline even if the prose was not retranslated.
 
 `tomoribot.app` serves an indexable English landing page at `/` and one per published locale at
 `/{locale}/`, each with its own canonical URL and `hreflang` set. Visitors choose a language; there is
-no `Accept-Language` redirect. `docs.tomoribot.app/` redirects to `/en/introduction/`, and that redirect
+no `Accept-Language` redirect. The landing language menu and the docs header logo are the only
+crawlable links into those pages, so both stay plain `<a href>` links rather than script navigation. `docs.tomoribot.app/` redirects to `/en/introduction/`, and that redirect
 must match in `apps/docs/astro.config.mts` and `apps/docs/public/_redirects`.
 
 The two hosts are separate Cloudflare Pages projects: `apps/landing/dist` and the docs build. Never
