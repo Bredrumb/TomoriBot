@@ -18,7 +18,8 @@ export interface LandingCopy {
   automatic: string;
   home: string;
   links: string;
-  support: string;
+  supportKofi: string;
+  supportPatreon: string;
   showcase: string;
   chooseFeature: string;
   viewFeature: string;
@@ -46,7 +47,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "Auto",
     home: "TomoriBot home",
     links: "TomoriBot links",
-    support: "Support on Ko-fi",
+    supportKofi: "Support on Ko-fi",
+    supportPatreon: "Support on Patreon",
     showcase: "TomoriBot feature gallery",
     chooseFeature: "Choose a feature",
     viewFeature: "View",
@@ -106,7 +108,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "自動",
     home: "TomoriBotホーム",
     links: "TomoriBotのリンク",
-    support: "Ko-fiで支援",
+    supportKofi: "Ko-fiで支援",
+    supportPatreon: "Patreonで支援",
     showcase: "TomoriBot機能ギャラリー",
     chooseFeature: "機能を選択",
     viewFeature: "表示",
@@ -141,7 +144,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "自動",
     home: "TomoriBot 首頁",
     links: "TomoriBot 連結",
-    support: "在 Ko-fi 支持我們",
+    supportKofi: "在 Ko-fi 支持我們",
+    supportPatreon: "在 Patreon 支持我們",
     showcase: "TomoriBot 功能圖庫",
     chooseFeature: "選擇功能",
     viewFeature: "查看",
@@ -176,7 +180,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "自动",
     home: "TomoriBot 首页",
     links: "TomoriBot 链接",
-    support: "在 Ko-fi 支持我们",
+    supportKofi: "在 Ko-fi 支持我们",
+    supportPatreon: "在 Patreon 支持我们",
     showcase: "TomoriBot 功能图库",
     chooseFeature: "选择功能",
     viewFeature: "查看",
@@ -211,7 +216,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "Automático",
     home: "Inicio de TomoriBot",
     links: "Enlaces de TomoriBot",
-    support: "Apoyar en Ko-fi",
+    supportKofi: "Apoyar en Ko-fi",
+    supportPatreon: "Apoyar en Patreon",
     showcase: "Galería de funciones de TomoriBot",
     chooseFeature: "Elegir una función",
     viewFeature: "Ver",
@@ -246,7 +252,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "Automático",
     home: "Página inicial do TomoriBot",
     links: "Links do TomoriBot",
-    support: "Apoiar no Ko-fi",
+    supportKofi: "Apoiar no Ko-fi",
+    supportPatreon: "Apoiar no Patreon",
     showcase: "Galeria de recursos do TomoriBot",
     chooseFeature: "Escolher um recurso",
     viewFeature: "Ver",
@@ -281,7 +288,8 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
     automatic: "Tự động",
     home: "Trang chủ TomoriBot",
     links: "Liên kết TomoriBot",
-    support: "Ủng hộ trên Ko-fi",
+    supportKofi: "Ủng hộ trên Ko-fi",
+    supportPatreon: "Ủng hộ trên Patreon",
     showcase: "Thư viện tính năng TomoriBot",
     chooseFeature: "Chọn tính năng",
     viewFeature: "Xem",

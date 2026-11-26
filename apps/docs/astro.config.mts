@@ -813,6 +813,7 @@ export default defineConfig({
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" },
         { icon: "discord", label: "Discord", href: "https://discord.gg/bjCfHm9QsB" },
+        { icon: "patreon", label: "Patreon", href: "https://www.patreon.com/cw/tomoribot" },
       ],
       sidebar,
     }),

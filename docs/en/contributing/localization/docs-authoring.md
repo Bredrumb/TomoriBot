@@ -186,7 +186,8 @@ and fragment, including the bot's `DOCS_ROUTES`.
 2. Update links in `docs/`, `README.md`, `.github/`, `AGENTS.md`, and `docs/README.md`.
 3. To keep an old URL working, add it to the `redirects` map in `apps/docs/astro.config.mts` (a
    meta-refresh page) and add 301 rules to `apps/docs/public/_redirects` with and without the
-   trailing slash (real redirects on Cloudflare).
+   trailing slash (real redirects on Cloudflare). Put them above the splat block at the end of that
+   file, because Cloudflare silently drops exact rules that follow too many splat rules.
 4. Run `cd apps/docs && bun run build`.
 
 ## Components and images
