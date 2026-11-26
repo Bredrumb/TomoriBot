@@ -2189,6 +2189,24 @@ class ServerRepository implements IRepository<ServerExportShape> {
     "personal_spotlights",
   ];
 
+  // Config writers only UPDATE these setup-seeded rows, so a wipe that keeps the server row must recreate them.
+  private static readonly PRESERVE_MODE_RESEED_TABLES: readonly string[] = [
+    "server_chat_configs",
+    "server_model_configs",
+    "server_member_permissions_configs",
+    "server_byok_configs",
+    "server_notice_embeds_configs",
+    "server_channel_scope_configs",
+    "server_welcome_configs",
+    "server_trigger_behavior_configs",
+    "server_auto_trigger_configs",
+    "server_capabilities_configs",
+    "server_novelai_imagegen_configs",
+    "server_nsfw_configs",
+    "server_speech_configs",
+    "server_memory_configs",
+  ];
+
   async listManagedWebhooksDecrypted(guildDiscId: string): Promise<Array<{ webhookDiscId: string; token: string }>> {
     try {
       const rows = (await sql`
@@ -2234,6 +2252,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
           // table name is a constant from a private allowlist, not user input, so safe to interpolate
           const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);
           totalDeleted += result.count ?? 0;
+        }
+        for (const table of ServerRepository.PRESERVE_MODE_RESEED_TABLES) {
+          await tx.unsafe(`INSERT INTO ${table} (server_id) VALUES ($1)`, [serverId]);
         }
         // discord_managed_webhooks is keyed by guild_disc_id, not server_id
         const whResult = await tx`

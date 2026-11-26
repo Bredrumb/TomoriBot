@@ -1,0 +1,4 @@
+-- No-op rollback.
+--
+-- The forward migration only inserts default rows that were missing. Reversing it would require knowing which
+-- rows it created versus rows that setup, /reset config, or a later nuke created after it ran.
