@@ -96,7 +96,7 @@ Estas acciones eliminan o restablecen permanentemente los datos almacenados:
   requieren `Administrar servidor`. Con la enseñanza de miembros habilitada, los miembros pueden ver, editar o eliminar sus
   propias memorias del servidor. Cuando está desactivada, ver y administrar las memorias del servidor requiere `Administrar servidor`.
 - `/personal nuke`: elimina permanentemente todos los datos personales en los servidores.
-- `/nuke`: borra los datos del servidor, incluidas las expresiones personalizadas y las reglas de acceso de personas. Configura `preserve_personas: true` para conservar las personas y al mismo tiempo eliminar expresiones y medios personalizados.
+- `/nuke`: borra los datos del servidor, incluidas las expresiones personalizadas y las reglas de acceso de personas. Configura `preserve_personas: true` para conservar las personas y al mismo tiempo eliminar expresiones y archivos multimedia personalizados. Después, los ajustes del servidor vuelven a sus valores predeterminados, y los proveedores y las claves de API deben agregarse de nuevo.
 - `/reset config`: restaura la configuración del servidor a los valores predeterminados de la base de datos.
   - **Conservas**: asignaciones de modelos activos, claves API, puntos finales personalizados, personas, memorias de servidor e integraciones.
   - **Borrar**: anulaciones de canales, reglas de activación automática, listas negras de usuarios y listas blancas de canales.

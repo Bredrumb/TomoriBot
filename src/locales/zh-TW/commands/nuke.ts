@@ -10,6 +10,6 @@ export default {
     success_full_title: `伺服器已清空`,
     success_full_description: `所有伺服器資料都已清空，包括人格。Discord 端的網路鉤子已刪除：**{webhooks_deleted}**（失敗：**{webhooks_failed}**）。請執行 \`/setup\` 重新開始。`,
     success_preserved_title: `伺服器已清空（保留人格）`,
-    success_preserved_description: `伺服器設定、白名單、額度、觸發與整合都已清空。人格與其屬性、記憶則保留。Discord 端的網路鉤子已刪除：**{webhooks_deleted}**（失敗：**{webhooks_failed}**）。請執行 \`/setup\` 重新設定伺服器層級的選項。`,
+    success_preserved_description: `伺服器設定、白名單、額度、觸發與整合都已清空。人格與其屬性、記憶則保留。Discord 端的網路鉤子已刪除：**{webhooks_deleted}**（失敗：**{webhooks_failed}**）。設定已還原為預設值：請用 \`/providers\` 重新新增供應商，再用 \`/config\` 調整其餘設定。`,
   },
 };

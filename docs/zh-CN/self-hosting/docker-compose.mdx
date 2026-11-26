@@ -58,7 +58,17 @@ cp .env.example .env
 docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 ```
 
-为`POSTGRES_PASSWORD`另行生成一个密码。你可以从`.env.optional.example`复制可选的调优参数。
+为`POSTGRES_PASSWORD`另行生成一个密码。Compose 没有默认回退密码，因此不设置时 PostgreSQL 会拒绝首次启动。它的 15432 端口仅接受来自本机的连接。你可以从`.env.optional.example`复制可选的调优参数。
+
+:::caution[数据库首次启动时未设置密码]
+旧版`docker-compose.yaml`会默认回退到密码`secure_default_password`，而 PostgreSQL 会一直保留首次启动时设置的密码。如果你的数据库卷是按这种方式创建的，请在`.env`中设置一个新的`POSTGRES_PASSWORD`，先用`docker compose up -d postgres`只启动数据库，再将已保存的密码改成相同的值：
+
+```sh
+docker compose exec postgres psql -U tomori -d tomodb -c "ALTER ROLE tomori PASSWORD 'your-new-password'"
+```
+
+然后再启动容器栈的其余部分。
+:::
 
 :::note[数据库连接会自动配置]
 不要在`.env`中设置`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`或`POSTGRES_DB`；Compose会自动配置它们。

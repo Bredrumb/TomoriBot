@@ -98,7 +98,7 @@ Những hành động này sẽ xóa vĩnh viễn hoặc đặt lại dữ liệ
   yêu cầu `Quản lý máy chủ`. Khi tính năng thành viên dạy bộ nhớ được bật, các thành viên có thể xem, chỉnh sửa hoặc xóa
   bộ nhớ máy chủ của chính mình. Khi bị tắt, việc xem và quản lý bộ nhớ máy chủ yêu cầu `Quản lý máy chủ`.
 - `/personal nuke`: xóa vĩnh viễn tất cả dữ liệu cá nhân trên các máy chủ.
-- `/nuke`: xóa dữ liệu máy chủ, bao gồm các biểu thức tùy chỉnh và quy tắc truy cập cá nhân. Đặt `preserve_personas: true` để giữ các cá tính trong khi xóa các biểu thức và phương tiện tùy chỉnh.
+- `/nuke`: xóa sạch dữ liệu máy chủ, bao gồm biểu cảm tùy chỉnh và quy tắc truy cập persona. Đặt `preserve_personas: true` để giữ lại persona trong khi xóa các biểu cảm và phương tiện tùy chỉnh. Cài đặt máy chủ sau đó sẽ trở về mặc định, và bạn phải thêm lại nhà cung cấp cùng khóa API.
 - `/reset config`: khôi phục cấu hình máy chủ về mặc định cơ sở dữ liệu.
   - **Bảo tồn**: gán model đang hoạt động, khóa API, điểm cuối tùy chỉnh, cá tính, bộ nhớ máy chủ và tích hợp.
   - **Xóa**: ghi đè kênh, quy tắc tự động kích hoạt, danh sách đen của người dùng và danh sách trắng của kênh.

@@ -11,6 +11,8 @@ Chọn các nhà cung cấp giọng nói trong `/providers`, hoặc dùng `/pers
 ## Text-to-Speech
 <!-- anchor: text-to-speech -->
 
+Một persona chỉ gửi tối đa một tin nhắn thoại cho mỗi phản hồi.
+
 ### Giọng đọc Google và OpenRouter
 
 Việc thêm Google sẽ chọn Gemini Flash TTS cho `TTS (Thiết kế giọng đọc)`. Thêm OpenRouter sẽ chọn Fish S2.1 Pro trả phí cho `TTS (Sao chép giọng đọc)`, đồng thời chỉ điền Seed Audio 1.0 vào `TTS (Thiết kế giọng đọc)` khi vị trí đó đang trống. OpenRouter không bao giờ thay thế thiết kế Gemini hoặc Vertex mà bạn đã chọn, do đó cả hai nhà cung cấp đều có thể cùng hoạt động. Nếu bạn đã thêm OpenRouter trước khi có Seed, vị trí Thiết kế của bạn sẽ vẫn trống cho đến khi bạn chọn Seed. Việc thêm lại khóa OpenRouter cũng sẽ điền Seed vào vị trí Thiết kế đang trống, bao gồm cả vị trí bạn đã chủ động xóa. Flash-Lite và Fish miễn phí yêu cầu chọn model rõ ràng; tình trạng sẵn có và hạn mức của nhà cung cấp vẫn được áp dụng. Dùng `/config` > Model > Chuyển đổi model để thay đổi hoặc xóa một trong hai vị trí.

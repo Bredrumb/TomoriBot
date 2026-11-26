@@ -116,7 +116,8 @@ These actions permanently remove or reset stored data:
   own server memories. When disabled, viewing and managing server memories requires `Manage Server`.
 - `/personal nuke`: permanently deletes all personal data across servers.
 - `/nuke`: wipes server data, including custom expressions and persona access rules. Set
-  `preserve_personas: true` to keep personas while removing custom expressions and media.
+  `preserve_personas: true` to keep personas while removing custom expressions and media. Server
+  settings then return to their defaults, and providers and API keys must be added again.
 - `/reset config`: restores server configuration to database defaults.
   - **Preserves**: active model assignments, API keys, custom endpoints, personas, server
     memories, and integrations.

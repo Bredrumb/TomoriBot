@@ -10,6 +10,6 @@ export default {
     success_full_title: `Servidor borrado`,
     success_full_description: `Todos los datos del servidor fueron borrados, incluyendo personas. Webhooks de Discord eliminados: **{webhooks_deleted}** (errores: **{webhooks_failed}**). Ejecuta \`/setup\` para empezar de nuevo.`,
     success_preserved_title: `Servidor borrado (personas preservadas)`,
-    success_preserved_description: `Ajustes del servidor, listas blancas, cuotas, activaciones e integraciones fueron borrados. Las personas y sus atributos/memorias se mantuvieron. Webhooks de Discord eliminados: **{webhooks_deleted}** (errores: **{webhooks_failed}**). Ejecuta \`/setup\` para reconfigurar los ajustes a nivel de servidor.`,
+    success_preserved_description: `Ajustes del servidor, listas blancas, cuotas, activaciones e integraciones fueron borrados. Las personas y sus atributos/memorias se mantuvieron. Webhooks de Discord eliminados: **{webhooks_deleted}** (errores: **{webhooks_failed}**). Los ajustes volvieron a sus valores predeterminados: agrega un proveedor de nuevo con \`/providers\` y luego ajusta el resto con \`/config\`.`,
   },
 };

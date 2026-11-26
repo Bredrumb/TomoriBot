@@ -2,6 +2,8 @@ import { type HumanizerSettings, humanizerSettingsFromDegree } from "@/constants
 import { SETUP_FEATURES, type SetupFeature } from "@/types/db/schema";
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Guild } from "discord.js";
+import { configRepository } from "@/utils/db/repositories/ConfigRepository";
+import { SERVER_SINGLETON_RESET_TABLES } from "@/utils/db/repositories/ResetRepository";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import * as cacheStore from "@/utils/cache/tomoriStateCacheStore";
 import { encryptApiKey } from "@/utils/security/crypto";
@@ -16,6 +18,7 @@ const PROMPT_SERVER_ID = "_rt_setup_prompt_001";
 const ORPHAN_SERVER_ID = "_rt_setup_orphan_001";
 const ROLLBACK_SERVER_ID = "_rt_setup_rollback_001";
 const CACHE_SERVER_ID = "_rt_setup_cache_001";
+const NUKE_SERVER_ID = "_rt_setup_nuke_001";
 const FEATURE_SERVER_IDS = ["_rt_setup_features_all", "_rt_setup_features_none", "_rt_setup_features_bundles"];
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () => {
@@ -52,7 +55,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
         ${PROMPT_SERVER_ID},
         ${ORPHAN_SERVER_ID},
         ${ROLLBACK_SERVER_ID},
-        ${CACHE_SERVER_ID}
+        ${CACHE_SERVER_ID},
+        ${NUKE_SERVER_ID}
         , ${FEATURE_SERVER_IDS[0]}, ${FEATURE_SERVER_IDS[1]}, ${FEATURE_SERVER_IDS[2]}
       )
     `;
@@ -533,5 +537,39 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
 
     expect(invalidateSpy).not.toHaveBeenCalled();
     invalidateSpy.mockRestore();
+  });
+
+  it("keeps every setup-seeded config row writable after a persona-preserving nuke", async () => {
+    async function seededSingletonTables(serverId: number): Promise<string[]> {
+      const seeded: string[] = [];
+      for (const { table } of SERVER_SINGLETON_RESET_TABLES) {
+        const rows = await testSql.unsafe(`SELECT 1 FROM ${table} WHERE server_id = $1`, [serverId]);
+        if (rows.length > 0) seeded.push(table);
+      }
+      return seeded;
+    }
+
+    await serverRepository.setup(null, {
+      serverId: NUKE_SERVER_ID,
+      presetId,
+      humanizer: 1,
+      tomoriName: "TomoriNuke",
+      timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
+      locale: "en-US",
+      registrationLocale: "en-US",
+      providerAccess: {
+        mode: "user-byok",
+      },
+      systemPrompt: null,
+    });
+    const serverId = await serverRepository.loadServerIdByDiscId(NUKE_SERVER_ID);
+    if (serverId === null) throw new Error("Setup did not create the server row");
+    const seededBySetup = await seededSingletonTables(serverId);
+
+    expect(await serverRepository.nukeServer(serverId, NUKE_SERVER_ID, { preservePersonas: true })).toBe(true);
+
+    expect(await seededSingletonTables(serverId)).toEqual(seededBySetup);
+    expect(await configRepository.updateChatConfig(serverId, { timezone_offset: 2 })).toBe(true);
   });
 });

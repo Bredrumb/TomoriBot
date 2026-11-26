@@ -45,6 +45,10 @@ on the 31st of every month, remind me to pay rent
 
 一個伺服器最多可以同時保留 100 個待處理的提醒與任務。達到上限時，TomoriBot 會通知你而不是繼續新增；使用 `/scheduled-task remove` 刪除舊的即可騰出空間。
 
+你建立的排程每次使用伺服器的 AI 模型執行時，都會消耗你在伺服器[額度](/features/setup-administration/server-moderation/#cost-control-quotas)中的一則文字回覆。當你的額度用完時，提醒仍會以沒有 AI 的純文字訊息傳送，任務則會改發送一則標註你的通知而不執行。下一次排程仍會維持原本的時間。
+
+如果管理員將你加入黑名單，你的排程會靜默暫停：重複排程會略過執行，並在解除黑名單後恢復；到期的單次排程則會直接捨棄。
+
 ## 傳送方式
 
 僅在發送成功後，提醒才會標記為完成。如果交付中斷，TomoriBot會自動重試，而不會更改重複計劃。

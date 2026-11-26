@@ -45,6 +45,10 @@ Pedirle a TomoriBot en el chat que elimine una programación sigue la misma regl
 
 Un servidor puede almacenar hasta 100 recordatorios y tareas pendientes a la vez. Cuando esté lleno, TomoriBot te avisará en lugar de agregar otro; elimina los anteriores con `/scheduled-task remove` para liberar espacio.
 
+Cada vez que una programación que creaste se ejecuta en el modelo de IA del servidor, consume una de tus respuestas de texto de la [cuota](/features/setup-administration/server-moderation/#cost-control-quotas) del servidor. Cuando tu cuota se agota, un recordatorio igual llega como un mensaje normal sin IA, y una tarea publica un aviso que te menciona en lugar de ejecutarse. Su siguiente ocurrencia mantiene su horario habitual.
+
+Si un moderador te incluye en la lista negra, tus programaciones se pausan en silencio: las recurrentes omiten sus ejecuciones y se reanudan si te quitan de la lista negra, y las únicas que llegan a su hora se descartan.
+
 ## Cómo se entregan
 
 Los recordatorios solo se marcan como completos después de que la entrega se realiza correctamente. Si se interrumpe la entrega, TomoriBot vuelve a intentarlo automáticamente sin alterar el cronograma recurrente.

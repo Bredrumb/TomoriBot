@@ -58,7 +58,15 @@ Dockerを使用して`CRYPTO_SECRET`のランダムな32文字の値を生成し
 docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 ```
 
-`POSTGRES_PASSWORD`用に別のパスワードを生成します。`.env.optional.example`からオプションのチューニング設定をコピーできます。
+`POSTGRES_PASSWORD`用に別のパスワードを生成します。Composeにはフォールバックがないため、設定されていない場合PostgreSQLは初回起動を拒否します。ポート15432はこのコンピューターからの接続のみを受け付けます。`.env.optional.example`からオプションのチューニング設定をコピーできます。
+
+:::caution[パスワードなしで初回起動されたデータベース]
+古いバージョンの `docker-compose.yaml` ではパスワードが `secure_default_password` にフォールバックされており、PostgreSQLは初回起動時のパスワードを保持し続けます。データベースボリュームがその状態で作成されていた場合は、`.env` に新しい `POSTGRES_PASSWORD` を設定し、`docker compose up -d postgres` でデータベースのみを起動してから、保存されているパスワードを同じ値に変更してください：
+```sh
+docker compose exec postgres psql -U tomori -d tomodb -c "ALTER ROLE tomori PASSWORD 'your-new-password'"
+```
+その後、残りのスタックを起動してください。
+:::
 
 :::note[データベース接続は自動です]
 `.env`には`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、または`POSTGRES_DB`を設定しないでください。Composeはそれらを自動的に構成します。

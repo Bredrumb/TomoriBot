@@ -16,13 +16,18 @@ La generación cuesta dinero, ya sea que la paguen desde su cuenta de proveedor 
 
 Los grupos de todo el servidor se restablecen automáticamente en un intervalo configurable en días.
 
+Qué cuenta:
+
+- **Texto** cuenta respuestas, no costo. Cada mensaje que el bot responde consume una unidad, sin importar cuántos pasos de herramientas tome la respuesta, incluso si no envía texto o alguien la detiene con `/kill` una vez que el modelo comenzó a responder. Si la solicitud al modelo falla por completo o se detiene antes de que el modelo responda, la unidad se reembolsa. Cada ejecución de una tarea programada de un miembro consume una de las unidades de ese miembro.
+- **Imágenes y videos** consumen una unidad en cuanto el proveedor acepta la solicitud, incluso si el resultado se detiene o es demasiado grande para publicarse, porque el proveedor igual lo cobra.
+
 ## BYOK de usuario (trae tu propia clave)
 <!-- anchor: user-byok-bring-your-own-key -->
 
 En `/moderation` > `Acceso de miembros`, puedes controlar si los miembros pueden usar IA financiada por el servidor:
 
 - **Modelos de servidor permitidos** (predeterminado): los miembros utilizan proveedores configurados en el servidor.
-- **Se requieren proveedores personales**: los miembros deben configurar sus propias claves API a través de `/personal providers`. El servidor no paga nada por los mensajes iniciados por los miembros. Las acciones iniciadas por el servidor (como saludos automatizados o tareas programadas) aún utilizan el proveedor del servidor.
+- **Se requieren proveedores personales**: los miembros deben configurar sus propias claves de API a través de `/personal providers`. El servidor no paga nada por los mensajes iniciados por los miembros ni por las tareas programadas de los miembros. Las acciones iniciadas por el servidor (como saludos automatizados) aún utilizan el proveedor del servidor.
 
 Los miembros configuran sus proveedores personales en [Personalización](/features/knowledge/personalization/#your-own-providers).
 

@@ -16,13 +16,18 @@ Việc tạo điện sẽ tốn tiền, cho dù được thanh toán từ tài k
 
 Nhóm trên toàn máy chủ tự động đặt lại theo khoảng thời gian có thể định cấu hình tính bằng ngày.
 
+Những gì được tính:
+
+- **Văn bản** tính theo số lượt trả lời, không tính theo chi phí. Mỗi tin nhắn bot trả lời sẽ dùng một đơn vị, bất kể câu trả lời cần bao nhiêu bước gọi công cụ, ngay cả khi bot không gửi văn bản nào hoặc có người dừng lại bằng `/kill` sau khi model đã bắt đầu trả lời. Tin nhắn có yêu cầu gửi tới model thất bại hoàn toàn, hoặc bị dừng trước khi model kịp trả lời, sẽ được hoàn lại. Mỗi lần chạy tác vụ theo lịch của một thành viên sẽ dùng một đơn vị của thành viên đó.
+- **Hình ảnh và video** dùng một đơn vị ngay khi nhà cung cấp chấp nhận yêu cầu, ngay cả khi kết quả bị dừng bằng lệnh hoặc quá lớn để đăng, vì nhà cung cấp vẫn tính phí.
+
 ## BYOK người dùng (Bring Your Own Key)
 <!-- anchor: user-byok-bring-your-own-key -->
 
 Trong `/moderation` > `Quyền thành viên`, bạn có thể kiểm soát liệu các thành viên có thể sử dụng AI do máy chủ tài trợ hay không:
 
 - **Cho phép model máy chủ** (mặc định): thành viên sử dụng nhà cung cấp được định cấu hình máy chủ.
-- **Yêu cầu nhà cung cấp cá nhân**: thành viên phải định cấu hình khóa API của riêng họ thông qua `/personal providers`. Máy chủ không trả tiền cho các tin nhắn do thành viên khởi tạo. Các hành động do máy chủ khởi tạo (chẳng hạn như lời chào tự động hoặc tác vụ đã lên lịch) vẫn sử dụng nhà cung cấp máy chủ.
+- **Yêu cầu nhà cung cấp cá nhân**: thành viên phải định cấu hình khóa API của riêng họ thông qua `/personal providers`. Máy chủ không trả tiền cho các tin nhắn do thành viên khởi tạo hoặc các tác vụ theo lịch của thành viên. Các hành động do máy chủ khởi tạo (chẳng hạn như lời chào tự động) vẫn sử dụng nhà cung cấp của máy chủ.
 
 Thành viên định cấu hình nhà cung cấp cá nhân của họ trong [Cá nhân hóa](/features/knowledge/personalization/#your-own-providers).
 

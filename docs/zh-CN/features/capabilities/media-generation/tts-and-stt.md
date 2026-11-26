@@ -11,6 +11,8 @@ TomoriBot可以在Discord中说和听：通过文本转语音 (TTS) 发送语音
 ## 文本转语音
 <!-- anchor: text-to-speech -->
 
+每个人格每次回复最多发送一条语音消息。
+
 ### Google 与 OpenRouter 语音
 
 添加 Google 会将 Gemini Flash TTS 选为 `TTS（语音设计）`。添加 OpenRouter 会将付费的 Fish S2.1 Pro 选为 `TTS（声音克隆）`，并在该槽位为空时将 Seed Audio 1.0 填入 `TTS（语音设计）`。OpenRouter 绝不会替换你已经选好的 Gemini 或 Vertex 语音设计，因此两家提供方可以同时保持启用。如果你在 Seed 上线前添加过 OpenRouter，你的语音设计槽位会保持为空，直到你手动选中 Seed。再次添加 OpenRouter 密钥也会将 Seed 填入空的语音设计槽位，包括你特意清空的槽位。Flash-Lite 和免费版 Fish 需要明确手动选择模型；可用性与提供方配额仍然适用。用 `/config` > 模型 > 切换模型 更改或清空任意槽位。

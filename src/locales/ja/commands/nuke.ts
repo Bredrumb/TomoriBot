@@ -10,6 +10,6 @@ export default {
     success_full_title: `サーバーを消去しました`,
     success_full_description: `ペルソナを含むすべてのサーバーデータを消去しました。Discord側で削除したWebhook: **{webhooks_deleted}** 件（失敗: **{webhooks_failed}** 件）。\`/setup\` を実行して新しく始めてください。`,
     success_preserved_title: `サーバーを消去しました（ペルソナは保持）`,
-    success_preserved_description: `サーバー設定、ホワイトリスト、クォータ、トリガー、連携を消去しました。ペルソナとその属性・記憶は保持されています。Discord側で削除したWebhook: **{webhooks_deleted}** 件（失敗: **{webhooks_failed}** 件）。\`/setup\` を実行してサーバーレベルの設定を再構成してください。`,
+    success_preserved_description: `サーバー設定、ホワイトリスト、クォータ、トリガー、連携を消去しました。ペルソナとその属性・記憶は保持されています。Discord側で削除したWebhook: **{webhooks_deleted}** 件（失敗: **{webhooks_failed}** 件）。設定はデフォルトに戻っています：\`/providers\` でプロバイダーを再度追加し、残りの設定は \`/config\` で調整してください。`,
   },
 };

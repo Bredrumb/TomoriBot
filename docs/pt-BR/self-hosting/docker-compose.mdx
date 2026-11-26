@@ -58,7 +58,15 @@ Gere um valor aleatório de 32 caracteres para `CRYPTO_SECRET` usando o Docker e
 docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 ```
 
-Gere uma senha separada para `POSTGRES_PASSWORD`. Você pode copiar configurações de ajuste opcionais de `.env.optional.example`.
+Gere uma senha separada para `POSTGRES_PASSWORD`. O Compose não tem um valor padrão alternativo, então o PostgreSQL recusa a primeira inicialização sem uma senha. A porta 15432 aceita conexões apenas deste computador. Você pode copiar configurações de ajuste opcionais de `.env.optional.example`.
+
+:::caution[Banco de dados iniciado inicialmente sem senha]
+Versões anteriores do `docker-compose.yaml` recorriam à senha `secure_default_password`, e o PostgreSQL mantém a senha com a qual foi iniciado pela primeira vez. Se o volume do seu banco de dados foi criado dessa forma, defina uma nova `POSTGRES_PASSWORD` no `.env`, inicie apenas o banco de dados com `docker compose up -d postgres` e altere a senha armazenada para o mesmo valor:
+```sh
+docker compose exec postgres psql -U tomori -d tomodb -c "ALTER ROLE tomori PASSWORD 'your-new-password'"
+```
+Em seguida, inicie o restante da pilha.
+:::
 
 :::note[A conexão com o banco de dados é automática]
 Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` no `.env`; o Compose configura esses valores automaticamente.

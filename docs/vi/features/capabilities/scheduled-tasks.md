@@ -45,6 +45,10 @@ Yêu cầu TomoriBot xóa lịch trình trong cuộc trò chuyện cũng tuân t
 
 Một máy chủ có thể lưu tối đa 100 lời nhắc và tác vụ đang chờ xử lý cùng một lúc. Khi đạt giới hạn, TomoriBot sẽ thông báo cho bạn thay vì thêm mới; hãy xóa các mục cũ bằng `/scheduled-task remove` để có thêm chỗ trống.
 
+Mỗi lần một lịch trình bạn đã tạo chạy trên model AI của máy chủ, lịch trình đó sẽ dùng một lượt trả lời văn bản trong [hạn mức](/features/setup-administration/server-moderation/#cost-control-quotas) của bạn trên máy chủ. Khi bạn dùng hết hạn mức, lời nhắc vẫn được gửi dưới dạng tin nhắn thường không có AI, còn tác vụ sẽ đăng thông báo ping bạn thay vì chạy. Lần chạy tiếp theo vẫn giữ nguyên thời gian thông thường.
+
+Nếu người kiểm duyệt đưa bạn vào danh sách đen, các lịch trình của bạn sẽ tạm dừng âm thầm: lịch định kỳ sẽ bỏ qua các lần chạy và tiếp tục lại nếu bạn được gỡ khỏi danh sách đen, còn lịch một lần đến hạn sẽ bị hủy bỏ.
+
 ## Cách thức gửi hoạt động
 
 Lời nhắc chỉ được đánh dấu là hoàn thành sau khi gửi thành công. Nếu quá trình phân phối bị gián đoạn, TomoriBot sẽ tự động thử lại mà không làm thay đổi lịch định kỳ.

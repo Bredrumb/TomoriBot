@@ -10,6 +10,6 @@ export default {
     success_full_title: `Server Nuked`,
     success_full_description: `All server data was wiped, including personas. Discord-side webhooks deleted: **{webhooks_deleted}** (failures: **{webhooks_failed}**). Run \`/setup\` to start fresh.`,
     success_preserved_title: `Server Nuked (Personas Preserved)`,
-    success_preserved_description: `Server settings, whitelists, quotas, triggers, and integrations were wiped. Personas and their attributes/memories were kept. Discord-side webhooks deleted: **{webhooks_deleted}** (failures: **{webhooks_failed}**). Run \`/setup\` to reconfigure server-level settings.`,
+    success_preserved_description: `Server settings, whitelists, quotas, triggers, and integrations were wiped. Personas and their attributes/memories were kept. Discord-side webhooks deleted: **{webhooks_deleted}** (failures: **{webhooks_failed}**). Settings are back to their defaults: add a provider again with \`/providers\`, then adjust the rest with \`/config\`.`,
   },
 };
