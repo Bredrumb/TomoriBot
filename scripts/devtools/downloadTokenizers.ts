@@ -76,11 +76,11 @@ async function downloadFile(
 
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-  // Stream response body to disk: Bun.write() accepts a Response directly
+  // Bun 1.4.0 exits silently mid-stream when Bun.write consumes a Response after an earlier fetch to the same host.
   try {
-    await Bun.write(destPath, response);
+    await Bun.write(destPath, await response.arrayBuffer());
   } catch (err) {
-    console.error(`  ✗ Write error for ${destPath}: ${err}`);
+    console.error(`  ✗ Download or write error for ${destPath}: ${err}`);
     return "error";
   }
 
