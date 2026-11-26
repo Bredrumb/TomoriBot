@@ -41,6 +41,10 @@ for (const locale of publishedLocales) {
     if (!html.includes(`hreflang="${alternateLocale.lang}" href="${alternateUrl}"`)) {
       throw new Error(`The ${locale.id} landing page is missing its ${alternateLocale.id} alternate`);
     }
+    const alternatePath = new URL(alternateUrl).pathname;
+    if (!html.includes(`<a href="${alternatePath}" hreflang="${alternateLocale.lang}"`)) {
+      throw new Error(`The ${locale.id} landing page has no crawlable ${alternateLocale.id} language link`);
+    }
   }
   if (!html.includes(`hreflang="x-default" href="${landingUrl("en")}"`)) {
     throw new Error(`The ${locale.id} landing page is missing its x-default alternate`);

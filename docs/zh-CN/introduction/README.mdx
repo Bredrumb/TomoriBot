@@ -1,37 +1,5 @@
 ---
 title: "TomoriBot 是什么？"
-# Keyword-rich <title> for search results; replaces Starlight's default
-# "{title} | TomoriBot" for this page only. H1 and sidebar keep the plain title.
-head:
-  - tag: title
-    content: "TomoriBot | 开源的 Discord AI 代理与角色扮演 bot"
-  # JSON-LD structured data: tells search engines this page describes a software
-  # product, enabling rich results. Google requires `offers` (or aggregateRating)
-  # alongside `name` for SoftwareApplication rich-result eligibility.
-  - tag: script
-    attrs:
-      type: "application/ld+json"
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "TomoriBot",
-        "url": "https://docs.tomoribot.app/",
-        "image": "https://docs.tomoribot.app/img/social-banner.png",
-        "description": "免费且开源的 Discord AI 代理与角色扮演系统，具备持久记忆、多个人格、媒体生成与多提供方 LLM 支持。",
-        "applicationCategory": "CommunicationApplication",
-        "operatingSystem": "Web",
-        "isAccessibleForFree": true,
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "sameAs": [
-          "https://github.com/Bredrumb/TomoriBot",
-          "https://discord.gg/bjCfHm9QsB"
-        ]
-      }
 sidebar:
   groupLabel: "介绍"
   order: 1

@@ -4,11 +4,17 @@
 // and reference the SVG directly as a plain <img> URL instead.
 // /favicon.ico is kept for the browser tab only — ICO files don't render
 // reliably in <img> tags across browsers.
+import { DEFAULT_DOCS_LOCALE_ID } from "@docs-locales";
+
 // biome-ignore lint/correctness/noUnusedVariables: Used in Astro template
-const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+const { siteTitle, locale } = Astro.locals.starlightRoute;
+// Every docs page links its locale's landing page because the landing pages have no other crawlable inbound links.
+// biome-ignore lint/correctness/noUnusedVariables: Used in Astro template
+const landingHref =
+  locale && locale !== DEFAULT_DOCS_LOCALE_ID ? `https://tomoribot.app/${locale}/` : "https://tomoribot.app/";
 ---
 
-<a href={siteTitleHref} class="site-title sl-flex">
+<a href={landingHref} class="site-title sl-flex">
   <img src="/tomoricon.svg" alt="" aria-hidden="true" class="site-icon" />
   <span translate="no">{siteTitle}</span>
 </a>
