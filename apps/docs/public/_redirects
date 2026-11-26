@@ -143,15 +143,13 @@
 /en/features/integrations/novelai-text /en/features/integrations/novelai/ 301
 /en/features/integrations/novelai-text/ /en/features/integrations/novelai/ 301
 # Cloud deployment pages moved to the release branch (docs/en/wiki/cloud/azure/), so the whole
-# subtree is absent from the built site. A splat rather than paired entries because this removes a
-# subtree rather than moving pages one-to-one, and it also covers the old
-# azure-terraform-state-recovery rule whose destination is now gone too.
+# subtree is absent from the built site. Its splats (in the block at the end of this file) replace
+# paired entries because this removes a subtree rather than moving pages one-to-one, and they also
+# cover the old azure-terraform-state-recovery rule whose destination is now gone too.
 /architecture/cloud /en/architecture/ 301
 /architecture/cloud/ /en/architecture/ 301
-/architecture/cloud/* /en/architecture/ 301
 /en/architecture/cloud /en/architecture/ 301
 /en/architecture/cloud/ /en/architecture/ 301
-/en/architecture/cloud/* /en/architecture/ 301
 
 # Contributing pages moved into extending/, localization/, testing/, and policies/.
 /en/contributing/adding-slash-command /en/contributing/extending/slash-command/ 301
@@ -343,28 +341,33 @@
 /vi/self-hosting/local-endpoints/setup-local-mcp /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
 /vi/self-hosting/local-endpoints/setup-local-mcp/ /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
 
-# Splats for bare routes from before the /en/ split stay last so the exact rules above them win,
-# and a new top-level docs section needs its own lines here.
+# Bare routes from before the /en/ split; a new top-level docs section needs its root pair here and
+# its splat below.
 /architecture/introduction /en/introduction/ 301
 /architecture/introduction/ /en/introduction/ 301
 /architecture/integrations/novelai/tool-calling /en/architecture/integrations/novelai/limitations/ 301
 /architecture/integrations/novelai/tool-calling/ /en/architecture/integrations/novelai/limitations/ 301
 /architecture /en/architecture/ 301
 /architecture/ /en/architecture/ 301
-/architecture/* /en/architecture/:splat 301
 /contributing /en/contributing/ 301
 /contributing/ /en/contributing/ 301
-/contributing/* /en/contributing/:splat 301
 /features /en/features/ 301
 /features/ /en/features/ 301
-/features/* /en/features/:splat 301
 /introduction /en/introduction/ 301
 /introduction/ /en/introduction/ 301
-/introduction/* /en/introduction/:splat 301
 /meet-tomori /en/meet-tomori/ 301
 /meet-tomori/ /en/meet-tomori/ 301
-/meet-tomori/* /en/meet-tomori/:splat 301
 /self-hosting /en/self-hosting/ 301
 /self-hosting/ /en/self-hosting/ 301
+
+# Cloudflare applied only 100 rules from the first splat onward and silently dropped the rest, so
+# every splat stays below every exact rule.
+/architecture/cloud/* /en/architecture/ 301
+/en/architecture/cloud/* /en/architecture/ 301
+/architecture/* /en/architecture/:splat 301
+/contributing/* /en/contributing/:splat 301
+/features/* /en/features/:splat 301
+/introduction/* /en/introduction/:splat 301
+/meet-tomori/* /en/meet-tomori/:splat 301
 /self-hosting/* /en/self-hosting/:splat 301
 /legal/* /en/legal/:splat 301
