@@ -97,9 +97,6 @@ Tool execution coordinates several turn-level side effects:
   notice recording the matched trigger pattern. On a turn that keeps its conversation quiet (a nudge,
   a reminder, or a random trigger), progress notices skip the conversation and post their full card
   to the thought log instead. Hidden image planning and persona generation suppress progress notices.
-- **One-shot memory guard:** A successful `update_short_term_memory` call sets
-  `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the
-  same turn.
 
 ## Return outcomes
 <!-- anchor: return-outcomes -->

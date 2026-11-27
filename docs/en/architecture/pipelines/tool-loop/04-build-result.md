@@ -57,7 +57,9 @@ The assembled `GenerationTurnResult` passes back up the chat pipeline:
    if applicable and invokes `responseSink.finalize(result)` to conclude Discord message streaming.
 3. **Post-turn effects (`runPostTurnEffects`):**
    The root chat handler (`tomoriChat`) receives the result and runs post-turn effects:
-   - Appends `result.personaResponses` to short-term memory dialogue history.
+   - Captures `result.personaResponses` in short-term memory. When the scope is due, post-turn effects
+     can use the finishing attempt's model and credentials to schedule a
+     [background summary](/architecture/pipelines/memory/stm/02-summary-upgrade/).
    - Records expression usage statistics.
    - Handles empty-response retries, quota accounting, thought logs, and boomerang follow-ups.
 

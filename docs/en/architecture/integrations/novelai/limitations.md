@@ -80,11 +80,8 @@ ordinary privacy, blacklist, lineage, channel, and corpus filters. NovelAI omits
 prefixes, and added owner labels from long-term memory text. Names and placeholders are resolved
 before rendering; GLM separates entries with single line breaks. Other providers retain their
 combined participant block and tool-targeting IDs. Inline and deferred short-term memory remain
-eligible for NovelAI.
-
-Short-term memory update nudges carry an empty `completionText` projection. Fitting honors that
-projection even when another provider built the context before a personal override or fallback.
-Actual memory contents remain eligible; instructions to call memory tools are excluded.
+eligible for NovelAI. NovelAI can recall recent dialogue and saved memory, but automatic summaries
+require a provider with conversation summary support.
 
 The fitter renders the complete prompt, counts it locally, and removes extra sample exchanges,
 memories, then oldest history exchanges. It protects personality and ATTG, one sample exchange,

@@ -74,7 +74,7 @@ Directives and deferred short-term memory items pass through the return shape in
 - `tailDirectives` hold instructions such as impersonation prefixes, stop requests, or manual system prompts.
 - `lowerPriorityTailDirectives` hold guidance inserted before the latest dialogue pair.
 - `uncensorDirective` holds stripped uncensor prompt injection text.
-- `nudgeItem` and `memoryInjectionItems` provide short-term memory reminders and content blocks for registry-controlled positional insertion.
+- `memoryInjectionItems` holds short-term memory blocks that the registry positions relative to dialogue history.
 - `messageIdMap` maps compact media and reference IDs to Discord message IDs.
 
 The chat pipeline's turn builder in [Build Context](/architecture/pipelines/chat/06-per-turn/01-build-context/) consumes this result, orders tail directives, and inserts positional items before passing the prompt to the [Provider Pipeline](/architecture/pipelines/provider/).

@@ -19,7 +19,7 @@ The public `buildContext` wrapper in `src/utils/text/context/builder.ts` coordin
 
 - **Native build runs first**: Presets do not fetch or format database state independently. They rearrange structured items already tagged by the native pipeline (`SYSTEM_HUMANIZER_RULES`, `KNOWLEDGE_SERVER_INFO`, `DIALOGUE_HISTORY`, etc.).
 - **Impersonation bypass**: User impersonation turns always bypass preset reassembly. This prevents third-party prompt templates from overriding the required imitation directive and framing.
-- **Preserved out-of-band items**: Tail directives, uncensor directives, the unified short-term memory nudge (`nudgeItem`), and deferred memory blocks (`memoryInjectionItems`) pass through preset reassembly unchanged. Downstream chat pipeline stages apply the registry anchors, preventing preset anchors from misplacing recency-sensitive context.
+- **Preserved out-of-band items**: Tail directives, uncensor directives, and deferred memory blocks (`memoryInjectionItems`) pass through preset reassembly unchanged. Downstream chat pipeline stages apply the registry anchors, preventing preset anchors from misplacing recency-sensitive context.
 - **Unmapped item preservation**: Preset reassembly flushes TomoriBot-specific knowledge items (server info, server memories, emojis, stickers, sprites) and dialogue-adjacent items (participant profiles, inline short-term memory, conditioning, and unclaimed Always On lore) at configured anchor markers (`main`, `charDescription`, `charPersonality`, `dialogueExamples`, `chatHistory`). Any remaining unpulled items append at the end of the system block list so no native context is dropped.
 
 NovelAI attempts receive a separate native context captured before preset reassembly. This preserves

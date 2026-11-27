@@ -17,7 +17,6 @@ whether the active model supports tool calling, which usually names the setting 
 |---|---|---|---|
 | Review capabilities | `{capabilities_tool}` | - | Check current chat abilities, commands, or settings before answering. |
 | Manage long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save, correct, or remove a server fact or personal memory. |
-| Update short-term memory | `{short_term_memory_tool}` | - | Save temporary working memory for the current channel or story arc. |
 | Manage task | `{task_tool}` / `{task_update_tool}` | - | Schedule, edit, or cancel reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
 | Cross-channel message | `{cross_channel_tool}` | - | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
