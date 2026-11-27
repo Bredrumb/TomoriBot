@@ -2,6 +2,7 @@ import { DEFAULT_HUMANIZER_SETTINGS, humanizerSettingsFromDegree } from "@/const
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ChannelType, ComponentType, type ActionRowData, type ButtonComponentData } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
+import { serverStmConfigSchema } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
 import type { BlocklistChannelTarget, ChecklistChannelTarget } from "@/utils/discord/channelChecklistManager";
 import type { ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
@@ -600,18 +601,11 @@ describe("config page text budgeting at stored maxima", () => {
             memoryTaggingEnabled: true,
             channelMemoryEnabled: true,
             stmEnabled: true,
-            toolUseEnabled: true,
             stmCategories: [{ server_id: 9, position: 0, label: "Summary", description: "Scene summary" }],
-            stmConfig: {
+            stmConfig: serverStmConfigSchema.parse({
               server_id: 9,
-              refresh_cadence: 5,
-              render_mode: "supersede",
-              crude_message_count: 6,
-              nudge_injection_depth: 2,
-              content_injection_depth: -1,
-              tool_description_override: "T".repeat(4000),
-              update_nudge_override: "N".repeat(4000),
-            },
+              summarizer_instructions_override: "T".repeat(4000),
+            }),
           },
         };
         return buildConfigPanelPayload({
@@ -921,8 +915,12 @@ describe("config page text budgeting at stored maxima", () => {
 
             // A cut preview stops at the shared ceiling rather than filling the page, so only
             // list truncation still has to use the remaining space.
-            for (const block of displays.join("\n").match(/```markdown\n[\s\S]*?\n<!-- [^\n]+ -->\n```/g) ?? []) {
-              expect(getDiscordTextLength(block)).toBeLessThanOrEqual(FENCED_PREVIEW_MAX_CHARS);
+            for (const text of displays) {
+              for (const block of text.match(/```markdown\n[\s\S]*?\n```/g) ?? []) {
+                if (/\n<!-- [^\n]+ -->\n```$/.test(block)) {
+                  expect(getDiscordTextLength(block)).toBeLessThanOrEqual(FENCED_PREVIEW_MAX_CHARS);
+                }
+              }
             }
             const slack = DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - totalText;
             const isTruncated = displays.some(
@@ -2759,7 +2757,6 @@ describe("config pages for a workspace with nothing configured", () => {
         memoryTaggingEnabled: false,
         channelMemoryEnabled: false,
         stmEnabled: false,
-        toolUseEnabled: false,
         stmConfig: null,
         stmCategories: [],
       },

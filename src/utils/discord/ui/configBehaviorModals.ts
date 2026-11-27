@@ -34,6 +34,7 @@ import { localizer, resolveDescription, resolvePresetDisplayName } from "@/utils
 import { formatUtcOffsetInput } from "@/utils/text/timezoneHelper";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modalPromptPartLabels";
+import { DEFAULT_STM_REFRESH_CADENCE } from "@/utils/memory/stmSummarizer";
 
 const STM_CATEGORY_LABEL_KEYS = [
   "commands.server.stm.categories-edit.slot_1_label",
@@ -73,11 +74,9 @@ export const BEHAVIOR_CHANNEL_MEMORY_FIELD = "behavior_channel_memory";
 export const BEHAVIOR_STM_REFRESH_CADENCE_FIELD = "behavior_stm_refresh_cadence";
 export const BEHAVIOR_STM_RENDER_MODE_FIELD = "behavior_stm_render_mode";
 export const BEHAVIOR_STM_CRUDE_MESSAGES_FIELD = "behavior_stm_crude_messages";
-export const BEHAVIOR_STM_NUDGE_DEPTH_FIELD = "behavior_stm_nudge_depth";
 export const BEHAVIOR_STM_CONTENT_DEPTH_FIELD = "behavior_stm_content_depth";
 export const BEHAVIOR_STM_CATEGORY_PREFIX = "behavior_stm_category_";
-export const BEHAVIOR_STM_TOOL_DESCRIPTION_FIELD = "behavior_stm_tool_description";
-export const BEHAVIOR_STM_UPDATE_NUDGE_FIELD = "behavior_stm_update_nudge";
+export const BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD = "behavior_stm_summarizer_instructions";
 export const CONFIG_PERMISSIONS_CHECKBOX_GROUP_PREFIX = "permissions_capabilities_group";
 export const CONFIG_PERMISSIONS_CHECKBOX_GROUP_SIZE = 10;
 
@@ -478,7 +477,7 @@ export function buildBehaviorStmParametersModal(
         TextInputStyle.Short,
         true,
         3,
-        String(config?.refresh_cadence ?? 5),
+        String(config?.refresh_cadence ?? DEFAULT_STM_REFRESH_CADENCE),
       ),
       radioField(
         locale,
@@ -509,17 +508,6 @@ export function buildBehaviorStmParametersModal(
         true,
         3,
         String(config?.crude_message_count ?? 6),
-      ),
-      textField(
-        locale,
-        nonce,
-        BEHAVIOR_STM_NUDGE_DEPTH_FIELD,
-        "commands.config.panel.stm_nudge_depth_label",
-        "commands.config.panel.stm_nudge_depth_description",
-        TextInputStyle.Short,
-        true,
-        3,
-        String(config?.nudge_injection_depth ?? 2),
       ),
       textField(
         locale,
@@ -570,12 +558,7 @@ export function buildBehaviorStmCategoriesModal(
   };
 }
 
-export function buildBehaviorStmPromptModal(
-  locale: string,
-  nonce: string,
-  toolDescription: string,
-  updateNudge: string,
-): RawModalPayload {
+export function buildBehaviorStmPromptModal(locale: string, nonce: string, instructions: string): RawModalPayload {
   return {
     custom_id: buildConfigRouteId({ action: "behavior-stm-prompt-submit", locale, nonce }),
     title: title(locale, "commands.config.panel.edit_stm_prompt_button"),
@@ -583,24 +566,13 @@ export function buildBehaviorStmPromptModal(
       textField(
         locale,
         nonce,
-        BEHAVIOR_STM_TOOL_DESCRIPTION_FIELD,
-        "commands.server.stm.prompt-edit.tool_description_label",
-        "commands.server.stm.prompt-edit.tool_description_description",
+        BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD,
+        "commands.config.panel.stm_summarizer_instructions_label",
+        "commands.config.panel.stm_summarizer_instructions_description",
         TextInputStyle.Paragraph,
         false,
         4000,
-        toolDescription,
-      ),
-      textField(
-        locale,
-        nonce,
-        BEHAVIOR_STM_UPDATE_NUDGE_FIELD,
-        "commands.server.stm.prompt-edit.update_nudge_label",
-        "commands.server.stm.prompt-edit.update_nudge_description",
-        TextInputStyle.Paragraph,
-        false,
-        4000,
-        updateNudge,
+        instructions,
       ),
     ],
   };
