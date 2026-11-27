@@ -154,7 +154,7 @@ flowchart TD
   - `server_nsfw_configs`: jailbreak toggles and content filters.
   - `server_byok_configs`: bring-your-own-key permissions.
   - `server_memory_configs`: memory retrieval limits and decay parameters.
-  - `server_stm_configs`: STM render mode, refresh cadence, and injection depths.
+  - `server_stm_configs`: STM render mode, refresh cadence, injection depth, and summarizer instructions override.
 
 Speech selections reference either `custom_endpoints` or `speech_models` for each mode, with
 `ON DELETE SET NULL`. Database validation checks server ownership, model mode, scoped registration,

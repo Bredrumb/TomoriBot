@@ -113,6 +113,34 @@ describe("background STM summaries", () => {
     for (const spy of restores.splice(0)) spy.mockRestore();
   });
 
+  it("uses the fetched boundary for gaps and retains neutral voice with an override", async () => {
+    const metric = spyOn(log, "metric").mockImplementation(() => {});
+    const provider = spyOn(featureExecutors, "generateConversationSummaryForProvider").mockResolvedValue({
+      summary: "Updated",
+    });
+    const write = spyOn(stm, "persistStmSummarization").mockResolvedValue(undefined);
+    restores.push(
+      spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(
+        serverStmConfigSchema.parse({ server_id: 1, summarizer_instructions_override: "Track plans." }),
+      ),
+    );
+    try {
+      await startStmSummarizer(
+        createRequest({
+          fetchedHistoryOldestTimestamp: marker + 1000,
+          history: [historyMessage("Old queued trigger", marker - 1000), historyMessage("New question", marker + 1000)],
+        }),
+      );
+      expect(metric).toHaveBeenCalledWith("stm_summary_history_gap", { scopeKind: "user" });
+      expect(provider.mock.calls[0][0].systemPrompt).toContain("neutral third person");
+      expect(provider.mock.calls[0][0].systemPrompt).toContain("Track plans.");
+    } finally {
+      metric.mockRestore();
+      provider.mockRestore();
+      write.mockRestore();
+    }
+  });
+
   it("starts one request per due scope and forwards the answering key, activity, and usage", async () => {
     const started = Promise.withResolvers<void>();
     const response = Promise.withResolvers<CompactConversationResult>();

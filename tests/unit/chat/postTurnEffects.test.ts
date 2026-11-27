@@ -160,6 +160,7 @@ describe("post-turn memory persistence", () => {
             credentialSource: "server",
           },
         });
+        await Bun.sleep(0);
         expect(store.mock.calls[0]?.[2]).toContainEqual(expect.objectContaining({ role: "model", content: text }));
         expect(increment.mock.calls).toEqual([[context.channel.id, serverId, null, persona.persona_id]]);
         if (status === "error" || status === "timeout") {
@@ -172,6 +173,60 @@ describe("post-turn memory persistence", () => {
       }
     } finally {
       for (const spy of [warm, store, increment, summarize, stats]) spy.mockRestore();
+    }
+  });
+
+  it("does not wait for cold STM hydration before completing the turn", async () => {
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    const persona = createPersona({ config: { short_term_memory_enabled: false } });
+    Object.assign(context, {
+      userDiscId: "1400000000000000002",
+      currentPersona: persona,
+      tomoriState: persona,
+      simplifiedMessages: [
+        {
+          id: "1400000000000000003",
+          authorId: "1400000000000000002",
+          authorName: "Juno",
+          authorType: "user",
+          content: "Hello",
+          createdAt: 1700000000000,
+          imageAttachments: [],
+          videoAttachments: [],
+        },
+      ],
+    });
+    Object.assign(context.turn, { requestSnapshot: { triggererPrivacyLevel: PrivacyLevel.MINIMAL } });
+    const pending = Promise.withResolvers<void>();
+    const warm = spyOn(shortTermMemory, "preWarmStmEntry").mockReturnValue(pending.promise);
+    const store = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
+    const increment = spyOn(shortTermMemory, "incrementStmTurnCounter").mockResolvedValue(undefined);
+    try {
+      await runPostTurnEffects(context, {
+        status: "completed",
+        streamResults: [],
+        personaResponses: [{ text: "Hello", personaName: "Mirri", personaId: persona.persona_id }],
+      });
+      expect(warm).toHaveBeenCalled();
+      expect(store).not.toHaveBeenCalled();
+      context.simplifiedMessages[0].content = "Next";
+      await runPostTurnEffects(context, {
+        status: "completed",
+        streamResults: [],
+        personaResponses: [{ text: "Next reply", personaName: "Mirri", personaId: persona.persona_id }],
+      });
+      expect(warm).toHaveBeenCalledTimes(1);
+      pending.resolve();
+      await Bun.sleep(0);
+      expect(store).toHaveBeenCalledTimes(2);
+      expect(store.mock.calls[0][2]).toContainEqual(expect.objectContaining({ content: "Hello" }));
+      expect(store.mock.calls[1][2]).toContainEqual(expect.objectContaining({ content: "Next" }));
+      expect(increment).toHaveBeenCalledTimes(2);
+    } finally {
+      pending.resolve();
+      warm.mockRestore();
+      store.mockRestore();
+      increment.mockRestore();
     }
   });
 

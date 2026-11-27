@@ -731,6 +731,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     assistantPrefill,
     expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
+    fetchedHistoryOldestTimestamp: history.fetchedHistoryOldestTimestamp,
     reactedMessages: history.reactedMessages,
     streamingContext,
     messageIdMap,
@@ -822,6 +823,7 @@ async function buildSimplifiedHistory(
   messageIdMap: MessageIdMap,
 ): Promise<{
   simplifiedMessages: SimplifiedMessageForContext[];
+  fetchedHistoryOldestTimestamp: number | undefined;
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
@@ -840,6 +842,8 @@ async function buildSimplifiedHistory(
           turn.personaIndex > 0 || turn.lockedTurn.admission.incoming.isFromQueue,
         )
       : [turn.lockedTurn.admission.message];
+  const fetchedHistoryOldestTimestamp =
+    messages.length > 0 ? Math.min(...messages.map((entry) => entry.createdTimestamp)) : undefined;
   // A borrowed trigger is only an anchor and a seeded placeholder is never history, so only a queued
   // turn's own real message is added back when the fetch missed it.
   if (
@@ -1209,6 +1213,7 @@ async function buildSimplifiedHistory(
 
   return {
     simplifiedMessages,
+    fetchedHistoryOldestTimestamp,
     userIds,
     matrixUsers,
     syntheticUsers,
