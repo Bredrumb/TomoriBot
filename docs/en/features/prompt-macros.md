@@ -78,7 +78,6 @@ A dash in the expansion column means the macro inserts the condition name.
 | `{capabilities_tool}` | `review_capabilities` | - | `Use {capabilities_tool} to check what you can do here before promising a feature such as stickers or voice messages.` |
 | `{memory_tool}` | `create_long_term_memory` | `manage_long_term_memory` with `create` | `Save lasting member preferences, such as favorite party games, with {memory_tool} so you can use them in future chats.` |
 | `{memory_update_tool}` | `update_long_term_memory` | `manage_long_term_memory` with `update` | `Use {memory_update_tool} to revise the existing memory when a member corrects a saved preference or a moderator changes a recurring event.` |
-| `{short_term_memory_tool}` | `update_short_term_memory` | - | `At roleplay scene breaks, use {short_term_memory_tool} to record where the party stopped, what clues they found, and what they plan to do next.` |
 | `{task_tool}` | `create_task` | `manage_task` with `create` | `Schedule game-night and poll reminders with {task_tool} when members request them. Confirm the scheduled time afterward.` |
 | `{task_update_tool}` | `update_task` | `manage_task` with `update` or `delete` | `Use {task_update_tool} to reschedule the existing reminder when a member changes its time or repeat schedule.` |
 | `{cross_channel_tool}` | `cross_channel_message` | - | `When asked to publish event results, post them in #announcements with {cross_channel_tool} and report back here.` |

@@ -12,7 +12,8 @@ The chat per-turn stage [Run Generation Turn](/architecture/pipelines/chat/06-pe
 calls `runToolLoop` for each model fallback and key rotation attempt, after context and provider
 configuration are prepared. The loop coordinates repeated generation passes, tool execution,
 context-enrichment restarts, and result assembly until the model finishes, a stop signal arrives,
-or a guard limit is reached.
+or a guard limit is reached. The result carries delivered dialogue to post-turn effects, which own
+[background short-term memory summaries](/architecture/pipelines/memory/stm/02-summary-upgrade/).
 
 ## Two tiers of loop control
 <!-- anchor: two-tiers-of-loop-control -->
@@ -87,7 +88,6 @@ The loop terminates through one of four pathways:
    - **Pre-tool-text exit policy (`shouldEndAfterPreToolText`):**
      When a successful tool follows visible text streamed to Discord:
      - Tools in `TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT` end the turn if no follow-up is required.
-     - `update_short_term_memory` ends immediately because memory updates are silent.
      - Other tools and providers continue normally.
    - **Empty response resolution (`isSettledAfterTool`):**
      When the provider returns an empty response after visible text or an expression was delivered,
