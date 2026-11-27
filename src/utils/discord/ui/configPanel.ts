@@ -88,7 +88,7 @@ import {
   buildPanelReceiptContainer,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
-import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
+import { DEFAULT_STM_RENDER_MODE, RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import {
   SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
   selectablePersonas,
@@ -3125,7 +3125,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     },
     {
       type: ComponentType.TextDisplay,
-      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? DEFAULT_STM_REFRESH_CADENCE })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? "supersede" })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}${autoSummarizationOffNote("commands.config.panel.stm_parameters_auto_off_note")}`,
+      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? DEFAULT_STM_REFRESH_CADENCE })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? DEFAULT_STM_RENDER_MODE })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}${autoSummarizationOffNote("commands.config.panel.stm_parameters_auto_off_note")}`,
     },
     {
       type: ComponentType.ActionRow,

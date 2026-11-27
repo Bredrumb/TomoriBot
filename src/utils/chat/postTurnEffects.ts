@@ -652,13 +652,15 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
         serverId ? null : context.userDiscId,
         personaId,
       );
-      if (answeringAttempt) {
+      if (answeringAttempt && result.status !== "error" && result.status !== "timeout") {
         void startStmSummarizer({
           serverId,
           userId: context.userDiscId,
           channelId: context.channel.id,
           personaId,
           internalServerId: context.tomoriState.server_id,
+          triggererUserId: context.triggererUserId,
+          lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
           enabled: stmEnabled,
           answeringAttempt,
           history: context.simplifiedMessages,

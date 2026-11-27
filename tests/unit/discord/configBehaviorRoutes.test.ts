@@ -1211,6 +1211,15 @@ describe("config Behavior routes", () => {
             label: localizedCopy(locale, "commands.config.panel.stm_refresh_cadence_label"),
             component: expect.objectContaining({ custom_id: cadenceId, value: String(DEFAULT_STM_REFRESH_CADENCE) }),
           }),
+          expect.objectContaining({
+            component: expect.objectContaining({
+              custom_id: renderModeId,
+              options: expect.arrayContaining([
+                expect.objectContaining({ value: "supersede", default: false }),
+                expect.objectContaining({ value: "crude_summary", default: true }),
+              ]),
+            }),
+          }),
         ]),
       });
 

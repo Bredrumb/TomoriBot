@@ -1,6 +1,6 @@
 import { ChannelType, TextInputStyle } from "discord.js";
 import type { RandomTriggerRow, SystemPromptPresetRow, TomoriState } from "@/types/db/schema";
-import type { ServerStmConfigRow, StmCategoryRow } from "@/types/db/schema";
+import { serverStmConfigSchema, type ServerStmConfigRow, type StmCategoryRow } from "@/types/db/schema";
 import { TOOL_NOTICE_DEFINITIONS, type ToolNoticeDefinition } from "@/constants/toolNotices";
 import { DELIBERATE_TOOL_TRIGGER_TARGETS } from "@/utils/tools/deliberateToolMode";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
@@ -73,6 +73,7 @@ export const BEHAVIOR_MEMORY_TAGGING_FIELD = "behavior_memory_tagging";
 export const BEHAVIOR_CHANNEL_MEMORY_FIELD = "behavior_channel_memory";
 export const BEHAVIOR_STM_REFRESH_CADENCE_FIELD = "behavior_stm_refresh_cadence";
 export const BEHAVIOR_STM_RENDER_MODE_FIELD = "behavior_stm_render_mode";
+export const DEFAULT_STM_RENDER_MODE = serverStmConfigSchema.shape.render_mode.parse(undefined);
 export const BEHAVIOR_STM_CRUDE_MESSAGES_FIELD = "behavior_stm_crude_messages";
 export const BEHAVIOR_STM_CONTENT_DEPTH_FIELD = "behavior_stm_content_depth";
 export const BEHAVIOR_STM_CATEGORY_PREFIX = "behavior_stm_category_";
@@ -464,6 +465,7 @@ export function buildBehaviorStmParametersModal(
   nonce: string,
   config: ServerStmConfigRow | null,
 ): RawModalPayload {
+  const renderMode = config?.render_mode ?? DEFAULT_STM_RENDER_MODE;
   return {
     custom_id: buildConfigRouteId({ action: "behavior-stm-parameters-submit", locale, nonce }),
     title: title(locale, "commands.config.panel.edit_stm_parameters_button"),
@@ -489,12 +491,12 @@ export function buildBehaviorStmParametersModal(
           {
             value: "supersede",
             label: localizer(locale, "commands.server.stm.parameters.supersede_option"),
-            default: (config?.render_mode ?? "supersede") === "supersede",
+            default: renderMode === "supersede",
           },
           {
             value: "crude_summary",
             label: localizer(locale, "commands.server.stm.parameters.crude_summary_option"),
-            default: config?.render_mode === "crude_summary",
+            default: renderMode === "crude_summary",
           },
         ],
       ),

@@ -1801,6 +1801,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(result.status).toBe("completed");
     expect(result.personaResponses[0]?.text).toBe("First half.\nsecond half.");
     expect(result.streamResults.map((stream) => stream.accumulatedText)).toEqual(["First half.", "second half."]);
+    expect(result.answeringAttempt?.modelCodename).toBe(fallbackModel.llm_codename);
     // Post-turn stats record every usage entry under the final model, so the primary's must not ride along.
     expect(sumTurnUsage(result.streamResults)).toEqual({ inputTokens: 950, outputTokens: 20 });
   });
@@ -1880,6 +1881,10 @@ describe("runGenerationTurn fallback behavior", () => {
       expect(toolLoopCalls).toHaveLength(2);
       expect(result.status).toBe(status);
       expect(result.personaResponses[0]?.text).toBe("Only half.");
+      expect(result.answeringAttempt).toMatchObject({
+        modelCodename: "fallback-model",
+        providerConfig: { model: "fallback-model" },
+      });
     }
   });
 

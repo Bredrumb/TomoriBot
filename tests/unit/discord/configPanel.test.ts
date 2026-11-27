@@ -1814,7 +1814,7 @@ describe("config Behavior pages", () => {
     const parameters = onText.find((content) => content.startsWith(`**[${parametersTitle}]`));
     expect(parameters?.split("\n").filter((line) => line.startsWith("> "))).toEqual([
       `> ${localizedCopy(locale, "commands.config.panel.stm_refresh_cadence_value", { count: DEFAULT_STM_REFRESH_CADENCE })}`,
-      `> ${localizedCopy(locale, "commands.config.panel.stm_render_mode_value", { mode: "supersede" })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_render_mode_value", { mode: "crude_summary" })}`,
       `> ${localizedCopy(locale, "commands.config.panel.stm_crude_messages_value", { count: 6 })}`,
       `> ${localizedCopy(locale, "commands.config.panel.stm_content_depth_value", { count: -1 })}`,
     ]);

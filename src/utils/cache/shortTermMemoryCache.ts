@@ -1129,7 +1129,7 @@ export async function persistStmSummarization(
   scope: { serverId: string | null; userId: string; channelId: string; personaId: number | null },
   snapshot: StmSnapshot,
   content: StmContent,
-  summarizedThrough: number,
+  summarizedThrough: number | undefined,
 ): Promise<void> {
   const { serverId, userId, channelId, personaId } = scope;
   const userKey = getUserCacheKey(userId, channelId, personaId);
@@ -1171,7 +1171,7 @@ export async function persistStmSummarization(
       UPDATE short_term_memories
       SET summary = COALESCE(${summary}, summary),
           categories = COALESCE(${categories}::JSONB, categories),
-          summarized_through = ${new Date(summarizedThrough)}
+          summarized_through = ${summarizedThrough === undefined ? null : new Date(summarizedThrough)}
       WHERE stm_id IN (${rows[0].stm_id}, ${rows[1]?.stm_id ?? rows[0].stm_id})
     `;
       await resetStmTurnCounter(channelId, serverId, serverId ? null : userId, personaId, tx);

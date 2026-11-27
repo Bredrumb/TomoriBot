@@ -163,4 +163,28 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("STM summarizer storage", () => {
       turnsSinceRefresh: 0,
     });
   });
+
+  it("saves a reply-only summary while preserving an unset history cursor", async () => {
+    const { personaId, personaLineageId } = fixtures;
+    const dm = { userId: scope.userId, channelId: "_rt_stm_summarizer_dm", serverId: null, personaId };
+    const summary = "Mirri described the image.";
+    try {
+      await storeShortTermMemory(dm.userId, dm.channelId, [], "DM", undefined, undefined, personaId, personaLineageId);
+      await incrementStmTurnCounter(dm.channelId, null, dm.userId, personaId);
+      const entry = getShortTermMemoryForUserChannel(dm.userId, dm.channelId, personaId);
+      if (!entry) throw new Error("Missing DM STM fixture");
+
+      await persistStmSummarization(dm, snapshotStmContent(entry), { summary }, undefined);
+      expect(entry).toMatchObject({ summary, turnsSinceRefresh: 0 });
+      expect(entry.summarizedThrough).toBeUndefined();
+      const [stored] = await testSql`
+        SELECT summary, summarized_through, turns_since_refresh
+        FROM short_term_memories WHERE channel_disc_id = ${dm.channelId}
+      `;
+      expect(stored).toMatchObject({ summary, summarized_through: null, turns_since_refresh: 0 });
+    } finally {
+      invalidateShortTermMemory(dm.userId, dm.channelId, personaId);
+      await testSql`DELETE FROM short_term_memories WHERE channel_disc_id = ${dm.channelId}`;
+    }
+  });
 });

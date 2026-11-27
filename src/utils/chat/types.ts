@@ -375,6 +375,7 @@ export interface GenerationTurnResult {
   firstDeliveredMessageId?: string;
   answeringAttempt?: {
     providerName: string;
+    modelCodename: string;
     providerConfig: Pick<ProviderConfig, "apiKey" | "model">;
     endpointUrl?: string;
     activity?: StoredCredentialActivity;

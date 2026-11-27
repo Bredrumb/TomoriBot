@@ -10,6 +10,7 @@ import {
   snapshotStmContent,
 } from "@/utils/cache/shortTermMemoryCache";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
+import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { generateConversationSummaryForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { log } from "@/utils/misc/logger";
 import { resolveConversationCompactionCapability } from "@/utils/provider/providerCapabilityResolver";
@@ -26,6 +27,7 @@ import {
   sanitizeUnknownTemplatePlaceholders,
 } from "@/utils/text/processors/mentionProcessor";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
+import { charsToTokensText, type TokenUsage } from "@/utils/text/tokenEstimate";
 
 export const DEFAULT_STM_REFRESH_CADENCE = 10;
 
@@ -44,10 +46,12 @@ interface StmSummarizerRequest {
   channelId: string;
   personaId: number | null;
   internalServerId: number;
+  triggererUserId: number | undefined;
+  lineageId: number;
   enabled: boolean;
   answeringAttempt: NonNullable<GenerationTurnResult["answeringAttempt"]>;
   history: readonly SimplifiedMessageForContext[];
-  replies: readonly (StmMessage & { timestamp: number })[];
+  replies: readonly StmMessage[];
   ready: Promise<unknown>;
 }
 
@@ -90,6 +94,7 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
   const { internalServerId, answeringAttempt } = request;
   const {
     providerName,
+    modelCodename,
     providerConfig: { apiKey, model },
     endpointUrl,
     activity,
@@ -106,8 +111,8 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
   if (!entry || (entry.turnsSinceRefresh ?? 0) < cadence) return;
 
   const snapshot = snapshotStmContent(entry);
-  const { messages, newestTimestamp } = collectTranscript(request, snapshot.summarizedThrough);
-  if (messages.length === 0 || newestTimestamp === undefined) return;
+  const { messages, newestHistoryTimestamp } = collectTranscript(request, snapshot.summarizedThrough);
+  if (messages.length === 0) return;
 
   const summaryMode =
     categories.length === 0 || (categories.length === 1 && categories[0].label.toLowerCase() === "summary");
@@ -118,6 +123,8 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
     : (snapshot.summary ?? "");
   const userPrompt = JSON.stringify({ previousMemory: previous, newMessages: messages });
 
+  const reportUsage = createProviderUsageRecorder(usageContext, modelCodename);
+  let hasMeasuredUsage = false;
   let content: Parameters<typeof persistStmSummarization>[2];
   try {
     const result = await withProviderUsageContext(
@@ -130,7 +137,11 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
           endpointUrl,
           systemPrompt,
           userPrompt,
-          onUsage: createProviderUsageRecorder(usageContext, model),
+          onUsage: (usage) => {
+            hasMeasuredUsage = true;
+            reportUsage?.(usage);
+            recordSummaryUsage(request, usage);
+          },
         }),
       activity,
     );
@@ -139,6 +150,13 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
       return;
     }
     const text = typeof result.summary === "string" ? result.summary : "";
+    // Estimate from text until a funded tier uses a provider that omits usage or the estimates prove inaccurate.
+    if (!hasMeasuredUsage && text) {
+      recordSummaryUsage(request, {
+        inputTokens: charsToTokensText(systemPrompt.length + userPrompt.length),
+        outputTokens: charsToTokensText(text.length),
+      });
+    }
     if (slugMap) {
       const parsed = parseStmCategories(text, slugMap, snapshot.categories);
       if (!parsed) throw new Error("Summary response contained no known category headings");
@@ -153,7 +171,29 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
     return;
   }
   if (hasStmSnapshot(getScopeMemory(request), snapshot)) {
-    await persistStmSummarization(request, snapshot, content, newestTimestamp);
+    await persistStmSummarization(request, snapshot, content, newestHistoryTimestamp);
+  }
+}
+
+function recordSummaryUsage(request: StmSummarizerRequest, usage: TokenUsage): void {
+  const { serverId, internalServerId, triggererUserId, lineageId, answeringAttempt } = request;
+  if (!serverId || !internalServerId || !triggererUserId) return;
+
+  for (const [metric, delta] of [
+    ["tokens_in", usage.inputTokens],
+    ["tokens_out", usage.outputTokens],
+    ["cache_read_tokens", usage.cacheReadTokens],
+    ["cache_write_tokens", usage.cacheWriteTokens],
+  ] as const) {
+    if (delta === undefined || delta <= 0) continue;
+    statRepository.recordStat({
+      serverId: internalServerId,
+      userId: triggererUserId,
+      lineageId,
+      metric,
+      metricKey: answeringAttempt.modelCodename,
+      delta,
+    });
   }
 }
 
@@ -172,11 +212,13 @@ function collectTranscript(request: StmSummarizerRequest, marker: number | undef
   }
 
   const messages: StmMessage[] = [];
-  let newestTimestamp = marker;
-  function append(message: StmMessage, timestamp: number | undefined) {
+  let newestHistoryTimestamp = marker;
+  function append(message: StmMessage, historyTimestamp?: number) {
     if (!message.content) return;
     messages.push({ speakerName: message.speakerName, content: message.content });
-    if (timestamp !== undefined) newestTimestamp = Math.max(newestTimestamp ?? timestamp, timestamp);
+    if (historyTimestamp !== undefined) {
+      newestHistoryTimestamp = Math.max(newestHistoryTimestamp ?? historyTimestamp, historyTimestamp);
+    }
   }
 
   if (start >= 0) {
@@ -200,8 +242,9 @@ function collectTranscript(request: StmSummarizerRequest, marker: number | undef
       append(cleanStmMessage(message), timestamp);
     }
   }
-  for (const reply of replies) append(reply, reply.timestamp);
-  return { messages, newestTimestamp };
+  // Keep reply timestamps out of the cursor so messages arriving after the history fetch can enter the next summary.
+  for (const reply of replies) append(reply);
+  return { messages, newestHistoryTimestamp };
 }
 
 function buildSystemPrompt(override: string | null | undefined, categories: StmCategoryRow[], summaryMode: boolean) {
