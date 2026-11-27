@@ -1779,6 +1779,28 @@ describe("config Behavior pages", () => {
       .join("\n");
     expect(toolUseOffSerialized).toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_tool_use_off"));
     expect(toolUseOffSerialized).not.toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_on"));
+
+    const autoOffNoteKeys = [
+      "commands.config.panel.stm_parameters_auto_off_note",
+      "commands.config.panel.stm_categories_auto_off_note",
+      "commands.config.panel.stm_prompt_auto_off_note",
+    ];
+    const stmOffSerialized = walk(
+      build(GUILD_MANAGER, {
+        category: "behavior",
+        page: "memory",
+        behaviorView: { ...d10View, memory: { ...d10View.memory, stmEnabled: false } },
+      }),
+    )
+      .map((component) => component.content ?? "")
+      .join("\n");
+    const stmOnSerialized = walk(memory)
+      .map((component) => component.content ?? "")
+      .join("\n");
+    for (const key of autoOffNoteKeys) {
+      expect(stmOffSerialized).toMatch(localizedProse("en-US", key));
+      expect(stmOnSerialized).not.toMatch(localizedProse("en-US", key));
+    }
   });
 
   it("keeps the overflow removal selector off the ordinary Trigger page", () => {

@@ -3077,6 +3077,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
   const categoryLines = view.stmCategories.length
     ? view.stmCategories.map((category) => `> ${category.label}: ${category.description}`).join("\n")
     : `> ${localizer(locale, "commands.choices.none")}`;
+  const autoSummarizationOffNote = (key: string) => (view.stmEnabled ? "" : `\n-# ${localizer(locale, key)}`);
   components.push(
     {
       type: ComponentType.TextDisplay,
@@ -3135,7 +3136,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     },
     {
       type: ComponentType.TextDisplay,
-      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? 5 })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? "supersede" })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_nudge_depth_value", { count: view.stmConfig?.nudge_injection_depth ?? 2 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}`,
+      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? 5 })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? "supersede" })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_nudge_depth_value", { count: view.stmConfig?.nudge_injection_depth ?? 2 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}${autoSummarizationOffNote("commands.config.panel.stm_parameters_auto_off_note")}`,
     },
     {
       type: ComponentType.ActionRow,
@@ -3151,7 +3152,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     },
     {
       type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(locale, "commands.config.panel.stm_categories_description")}\n${categoryLines}`,
+      content: `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(locale, "commands.config.panel.stm_categories_description")}\n${categoryLines}${autoSummarizationOffNote("commands.config.panel.stm_categories_auto_off_note")}`,
     },
     {
       type: ComponentType.ActionRow,
@@ -3172,7 +3173,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
   const stmPromptHeader = `**${localizer(locale, "commands.config.panel.stm_prompt_title")}**\n${localizer(
     locale,
     "commands.config.panel.stm_prompt_description",
-  )}\n`;
+  )}${autoSummarizationOffNote("commands.config.panel.stm_prompt_auto_off_note")}\n`;
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmPromptHeader) + 1;
   const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
