@@ -374,7 +374,8 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
     return "failed";
   }
   if (planned.status === "declined") {
-    sample(input, { outcome: "aborted", phase: "b", reason: "planner_declined", plannerModel, ...usage });
+    const reason = planned.reason === "repeated_topic" ? "planner_repeated_topic" : "planner_declined";
+    sample(input, { outcome: "aborted", phase: "b", reason, plannerModel, ...usage });
     return "aborted";
   }
 

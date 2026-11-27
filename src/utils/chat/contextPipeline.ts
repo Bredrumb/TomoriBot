@@ -93,7 +93,7 @@ import {
   AGENDA_NOTICE_AUTHOR_ID,
   agendaNoticeId,
   formatAgendaNotice,
-  loadPersonaAgendas,
+  loadLatestPersonaAgenda,
 } from "@/modules/natural-nudges/runtime/agendas";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
@@ -960,11 +960,11 @@ async function buildSimplifiedHistory(
 
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
-  const [messageProxyIdentitiesByMessageId, , minimalNoticeBodies, agendasByMessageId] = await Promise.all([
+  const [messageProxyIdentitiesByMessageId, , minimalNoticeBodies, latestAgenda] = await Promise.all([
     resolveMessageProxyMessageIdentitiesForHistory(messages),
     primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id)),
     resolveMinimalNoticeBodies(visibleRawMessages),
-    loadPersonaAgendas(
+    loadLatestPersonaAgenda(
       turn.persona.persona_id,
       visibleRawMessages.map((msg) => msg.id),
     ),
@@ -1068,7 +1068,7 @@ async function buildSimplifiedHistory(
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
 
-    const agenda = agendasByMessageId.get(msg.id);
+    const agenda = latestAgenda?.messageId === msg.id ? latestAgenda.agenda : undefined;
     if (agenda) {
       simplifiedMessages.push({
         id: agendaNoticeId(msg.id),

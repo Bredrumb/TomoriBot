@@ -1,18 +1,28 @@
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { log } from "@/utils/misc/logger";
 
-// Swallows read failures and returns an empty map because losing the reminder is acceptable and must never block the
-// turn.
-export async function loadPersonaAgendas(
+export interface PersonaAgenda {
+  messageId: string;
+  agenda: string;
+}
+
+// Only the newest opener's agenda applies, because older goals would otherwise stack for as long as their openers stay
+// in history.
+export async function loadLatestPersonaAgenda(
   personaId: number | null | undefined,
   messageIds: readonly string[],
-): Promise<ReadonlyMap<string, string>> {
-  if (typeof personaId !== "number") return new Map();
+): Promise<PersonaAgenda | null> {
+  if (typeof personaId !== "number") return null;
   try {
-    return await naturalNudgeRepository.loadAgendas(personaId, messageIds);
+    let latest: PersonaAgenda | null = null;
+    for (const [messageId, agenda] of await naturalNudgeRepository.loadAgendas(personaId, messageIds)) {
+      if (!latest || BigInt(messageId) > BigInt(latest.messageId)) latest = { messageId, agenda };
+    }
+    return latest;
   } catch (error) {
+    // Losing the reminder is acceptable, so a read failure must never block the turn.
     log.warn("Natural Nudges: failed to load agendas for context", error, { personaId });
-    return new Map();
+    return null;
   }
 }
 
