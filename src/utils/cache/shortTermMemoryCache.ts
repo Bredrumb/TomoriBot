@@ -1125,23 +1125,69 @@ export function hasStmSnapshot(entry: ShortTermMemoryEntry | undefined, snapshot
   );
 }
 
+const stmCounterWrites = new Map<string, Promise<void>>();
+
+async function serializeStmCounterWrite<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = stmCounterWrites.get(key) ?? Promise.resolve();
+  const done = Promise.withResolvers<void>();
+  const tail = previous.then(() => done.promise);
+  stmCounterWrites.set(key, tail);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    done.resolve();
+    if (stmCounterWrites.get(key) === tail) stmCounterWrites.delete(key);
+  }
+}
+
 export async function persistStmSummarization(
   scope: { serverId: string | null; userId: string; channelId: string; personaId: number | null },
   snapshot: StmSnapshot,
   content: StmContent,
   summarizedThrough: number | undefined,
+  categorySnapshot?: {
+    serverId: number;
+    categories: readonly { position: number; label: string; description: string }[];
+  },
 ): Promise<void> {
   const { serverId, userId, channelId, personaId } = scope;
-  const userKey = getUserCacheKey(userId, channelId, personaId);
-  const liveKey = serverId ? getServerCacheKey(serverId, channelId, personaId) : userKey;
-  const userEntry = cache.get(userKey);
-  const isCurrent = () => cache.get(userKey) === userEntry && hasStmSnapshot(cache.get(liveKey), snapshot);
+  const key = JSON.stringify([serverId ?? userId, channelId, personaId]);
+  return serializeStmCounterWrite(key, async () => {
+    const userKey = getUserCacheKey(userId, channelId, personaId);
+    const liveKey = serverId ? getServerCacheKey(serverId, channelId, personaId) : userKey;
+    const userEntry = cache.get(userKey);
+    const isCurrent = () => cache.get(userKey) === userEntry && hasStmSnapshot(cache.get(liveKey), snapshot);
 
-  if (!userEntry) return;
+    if (!userEntry) return;
 
-  const written = await sql
-    .begin(async (tx) => {
-      const rows = await tx<StmContentRow[]>`
+    const written = await sql
+      .begin(async (tx) => {
+        if (categorySnapshot) {
+          await tx`SELECT server_id FROM servers WHERE server_id = ${categorySnapshot.serverId} FOR NO KEY UPDATE`;
+          const categories = await tx<Array<{ position: number; label: string; description: string }>>`
+          SELECT position, label, description FROM stm_categories
+          WHERE server_id = ${categorySnapshot.serverId} ORDER BY position ASC
+        `;
+          const effectiveCategories =
+            categories.length > 0
+              ? categories
+              : [
+                  {
+                    position: 0,
+                    label: "summary",
+                    description: "A running summary of recent events, topics, and context from this conversation.",
+                  },
+                ];
+          if (
+            !isDeepStrictEqual(
+              effectiveCategories.map(({ position, label, description }) => ({ position, label, description })),
+              categorySnapshot.categories.map(({ position, label, description }) => ({ position, label, description })),
+            )
+          )
+            return false;
+        }
+        const rows = await tx<StmContentRow[]>`
       SELECT stm_id, scope_kind, summary, categories, summarized_through, last_refreshed_turn
       FROM short_term_memories
       WHERE COALESCE(server_disc_id, '') = COALESCE(${serverId}, '')
@@ -1152,43 +1198,44 @@ export async function persistStmSummarization(
       ORDER BY stm_id
       FOR UPDATE
     `;
-      const liveRow = rows.find((row) => row.scope_kind === (serverId ? "server" : "user"));
-      if (
-        rows.length !== (serverId ? 2 : 1) ||
-        !liveRow ||
-        !isCurrent() ||
-        (liveRow.summary ?? undefined) !== snapshot.summary ||
-        liveRow.summarized_through?.getTime() !== snapshot.summarizedThrough ||
-        liveRow.last_refreshed_turn !== snapshot.lastRefreshedTurn ||
-        !isDeepStrictEqual(normalizeStmCategories(liveRow.categories), snapshot.categories)
-      ) {
-        return false;
-      }
+        const liveRow = rows.find((row) => row.scope_kind === (serverId ? "server" : "user"));
+        if (
+          rows.length !== (serverId ? 2 : 1) ||
+          !liveRow ||
+          !isCurrent() ||
+          (liveRow.summary ?? undefined) !== snapshot.summary ||
+          liveRow.summarized_through?.getTime() !== snapshot.summarizedThrough ||
+          liveRow.last_refreshed_turn !== snapshot.lastRefreshedTurn ||
+          !isDeepStrictEqual(normalizeStmCategories(liveRow.categories), snapshot.categories)
+        ) {
+          return false;
+        }
 
-      const summary = "summary" in content ? content.summary : null;
-      const categories = "categories" in content ? JSON.stringify(content.categories) : null;
-      await tx`
+        const summary = "summary" in content ? content.summary : null;
+        const categories = "categories" in content ? JSON.stringify(content.categories) : null;
+        await tx`
       UPDATE short_term_memories
       SET summary = COALESCE(${summary}, summary),
           categories = COALESCE(${categories}::JSONB, categories),
           summarized_through = ${summarizedThrough === undefined ? null : new Date(summarizedThrough)}
       WHERE stm_id IN (${rows[0].stm_id}, ${rows[1]?.stm_id ?? rows[0].stm_id})
     `;
-      await resetStmTurnCounter(channelId, serverId, serverId ? null : userId, personaId, tx);
-      if (!isCurrent()) throw STM_SNAPSHOT_CHANGED;
-      return true;
-    })
-    .catch((error: unknown) => {
-      if (error === STM_SNAPSHOT_CHANGED) return false;
-      throw error;
-    });
+        await resetStmTurnCounter(channelId, serverId, serverId ? null : userId, personaId, tx);
+        if (!isCurrent()) throw STM_SNAPSHOT_CHANGED;
+        return true;
+      })
+      .catch((error: unknown) => {
+        if (error === STM_SNAPSHOT_CHANGED) return false;
+        throw error;
+      });
 
-  if (!written || !isCurrent()) return;
+    if (!written || !isCurrent()) return;
 
-  for (const entry of new Set([snapshot.entry, userEntry])) {
-    Object.assign(entry, content, { summarizedThrough, lastUpdated: Date.now() });
-  }
-  resetCachedStmCounter(snapshot.entry);
+    for (const entry of new Set([snapshot.entry, userEntry])) {
+      Object.assign(entry, content, { summarizedThrough, lastUpdated: Date.now() });
+    }
+    resetCachedStmCounter(snapshot.entry);
+  });
 }
 
 // Guild live STM is server-shared (serverId, userId=null) and DM STM is user-scoped (userId, serverId=null), because
@@ -1198,25 +1245,30 @@ export async function incrementStmTurnCounter(
   serverId: string | null,
   userId: string | null,
   personaId?: number | null,
-): Promise<void> {
-  try {
-    if (!serverId && !userId) return;
-    const resolvedPersonaId = personaId ?? null;
-    const scopeKind = serverId ? "server" : "user";
-    const cacheKey = serverId
-      ? getServerCacheKey(serverId, channelId, personaId)
-      : getUserCacheKey(userId ?? "", channelId, personaId);
-    const entry = cache.get(cacheKey);
-    if (entry) {
-      entry.turnsSinceRefresh = (entry.turnsSinceRefresh ?? 0) + 1;
+): Promise<number | undefined> {
+  if (!serverId && !userId) return undefined;
+  const key = JSON.stringify([serverId ?? userId, channelId, personaId ?? null]);
+  return serializeStmCounterWrite(key, async () => {
+    try {
+      const resolvedPersonaId = personaId ?? null;
+      const scopeKind = serverId ? "server" : "user";
+      const cacheKey = serverId
+        ? getServerCacheKey(serverId, channelId, personaId)
+        : getUserCacheKey(userId ?? "", channelId, personaId);
+      const entry = cache.get(cacheKey);
+      await incrementStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
+      if (entry && cache.get(cacheKey) === entry) {
+        entry.turnsSinceRefresh = (entry.turnsSinceRefresh ?? 0) + 1;
+        return entry.turnsSinceRefresh;
+      }
+      return undefined;
+    } catch (error) {
+      log.error("[shortTermMemoryCache] Failed to increment STM turn counter", error, {
+        errorType: "CACHE_UPDATE_ERROR",
+        metadata: { channelId, serverId, userId },
+      });
     }
-    await incrementStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
-  } catch (error) {
-    log.error("[shortTermMemoryCache] Failed to increment STM turn counter", error, {
-      errorType: "CACHE_UPDATE_ERROR",
-      metadata: { channelId, serverId, userId },
-    });
-  }
+  });
 }
 
 function resetCachedStmCounter(entry: ShortTermMemoryEntry): void {

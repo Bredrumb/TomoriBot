@@ -247,6 +247,7 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
   ): Promise<boolean> {
     try {
       await sql.begin(async (tx) => {
+        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
         await tx`DELETE FROM stm_categories WHERE server_id = ${serverId}`;
         for (const cat of categories) {
           await tx`

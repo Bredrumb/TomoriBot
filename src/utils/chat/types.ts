@@ -306,6 +306,7 @@ export interface ChatTurnContext {
   // Shared by reference across every attempt of this persona turn so retries do not reset ExpressionDeliveryState.
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
+  oldestQueuedMessageTimestamp?: number;
   reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;

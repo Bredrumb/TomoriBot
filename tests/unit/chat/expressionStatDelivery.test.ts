@@ -394,7 +394,7 @@ describe("emoji stats count only what Discord accepted", () => {
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
     const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
-    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockResolvedValue(undefined);
     try {
       const result = makeResult({
         streamResults: [
@@ -456,7 +456,7 @@ describe("emoji stats count only what Discord accepted", () => {
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
     const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
-    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockResolvedValue(undefined);
     try {
       await runPostTurnEffects(
         first,

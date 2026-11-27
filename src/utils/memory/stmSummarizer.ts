@@ -51,26 +51,19 @@ interface StmSummarizerRequest {
   enabled: boolean;
   answeringAttempt: NonNullable<GenerationTurnResult["answeringAttempt"]>;
   history: readonly SimplifiedMessageForContext[];
+  oldestQueuedMessageTimestamp?: number;
   replies: readonly StmMessage[];
-  ready: Promise<unknown>;
+  ready: Promise<number | undefined>;
 }
 
-const inFlight = new Map<string, Promise<void>>();
+const inFlight = new Set<string>();
 
 export function startStmSummarizer(request: StmSummarizerRequest): Promise<void> | undefined {
   if (!request.enabled) return;
-  const { serverId, userId, channelId, personaId } = request;
-  const key = JSON.stringify([serverId ? "server" : "user", serverId ?? userId, channelId, personaId]);
-  if (inFlight.has(key)) return;
-
-  const turnsAfterIncrement = getScopeMemory(request)?.turnsSinceRefresh ?? 0;
-  const run = summarizeIfDue(request, turnsAfterIncrement)
-    .catch((error: unknown) =>
-      log.warn("Background short-term memory update failed", error, { metadata: { channelId, personaId } }),
-    )
-    .finally(() => inFlight.delete(key));
-  inFlight.set(key, run);
-  return run;
+  const { channelId, personaId } = request;
+  return summarizeIfDue(request).catch((error: unknown) =>
+    log.warn("Background short-term memory update failed", error, { metadata: { channelId, personaId } }),
+  );
 }
 
 export function cleanStmText(text: string): string {
@@ -90,7 +83,7 @@ function getScopeMemory({ serverId, userId, channelId, personaId }: StmSummarize
     : getShortTermMemoryForUserChannel(userId, channelId, personaId);
 }
 
-async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement: number): Promise<void> {
+async function summarizeIfDue(request: StmSummarizerRequest): Promise<void> {
   const { internalServerId, answeringAttempt } = request;
   const {
     providerName,
@@ -101,77 +94,93 @@ async function summarizeIfDue(request: StmSummarizerRequest, turnsAfterIncrement
     usageContext,
   } = answeringAttempt;
 
-  await request.ready;
+  const turnsAfterIncrement = await request.ready;
   const config = await shortTermMemoryRepository.getStmConfig(internalServerId);
   const cadence = config?.refresh_cadence ?? DEFAULT_STM_REFRESH_CADENCE;
-  if (turnsAfterIncrement < cadence) return;
-  if (!(await resolveConversationCompactionCapability(providerName))) return;
-  const categories = await shortTermMemoryRepository.getStmCategories(internalServerId);
-  const entry = getScopeMemory(request);
-  if (!entry || (entry.turnsSinceRefresh ?? 0) < cadence) return;
-
-  const snapshot = snapshotStmContent(entry);
-  const { messages, newestHistoryTimestamp } = collectTranscript(request, snapshot.summarizedThrough);
-  if (messages.length === 0) return;
-
-  const summaryMode =
-    categories.length === 0 || (categories.length === 1 && categories[0].label.toLowerCase() === "summary");
-  const slugMap = summaryMode ? undefined : buildSlugMap(categories);
-  const systemPrompt = buildSystemPrompt(config?.summarizer_instructions_override, categories, summaryMode);
-  const previous = slugMap
-    ? Object.fromEntries([...slugMap].map(([slug, label]) => [label, snapshot.categories[slug] ?? ""]))
-    : (snapshot.summary ?? "");
-  const userPrompt = JSON.stringify({ previousMemory: previous, newMessages: messages });
-
-  const reportUsage = createProviderUsageRecorder(usageContext, modelCodename);
-  let hasMeasuredUsage = false;
-  let content: Parameters<typeof persistStmSummarization>[2];
+  if (turnsAfterIncrement === undefined || turnsAfterIncrement < cadence) return;
+  const key = JSON.stringify([
+    request.serverId ? "server" : "user",
+    request.serverId ?? request.userId,
+    request.channelId,
+    request.personaId,
+  ]);
+  if (inFlight.has(key)) return;
+  inFlight.add(key);
   try {
-    const result = await withProviderUsageContext(
-      usageContext,
-      () =>
-        generateConversationSummaryForProvider({
-          providerName,
-          apiKey,
-          model,
-          endpointUrl,
-          systemPrompt,
-          userPrompt,
-          onUsage: (usage) => {
-            hasMeasuredUsage = true;
-            reportUsage?.(usage);
-            recordSummaryUsage(request, usage);
-          },
-        }),
-      activity,
-    );
-    if (result.error || result.cause) {
-      await reportSummaryFailure(request, result.cause, result.error);
+    if (!(await resolveConversationCompactionCapability(providerName))) return;
+    const categories = await shortTermMemoryRepository.getStmCategories(internalServerId);
+    const entry = getScopeMemory(request);
+    if (!entry || (entry.turnsSinceRefresh ?? 0) < cadence) return;
+
+    const snapshot = snapshotStmContent(entry);
+    const { messages, newestHistoryTimestamp } = collectTranscript(request, snapshot.summarizedThrough);
+    if (messages.length === 0) return;
+
+    const summaryMode =
+      categories.length === 0 || (categories.length === 1 && categories[0].label.toLowerCase() === "summary");
+    const slugMap = summaryMode ? undefined : buildSlugMap(categories);
+    const systemPrompt = buildSystemPrompt(config?.summarizer_instructions_override, categories, summaryMode);
+    const previous = slugMap
+      ? Object.fromEntries([...slugMap].map(([slug, label]) => [label, snapshot.categories[slug] ?? ""]))
+      : (snapshot.summary ?? "");
+    const userPrompt = JSON.stringify({ previousMemory: previous, newMessages: messages });
+
+    const reportUsage = createProviderUsageRecorder(usageContext, modelCodename);
+    let hasMeasuredUsage = false;
+    let content: Parameters<typeof persistStmSummarization>[2];
+    try {
+      const result = await withProviderUsageContext(
+        usageContext,
+        () =>
+          generateConversationSummaryForProvider({
+            providerName,
+            deferFailureReport: true,
+            apiKey,
+            model,
+            endpointUrl,
+            systemPrompt,
+            userPrompt,
+            onUsage: (usage) => {
+              hasMeasuredUsage = true;
+              reportUsage?.(usage);
+              recordSummaryUsage(request, usage);
+            },
+          }),
+        activity,
+      );
+      if (result.error || result.cause) {
+        await reportSummaryFailure(request, result.cause, result.error);
+        return;
+      }
+      const text = typeof result.summary === "string" ? result.summary : "";
+      // Estimate from text until a funded tier uses a provider that omits usage or the estimates prove inaccurate.
+      if (!hasMeasuredUsage && text) {
+        recordSummaryUsage(request, {
+          inputTokens: charsToTokensText(systemPrompt.length + userPrompt.length),
+          outputTokens: charsToTokensText(text.length),
+        });
+      }
+      if (slugMap) {
+        const parsed = parseStmCategories(text, slugMap, snapshot.categories);
+        if (!parsed) throw new Error("Summary response contained no known category headings");
+        content = { categories: parsed };
+      } else {
+        const summary = cleanSummaryValue(text);
+        if (!summary) throw new Error("Summary response was empty");
+        content = { summary };
+      }
+    } catch (error) {
+      await reportSummaryFailure(request, error);
       return;
     }
-    const text = typeof result.summary === "string" ? result.summary : "";
-    // Estimate from text until a funded tier uses a provider that omits usage or the estimates prove inaccurate.
-    if (!hasMeasuredUsage && text) {
-      recordSummaryUsage(request, {
-        inputTokens: charsToTokensText(systemPrompt.length + userPrompt.length),
-        outputTokens: charsToTokensText(text.length),
+    if (hasStmSnapshot(getScopeMemory(request), snapshot)) {
+      await persistStmSummarization(request, snapshot, content, newestHistoryTimestamp, {
+        serverId: internalServerId,
+        categories,
       });
     }
-    if (slugMap) {
-      const parsed = parseStmCategories(text, slugMap, snapshot.categories);
-      if (!parsed) throw new Error("Summary response contained no known category headings");
-      content = { categories: parsed };
-    } else {
-      const summary = cleanSummaryValue(text);
-      if (!summary) throw new Error("Summary response was empty");
-      content = { summary };
-    }
-  } catch (error) {
-    await reportSummaryFailure(request, error);
-    return;
-  }
-  if (hasStmSnapshot(getScopeMemory(request), snapshot)) {
-    await persistStmSummarization(request, snapshot, content, newestHistoryTimestamp);
+  } finally {
+    inFlight.delete(key);
   }
 }
 
@@ -207,7 +216,7 @@ function collectTranscript(request: StmSummarizerRequest, marker: number | undef
     }
     start = history.findIndex(
       ({ createdAt, combinedCreatedAts }) =>
-        (createdAt !== undefined && createdAt > marker) || combinedCreatedAts?.some((time) => time > marker),
+        (createdAt !== undefined && createdAt >= marker) || combinedCreatedAts?.some((time) => time >= marker),
     );
   }
 
@@ -216,7 +225,10 @@ function collectTranscript(request: StmSummarizerRequest, marker: number | undef
   function append(message: StmMessage, historyTimestamp?: number) {
     if (!message.content) return;
     messages.push({ speakerName: message.speakerName, content: message.content });
-    if (historyTimestamp !== undefined) {
+    if (
+      historyTimestamp !== undefined &&
+      (request.oldestQueuedMessageTimestamp === undefined || historyTimestamp < request.oldestQueuedMessageTimestamp)
+    ) {
       newestHistoryTimestamp = Math.max(newestHistoryTimestamp ?? historyTimestamp, historyTimestamp);
     }
   }
@@ -225,15 +237,20 @@ function collectTranscript(request: StmSummarizerRequest, marker: number | undef
     for (const message of history.slice(start)) {
       if (message.authorType !== "user" && message.authorType !== "persona") continue;
       const { createdAt, combinedCreatedAts, individualContents } = message;
-      const timestamp = combinedCreatedAts?.at(-1) || createdAt;
+      const timestamp =
+        combinedCreatedAts
+          ?.filter(
+            (time) => request.oldestQueuedMessageTimestamp === undefined || time < request.oldestQueuedMessageTimestamp,
+          )
+          .at(-1) ?? createdAt;
       if (
         marker !== undefined &&
         createdAt !== undefined &&
-        createdAt <= marker &&
+        createdAt < marker &&
         combinedCreatedAts &&
         individualContents
       ) {
-        const firstNew = combinedCreatedAts.findIndex((time) => time > marker);
+        const firstNew = combinedCreatedAts.findIndex((time) => time >= marker);
         if (firstNew >= 0) {
           append(cleanStmMessage(message, individualContents.slice(firstNew).join("\n")), timestamp);
           continue;
@@ -277,9 +294,19 @@ export function parseStmCategories(
   const headings = new Map([...slugMap].map(([slug, label]) => [`### ${label}`, slug]));
   const sections = new Map<string, string[]>();
   let current: string[] | undefined;
-  for (const line of text.split(/\r?\n/)) {
+  const lines = text.replaceAll("\r\n", "\n").split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     if (line.startsWith("### ") || line === "###") {
-      const slug = headings.get(line);
+      let slug = headings.get(line);
+      for (const [heading, candidate] of headings) {
+        const parts = heading.replaceAll("\r\n", "\n").split("\n");
+        if (parts.length > 1 && parts.every((part, offset) => lines[index + offset] === part)) {
+          slug = candidate;
+          index += parts.length - 1;
+          break;
+        }
+      }
       current = slug === undefined ? undefined : [];
       if (slug !== undefined && current) sections.set(slug, current);
     } else {

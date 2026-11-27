@@ -664,8 +664,9 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
           enabled: stmEnabled,
           answeringAttempt,
           history: context.simplifiedMessages,
+          oldestQueuedMessageTimestamp: context.oldestQueuedMessageTimestamp,
           replies,
-          ready: Promise.all([stored, incremented]),
+          ready: Promise.all([stored, incremented]).then(([, count]) => count),
         });
       }
     }

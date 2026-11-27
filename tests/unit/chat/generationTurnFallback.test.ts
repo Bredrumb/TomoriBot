@@ -1882,8 +1882,8 @@ describe("runGenerationTurn fallback behavior", () => {
       expect(result.status).toBe(status);
       expect(result.personaResponses[0]?.text).toBe("Only half.");
       expect(result.answeringAttempt).toMatchObject({
-        modelCodename: "fallback-model",
-        providerConfig: { model: "fallback-model" },
+        modelCodename: "primary-model",
+        providerConfig: { model: "primary-model" },
       });
     }
   });

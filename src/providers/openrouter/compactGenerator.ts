@@ -78,17 +78,23 @@ export async function generateConversationSummaryOpenrouter(
 
     if (!response.ok) {
       const errorBody = await response.text();
-      log.error("OpenRouter compact summary request failed", new Error(errorBody), {
-        errorType: "OpenrouterCompactHttpError",
-        metadata: {
-          model: request.model,
-          status: response.status,
-          errorBody,
-        },
-      });
+      if (!request.deferFailureReport) {
+        log.error("OpenRouter compact summary request failed", new Error(errorBody), {
+          errorType: "OpenrouterCompactHttpError",
+          metadata: {
+            model: request.model,
+            status: response.status,
+            errorBody,
+          },
+        });
+      }
       return {
         error: `OpenRouter request failed (${response.status}): ${response.statusText}`,
-        cause: readOpenRouterLimitError(response.status, response.headers, errorBody) ?? undefined,
+        cause: Object.assign(
+          readOpenRouterLimitError(response.status, response.headers, errorBody) ??
+            new Error("Provider request failed"),
+          { status: response.status, responseBody: errorBody },
+        ),
       };
     }
 
@@ -127,8 +133,9 @@ export async function generateConversationSummaryOpenrouter(
     return { summary: responseText.trim() };
   } catch (error) {
     if (error instanceof ProviderRequestDeniedError) return { error: error.message, cause: error };
-    log.error("OpenRouter compact summary failed", error as Error);
+    if (!request.deferFailureReport) log.error("OpenRouter compact summary failed", error as Error);
     return {
+      cause: error instanceof Error ? error : undefined,
       error: error instanceof Error ? error.message : "Unknown OpenRouter error",
     };
   }

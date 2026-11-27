@@ -628,6 +628,7 @@ class ImportRepository {
     serverId: number,
     categories: readonly { position: number; label: string; description: string }[],
   ): Promise<void> {
+    await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
     await tx`DELETE FROM stm_categories WHERE server_id = ${serverId}`;
     for (const category of categories) {
       await tx`
@@ -1330,7 +1331,7 @@ class ImportRepository {
       });
       const plain = memories.filter((memory) => memory.tags.length === 0);
       await sql.begin(async (tx) => {
-        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
         const result = await lorebookRepository.importEntries(
           serverId,
           targetPersonaLineageId,
@@ -1553,7 +1554,7 @@ class ImportRepository {
 
       let memoriesDeleted = 0;
       await sql.begin(async (tx) => {
-        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
         if (
           serverwideEntries !== undefined &&
           (await lorebookRepository.replaceScopeEntries(serverId, null, serverwideEntries, tx)) !== "replaced"

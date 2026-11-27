@@ -14,7 +14,7 @@ the scope must reach the server's summary interval (10 bot replies by default), 
 must support conversation summaries. Tool Use and model tool support are independent of this
 check. NovelAI does not support conversation summaries.
 
-The request uses the finishing reply attempt's provider, model, endpoint, and credentials,
+The request uses the delivering reply attempt's provider, model, endpoint, and credentials,
 including a personal API key. This is a separate generation charged to those credentials.
 Server stats and applicable subscription usage attribute its tokens to that model.
 
@@ -27,14 +27,14 @@ person. The response is plain text, with one `### <Label>` section per category 
 
 Only one run can be in flight per live scope (server, channel, and persona in a guild, or user,
 channel, and persona in a DM). The summarizer snapshots the stored memory before the request.
-The cache and persistence checks discard the result if that memory was edited or cleared
-while the request was running. A successful write saves the memory and its
+The cache and persistence checks discard the result if that memory or its category definitions
+changed while the request was running. A successful write saves the memory and its
 `summarized_through` cursor and resets the cadence in one transaction. The cache updates
 after commit.
 
-The cursor records the newest included timestamp from the fetched history. It excludes the
-appended reply's timestamp, so messages arriving between the history fetch and reply delivery
-remain eligible for the next summary. A terminal provider error or timeout can still leave
+The cursor records an included timestamp from the fetched history before any message awaiting its
+own queued turn. Messages at the cursor timestamp remain eligible on the next run, as do messages
+arriving between the history fetch and reply delivery. The cursor excludes the appended reply. A terminal provider error or timeout can still leave
 delivered text in passive capture, but it cannot start a summary or advance the cursor.
 A failed summary leaves the stored memory, cursor, and cadence intact. The next eligible reply
 retries from the last saved cursor. The summarizer posts nothing to Discord.
