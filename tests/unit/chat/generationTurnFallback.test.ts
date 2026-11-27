@@ -537,7 +537,7 @@ const fakeProvider = {
       apiKey,
       model: tomoriState.llm.llm_codename,
       temperature: tomoriState.config.llm_temperature ?? 0.7,
-      ...(tomoriState.llm.has_tools && { tools: [{ name: "update_short_term_memory" }] }),
+      ...(tomoriState.llm.has_tools && { tools: [{ name: "create_thread" }] }),
     };
   },
   getInfo: () => ({ name: "google" }),
@@ -829,16 +829,30 @@ describe("runGenerationTurn fallback behavior", () => {
       },
     ]).flat();
     const originalItems = [...context.contextItems];
+    const activity = {
+      references: [],
+      requestKeyDigest: Bun.CryptoHasher.hash("sha256", "next-key", "hex"),
+    };
     rotationKeyQueue.push(
       { apiKey: "first-key", rotationKeyId: 11, isMainKey: false },
-      { apiKey: "next-key", rotationKeyId: 12, isMainKey: false },
+      {
+        apiKey: "next-key",
+        rotationKeyId: 12,
+        isMainKey: false,
+        usageContext: { storedCredentialActivity: activity },
+      },
     );
     subscriptionLimits.set("first-key", firstLimit);
     subscriptionLimits.set("next-key", nextLimit);
     queuedResults.push(personalRouteFailure(), successfulReply());
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, collectingSink());
+    const result = await runGenerationTurn(context, collectingSink());
     expect(toolLoopCalls.map((call) => call.apiKey)).toEqual(["first-key", "next-key"]);
+    expect(result.answeringAttempt).toMatchObject({
+      providerConfig: { apiKey: "next-key", model: "kayra-v1" },
+      activity,
+      credentialSource: "server",
+    });
     expect(subscriptionReads).toEqual([]);
     for (const call of toolLoopCalls) expect(call.contextItems.filter((item) => item.messageId)).toEqual(originalItems);
     for (const call of toolLoopCalls) {
@@ -1270,6 +1284,35 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.shouldApplyTextQuota).toBe(false);
     expect(context.textQuotaState).toBeNull();
     expect(result.fallbackNotice).toBeUndefined();
+  });
+
+  it("carries the resolved personal custom endpoint even when the state has no URL mirror", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-custom", "custom:42"),
+    );
+    context.personalTextProvider = "custom:42";
+    const endpointUrl = "https://example.invalid/resolved/v1";
+    const createConfig = fakeProvider.createConfig;
+    const config = spyOn(fakeProvider, "createConfig").mockImplementation(async (state, apiKey) => ({
+      ...(await createConfig(state, apiKey)),
+      endpointUrl,
+    }));
+    try {
+      queuedResults.push(successfulReply());
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      const result = await runGenerationTurn(context, collectingSink());
+
+      expect(context.tomoriState.config.custom_endpoint_url).toBeFalsy();
+      expect(result.answeringAttempt).toMatchObject({
+        credentialSource: "personal",
+        providerConfig: { apiKey: "personal-key", model: "personal-custom" },
+        endpointUrl,
+      });
+    } finally {
+      config.mockRestore();
+    }
   });
 
   it("resolves the server route from the persona's server model rather than the personal overlay", async () => {
@@ -1783,6 +1826,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(result.status).toBe("completed");
     expect(result.personaResponses[0]?.text).toBe("First half.\nsecond half.");
     expect(result.streamResults.map((stream) => stream.accumulatedText)).toEqual(["First half.", "second half."]);
+    expect(result.answeringAttempt?.modelCodename).toBe(fallbackModel.llm_codename);
     // Post-turn stats record every usage entry under the final model, so the primary's must not ride along.
     expect(sumTurnUsage(result.streamResults)).toEqual({ inputTokens: 950, outputTokens: 20 });
   });
@@ -1862,6 +1906,10 @@ describe("runGenerationTurn fallback behavior", () => {
       expect(toolLoopCalls).toHaveLength(2);
       expect(result.status).toBe(status);
       expect(result.personaResponses[0]?.text).toBe("Only half.");
+      expect(result.answeringAttempt).toMatchObject({
+        modelCodename: "primary-model",
+        providerConfig: { model: "primary-model" },
+      });
     }
   });
 
@@ -2306,7 +2354,7 @@ describe("runGenerationTurn fallback behavior", () => {
       ).toBe(true);
     });
 
-    it("drops the same-channel STM block and nudge on an attempt that sends no tools", async () => {
+    it("keeps same-channel and other-channel STM on an attempt that sends no tools", async () => {
       const context = makeContext(
         { ...makeLlm(1, "primary-model"), has_tools: true } as LlmRow,
         makeLlm(2, "toolless-fallback"),
@@ -2321,7 +2369,6 @@ describe("runGenerationTurn fallback behavior", () => {
           role: "user",
           parts: [{ type: "text", text: "this channel" }],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          requiresToolCalling: true,
         },
         { role: "user", parts: [{ type: "text", text: "hello" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
       ];
@@ -2337,7 +2384,10 @@ describe("runGenerationTurn fallback behavior", () => {
             .filter((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)
             .map(contextItemText),
         ),
-      ).toEqual([["other channel", "this channel"], ["other channel"]]);
+      ).toEqual([
+        ["other channel", "this channel"],
+        ["other channel", "this channel"],
+      ]);
     });
   });
 });

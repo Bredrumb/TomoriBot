@@ -1,7 +1,7 @@
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
-import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
+import { type PersonaSpriteRow, serverStmConfigSchema, type StmCategoryRow, type TomoriState } from "@/types/db/schema";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
@@ -23,10 +23,11 @@ import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/components
 import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import { DEFAULT_STM_REFRESH_CADENCE, DEFAULT_STM_SUMMARIZER_INSTRUCTIONS } from "@/utils/memory/stmSummarizer";
 import { initializeLocalizer, hasLocaleKey, localizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse, expectForEveryLocale } from "../../helpers/localeCases";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
-import { expectSafePanelPayload } from "../../helpers/panelLimits";
+import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -134,6 +135,14 @@ const MEMORY_CATEGORIES: StmCategoryRow[] = [
   { server_id: 9, position: 0, label: "Summary", description: "Current summary" },
   { server_id: 9, position: 1, label: "People", description: "People in the scene" },
 ];
+
+const BEHAVIOR_MEMORY_VIEW = {
+  memoryTaggingEnabled: true,
+  channelMemoryEnabled: false,
+  stmEnabled: true,
+  stmConfig: null,
+  stmCategories: MEMORY_CATEGORIES,
+};
 
 const MEMORY_CONDITIONING: ConditioningGroup = {
   conditioningType: "reward",
@@ -1746,14 +1755,7 @@ describe("config Behavior pages", () => {
         verbosity: "minimal" as const,
         speechTranscriptsEnabled: true,
       },
-      memory: {
-        memoryTaggingEnabled: true,
-        channelMemoryEnabled: false,
-        stmEnabled: true,
-        toolUseEnabled: true,
-        stmConfig: null,
-        stmCategories: MEMORY_CATEGORIES,
-      },
+      memory: BEHAVIOR_MEMORY_VIEW,
     };
     const experimental = build(GUILD_MANAGER, { category: "behavior", page: "experimental", behaviorView: d10View });
     const notices = build(GUILD_MANAGER, { category: "behavior", page: "notices", behaviorView: d10View });
@@ -1802,69 +1804,93 @@ describe("config Behavior pages", () => {
     expect(buttonFor(memory, { action: "behavior-stm-enabled-set", locale: "en-US", enabled: false })?.disabled).toBe(
       false,
     );
+  });
 
-    const memoryToolUseOff = build(GUILD_MANAGER, {
+  it("renders STM instructions, the summary interval, and the automatic summarization states", () => {
+    const locale = "en-US";
+    const memory = build(GUILD_MANAGER, {
       category: "behavior",
       page: "memory",
-      behaviorView: { ...d10View, memory: { ...d10View.memory, toolUseEnabled: false } },
+      behaviorView: { ...behaviorView, memory: BEHAVIOR_MEMORY_VIEW },
     });
-    const toolUseOffSerialized = walk(memoryToolUseOff)
-      .map((component) => component.content ?? "")
-      .join("\n");
-    expect(toolUseOffSerialized).toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_tool_use_off"));
-    expect(toolUseOffSerialized).not.toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_on"));
+    const instructions = "Keep unresolved plans and decisions.";
+    const memoryOff = build(GUILD_MANAGER, {
+      category: "behavior",
+      page: "memory",
+      behaviorView: {
+        ...behaviorView,
+        memory: {
+          ...BEHAVIOR_MEMORY_VIEW,
+          stmEnabled: false,
+          stmConfig: serverStmConfigSchema.parse({ server_id: 9, summarizer_instructions_override: instructions }),
+        },
+      },
+    });
+    const onText = collectTextDisplays(memory);
+    const offText = collectTextDisplays(memoryOff);
+    const title = localizedCopy(locale, "commands.config.panel.stm_prompt_title");
+    const onPrompt = onText.find((content) => content.startsWith(`**${title}**`));
+    const offPrompt = offText.find((content) => content.startsWith(`**${title}**`));
+    expect(onPrompt?.split("```markdown\n").slice(1)).toEqual([`${DEFAULT_STM_SUMMARIZER_INSTRUCTIONS}\n\`\`\``]);
+    expect(offPrompt?.split("```markdown\n").slice(1)).toEqual([`${instructions}\n\`\`\``]);
+    expect(buttonFor(memory, { action: "behavior-stm-prompt-open", locale })?.disabled).toBe(false);
 
-    const autoOffNoteKeys = [
+    const statusDescription = localizedProse(locale, "commands.config.panel.stm_enabled_description");
+    expect(onText[onText.findIndex((content) => statusDescription.test(content)) + 1]).toMatch(
+      localizedProse(locale, "commands.config.panel.stm_enabled_on"),
+    );
+    expect(offText[offText.findIndex((content) => statusDescription.test(content)) + 1]).toMatch(
+      localizedProse(locale, "commands.config.panel.stm_enabled_off"),
+    );
+
+    const parametersTitle = localizedCopy(locale, "commands.config.panel.stm_parameters_title");
+    const parameters = onText.find((content) => content.startsWith(`**[${parametersTitle}]`));
+    expect(parameters?.split("\n").filter((line) => line.startsWith("> "))).toEqual([
+      `> ${localizedCopy(locale, "commands.config.panel.stm_refresh_cadence_value", { count: DEFAULT_STM_REFRESH_CADENCE })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_render_mode_value", { mode: "crude_summary" })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_crude_messages_value", { count: 6 })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_content_depth_value", { count: -1 })}`,
+    ]);
+    for (const key of [
       "commands.config.panel.stm_parameters_auto_off_note",
       "commands.config.panel.stm_categories_auto_off_note",
       "commands.config.panel.stm_prompt_auto_off_note",
-    ];
-    const stmOffSerialized = walk(
-      build(GUILD_MANAGER, {
-        category: "behavior",
-        page: "memory",
-        behaviorView: { ...d10View, memory: { ...d10View.memory, stmEnabled: false } },
-      }),
-    )
-      .map((component) => component.content ?? "")
-      .join("\n");
-    const stmOnSerialized = walk(memory)
-      .map((component) => component.content ?? "")
-      .join("\n");
-    for (const key of autoOffNoteKeys) {
-      expect(stmOffSerialized).toMatch(localizedProse("en-US", key));
-      expect(stmOnSerialized).not.toMatch(localizedProse("en-US", key));
+    ]) {
+      const note = localizedProse(locale, key);
+      expect(
+        offText.some((text) =>
+          note.test(
+            text
+              .split("\n")
+              .filter((line) => line.startsWith("-# "))
+              .join("\n"),
+          ),
+        ),
+      ).toBe(true);
+      expect(onText.join("\n")).not.toMatch(note);
     }
   });
 
   it("keeps Advanced Memory within Discord's text cap when every STM category slot is full", () => {
-    const fullCategories: StmCategoryRow[] = Array.from({ length: 5 }, (_entry, position) => ({
-      server_id: 9,
-      position,
-      label: `Slot ${position}`,
-      description: "x".repeat(990),
-    }));
+    const stmCategories = Array.from({ length: 5 }, (_, position) => {
+      const label = `Category ${position + 1}`;
+      return { server_id: 9, position, label, description: "A".repeat(1000 - label.length - 2) };
+    });
     expectForEveryLocale((locale) => {
-      for (const stmEnabled of [true, false]) {
-        const payload = build(GUILD_MANAGER, {
-          locale,
-          category: "behavior",
-          page: "memory",
-          behaviorView: {
-            ...behaviorView,
-            memory: {
-              memoryTaggingEnabled: true,
-              channelMemoryEnabled: false,
-              stmEnabled,
-              toolUseEnabled: true,
-              stmConfig: null,
-              stmCategories: fullCategories,
-            },
-          },
-        });
-        const result = validateComponentsV2MessageLimits(payload);
-        expect(result.valid, `${locale} stm=${stmEnabled}: ${JSON.stringify(result.violations)}`).toBe(true);
-      }
+      const payload = build(GUILD_MANAGER, {
+        locale,
+        category: "behavior",
+        page: "memory",
+        behaviorView: {
+          ...behaviorView,
+          memory: { ...BEHAVIOR_MEMORY_VIEW, stmEnabled: false, stmCategories },
+        },
+      });
+      expectSafePanelPayload(payload, locale);
+      const categoryTitle = localizedCopy(locale, "commands.config.panel.stm_categories_title");
+      const categories = collectTextDisplays(payload).find((content) => content.startsWith(`**${categoryTitle}**`));
+      expect(categories).toContain(`\n\`\`\`markdown\n${stmCategories[0]?.label}: `);
+      expect(categories).toContain("<!--");
     });
   });
 

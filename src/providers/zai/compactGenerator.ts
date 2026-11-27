@@ -48,16 +48,22 @@ export async function generateConversationSummaryZai(
 
     if (!response.ok) {
       const errorBody = await response.text();
-      log.error("Z.ai compact summary request failed", new Error(errorBody), {
-        errorType: "ZaiCompactHttpError",
-        metadata: {
-          model: apiModel,
-          status: response.status,
-          errorBody,
-        },
-      });
+      if (!request.deferFailureReport) {
+        log.error("Z.ai compact summary request failed", new Error(errorBody), {
+          errorType: "ZaiCompactHttpError",
+          metadata: {
+            model: apiModel,
+            status: response.status,
+            errorBody,
+          },
+        });
+      }
       return {
         error: `Z.ai request failed (${response.status}): ${response.statusText}`,
+        cause: Object.assign(new Error("Provider request failed"), {
+          status: response.status,
+          responseBody: errorBody.replaceAll(request.apiKey, "[REDACTED]"),
+        }),
       };
     }
 
@@ -73,8 +79,9 @@ export async function generateConversationSummaryZai(
 
     return { summary: responseText };
   } catch (error) {
-    log.error("Z.ai compact summary failed", error as Error);
+    if (!request.deferFailureReport) log.error("Z.ai compact summary failed", error as Error);
     return {
+      cause: error instanceof Error ? error : undefined,
       error: error instanceof Error ? error.message : "Unknown Z.ai error",
     };
   }

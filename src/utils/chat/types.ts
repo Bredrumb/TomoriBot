@@ -8,9 +8,11 @@ import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/contex
 import type {
   FunctionCall,
   FunctionResponseImageMetadata,
+  ProviderConfig,
   StreamResult,
   ThoughtLogPayload,
 } from "@/types/provider/interfaces";
+import type { StoredCredentialActivity } from "@/utils/security/apiKeyRetention";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
@@ -304,6 +306,8 @@ export interface ChatTurnContext {
   // Shared by reference across every attempt of this persona turn so retries do not reset ExpressionDeliveryState.
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
+  fetchedHistoryOldestTimestamp?: number;
+  oldestQueuedMessageTimestamp?: number;
   reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
@@ -372,6 +376,15 @@ export interface GenerationTurnResult {
   personaResponses: ChatPersonaResponse[];
   toolResponseDelivered?: boolean;
   firstDeliveredMessageId?: string;
+  answeringAttempt?: {
+    providerName: string;
+    modelCodename: string;
+    providerConfig: Pick<ProviderConfig, "apiKey" | "model">;
+    endpointUrl?: string;
+    activity?: StoredCredentialActivity;
+    usageContext?: ProviderUsageContext;
+    credentialSource: ChatTurnContext["textCredentialSource"];
+  };
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
 }

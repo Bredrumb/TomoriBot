@@ -1,7 +1,6 @@
 import { ChannelType, ComponentType, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import { CooldownType, type RandomTriggerRow, type TomoriState } from "@/types/db/schema";
-import type { ServerStmConfigRow } from "@/types/db/schema";
 import { TOOL_NOTICE_DEFINITIONS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
 import {
   computeRandomTriggerRemoveFingerprint,
@@ -84,8 +83,7 @@ import {
 } from "@/utils/tools/deliberateToolMode";
 import { slugifyLabel } from "@/utils/text/slugifyLabel";
 import { MAX_MESSAGES_PER_CHANNEL } from "@/utils/cache/shortTermMemoryCache";
-import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
-import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
+import { DEFAULT_STM_SUMMARIZER_INSTRUCTIONS } from "@/utils/memory/stmSummarizer";
 import {
   BEHAVIOR_CHANNEL_MEMORY_FIELD,
   BEHAVIOR_MEMORY_TAGGING_FIELD,
@@ -94,11 +92,9 @@ import {
   BEHAVIOR_STM_CATEGORY_PREFIX,
   BEHAVIOR_STM_CONTENT_DEPTH_FIELD,
   BEHAVIOR_STM_CRUDE_MESSAGES_FIELD,
-  BEHAVIOR_STM_NUDGE_DEPTH_FIELD,
   BEHAVIOR_STM_REFRESH_CADENCE_FIELD,
   BEHAVIOR_STM_RENDER_MODE_FIELD,
-  BEHAVIOR_STM_TOOL_DESCRIPTION_FIELD,
-  BEHAVIOR_STM_UPDATE_NUDGE_FIELD,
+  BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD,
   BEHAVIOR_TOOL_CONTEXT_FIELD,
   BEHAVIOR_TOOL_TRIGGER_LITERAL_FIELD,
   BEHAVIOR_TOOL_TRIGGER_REMOVE_GROUP_PREFIX,
@@ -1091,7 +1087,6 @@ function fallbackD10View(state: TomoriState) {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
       stmEnabled: state.config.short_term_memory_enabled ?? false,
-      toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig: null,
       stmCategories: [],
     },
@@ -1133,20 +1128,22 @@ export async function handleConfigBehaviorD10ModalOpen(
     await replyPanelReceipt(interaction, outdatedConfigPanelReceipt(route.locale));
     return true;
   }
-  const view = await d10View(state, dependencies);
   const nonce = dependencies.createNonce();
   switch (route.action) {
-    case "behavior-tool-context-open":
+    case "behavior-tool-context-open": {
+      const { experimental } = await d10View(state, dependencies);
       await dependencies.showModal(
         interaction,
-        buildBehaviorToolContextModal(route.locale, nonce, view.experimental.deliberateToolContextTurns),
+        buildBehaviorToolContextModal(route.locale, nonce, experimental.deliberateToolContextTurns),
       );
       break;
+    }
     case "behavior-tool-trigger-add-open":
       await dependencies.showModal(interaction, buildBehaviorToolTriggerAddModal(route.locale, nonce));
       break;
     case "behavior-tool-trigger-remove-open": {
-      const entryCount = triggerEntries(view.experimental.deliberateToolTriggers).length;
+      const { experimental } = await d10View(state, dependencies);
+      const entryCount = triggerEntries(experimental.deliberateToolTriggers).length;
       if (entryCount === 0) {
         await replyPanelReceipt(interaction, {
           tone: "info",
@@ -1168,17 +1165,20 @@ export async function handleConfigBehaviorD10ModalOpen(
       }
       await dependencies.showModal(
         interaction,
-        buildBehaviorToolTriggerRemoveModal(route.locale, nonce, view.experimental.deliberateToolTriggers),
+        buildBehaviorToolTriggerRemoveModal(route.locale, nonce, experimental.deliberateToolTriggers),
       );
       break;
     }
-    case "behavior-send-limit-open":
+    case "behavior-send-limit-open": {
+      const { experimental } = await d10View(state, dependencies);
       await dependencies.showModal(
         interaction,
-        buildBehaviorSendLimitModal(route.locale, nonce, view.experimental.sendLimit),
+        buildBehaviorSendLimitModal(route.locale, nonce, experimental.sendLimit),
       );
       break;
-    case "behavior-notice-visibility-open":
+    }
+    case "behavior-notice-visibility-open": {
+      const { notices } = await d10View(state, dependencies);
       if (TOOL_NOTICE_DEFINITIONS.length > MAX_NOTICE_ENTRIES) {
         await replyPanelReceipt(interaction, {
           tone: "warning",
@@ -1193,20 +1193,18 @@ export async function handleConfigBehaviorD10ModalOpen(
       }
       await dependencies.showModal(
         interaction,
-        buildBehaviorNoticeVisibilityModal(route.locale, nonce, view.notices.hiddenNoticeKeys),
+        buildBehaviorNoticeVisibilityModal(route.locale, nonce, notices.hiddenNoticeKeys),
       );
       break;
-    case "behavior-memory-tagging-open":
+    }
+    case "behavior-memory-tagging-open": {
+      const { memory } = await d10View(state, dependencies);
       await dependencies.showModal(
         interaction,
-        buildBehaviorMemoryTaggingModal(
-          route.locale,
-          nonce,
-          view.memory.memoryTaggingEnabled,
-          view.memory.channelMemoryEnabled,
-        ),
+        buildBehaviorMemoryTaggingModal(route.locale, nonce, memory.memoryTaggingEnabled, memory.channelMemoryEnabled),
       );
       break;
+    }
     case "behavior-stm-parameters-open": {
       const stmConfig = await shortTermMemoryRepository.getStmConfig(state.server_id);
       await dependencies.showModal(interaction, buildBehaviorStmParametersModal(route.locale, nonce, stmConfig));
@@ -1229,19 +1227,13 @@ export async function handleConfigBehaviorD10ModalOpen(
       break;
     }
     case "behavior-stm-prompt-open": {
-      const [stmConfig, categories] = await Promise.all([
-        shortTermMemoryRepository.getStmConfig(state.server_id),
-        shortTermMemoryRepository.getStmCategories(state.server_id),
-      ]);
-      const categoryMode =
-        categories.length > 1 || (categories.length === 1 && categories[0]?.label.toLowerCase() !== "summary");
+      const stmConfig = await shortTermMemoryRepository.getStmConfig(state.server_id);
       await dependencies.showModal(
         interaction,
         buildBehaviorStmPromptModal(
           route.locale,
           nonce,
-          stmConfig?.tool_description_override ?? DEFAULT_STM_TOOL_DESCRIPTION,
-          stmConfig?.update_nudge_override ?? (categoryMode ? SEED_CATEGORY_UPDATE_HINT : SEED_SUMMARY_UPDATE_HINT),
+          stmConfig?.summarizer_instructions_override ?? DEFAULT_STM_SUMMARIZER_INSTRUCTIONS,
         ),
       );
       break;
@@ -1711,25 +1703,17 @@ async function runD10Write(
       1,
       MAX_MESSAGES_PER_CHANNEL,
     );
-    const nudge = parseInteger(getText(submitted, BEHAVIOR_STM_NUDGE_DEPTH_FIELD, route.nonce), 0, 20);
     const content = parseInteger(getText(submitted, BEHAVIOR_STM_CONTENT_DEPTH_FIELD, route.nonce), -1, 20);
     const mode = dependencies.takeSelectValue(
       submitted.id,
       buildConfigModalFieldId(BEHAVIOR_STM_RENDER_MODE_FIELD, route.nonce),
     );
-    if (
-      cadence === null ||
-      crude === null ||
-      nudge === null ||
-      content === null ||
-      (mode !== "supersede" && mode !== "crude_summary")
-    )
+    if (cadence === null || crude === null || content === null || (mode !== "supersede" && mode !== "crude_summary"))
       return { receipt: invalid(locale, "commands.config.panel.stm_parameters_invalid_detail") };
     const updated = await shortTermMemoryRepository.upsertStmConfig(state.server_id, {
       refresh_cadence: cadence,
-      render_mode: mode as ServerStmConfigRow["render_mode"],
+      render_mode: mode,
       crude_message_count: crude,
-      nudge_injection_depth: nudge,
       content_injection_depth: content,
     });
     if (!updated) return { receipt: writeFailed(locale) };
@@ -1744,11 +1728,27 @@ async function runD10Write(
     };
   }
   if (route.action === "behavior-stm-prompt-submit") {
-    const toolDescription = getText(submitted, BEHAVIOR_STM_TOOL_DESCRIPTION_FIELD, route.nonce).trim() || null;
-    const updateNudge = getText(submitted, BEHAVIOR_STM_UPDATE_NUDGE_FIELD, route.nonce).trim() || null;
+    const field = submitted.fields.fields.get(
+      buildConfigModalFieldId(BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD, route.nonce),
+    );
+    if (field?.type !== ComponentType.TextInput || typeof field.value !== "string") {
+      return { receipt: staleReceipt(locale) };
+    }
+    const instructions = field.value.trim() || null;
+    const current =
+      (await shortTermMemoryRepository.getStmConfig(state.server_id))?.summarizer_instructions_override ?? null;
+    if (instructions === current || (current === null && instructions === DEFAULT_STM_SUMMARIZER_INSTRUCTIONS)) {
+      return {
+        receipt: receipt(
+          locale,
+          "info",
+          "commands.config.panel.state_no_changes_heading",
+          "commands.config.panel.state_no_changes_detail",
+        ),
+      };
+    }
     const updated = await shortTermMemoryRepository.upsertStmConfig(state.server_id, {
-      tool_description_override: toolDescription,
-      update_nudge_override: updateNudge,
+      summarizer_instructions_override: instructions,
     });
     if (!updated) return { receipt: writeFailed(locale) };
     return {

@@ -156,7 +156,6 @@ export interface ConfigBehaviorMemoryView {
   memoryTaggingEnabled: boolean;
   channelMemoryEnabled: boolean;
   stmEnabled: boolean;
-  toolUseEnabled: boolean;
   stmConfig: ServerStmConfigRow | null;
   stmCategories: StmCategoryRow[];
 }

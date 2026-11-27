@@ -4,7 +4,6 @@ import { isMemoryDecayEnabled } from "@/utils/memory/memoryDecay";
 import { orderNativePromptBlocks, STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
-import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { buildLorebookContextItems } from "@/modules/lorebooks/runtime/contextItems";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
@@ -34,10 +33,6 @@ export type NativeBuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
-  nudgeItem?: StructuredContextItem;
-  // Dialogue-item depth counts spacers and directives as well as messages, with 0 targeting the tail, so positional
-  // nudge placement matches native layout.
-  nudgeInjectionDepth?: number;
   // Returned separately from contextItems because fresh STM and non-negative depths must bypass preset buckets for
   // downstream positional insertion.
   memoryInjectionItems?: StructuredContextItem[];
@@ -81,7 +76,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     impersonatedUserPrompt,
     personaUserBlocks,
     includeTimestamps = false,
-    explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
     deliberateToolAllowedNames,
     toolStreamContext,
     presetOwnsSystemPrompt = false,
@@ -121,8 +115,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const contextItems: StructuredContextItem[] = [];
   const tailDirectives: string[] = [];
   const lowerPriorityTailDirectives: string[] = [];
-  let nudgeItem: StructuredContextItem | undefined;
-  let nudgeInjectionDepth = 2;
   let memoryInjectionItems: StructuredContextItem[] | undefined;
   let memoryInjectionDepth = -1;
   let uncensorDirective: string | undefined;
@@ -193,11 +185,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const dateSpacerTemplate =
     tomoriConfig.time_awareness_enabled !== false ? await toolPromptMacroResolver.expand(SPACER_TEMPLATE) : null;
   const documentHintTemplate = await toolPromptMacroResolver.expand(DOCUMENT_HINT_TEMPLATE);
-  const explicitLongTermMemoryIntent =
-    explicitLongTermMemoryIntentOverride ??
-    hasExplicitLongTermMemoryIntent(
-      simplifiedMessageHistory.filter((message) => message.authorType === "user").at(-1)?.content,
-    );
 
   contextItems.push(
     ...(await buildPromptContextItems({
@@ -350,7 +337,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   try {
     const actualTriggeringUserId =
       impersonatedUserId ?? shortTermMemoryUserId ?? snapshot?.triggererUserRow?.user_disc_id;
-    // Run even when short_term_memory_enabled is false so curated STM still renders while auto-nudges stay suppressed.
+    // Read curated STM even when automatic summarization is off.
     if (actualTriggeringUserId) {
       const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
@@ -362,12 +349,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
         client,
         isUserImpersonation,
-        explicitLongTermMemoryIntent,
-        toolPromptMacroResolver,
         convertMentions,
       });
-      nudgeItem = stmResult.nudgeItem;
-      nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
       memoryInjectionDepth = stmResult.memoryInjectionDepth;
       if (memoryInjectionDepth >= 0 || stmResult.memoryItems.some((item: PromptLayoutItem) => item[STM_TAIL_SLOT])) {
         // Deferred content bypasses preset buckets so the tail slot and saved item depth can be compared after history assembly.
@@ -484,8 +467,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     tailDirectives,
     lowerPriorityTailDirectives,
     uncensorDirective,
-    nudgeItem,
-    nudgeInjectionDepth,
     memoryInjectionItems,
     memoryInjectionDepth,
   };

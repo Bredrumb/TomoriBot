@@ -118,9 +118,7 @@ interface WorkspaceConfigProjectionRow {
   refresh_cadence: number | null;
   render_mode: "supersede" | "crude_summary" | null;
   crude_message_count: number | null;
-  tool_description_override: string | null;
-  update_nudge_override: string | null;
-  nudge_injection_depth: number | null;
+  summarizer_instructions_override: string | null;
   content_injection_depth: number | null;
 }
 
@@ -817,9 +815,7 @@ export class ExportRepository {
           stmc.refresh_cadence AS refresh_cadence,
           stmc.render_mode AS render_mode,
           stmc.crude_message_count AS crude_message_count,
-          stmc.tool_description_override AS tool_description_override,
-          stmc.update_nudge_override AS update_nudge_override,
-          stmc.nudge_injection_depth AS nudge_injection_depth,
+          stmc.summarizer_instructions_override AS summarizer_instructions_override,
           stmc.content_injection_depth AS content_injection_depth
         FROM servers s
         LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
@@ -941,9 +937,7 @@ export class ExportRepository {
                   refresh_cadence: configData.refresh_cadence,
                   render_mode: configData.render_mode,
                   crude_message_count: configData.crude_message_count,
-                  tool_description_override: configData.tool_description_override,
-                  update_nudge_override: configData.update_nudge_override,
-                  nudge_injection_depth: configData.nudge_injection_depth,
+                  summarizer_instructions_override: configData.summarizer_instructions_override,
                   content_injection_depth: configData.content_injection_depth,
                 },
           stm_categories: categoryRows.map((category) => ({

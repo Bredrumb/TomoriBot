@@ -9,7 +9,7 @@ import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
 import {
   naturalNudgeInterestsSchema,
   naturalNudgeTalkativenessSchema,
-  personaAuthoredIdleNudgesSchema,
+  personaAuthoredIdleNudgesImportSchema,
   type NaturalNudgeInterest,
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
@@ -164,7 +164,7 @@ export const presetExportDataSchema = z.object({
   is_nsfw: z.boolean().optional(),
   natural_nudge_interests: naturalNudgeInterestsSchema.optional(),
   natural_nudge_talkativeness: naturalNudgeTalkativenessSchema.optional(),
-  natural_nudge_idle_nudges: personaAuthoredIdleNudgesSchema.optional(),
+  natural_nudge_idle_nudges: personaAuthoredIdleNudgesImportSchema.optional(),
 });
 
 // Legacy preset files still in users' hands use nai_char_ref_url, so imports must rename the key before schema

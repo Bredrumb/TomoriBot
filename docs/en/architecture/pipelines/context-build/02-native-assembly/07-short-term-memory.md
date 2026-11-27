@@ -3,7 +3,7 @@ title: "02.7: Short-Term Memory"
 aiGenerated: true
 ---
 
-The short-term memory contributor retrieves recent conversation summaries and category blocks across server channels and emits cadence-gated tool nudges.
+The short-term memory contributor retrieves recent conversation summaries and category blocks from the current channel and other eligible channels. Models can read same-channel memory without tool support.
 
 ## Flow and ownership
 
@@ -11,7 +11,7 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
 
 1. **Preconditions and gating**:
    - Requires a triggering user ID. Returns an empty result if absent.
-   - When automatic short-term memory is disabled (`short_term_memory_enabled === false`), the bot suppresses the cadence nudge and the write tool. Existing memory content still renders so operators can curate memories manually.
+   - Existing memory renders even when automatic summaries are off.
 2. **Channel memory retrieval**:
    - **Same-channel memory**: Retrieves the active running summary or category block for the current channel.
    - **Other-channel memories**: Retrieves up to three recent conversation summaries from other channels (`MAX_OTHER_CHANNEL_MEMORIES = 3`), sorted by update recency.
@@ -21,28 +21,19 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
    - `crude_summary` (default): Emits the summary or category block followed by recent raw messages.
    - `supersede`: When a summary or category block exists, raw messages for that channel are omitted.
    - Summaries and category text resolve `{@userId}` for the active persona. Raw messages preserve this token.
-4. **Unified cadence nudge (`nudgeItem`)**:
-   - Emits a prompt hint instructing the model to invoke `{short_term_memory_tool}` after responding.
-   - Gated by `turnsSinceRefresh >= refreshCadence` (default 5). The same counter and condition govern both initial creation and ongoing refresh.
-   - Suppressed when the model lacks tools (`has_tools === false`), the provider is NovelAI, or an explicit long-term memory command is detected (`explicitLongTermMemoryIntent === true`). The model is the turn's planned model (channel or persona override included), not the server default.
-   - The nudge and the same-channel block carry `requiresToolCalling`, so a fallback attempt that sends no tools drops both while other-channel memories stay.
-   - Carries an empty `completionText` projection, so NovelAI request fitting also excludes a nudge built for another model before a personal override or fallback; actual memory contents remain eligible.
-   - Returned out-of-band alongside `nudgeInjectionDepth` (default 2, placing it before the latest user/bot turn pair).
-5. **Content placement**: Same-channel memory younger than 60 minutes, or any block carrying other-channel content, receives the `STM_TAIL_SLOT` marker. Native assembly defers that content even when the configured depth is `-1`. Stale same-channel-only content keeps its configured placement, with `-1` remaining above history.
+4. **Content placement**: Same-channel memory younger than 60 minutes, or any block carrying other-channel content, receives the `STM_TAIL_SLOT` marker. Native assembly defers that content even when the configured depth is `-1`. Stale same-channel-only content keeps its configured placement, with `-1` remaining above history.
 
 ## Positional injection contract
 
 `applyPromptLayoutInserts` in `src/utils/text/context/promptLayout.ts` compares the fresh block's
 tail-slot position with its configured dialogue-item depth and chooses the position closer to the
-end. Saved depths retain their item-based meaning. The cadence nudge keeps its independent depth.
-Registry order places STM content before its nudge when the positions coincide. These rules apply
-after native or preset assembly; presets cannot pull fresh STM into an early marker.
+end. Saved depths retain their item-based meaning. Placement runs after native or preset assembly
+so presets cannot pull fresh STM into an early marker.
 
 ## Constraints and rationale
 
-- **Out-of-band delivery**: Preserving `nudgeItem` and deferred `memoryInjectionItems` outside `contextItems` ensures that preset reassembly does not pull recency-sensitive notes into the system prefix.
+- **Out-of-band delivery**: Preserving deferred `memoryInjectionItems` outside `contextItems` ensures that preset reassembly does not pull recency-sensitive notes into the system prefix.
 - **Sharing exception**: `stm_privacy_bypass` permits the owning server's private STM to leave its channels; it never changes thought-log or cross-channel tool permissions, and its stored value retains its existing meaning.
-- **Explicit memory intent suppression**: When a user explicitly asks the bot to remember or store information permanently, the short-term memory nudge is suppressed so the model selects `manage_long_term_memory` instead.
 - **Fail-safe execution**: Any error during short-term memory assembly logs a warning and returns an empty list, preventing memory lookup failures from aborting the turn.
 
 ## Source pointers
@@ -52,4 +43,4 @@ after native or preset assembly; presets cannot pull fresh STM into an early mar
 - `src/utils/db/repositories/ShortTermMemoryRepository.ts`: durable database persistence.
 - `src/utils/chat/contextPipeline.ts`: `appendTailDirectives` positional dialogue splicing.
 - `src/utils/text/context/promptLayout.ts`: positional insertion and tail-slot comparison.
-- [Short-Term Memory Pipeline](/architecture/pipelines/memory/stm/): Working memory capture, category upgrades, and cache lifecycles.
+- [Short-Term Memory Pipeline](/architecture/pipelines/memory/stm/): Working memory capture, background summaries, and cache lifecycles.

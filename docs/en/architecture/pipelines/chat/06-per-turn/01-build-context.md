@@ -9,19 +9,13 @@ resolves participant metadata, and delegates prompt assembly to the context-buil
 
 ## Flow and ownership
 
-The stage is coordinated by `buildChatTurnContext()` across two modules:
-
-1. **Intent wrapper** (`src/utils/chat/contextPipelineIntent.ts`): checks whether autonomous short-term
-   memory (STM) maintenance is due via `isShortTermMemoryMaintenanceDue()`. When Deliberate Tool Mode
-   is active and maintenance is due, it temporarily admits `update_short_term_memory` into the tool
-   allowlist so memory updates run without requiring user prompt keywords.
-2. **Base builder** (`src/utils/chat/contextPipeline.ts`): coordinates history retrieval, message simplification,
-   participant resolution, and prompt synthesis.
+`buildChatTurnContext()` in `src/utils/chat/contextPipeline.ts` coordinates history retrieval,
+message simplification, participant resolution, and prompt assembly. The simplified history also
+feeds [post-turn short-term memory](/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/).
 
 ```mermaid
 flowchart TD
-  turn["ChatTurn"] --> intent["contextPipelineIntent<br/>checks autonomous STM maintenance"]
-  intent --> build["contextPipeline.buildChatTurnContext()"]
+  turn["ChatTurn"] --> build["contextPipeline.buildChatTurnContext()"]
   build --> hist["readChannelHistory()<br/>fetches or reuses busy channel's history window"]
   hist --> simp["buildSimplifiedHistory()<br/>builds MessageIdMap, collapses same-author runs,<br/>extracts embed/CV2 notices, filters privacy"]
   simp --> part["prepareParticipantContext()<br/>resolves visible authors, aliases, personas"]
@@ -84,7 +78,7 @@ flowchart TD
 
 ### Deliberate Tool Mode admission
 
-Besides keyword triggers, follow-ups, and the autonomous sticker and STM tools, media on the triggering
+Besides keyword triggers, follow-ups, and the autonomous sticker tool, media on the triggering
 message's history entry admits the tool that reads it: a file admits `read_file`, a non-emoji image
 admits `analyze_image`, a GIF also admits `process_gif`, and a YouTube link admits
 `process_youtube_video` (`getAttachmentDeliberateToolIntentResult()`). Only the triggering entry counts,
@@ -142,7 +136,6 @@ The stage initializes per-turn flags on `StreamingContext`:
 
 ## Source pointers
 
-- `src/utils/chat/contextPipelineIntent.ts`: autonomous STM intent preflight.
 - `src/utils/chat/contextPipeline.ts`: `buildChatTurnContext()` implementation.
 - `src/utils/chat/historyWindow.ts`: bounded history reuse and gateway change signals.
 - `src/utils/text/contextBuilder.ts`: `buildContext()` entry point to the context-build pipeline.

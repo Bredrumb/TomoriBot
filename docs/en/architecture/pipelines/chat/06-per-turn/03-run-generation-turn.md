@@ -48,8 +48,8 @@ Running such an attempt switches credential attribution to the server. Tools ret
 
 Each attempt prepares media for its capabilities, formats prefill as a model continuation or tail
 directive, and trims history to known context limits with an output reserve. Context is assembled
-once for the planned model, so an attempt whose provider config carries no tools drops the items
-marked `requiresToolCalling` (the same-channel short-term memory block and its nudge). The prefill's tokens
+once for the planned model. Same-channel short-term memory remains eligible when a fallback model
+lacks tool support. The prefill's tokens
 are reserved against the same budget but kept out of the truncated list, because a tail directive
 is a dialogue user turn the truncator would otherwise protect in place of the real trigger.
 

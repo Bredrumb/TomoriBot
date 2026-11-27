@@ -39,6 +39,13 @@ const CARD_NUDGES: PersonaAuthoredIdleNudge[] = [
   },
 ];
 
+const retiredTool = "update_short_term_memory";
+const LEGACY_CARD_NUDGES = CARD_NUDGES.map((nudge) => ({
+  ...nudge,
+  prerequisites: [...nudge.prerequisites, `tool:${retiredTool}`],
+  recommended_tools: [retiredTool, ...nudge.recommended_tools],
+}));
+
 const OTHER_CARD_NUDGES: PersonaAuthoredIdleNudge[] = [
   {
     id: "shelf_talk",
@@ -670,9 +677,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
       expect(JSON.stringify(exported.data)).not.toContain('"enabled"');
 
       const png = Buffer.from(await Bun.file("src/db/seed/catalog/personas/default/default.png").arrayBuffer());
+      const legacyExport = {
+        ...exported.data,
+        data: { ...exported.data.data, natural_nudge_idle_nudges: LEGACY_CARD_NUDGES },
+      };
       const payloads = [
-        JSON.parse(JSON.stringify(exported.data)),
-        extractMetadataFromPNG(embedMetadataInPNG(png, exported.data)),
+        JSON.parse(JSON.stringify(legacyExport)),
+        extractMetadataFromPNG(embedMetadataInPNG(png, legacyExport)),
       ];
       for (const payload of payloads) {
         const validated = presetRepository.validatePresetFile(payload);
@@ -857,7 +868,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
         client: {} as Client,
         guild: null,
         serverDiscId: FIXTURE_IDS.serverDiscId,
-        presetData: cardData("_rt_alter_with_nudges", { natural_nudge_idle_nudges: CARD_NUDGES }),
+        presetData: cardData("_rt_alter_with_nudges", { natural_nudge_idle_nudges: LEGACY_CARD_NUDGES }),
         identityMode: "fork",
         avatarImageBuffer: null,
       });

@@ -5,8 +5,8 @@ import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
 import * as realUserCache from "@/utils/cache/userCache";
 import { ContextItemTag } from "@/types/misc/context";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
-import { createPersona } from "../../helpers/fixtures";
-import { serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
+import { serverStmConfigSchema } from "@/types/db/schema";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { fitNovelAIPrompt } from "@/providers/novelai/promptFitting";
 import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
@@ -292,65 +292,35 @@ describe("other-channel short-term recall", () => {
     expect(items.findIndex((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)).toBe(5);
   });
 
-  it("keeps tool nudges for capable providers but excludes them from every NovelAI prompt", async () => {
-    const loadConfig = spyOn(shortTermMemoryRepository, "getStmConfig");
-    const loadCategories = spyOn(shortTermMemoryRepository, "getStmCategories");
-    for (const categoryMode of [false, true]) {
-      for (const override of [null, "custom-cadence-directive"]) {
-        loadConfig.mockResolvedValue(serverStmConfigSchema.parse({ server_id: 1, update_nudge_override: override }));
-        loadCategories.mockResolvedValue(
-          categoryMode
-            ? [
-                stmCategorySchema.parse({
-                  server_id: 1,
-                  category_id: 1,
-                  position: 0,
-                  label: "Plans",
-                  description: "Activities",
-                }),
-              ]
-            : [],
-        );
-        sameChannelEntry = hydratedEntry("channel-current", Date.now(), {
-          summary: "Juno played Celeste.",
-          turnsSinceRefresh: 5,
-          ...(categoryMode ? { categories: { plans: "Juno played Celeste." } } : {}),
-        });
-        const source = await buildShortTermMemoryContext({
-          triggeringUserId: "user-1",
-          currentChannelId: "channel-current",
-          currentServerId: "server-1",
-          tomoriState: createPersona({ config: { short_term_memory_enabled: true } }),
-          triggererName: "Mirri",
-          botName: "Juno",
-          personalMemoriesEnabled: false,
-          client,
-          isUserImpersonation: false,
-          convertMentions: async (text) => text,
-        });
-        expect(source.nudgeItem).toBeDefined();
-        const nudge = source.nudgeItem;
-        if (!nudge) throw new Error("Missing cadence nudge fixture");
-        const ordinaryText = nudge.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
-        expect(ordinaryText.length).toBeGreaterThan(0);
-        expect(source.memoryItems.length).toBeGreaterThan(0);
-        for (const model of ["kayra-v1", "llama-3-erato-v1", "glm-4-6", "xialong-v1"]) {
-          const prepared = fitNovelAIPrompt({
-            contextItems: [...source.memoryItems, nudge],
-            tomoriState: createPersona(),
-            profile: getNovelAIProfile(model),
-            window: 4096,
-          });
-          expect(prepared.prompt).toContain("Juno played Celeste.");
-          expect(prepared.prompt).not.toMatch(
-            /update_short_term_memory|create_long_term_memory|update_long_term_memory|custom-cadence-directive/u,
-          );
-          expect(prepared.report.excluded.some((id) => id.includes(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY))).toBe(
-            true,
-          );
-        }
-        expect(nudge.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")).toBe(ordinaryText);
-      }
+  it("renders curated memories with summarization and tools off, including in NovelAI", async () => {
+    const tomoriState = createPersona({
+      llm: createLlmRow({ has_tools: false }),
+      config: { short_term_memory_enabled: false },
+    });
+    sameChannelEntry = hydratedEntry("channel-current", Date.now(), { summary: "Juno has the map." });
+    otherChannelEntries = [hydratedEntry("channel-other", Date.now(), { summary: "Mirri packed tea." })];
+    const { memoryItems } = await buildShortTermMemoryContext({
+      triggeringUserId: "user-1",
+      currentChannelId: "channel-current",
+      currentServerId: "server-1",
+      tomoriState,
+      triggererName: "Mirri",
+      botName: "Juno",
+      personalMemoriesEnabled: false,
+      client,
+      isUserImpersonation: false,
+      convertMentions: async (text) => text,
+    });
+    expect(memoryItems).toHaveLength(2);
+    for (const model of ["kayra-v1", "llama-3-erato-v1", "glm-4-6", "xialong-v1"]) {
+      const prepared = fitNovelAIPrompt({
+        contextItems: memoryItems,
+        tomoriState,
+        profile: getNovelAIProfile(model),
+        window: 4096,
+      });
+      expect(prepared.prompt).toContain("Juno has the map.");
+      expect(prepared.prompt).toContain("Mirri packed tea.");
     }
   });
 

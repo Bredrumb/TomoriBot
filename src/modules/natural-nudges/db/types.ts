@@ -21,7 +21,6 @@ export const NUDGE_TOOL_NAMES = [
   "interact_with_recent_message",
   "create_long_term_memory",
   "update_long_term_memory",
-  "update_short_term_memory",
   "process_youtube_video",
 ] as const;
 export type NudgeToolName = (typeof NUDGE_TOOL_NAMES)[number];
@@ -247,14 +246,38 @@ export const personaAuthoredIdleNudgeSchema = z
   .superRefine(refineIdleNudgeContent);
 export type PersonaAuthoredIdleNudge = z.infer<typeof personaAuthoredIdleNudgeSchema>;
 
-export const personaAuthoredIdleNudgesSchema = z.preprocess(
-  parseJsonbText,
-  z
-    .array(personaAuthoredIdleNudgeSchema)
-    .max(PERSONA_AUTHORED_IDLE_NUDGE_LIMIT)
-    .refine((nudges) => new Set(nudges.map((nudge) => nudge.id)).size === nudges.length, {
-      message: "Duplicate authored idle nudge id",
-    }),
+const personaAuthoredIdleNudgeListSchema = z
+  .array(personaAuthoredIdleNudgeSchema)
+  .max(PERSONA_AUTHORED_IDLE_NUDGE_LIMIT)
+  .refine((nudges) => new Set(nudges.map((nudge) => nudge.id)).size === nudges.length, {
+    message: "Duplicate authored idle nudge id",
+  });
+
+export const personaAuthoredIdleNudgesSchema = z.preprocess(parseJsonbText, personaAuthoredIdleNudgeListSchema);
+
+export function stripRetiredIdleNudgeTool(input: unknown): unknown {
+  if (!Array.isArray(input)) return input;
+
+  const retiredTool = "update_short_term_memory";
+  return input.map((nudge: unknown) => {
+    if (typeof nudge !== "object" || nudge === null || Array.isArray(nudge)) return nudge;
+
+    const { prerequisites, recommended_tools: recommendedTools } = nudge as Record<string, unknown>;
+    return {
+      ...nudge,
+      ...(Array.isArray(prerequisites) && {
+        prerequisites: prerequisites.filter((id: unknown) => id !== TOOL_PREREQUISITE_PREFIX + retiredTool),
+      }),
+      ...(Array.isArray(recommendedTools) && {
+        recommended_tools: recommendedTools.filter((name: unknown) => name !== retiredTool),
+      }),
+    };
+  });
+}
+
+export const personaAuthoredIdleNudgesImportSchema = z.preprocess(
+  (input) => stripRetiredIdleNudgeTool(parseJsonbText(input)),
+  personaAuthoredIdleNudgeListSchema,
 );
 
 export function computePersonaNudgeFingerprint(

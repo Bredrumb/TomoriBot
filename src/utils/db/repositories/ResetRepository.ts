@@ -203,9 +203,7 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "refresh_cadence",
       "render_mode",
       "crude_message_count",
-      "tool_description_override",
-      "update_nudge_override",
-      "nudge_injection_depth",
+      "summarizer_instructions_override",
       "content_injection_depth",
     ],
     preserved: [],
@@ -305,6 +303,7 @@ class ResetRepository {
   // nudges after this resolves.
   async resetServerConfiguration(serverId: number): Promise<void> {
     await sql.begin(async (tx: SQL) => {
+      await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
       await tx`
         INSERT INTO server_chat_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
@@ -485,9 +484,7 @@ class ResetRepository {
           refresh_cadence = DEFAULT,
           render_mode = DEFAULT,
           crude_message_count = DEFAULT,
-          tool_description_override = DEFAULT,
-          update_nudge_override = DEFAULT,
-          nudge_injection_depth = DEFAULT,
+          summarizer_instructions_override = DEFAULT,
           content_injection_depth = DEFAULT,
           updated_at = NOW()
       `;

@@ -104,7 +104,6 @@ describe("context pipeline prompt model", () => {
             contextItems: [],
             tailDirectives: [],
             lowerPriorityTailDirectives: [],
-            nudgeInjectionDepth: 0,
             messageIdMap: new MessageIdMap(),
           };
         }),

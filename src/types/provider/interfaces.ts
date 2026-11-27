@@ -109,6 +109,7 @@ export interface StreamResult {
 export interface ProviderConfig {
   model: string;
   apiKey: string;
+  endpointUrl?: string;
   temperature: number;
   disabledParams?: SupportedParam[];
   maxOutputTokens?: number;

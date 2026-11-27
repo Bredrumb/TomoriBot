@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import type { Client, Message } from "discord.js";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import * as admission from "@/utils/chat/admission";
-import * as contextPipeline from "@/utils/chat/contextPipelineIntent";
+import * as contextPipeline from "@/utils/chat/contextPipeline";
 import * as generation from "@/utils/chat/generationTurn";
 import * as postTurn from "@/utils/chat/postTurnEffects";
 import * as emitter from "@/utils/chat/responseEmitter";

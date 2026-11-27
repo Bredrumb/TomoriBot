@@ -92,8 +92,6 @@ export type StructuredContextItem = {
   conversationUsers?: ConversationUserReference[];
   participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
   personaMentionMap?: Map<string, string>;
-  // Built only when the context model can call tools, so a generation attempt that sends no tools drops it.
-  requiresToolCalling?: true;
 };
 
 // Scoped to one request and reused across context rebuilds, not shared globally, so mid-request DB reads stay

@@ -2,7 +2,12 @@ import { humanizerSettingsFromDegree, pickHumanizerSettings } from "@/constants/
 import { type HumanizerCheckboxGroup, humanizerCheckboxFieldName } from "@/utils/discord/humanizerOptions";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { ChannelType, ComponentType, type Client } from "discord.js";
-import type { RandomTriggerRow, TomoriState } from "@/types/db/schema";
+import {
+  serverStmConfigSchema,
+  type RandomTriggerRow,
+  type ServerStmConfigRow,
+  type TomoriState,
+} from "@/types/db/schema";
 import * as shortTermMemoryCache from "@/utils/cache/shortTermMemoryCache";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { configRepository, serverScheduleRepository } from "@/utils/db/repositories";
@@ -40,6 +45,11 @@ import {
   buildBehaviorNoticeVisibilityModal,
   buildBehaviorStmParametersModal,
   BEHAVIOR_STM_CATEGORY_PREFIX,
+  BEHAVIOR_STM_CONTENT_DEPTH_FIELD,
+  BEHAVIOR_STM_CRUDE_MESSAGES_FIELD,
+  BEHAVIOR_STM_REFRESH_CADENCE_FIELD,
+  BEHAVIOR_STM_RENDER_MODE_FIELD,
+  BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD,
   buildBehaviorToolContextModal,
   buildBehaviorToolTriggerAddModal,
   buildBehaviorToolTriggerRemoveModal,
@@ -47,6 +57,7 @@ import {
   buildBehaviorRandomAddModal,
   buildBehaviorRandomRemoveModal,
 } from "@/utils/discord/ui/configBehaviorModals";
+import { DEFAULT_STM_REFRESH_CADENCE, DEFAULT_STM_SUMMARIZER_INSTRUCTIONS } from "@/utils/memory/stmSummarizer";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
@@ -1103,6 +1114,136 @@ describe("config Behavior routes", () => {
     expect(update.mock.calls[0]?.[1]).toEqual({ tool_notice_verbosity: "verbose" });
     expect(harness.telemetry).toEqual(["server-config.workspace.notice-verbosity.set"]);
     update.mockRestore();
+  });
+
+  it("prefills STM instructions and saves only changes to the override", async () => {
+    const harness = makeHarness(true);
+    const locale = "en-US";
+    const nonce = "nonce1234567";
+    const fieldId = buildConfigModalFieldId(BEHAVIOR_STM_SUMMARIZER_INSTRUCTIONS_FIELD, nonce);
+    const openId = buildConfigRouteId({ action: "behavior-stm-prompt-open", locale });
+    const submitId = buildConfigRouteId({ action: "behavior-stm-prompt-submit", locale, nonce });
+    let config: ServerStmConfigRow | null = null;
+    const getConfig = spyOn(shortTermMemoryRepository, "getStmConfig").mockImplementation(async () => config);
+    const upsert = spyOn(shortTermMemoryRepository, "upsertStmConfig").mockImplementation(async (serverId, patch) => {
+      config = serverStmConfigSchema.parse({ ...config, server_id: serverId, ...patch });
+      return true;
+    });
+    const open = async (value: string) => {
+      const interaction = makeInteraction(harness, openId);
+      await dispatch(harness, interaction);
+      expect(interaction.deferred).toBe(false);
+      expect(harness.modals.at(-1)).toMatchObject({
+        custom_id: submitId,
+        components: [
+          expect.objectContaining({
+            label: localizedCopy(locale, "commands.config.panel.stm_summarizer_instructions_label"),
+            description: localizedCopy(locale, "commands.config.panel.stm_summarizer_instructions_description"),
+            component: expect.objectContaining({
+              custom_id: fieldId,
+              type: ComponentType.TextInput,
+              value,
+              required: false,
+            }),
+          }),
+        ],
+      });
+    };
+    const submit = (fields: Record<string, string>) =>
+      dispatch(harness, makeInteraction(harness, submitId, { kind: "modal", fields }));
+    const lastReceipt = () => collectTextDisplays(harness.edits.at(-1)).join("\n");
+    const unchanged = localizedProse(locale, "commands.config.panel.state_no_changes_heading");
+    const override = "Keep unresolved plans and decisions.";
+    try {
+      await open(DEFAULT_STM_SUMMARIZER_INSTRUCTIONS);
+      await submit({ [fieldId]: DEFAULT_STM_SUMMARIZER_INSTRUCTIONS });
+      expect(lastReceipt()).toMatch(unchanged);
+
+      await submit({ [fieldId]: `  ${override}  ` });
+      expect(lastReceipt()).toMatch(localizedProse(locale, "commands.config.panel.state_updated_heading"));
+      await open(override);
+      await submit({ [fieldId]: override });
+      expect(lastReceipt()).toMatch(unchanged);
+
+      await submit({});
+      expect(lastReceipt()).toMatch(localizedProse(locale, "commands.config.panel.stale_heading"));
+      await submit({ [fieldId]: "" });
+      expect(lastReceipt()).toMatch(localizedProse(locale, "commands.config.panel.state_updated_heading"));
+      await open(DEFAULT_STM_SUMMARIZER_INSTRUCTIONS);
+
+      expect(upsert.mock.calls).toEqual([
+        [9, { summarizer_instructions_override: override }],
+        [9, { summarizer_instructions_override: null }],
+      ]);
+    } finally {
+      upsert.mockRestore();
+      getConfig.mockRestore();
+    }
+  });
+
+  it("opens and saves the STM parameters without a nudge depth field", async () => {
+    const harness = makeHarness(true);
+    const locale = "en-US";
+    const nonce = "nonce1234567";
+    const cadenceId = buildConfigModalFieldId(BEHAVIOR_STM_REFRESH_CADENCE_FIELD, nonce);
+    const renderModeId = buildConfigModalFieldId(BEHAVIOR_STM_RENDER_MODE_FIELD, nonce);
+    const crudeId = buildConfigModalFieldId(BEHAVIOR_STM_CRUDE_MESSAGES_FIELD, nonce);
+    const contentDepthId = buildConfigModalFieldId(BEHAVIOR_STM_CONTENT_DEPTH_FIELD, nonce);
+    const getConfig = spyOn(shortTermMemoryRepository, "getStmConfig").mockResolvedValue(null);
+    const upsert = spyOn(shortTermMemoryRepository, "upsertStmConfig").mockResolvedValue(true);
+    try {
+      await dispatch(
+        harness,
+        makeInteraction(harness, buildConfigRouteId({ action: "behavior-stm-parameters-open", locale })),
+      );
+      const [modal] = harness.modals;
+      expect(collectModalFieldTypes(modal)).toEqual(
+        new Map([
+          [cadenceId, ComponentType.TextInput],
+          [renderModeId, ComponentType.RadioGroup],
+          [crudeId, ComponentType.TextInput],
+          [contentDepthId, ComponentType.TextInput],
+        ]),
+      );
+      expect(modal).toMatchObject({
+        components: expect.arrayContaining([
+          expect.objectContaining({
+            label: localizedCopy(locale, "commands.config.panel.stm_refresh_cadence_label"),
+            component: expect.objectContaining({ custom_id: cadenceId, value: String(DEFAULT_STM_REFRESH_CADENCE) }),
+          }),
+          expect.objectContaining({
+            component: expect.objectContaining({
+              custom_id: renderModeId,
+              options: expect.arrayContaining([
+                expect.objectContaining({ value: "supersede", default: false }),
+                expect.objectContaining({ value: "crude_summary", default: true }),
+              ]),
+            }),
+          }),
+        ]),
+      });
+
+      await dispatch(
+        harness,
+        makeInteraction(harness, buildConfigRouteId({ action: "behavior-stm-parameters-submit", locale, nonce }), {
+          kind: "modal",
+          fields: { [cadenceId]: "100", [crudeId]: "8", [contentDepthId]: "-1" },
+          selectValues: { [renderModeId]: "crude_summary" },
+        }),
+      );
+      expect(upsert).toHaveBeenCalledWith(9, {
+        refresh_cadence: 100,
+        render_mode: "crude_summary",
+        crude_message_count: 8,
+        content_injection_depth: -1,
+      });
+      expect(collectTextDisplays(harness.edits.at(-1)).join("\n")).toMatch(
+        localizedProse(locale, "commands.config.panel.state_updated_heading"),
+      );
+    } finally {
+      upsert.mockRestore();
+      getConfig.mockRestore();
+    }
   });
 
   it("discloses active STM scopes before the category write and clears only those cache records", async () => {

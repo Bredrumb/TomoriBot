@@ -128,6 +128,7 @@ async function runGenerationAttempts(
     context.streamingContext.deliveredMessageRefs ??= [];
     const carried: DeliveredTurnOutput = { text: "", details: "", streamResults: [] };
     let supersededResult: GenerationTurnResult | undefined;
+    let deliveringAttempt: GenerationTurnResult["answeringAttempt"];
     // Starting index of the server fallback route (null until used) so the receipt knows when to offer personal
     // fallback opt-out.
     let serverRouteStartIndex: number | null = null;
@@ -155,7 +156,6 @@ async function runGenerationAttempts(
         userId: context.streamingContext.triggererUserId,
         tomoriState: attempt.tomoriState,
         streamContext: context.streamingContext,
-        sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
       let rotationKeyId = attempt.rotationKeyId;
@@ -227,6 +227,18 @@ async function runGenerationAttempts(
             attempt.activity,
           ),
         );
+        if (result.personaResponses.length > 0) {
+          const { apiKey, model, endpointUrl } = attempt.providerConfig;
+          deliveringAttempt = {
+            providerName: attempt.provider.getInfo().name,
+            modelCodename: attempt.tomoriState.llm.llm_codename,
+            providerConfig: { apiKey, model },
+            endpointUrl,
+            activity: attempt.activity,
+            usageContext: context.usageContext,
+            credentialSource: attempt.credentialSource,
+          };
+        }
         supersededResult = result;
         if (carried.text && result.status === "empty_response" && !isRetryableEmptyResponse(result)) {
           result = { ...result, status: "completed" };
@@ -341,6 +353,7 @@ async function runGenerationAttempts(
         // retry and must not surface as a second embed.
         const finalResult = prependDeliveredOutput(result, context, carried);
         if (fallbackNotice) finalResult.fallbackNotice = fallbackNotice;
+        if (finalResult.personaResponses.length > 0) finalResult.answeringAttempt = deliveringAttempt;
         if (context.responseReview) finalResult.usageEntries = context.responseReview.usage;
         await responseSink.finalize(finalResult);
         return finalResult;
@@ -909,15 +922,9 @@ async function prepareProviderContextItems(args: {
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
   streamContext: StreamingContext;
-  // Must come from the built provider config rather than tomoriState because a provider's live capability catalog can
-  // withdraw tools the state still allows.
-  sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
   const deliberateToolAllowedNames = args.streamContext.deliberateToolAllowedNames;
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, deliberateToolAllowedNames);
-  if (!args.sendsTools) {
-    contextItems = contextItems.filter((item) => !item.requiresToolCalling);
-  }
 
   // Adapt verbatim schemas and nudge independently into new arrays per fallback attempt, because contexts can carry
   // the nudge even when no tool schemas resolve.
@@ -1008,7 +1015,7 @@ function injectVerbatimToolDefinitionsItem(
 // DIALOGUE_HISTORY items are counted rather than messages (unlike stage 11) because only tags remain recoverable here
 // and approximate tail placement suffices.
 function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
-  const nudgeItem: StructuredContextItem = {
+  const verbatimNudge: StructuredContextItem = {
     role: "user",
     parts: [{ type: "text", text: VERBATIM_NUDGE_CONTEXT_TEXT }],
     metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
@@ -1028,7 +1035,7 @@ function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredCont
     }
     dialogueSeen += 1;
   }
-  return [...items.slice(0, insertionIndex), nudgeItem, ...items.slice(insertionIndex)];
+  return [...items.slice(0, insertionIndex), verbatimNudge, ...items.slice(insertionIndex)];
 }
 
 function dropOldestHistoryExchangePairs(

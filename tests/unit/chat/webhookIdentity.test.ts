@@ -269,7 +269,6 @@ describe("verified managed webhook identity", () => {
       contextItems: [],
       tailDirectives: [],
       lowerPriorityTailDirectives: [],
-      nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
     });
     try {

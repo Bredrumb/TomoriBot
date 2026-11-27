@@ -26,6 +26,7 @@ import {
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { statRepository } from "@/utils/db/repositories";
 import * as shortTermMemory from "@/utils/cache/shortTermMemoryCache";
+import * as stmSummarizer from "@/utils/memory/stmSummarizer";
 
 const emptyResponseResult: GenerationTurnResult = {
   status: "empty_response",
@@ -109,6 +110,126 @@ function makeContext(options: {
 }
 
 describe("post-turn memory persistence", () => {
+  it("captures delivered text after provider failures and starts summarization on the next clean reply", async () => {
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    const serverId = "1400000000000000001";
+    const userId = "1400000000000000002";
+    const persona = createPersona({ persona_lineage_id: 44, config: { short_term_memory_enabled: true } });
+    Object.assign(context, {
+      serverDiscId: serverId,
+      userDiscId: userId,
+      triggererUserId: 77,
+      currentPersona: persona,
+      tomoriState: persona,
+      simplifiedMessages: [
+        {
+          id: "1400000000000000003",
+          authorId: userId,
+          authorName: "Juno",
+          authorType: "user",
+          content: "What should we bring?",
+          createdAt: 1700000000000,
+          imageAttachments: [],
+          videoAttachments: [],
+        },
+      ] satisfies ChatTurnContext["simplifiedMessages"],
+    });
+    Object.assign(context.turn, { requestSnapshot: { triggererPrivacyLevel: PrivacyLevel.MINIMAL } });
+
+    const warm = spyOn(shortTermMemory, "preWarmStmEntry").mockResolvedValue(undefined);
+    const store = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
+    const increment = spyOn(shortTermMemory, "incrementStmTurnCounter").mockResolvedValue(10);
+    const summarize = spyOn(stmSummarizer, "startStmSummarizer").mockReturnValue(undefined);
+    const stats = spyOn(statRepository, "recordStat").mockImplementation(() => {});
+    const text = "I packed a map.";
+    try {
+      for (const status of ["error", "timeout", "completed", "follow_up_interrupt"] as const) {
+        store.mockClear();
+        increment.mockClear();
+        summarize.mockClear();
+        await runPostTurnEffects(context, {
+          status,
+          streamResults: [{ status, accumulatedText: text }],
+          personaResponses: [
+            { text, personaName: persona.persona_nickname, personaId: persona.persona_id, personaLineageId: 44 },
+          ],
+          answeringAttempt: {
+            providerName: persona.llm.llm_provider,
+            modelCodename: persona.llm.llm_codename,
+            providerConfig: { apiKey: "fixture-key", model: persona.llm.llm_codename },
+            credentialSource: "server",
+          },
+        });
+        await Bun.sleep(0);
+        expect(store.mock.calls[0]?.[2]).toContainEqual(expect.objectContaining({ role: "model", content: text }));
+        expect(increment.mock.calls).toEqual([[context.channel.id, serverId, null, persona.persona_id]]);
+        if (status === "error" || status === "timeout") {
+          expect(summarize).not.toHaveBeenCalled();
+        } else {
+          expect(summarize).toHaveBeenCalledWith(
+            expect.objectContaining({ internalServerId: persona.server_id, triggererUserId: 77, lineageId: 44 }),
+          );
+        }
+      }
+    } finally {
+      for (const spy of [warm, store, increment, summarize, stats]) spy.mockRestore();
+    }
+  });
+
+  it("does not wait for cold STM hydration before completing the turn", async () => {
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    const persona = createPersona({ config: { short_term_memory_enabled: false } });
+    Object.assign(context, {
+      userDiscId: "1400000000000000002",
+      currentPersona: persona,
+      tomoriState: persona,
+      simplifiedMessages: [
+        {
+          id: "1400000000000000003",
+          authorId: "1400000000000000002",
+          authorName: "Juno",
+          authorType: "user",
+          content: "Hello",
+          createdAt: 1700000000000,
+          imageAttachments: [],
+          videoAttachments: [],
+        },
+      ],
+    });
+    Object.assign(context.turn, { requestSnapshot: { triggererPrivacyLevel: PrivacyLevel.MINIMAL } });
+    const pending = Promise.withResolvers<void>();
+    const warm = spyOn(shortTermMemory, "preWarmStmEntry").mockReturnValue(pending.promise);
+    const store = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
+    const increment = spyOn(shortTermMemory, "incrementStmTurnCounter").mockResolvedValue(undefined);
+    try {
+      await runPostTurnEffects(context, {
+        status: "completed",
+        streamResults: [],
+        personaResponses: [{ text: "Hello", personaName: "Mirri", personaId: persona.persona_id }],
+      });
+      expect(warm).toHaveBeenCalled();
+      expect(store).not.toHaveBeenCalled();
+      context.simplifiedMessages[0].content = "Next";
+      await runPostTurnEffects(context, {
+        status: "completed",
+        streamResults: [],
+        personaResponses: [{ text: "Next reply", personaName: "Mirri", personaId: persona.persona_id }],
+      });
+      expect(warm).toHaveBeenCalledTimes(1);
+      pending.resolve();
+      await Bun.sleep(0);
+      expect(store).toHaveBeenCalledTimes(2);
+      expect(store.mock.calls[0][2]).toContainEqual(expect.objectContaining({ content: "Hello" }));
+      expect(store.mock.calls[1][2]).toContainEqual(expect.objectContaining({ content: "Next" }));
+      expect(increment).toHaveBeenCalledTimes(2);
+    } finally {
+      pending.resolve();
+      warm.mockRestore();
+      store.mockRestore();
+      increment.mockRestore();
+    }
+  });
+
   it("starts recall persistence without waiting for its writes or metric", async () => {
     const pending = Promise.withResolvers<void>();
     const persist = spyOn(memoryRecallPersistence, "persistMemoryRecall").mockImplementation(() => pending.promise);
@@ -328,7 +449,7 @@ describe("nudge persona mention handoffs", () => {
   it("queues explicit mentions once in text order and preserves system accounting without copying private goals", async () => {
     const { context, incoming, lockEntry } = nudgeTurn();
     const stats = spyOn(statRepository, "recordStat").mockImplementation(() => {});
-    const stm = spyOn(shortTermMemory, "storeShortTermMemory").mockImplementation(() => {});
+    const stm = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
     restores.push(stats, stm);
     incoming.injectedContextItems = [{ role: "system", parts: [{ type: "text", text: "private opener goal" }] }];
     getSelfReplyChainState(channelId).triggerCount = 7;

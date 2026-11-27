@@ -342,7 +342,6 @@ it("preserves serialized prefixes across volatile updates and appended exchanges
     });
     applyPromptLayoutInserts(result.contextItems, [
       { tag: "stm_content", items: result.memoryInjectionItems ?? [], depth: result.memoryInjectionDepth },
-      { tag: "stm_nudge", items: result.nudgeItem ? [result.nudgeItem] : [], depth: result.nudgeInjectionDepth },
     ]);
     return result.contextItems;
   }
