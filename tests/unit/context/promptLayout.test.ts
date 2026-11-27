@@ -329,7 +329,6 @@ describe("prompt layout registry", () => {
     const history = Array.from({ length: 4 }, (_, index) => dialogue(index % 2 ? "Mirri" : "Juno"));
     const lower = item(ContextItemTag.DIALOGUE_HISTORY);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
-    const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
     const tail = item(ContextItemTag.DIALOGUE_HISTORY);
     const queue = item(ContextItemTag.DIALOGUE_HISTORY);
     const uncensor = item(ContextItemTag.DIALOGUE_HISTORY);
@@ -338,7 +337,6 @@ describe("prompt layout registry", () => {
       { tag: "uncensor", items: [uncensor] },
       { tag: "queued_reply", items: [queue] },
       { tag: "combined_tail", items: [tail] },
-      { tag: "stm_nudge", items: [nudge], depth: 2 },
       { tag: "stm_content", items: [memory], depth: 2 },
       { tag: "lower_priority_tail", items: [lower] },
     ]);
@@ -349,7 +347,6 @@ describe("prompt layout registry", () => {
       ...history.slice(0, 2),
       lower,
       memory,
-      nudge,
       ...history.slice(2),
       tail,
       queue,
@@ -380,19 +377,12 @@ describe("prompt layout registry", () => {
     expect(blocks).toEqual([spacer, persona, channel, verbatim, reunion, global]);
   });
 
-  it("clamps emitted-history depths and keeps negative-depth STM inline", () => {
+  it("keeps negative-depth STM inline", () => {
     const sample = item(ContextItemTag.DIALOGUE_SAMPLE);
     const memory = item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY);
-    const nudge = { ...item(ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY), completionText: "" };
     const history = dialogue("Juno");
     const blocks = [sample, history];
-    applyPromptLayoutInserts(blocks, [
-      { tag: "stm_content", items: [memory], depth: -1 },
-      { tag: "stm_nudge", items: [nudge], depth: 20 },
-    ]);
-    expect(blocks).toEqual([sample, nudge, history]);
-    const empty: StructuredContextItem[] = [];
-    applyPromptLayoutInserts(empty, [{ tag: "stm_nudge", items: [nudge], depth: 20 }]);
-    expect(empty).toEqual([nudge]);
+    applyPromptLayoutInserts(blocks, [{ tag: "stm_content", items: [memory], depth: -1 }]);
+    expect(blocks).toEqual([sample, history]);
   });
 });

@@ -99,7 +99,6 @@ describe("persona-blocked authors in context", () => {
       contextItems: [],
       tailDirectives: [],
       lowerPriorityTailDirectives: [],
-      nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
     });
     try {

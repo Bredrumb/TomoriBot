@@ -81,11 +81,8 @@ export interface StreamingContext {
   disableYouTubeProcessing: boolean;
   disableProfilePictureProcessing?: boolean;
   disableGifProcessing?: boolean;
-  disableShortTermMemoryUpdate?: boolean;
   disableConditioningInteraction?: boolean;
   disableCrossChannelMessage?: boolean;
-  // Suppresses STM tool nudges when persistent memory is requested.
-  explicitLongTermMemoryIntent?: boolean;
   disableMessageMetadataContext?: boolean;
   // Blocks tool-sent replies when the stream is already replying (reactions stay allowed).
   disableRecentMessageReplyTool?: boolean;
@@ -273,9 +270,6 @@ export interface ToolAssemblyState {
 export interface ToolAssemblyContext {
   provider: string;
   state: ToolAssemblyState;
-  // Pre-assembly tool names passed into assembleForContext so schema builders can inspect sibling availability
-  // without circular dependencies.
-  availableToolNames?: ReadonlySet<string>;
 }
 
 export interface Tool {

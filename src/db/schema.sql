@@ -3524,10 +3524,7 @@ CREATE TABLE IF NOT EXISTS server_stm_configs (
   render_mode               TEXT        NOT NULL DEFAULT 'crude_summary'
                                           CHECK (render_mode IN ('supersede', 'crude_summary')),
   crude_message_count       INT         NOT NULL DEFAULT 6,
-  tool_description_override TEXT,
-  update_nudge_override     TEXT,
   summarizer_instructions_override TEXT,
-  nudge_injection_depth     INT         NOT NULL DEFAULT 2,
   content_injection_depth   INT         NOT NULL DEFAULT -1,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()

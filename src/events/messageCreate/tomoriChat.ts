@@ -8,7 +8,7 @@ import {
   runWithChannelLock,
   suppressNextSelfReply,
 } from "@/utils/chat/channelQueue";
-import { buildChatTurnContext } from "@/utils/chat/contextPipelineIntent";
+import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import {
   recordChatDiagnostic,
   runWithChatDiagnostic,

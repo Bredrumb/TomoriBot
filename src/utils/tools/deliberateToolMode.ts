@@ -200,7 +200,6 @@ const IMAGE_REQUEST_TOOL_NAMES = [...IMAGE_GENERATION_TOOL_NAMES, "danbooru_sear
 const DANBOORU_ART_TOOL_NAMES = ["danbooru_search_tags", "danbooru_search_posts"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
 const VOICE_GENERATION_TOOL_NAMES = ["generate_voice_message"];
-const SHORT_TERM_MEMORY_TOOL_NAMES = ["update_short_term_memory"];
 const MEDIA_ANALYSIS_TOOL_NAMES = [
   "analyze_image",
   "peek_profile_picture",
@@ -267,7 +266,7 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
     value: "memory",
     labelKey: "commands.config.panel.tool_target_memory",
     label: "Memory",
-    toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES],
+    toolNames: MEMORY_TOOL_NAMES,
   },
   {
     value: "media-analysis",

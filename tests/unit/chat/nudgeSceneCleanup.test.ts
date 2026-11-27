@@ -6,7 +6,7 @@ import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import * as admission from "@/utils/chat/admission";
 import * as channelQueue from "@/utils/chat/channelQueue";
 import { channelLocks, type QueuedMessage } from "@/utils/chat/channelQueue";
-import * as contextPipelineIntent from "@/utils/chat/contextPipelineIntent";
+import * as contextPipeline from "@/utils/chat/contextPipeline";
 import * as generationTurn from "@/utils/chat/generationTurn";
 import * as postTurnEffects from "@/utils/chat/postTurnEffects";
 import * as responseEmitter from "@/utils/chat/responseEmitter";
@@ -60,7 +60,7 @@ beforeEach(() => {
       lockedTurn,
       turns: [{ lockedTurn, personaIndex: 0, totalPersonas: 1 }] as never,
     })),
-    spyOn(contextPipelineIntent, "buildChatTurnContext").mockImplementation(
+    spyOn(contextPipeline, "buildChatTurnContext").mockImplementation(
       async (turn) => ({ turn }) as unknown as ChatTurnContext,
     ),
     spyOn(responseEmitter, "createChatResponseSink").mockReturnValue({} as never),

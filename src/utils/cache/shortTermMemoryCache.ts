@@ -1226,7 +1226,7 @@ function resetCachedStmCounter(entry: ShortTermMemoryEntry): void {
 
 // Mutually exclusive serverId/userId scope matches incrementStmTurnCounter, and last_refreshed_turn advances
 // monotonically so callers can track refresh epochs.
-export async function resetStmTurnCounter(
+async function resetStmTurnCounter(
   channelId: string,
   serverId: string | null,
   userId: string | null,

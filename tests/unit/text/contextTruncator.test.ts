@@ -119,12 +119,10 @@ it("retains tail-slot facts across removed exchanges and repositions them above 
       parts: [{ type: "text", text }],
     });
     const lower = directive("lower");
-    const nudge: PromptLayoutItem = { ...memory, [STM_TAIL_SLOT]: undefined, completionText: "" };
     const generationTail = [directive("combined"), directive("queued"), directive("uncensor")];
     applyPromptLayoutInserts(items, [
       { tag: "lower_priority_tail", items: [lower] },
       { tag: "stm_content", items: [memory], depth },
-      { tag: "stm_nudge", items: [nudge], depth: 1 },
       { tag: "combined_tail", items: [generationTail[0]] },
       { tag: "queued_reply", items: [generationTail[1]] },
       { tag: "uncensor", items: [generationTail[2]] },
@@ -144,7 +142,6 @@ it("retains tail-slot facts across removed exchanges and repositions them above 
     else expect(result.truncated.indexOf(memory)).toBeLessThan(result.truncated.indexOf(dialogue[10]));
     expect(result.truncated.slice(-generationTail.length)).toEqual(generationTail);
     expect(result.truncated).toContain(lower);
-    expect(result.truncated).toContain(nudge);
     expect(getCacheablePrefixBoundary(result.truncated)?.metadataTag).toBe(ContextItemTag.SYSTEM_PERSONALITY);
     expect(getCacheablePrefixBoundary(items)).toBe(originalBoundary);
   }

@@ -13,7 +13,6 @@ import {
   incrementStmTurnCounter,
   filterUnwarmedStmUsers,
   warmUserStmRows,
-  resetStmTurnCounter,
   invalidateShortTermMemory,
   clearShortTermMemoryForChannel,
   clearShortTermMemoryForServerChannel,
@@ -28,10 +27,7 @@ type ShortTermMemoryExportShape = {
     refresh_cadence: number;
     render_mode: "supersede" | "crude_summary";
     crude_message_count: number;
-    tool_description_override: string | null;
-    update_nudge_override: string | null;
     summarizer_instructions_override?: string | null;
-    nudge_injection_depth?: number;
     content_injection_depth?: number;
   } | null;
   stm_categories: Array<{
@@ -90,10 +86,6 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
     ...args: Parameters<typeof incrementStmTurnCounter>
   ): ReturnType<typeof incrementStmTurnCounter> {
     return incrementStmTurnCounter(...args);
-  }
-
-  resetTurnCounter(...args: Parameters<typeof resetStmTurnCounter>): ReturnType<typeof resetStmTurnCounter> {
-    return resetStmTurnCounter(...args);
   }
 
   invalidate(...args: Parameters<typeof invalidateShortTermMemory>): void {
@@ -221,10 +213,7 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
       "refresh_cadence",
       "render_mode",
       "crude_message_count",
-      "tool_description_override",
-      "update_nudge_override",
       "summarizer_instructions_override",
-      "nudge_injection_depth",
       "content_injection_depth",
     ]);
 
@@ -302,10 +291,7 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
               refresh_cadence: config.refresh_cadence,
               render_mode: config.render_mode,
               crude_message_count: config.crude_message_count,
-              tool_description_override: config.tool_description_override ?? null,
-              update_nudge_override: config.update_nudge_override ?? null,
               summarizer_instructions_override: config.summarizer_instructions_override ?? null,
-              nudge_injection_depth: config.nudge_injection_depth,
               content_injection_depth: config.content_injection_depth,
             }
           : null,

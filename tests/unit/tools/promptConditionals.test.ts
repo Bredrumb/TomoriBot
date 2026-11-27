@@ -1,11 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, spyOn } from "bun:test";
-import { getGuildMcpManager, type GuildMcpRouting } from "@/utils/mcp/guildMcpManager";
-import type { GuildMCPConnection } from "@/types/tool/mcpTypes";
-import type { GuildMcpServerRow } from "@/types/db/schema";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AssembledServerConfig } from "@/types/db/schema";
-import type { ToolStateForContext } from "@/tools/toolRegistry";
+import { ToolRegistry, type ToolStateForContext } from "@/tools/toolRegistry";
+import { ManageLongTermMemoryTool } from "@/tools/functionCalls/manageLongTermMemoryTool";
+import type { Tool } from "@/types/tool/interfaces";
 import { DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
 import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { personaSections } from "@/db/seed/catalog/personas";
@@ -16,6 +15,7 @@ import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
 import {
   createToolPromptMacroResolver,
   type PromptCapabilityValues,
+  type ToolPromptMacroContext,
   resolvePromptCapabilityValues,
   UNAVAILABLE_TOOL_TEXT,
 } from "@/utils/tools/toolPromptMacros";
@@ -183,32 +183,67 @@ describe("prompt conditionals", () => {
 });
 
 describe("prompt macro resolver condition integration", () => {
-  let routing: ReturnType<typeof spyOn<ReturnType<typeof getGuildMcpManager>, "getGuildMCPRouting">>;
+  let loadTools: ReturnType<typeof spyOn<typeof ToolRegistry, "getAvailableToolsWithMCP">>;
+
   beforeEach(() => {
-    routing = spyOn(getGuildMcpManager(), "getGuildMCPRouting").mockResolvedValue({
-      routes: new Map(),
-      replaced: new Set(),
+    loadTools = spyOn(ToolRegistry, "getAvailableToolsWithMCP").mockResolvedValue({
+      builtInTools: [],
+      mcpFunctionNames: [],
+      totalCount: 0,
     });
   });
-  afterEach(() => routing.mockRestore());
-  it("keeps the migration rollback fallback synchronized", () => {
+  afterEach(() => loadTools.mockRestore());
+
+  function resolverForTools(
+    names: string[],
+    overrides?: ToolPromptMacroContext,
+    mcpToolFamilies: Record<string, string> = {},
+  ) {
+    const memoryActions = [
+      ...(names.includes("create_long_term_memory") ? ["create"] : []),
+      ...(names.includes("update_long_term_memory") ? ["update", "delete"] : []),
+    ];
+    const builtInTools: Tool[] = names
+      .filter((name) => name !== "create_long_term_memory" && name !== "update_long_term_memory")
+      .map((name) => ({
+        name,
+        description: name,
+        category: "search",
+        parameters: { type: "object", properties: {}, required: [] },
+        isAvailableFor: () => true,
+        execute: async () => ({ success: true }),
+      }));
+    if (memoryActions.length > 0) builtInTools.push(new ManageLongTermMemoryTool().withActions(memoryActions));
+    const mcpFunctionNames = Object.keys(mcpToolFamilies);
+    loadTools.mockResolvedValue({
+      builtInTools,
+      mcpFunctionNames,
+      totalCount: builtInTools.length + mcpFunctionNames.length,
+      mcpToolFamilies,
+    });
+    return createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      ...overrides,
+    });
+  }
+
+  it("renders the current default like the rollback fallback with the available tools", async () => {
     const migration = readFileSync(
       join(process.cwd(), "src/db/migrations/061_default_system_prompt_read_time.down.sql"),
       "utf8",
     );
     const literal = migration.match(/SET system_prompt = E'((?:''|[^'])*)'\s+WHERE/s)?.[1];
 
-    expect(literal).toBeDefined();
-    expect(literal?.replaceAll("''", "'").replaceAll("\\n", "\n")).toBe(DEFAULT_SYSTEM_PROMPT);
+    if (!literal) throw new Error("Missing default prompt in the rollback");
+    const resolver = resolverForTools(["create_long_term_memory", "update_long_term_memory"]);
+    const rollbackPrompt = literal.replaceAll("''", "'").replaceAll("\\n", "\n");
+    expect(await resolver.expand(rollbackPrompt)).toBe(await resolver.expand(DEFAULT_SYSTEM_PROMPT));
   });
 
   it("evaluates capability blocks before expanding surviving tool macros", async () => {
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["create_long_term_memory"]),
-    });
+    const resolver = resolverForTools(["create_long_term_memory"]);
 
     expect(await resolver.expand("{{if capability:self_teaching}}Use {memory_tool}.{{/if}}")).toBe(
       "Use `manage_long_term_memory` with action `create`.",
@@ -218,13 +253,10 @@ describe("prompt macro resolver condition integration", () => {
   it("does not name a tool through a static macro when the turn cannot call it", async () => {
     const failures: string[] = [];
     for (const hasTools of [true, false]) {
-      const resolver = createToolPromptMacroResolver({
-        provider: "google",
+      const resolver = resolverForTools(["create_long_term_memory"], {
         stateForContext: { ...TOOL_STATE, llm: { ...TOOL_STATE.llm, has_tools: hasTools } },
-        capabilities: ENABLED_CAPABILITIES,
-        availableToolNames: new Set(["create_long_term_memory"]),
       });
-      const expanded = await resolver.expand("Use {memory_tool}, then {short_term_memory_tool}.");
+      const expanded = await resolver.expand("Use {memory_tool}, then {task_tool}.");
       const expected = `Use ${hasTools ? "`manage_long_term_memory` with action `create`" : UNAVAILABLE_TOOL_TEXT}, then ${UNAVAILABLE_TOOL_TEXT}.`;
       if (expanded !== expected) failures.push(`has_tools=${hasTools}: ${expanded}`);
     }
@@ -264,12 +296,8 @@ describe("prompt macro resolver condition integration", () => {
     expect(expanded).not.toContain("{{if");
   });
 
-  it("uses the scoped runtime tool set without reloading availability", async () => {
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["create_long_term_memory", "web_search"]),
+  it("filters the runtime tool set by deliberate tool permissions", async () => {
+    const resolver = resolverForTools(["create_long_term_memory", "web_search"], {
       deliberateToolAllowedNames: ["web_search"],
     });
 
@@ -289,11 +317,7 @@ describe("prompt macro resolver condition integration", () => {
     const failures: string[] = [];
     for (const { template, toolName } of hints) {
       for (const allowed of [true, false]) {
-        const resolver = createToolPromptMacroResolver({
-          provider: "google",
-          stateForContext: TOOL_STATE,
-          capabilities: ENABLED_CAPABILITIES,
-          availableToolNames: new Set([toolName, "web_search"]),
+        const resolver = resolverForTools([toolName, "web_search"], {
           deliberateToolAllowedNames: allowed ? [toolName] : ["web_search"],
         });
         const expanded = await resolver.expand(template);
@@ -306,23 +330,15 @@ describe("prompt macro resolver condition integration", () => {
   });
 
   it("hides tool branches when the active model cannot call tools", async () => {
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
+    const resolver = resolverForTools(["create_long_term_memory"], {
       stateForContext: { ...TOOL_STATE, llm: { ...TOOL_STATE.llm, has_tools: false } },
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["create_long_term_memory"]),
     });
 
     expect(await resolver.expand("{{if tool:create_long_term_memory}}memory{{else}}none{{/if}}")).toBe("none");
   });
 
   it("renders and expands each default memory instruction when its tool is available", async () => {
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["create_long_term_memory", "update_long_term_memory"]),
-    });
+    const resolver = resolverForTools(["create_long_term_memory", "update_long_term_memory"]);
 
     const expanded = await resolver.expand(DEFAULT_SYSTEM_PROMPT);
 
@@ -332,39 +348,15 @@ describe("prompt macro resolver condition integration", () => {
   });
 
   it("renders self-diagnostic guidance for bundled and guild URL fetch tools", async () => {
-    const bundledResolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set([
-        "create_long_term_memory",
-        "update_long_term_memory",
-        "review_capabilities",
-        "fetch_url",
-      ]),
-    });
-    const guildResolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["review_capabilities", "read_webpage"]),
-    });
-
-    const bundled = await bundledResolver.expand(DEFAULT_SYSTEM_PROMPT);
-    const selected: GuildMcpRouting = {
-      routes: new Map([
-        [
-          "read_webpage",
-          {
-            config: { server_type: "url_fetcher" } as GuildMcpServerRow,
-            connection: {} as GuildMCPConnection,
-          },
-        ],
-      ]),
-      replaced: new Set(["url_fetcher"]),
-    };
-    routing.mockResolvedValue(selected);
-    const guild = await guildResolver.expand(DEFAULT_SYSTEM_PROMPT);
+    const bundled = await resolverForTools([
+      "create_long_term_memory",
+      "update_long_term_memory",
+      "review_capabilities",
+      "fetch_url",
+    ]).expand(DEFAULT_SYSTEM_PROMPT);
+    const guild = await resolverForTools(["review_capabilities"], {}, { read_webpage: "url_fetcher" }).expand(
+      DEFAULT_SYSTEM_PROMPT,
+    );
 
     expect(bundled).toContain("`review_capabilities`");
     expect(bundled).toContain("`fetch_url`");
@@ -381,12 +373,7 @@ describe("prompt macro resolver condition integration", () => {
     const preset = systemPromptSections
       .flatMap((section) => section.rows)
       .find((row) => row.name === "Default + Image Generation Expert");
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["generate_image"]),
-    });
+    const resolver = resolverForTools(["generate_image"]);
 
     const expanded = await resolver.expand(preset?.promptText ?? "");
 
@@ -401,12 +388,7 @@ describe("prompt macro resolver condition integration", () => {
     const preset = systemPromptSections
       .flatMap((section) => section.rows)
       .find((row) => row.name === "Default + Image Generation Expert");
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["generate_image_nai"]),
-    });
+    const resolver = resolverForTools(["generate_image_nai"]);
 
     const expanded = await resolver.expand(preset?.promptText ?? "");
 
@@ -418,12 +400,7 @@ describe("prompt macro resolver condition integration", () => {
   });
 
   it("does not infer URL-fetch availability from unrelated read tools", async () => {
-    const resolver = createToolPromptMacroResolver({
-      provider: "google",
-      stateForContext: TOOL_STATE,
-      capabilities: ENABLED_CAPABILITIES,
-      availableToolNames: new Set(["review_capabilities", "read_file"]),
-    });
+    const resolver = resolverForTools(["review_capabilities", "read_file"]);
 
     const expanded = await resolver.expand(DEFAULT_SYSTEM_PROMPT);
 

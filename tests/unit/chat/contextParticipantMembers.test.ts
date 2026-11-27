@@ -164,7 +164,6 @@ describe("participant member request scope", () => {
           contextItems: [],
           tailDirectives: [],
           lowerPriorityTailDirectives: [],
-          nudgeInjectionDepth: 0,
           messageIdMap: new MessageIdMap(),
         };
       }),

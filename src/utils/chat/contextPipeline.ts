@@ -22,7 +22,6 @@ import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
   type DeliberateToolIntentMatch,
   expandDeliberateToolAllowedNames,
@@ -299,9 +298,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     disableYouTubeProcessing: false,
     disableProfilePictureProcessing: false,
     disableGifProcessing: false,
-    disableShortTermMemoryUpdate: false,
     disableCrossChannelMessage: false,
-    explicitLongTermMemoryIntent: hasExplicitLongTermMemoryIntent(message.content),
     disableMessageMetadataContext: false,
     forceReason: incoming.forceReason,
     isManuallyTriggered: incoming.isManuallyTriggered,
@@ -355,8 +352,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
-  // Resolve deliberate tool mode before buildContext() because `has_tools` gates STM tool affordances during
-  // context synthesis.
   const deliberateToolModeActive = resolveTurnDeliberateToolMode(turn);
   const reminderData = incoming.reminderData;
   const reminderRecipientID = incoming.reminderRecipientID;
@@ -471,7 +466,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolAllowedNames.push(...getAutonomousDeliberateToolNames(turn.persona));
   }
 
-  // Task tools require intent; expression tools and due maintenance can be admitted autonomously.
   const deliberateToolIntent =
     deliberateToolAllowedNames.length > 0 || (streamingContext.endTurnAfterTools?.length ?? 0) > 0;
   const toolsDisabledByDeliberateMode =
@@ -609,7 +603,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
       impersonatedUserNickname,
       impersonatedUserPrompt,
-      explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
       deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
       toolStreamContext: streamingContext,
       messageIdMap,
@@ -677,8 +670,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,
-      nudgeItem: contextBuild.nudgeItem,
-      nudgeInjectionDepth: contextBuild.nudgeInjectionDepth,
       memoryInjectionItems: contextBuild.memoryInjectionItems,
       memoryInjectionDepth: contextBuild.memoryInjectionDepth,
       messageIdMap,
@@ -1655,8 +1646,6 @@ function appendTailDirectives(args: {
   lowerPriorityTailDirectives: string[];
   tailDirectives: string[];
   uncensorDirective?: string;
-  nudgeItem?: ChatTurnContext["contextItems"][number];
-  nudgeInjectionDepth?: number;
   memoryInjectionItems?: ChatTurnContext["contextItems"];
   memoryInjectionDepth?: number;
   messageIdMap?: MessageIdMap;
@@ -1744,7 +1733,6 @@ function appendTailDirectives(args: {
   applyPromptLayoutInserts(contextItems, [
     { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
     { tag: "stm_content", items: args.memoryInjectionItems ?? [], depth: args.memoryInjectionDepth },
-    { tag: "stm_nudge", items: args.nudgeItem ? [args.nudgeItem] : [], depth: args.nudgeInjectionDepth },
     { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
     { tag: "queued_reply", items: queuedItem ? [queuedItem] : [] },
     { tag: "uncensor", items: uncensorItem ? [uncensorItem] : [] },

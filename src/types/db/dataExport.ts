@@ -10,6 +10,7 @@ import {
   CUSTOM_IDLE_NUDGE_LIMIT,
   customIdleNudgeInputSchema,
   serverNaturalNudgeConfigSchema,
+  stripRetiredIdleNudgeTool,
 } from "@/modules/natural-nudges/db/types";
 import {
   findHumanizerDependencyViolation,
@@ -308,10 +309,7 @@ const serverStmConfigExportSchema = z.object({
       refresh_cadence: z.number().int(),
       render_mode: z.enum(["supersede", "crude_summary"]),
       crude_message_count: z.number().int(),
-      tool_description_override: z.string().nullable(),
-      update_nudge_override: z.string().nullable(),
       summarizer_instructions_override: z.string().nullable().optional(),
-      nudge_injection_depth: z.number().int().optional(),
       content_injection_depth: z.number().int().optional(),
     })
     .nullable()
@@ -398,7 +396,9 @@ const workspaceNudgesConfigSectionSchema = serverNaturalNudgeConfigSchema
     llm_id: z.number().int().positive().nullable().optional(),
     checker_llm_id: z.number().int().positive().nullable().optional(),
     checker_decision_model_id: z.number().int().positive().nullable().optional(),
-    custom_idle_nudges: z.array(customIdleNudgeInputSchema.strict()).max(CUSTOM_IDLE_NUDGE_LIMIT).optional(),
+    custom_idle_nudges: z
+      .preprocess(stripRetiredIdleNudgeTool, z.array(customIdleNudgeInputSchema.strict()).max(CUSTOM_IDLE_NUDGE_LIMIT))
+      .optional(),
   })
   .strict();
 

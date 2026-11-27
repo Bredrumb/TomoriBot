@@ -149,7 +149,6 @@ async function runGenerationAttempts(
         userId: context.streamingContext.triggererUserId,
         tomoriState: attempt.tomoriState,
         streamContext: context.streamingContext,
-        sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
       let rotationKeyId = attempt.rotationKeyId;
@@ -900,15 +899,9 @@ async function prepareProviderContextItems(args: {
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
   streamContext: StreamingContext;
-  // Must come from the built provider config rather than tomoriState because a provider's live capability catalog can
-  // withdraw tools the state still allows.
-  sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
   const deliberateToolAllowedNames = args.streamContext.deliberateToolAllowedNames;
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, deliberateToolAllowedNames);
-  if (!args.sendsTools) {
-    contextItems = contextItems.filter((item) => !item.requiresToolCalling);
-  }
 
   // Adapt verbatim schemas and nudge independently into new arrays per fallback attempt, because contexts can carry
   // the nudge even when no tool schemas resolve.
@@ -999,7 +992,7 @@ function injectVerbatimToolDefinitionsItem(
 // DIALOGUE_HISTORY items are counted rather than messages (unlike stage 11) because only tags remain recoverable here
 // and approximate tail placement suffices.
 function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
-  const nudgeItem: StructuredContextItem = {
+  const verbatimNudge: StructuredContextItem = {
     role: "user",
     parts: [{ type: "text", text: VERBATIM_NUDGE_CONTEXT_TEXT }],
     metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
@@ -1019,7 +1012,7 @@ function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredCont
     }
     dialogueSeen += 1;
   }
-  return [...items.slice(0, insertionIndex), nudgeItem, ...items.slice(insertionIndex)];
+  return [...items.slice(0, insertionIndex), verbatimNudge, ...items.slice(insertionIndex)];
 }
 
 function dropOldestHistoryExchangePairs(

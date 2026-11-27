@@ -15,12 +15,10 @@ import {
 import { log } from "@/utils/misc/logger";
 import { ContextItemTag, type ContextMemoryEntry, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
-import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
 import { serverMemoryRepository } from "@/utils/db/repositories";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
-import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import { channelScopeAdmits, channelScopeCandidates } from "@/utils/discord/channelScope";
 import { STM_TAIL_SLOT, type PromptLayoutItem } from "@/utils/text/context/promptLayout";
@@ -32,18 +30,6 @@ const MAX_OTHER_CHANNEL_MEMORIES = 3;
 
 // Each chat turn's crude write refreshes lastUpdated, so an hour distinguishes active same-channel memory from ambient recall.
 const STM_FRESH_WINDOW_MS = 60 * 60 * 1000;
-
-export const SEED_SUMMARY_UPDATE_HINT =
-  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation.{{if tool:create_long_term_memory}} Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool}{{if tool:update_long_term_memory}} or {memory_update_tool}{{/if}} instead.{{/if}}]";
-
-const SEED_SUMMARY_UPDATE_HINT_FALLBACK =
-  "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use manage_long_term_memory instead.]";
-
-export const SEED_CATEGORY_UPDATE_HINT =
-  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}.{{if tool:create_long_term_memory}} Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool}{{if tool:update_long_term_memory}} or {memory_update_tool}{{/if}} instead.{{/if}}]";
-
-const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
-  "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use manage_long_term_memory instead.]";
 
 function formatDiscordChannelReference(channelId: string | undefined, fallbackText: string): string {
   return channelId ? `<#${channelId}>` : fallbackText;
@@ -189,22 +175,14 @@ export async function buildShortTermMemoryContext(params: {
   personalMemoriesEnabled: boolean;
   client: Client;
   isUserImpersonation: boolean;
-  explicitLongTermMemoryIntent?: boolean;
-  toolPromptMacroResolver?: ToolPromptMacroResolver;
   convertMentions: MentionConverter;
 }): Promise<{
   memoryItems: StructuredContextItem[];
-  nudgeItem?: StructuredContextItem;
-  nudgeInjectionDepth: number;
   // Sentinel depths: -1 anchors stale same-channel memory at the top, and STM_TAIL_SLOT marks fresh content so
   // downstream builders can compare positions.
   memoryInjectionDepth: number;
 }> {
   const memoryItems: PromptLayoutItem[] = [];
-  let nudgeItem: StructuredContextItem | undefined;
-
-  const expandPromptToolText = (macroText: string, fallbackText: string) =>
-    params.toolPromptMacroResolver ? params.toolPromptMacroResolver.expand(macroText) : Promise.resolve(fallbackText);
   const convertMemoryText = (text: string, mode: "resolve" | "template") =>
     params.convertMentions(
       text,
@@ -226,14 +204,10 @@ export async function buildShortTermMemoryContext(params: {
         ])
       : [null, []];
 
-    const refreshCadence = stmConfig?.refresh_cadence ?? 5;
     // Most servers have no server_stm_configs row at all (it is not seeded at setup),
     // so this fallback, not the column default, decides the render mode for them.
     const renderMode = stmConfig?.render_mode ?? "crude_summary";
     const crudeMessageCount = stmConfig?.crude_message_count ?? DEFAULT_CRUDE_MESSAGE_COUNT;
-    const updateNudgeOverride = stmConfig?.update_nudge_override ?? null;
-    // Spacers and directives remain in saved depth counts because changing the unit would reinterpret existing server settings.
-    const nudgeInjectionDepth = stmConfig?.nudge_injection_depth ?? 2;
     const configuredMemoryInjectionDepth = stmConfig?.content_injection_depth ?? -1;
     let isStmFresh = false;
 
@@ -242,7 +216,6 @@ export async function buildShortTermMemoryContext(params: {
       stmCategoryRows.length > 0 &&
       !(stmCategoryRows.length === 1 && stmCategoryRows[0].label.toLowerCase() === "summary");
     const slugMap = isCategoryMode ? buildSlugMap(stmCategoryRows) : null;
-    const categoryLabelList = isCategoryMode ? stmCategoryRows.map((r) => r.label).join(", ") : "";
     const userRow = await getCachedUserRow(params.triggeringUserId);
     const crossServerOptIn = userRow?.shortterm_cache_crossserver_opt_in ?? false;
 
@@ -372,113 +345,57 @@ export async function buildShortTermMemoryContext(params: {
         });
       }
     }
-    if (params.tomoriState?.llm?.has_tools) {
-      // Gate only the nudge on updateShortTermMemoryTool availability so manual STM content still surfaces when
-      // disabled.
-      const isStmToolAvailable =
-        params.tomoriState.llm.llm_provider !== "novelai" &&
-        !params.explicitLongTermMemoryIntent &&
-        params.tomoriState.config?.short_term_memory_enabled !== false;
+    // Pre-warm the single-channel cache before the sync getter below so post-restart turns see persisted STM.
+    await (params.currentServerId === "DM"
+      ? preWarmStmEntry("user", params.triggeringUserId, params.currentChannelId, params.tomoriState?.persona_id)
+      : preWarmStmEntry("server", params.currentServerId, params.currentChannelId, params.tomoriState?.persona_id));
 
-      // Pre-warm the single-channel cache before the sync getter below so post-restart turns see persisted STM.
-      await (params.currentServerId === "DM"
-        ? preWarmStmEntry("user", params.triggeringUserId, params.currentChannelId, params.tomoriState?.persona_id)
-        : preWarmStmEntry("server", params.currentServerId, params.currentChannelId, params.tomoriState?.persona_id));
+    const sameChannelMemory =
+      params.currentServerId === "DM"
+        ? getShortTermMemoryForUserChannel(
+            params.triggeringUserId,
+            params.currentChannelId,
+            params.tomoriState?.persona_id,
+          )
+        : getShortTermMemoryForServerChannel(
+            params.currentServerId,
+            params.currentChannelId,
+            params.tomoriState?.persona_id,
+          );
 
-      const sameChannelMemory =
-        params.currentServerId === "DM"
-          ? getShortTermMemoryForUserChannel(
-              params.triggeringUserId,
-              params.currentChannelId,
-              params.tomoriState?.persona_id,
-            )
-          : getShortTermMemoryForServerChannel(
-              params.currentServerId,
-              params.currentChannelId,
-              params.tomoriState?.persona_id,
-            );
+    const stmAgeMs = sameChannelMemory ? Date.now() - sameChannelMemory.lastUpdated : Number.POSITIVE_INFINITY;
+    isStmFresh ||= stmAgeMs <= STM_FRESH_WINDOW_MS;
 
-      const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? 0;
-      const isNudgeDue = turnsSinceRefresh >= refreshCadence;
+    const sameChannelCategories =
+      sameChannelMemory?.categories && Object.keys(sameChannelMemory.categories).length > 0
+        ? (sameChannelMemory.categories as Record<string, string>)
+        : null;
+    const hasMemoryContent = sameChannelCategories !== null || Boolean(sameChannelMemory?.summary);
 
-      const stmAgeMs = sameChannelMemory ? Date.now() - sameChannelMemory.lastUpdated : Number.POSITIVE_INFINITY;
-      isStmFresh ||= stmAgeMs <= STM_FRESH_WINDOW_MS;
-
-      const sameChannelCategories =
-        sameChannelMemory?.categories && Object.keys(sameChannelMemory.categories).length > 0
-          ? (sameChannelMemory.categories as Record<string, string>)
-          : null;
-      const hasMemoryContent = sameChannelCategories !== null || Boolean(sameChannelMemory?.summary);
-
-      if (hasMemoryContent) {
-        let memoryBodyText: string;
-        if (sameChannelCategories && slugMap) {
-          memoryBodyText = formatCategoryLines(sameChannelCategories, slugMap);
-        } else if (sameChannelCategories) {
-          memoryBodyText = formatCategoryLines(sameChannelCategories);
-        } else {
-          memoryBodyText = sameChannelMemory?.summary ?? "";
-        }
-
-        const summaryText = params.isUserImpersonation
-          ? `[System: Short term memory for this ongoing conversation:\n${memoryBodyText}]`
-          : `[System: ${params.botName}'s short term memory for this ongoing conversation:\n${memoryBodyText}]`;
-
-        memoryItems.push({
-          role: "user",
-          parts: [
-            {
-              type: "text",
-              text: await convertMemoryText(summaryText, "template"),
-            },
-          ],
-          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          requiresToolCalling: true,
-        });
+    if (hasMemoryContent) {
+      let memoryBodyText: string;
+      if (sameChannelCategories && slugMap) {
+        memoryBodyText = formatCategoryLines(sameChannelCategories, slugMap);
+      } else if (sameChannelCategories) {
+        memoryBodyText = formatCategoryLines(sameChannelCategories);
+      } else {
+        memoryBodyText = sameChannelMemory?.summary ?? "";
       }
 
-      // The nudge is NOT pushed into memoryItems; it is returned separately so the caller can
-      // inject it at the configured dialogue depth (highest-signal tail position by default).
-      if (isStmToolAvailable && isNudgeDue) {
-        let rawHintText: string;
-        let rawHintFallback: string;
+      const summaryText = params.isUserImpersonation
+        ? `[System: Short term memory for this ongoing conversation:\n${memoryBodyText}]`
+        : `[System: ${params.botName}'s short term memory for this ongoing conversation:\n${memoryBodyText}]`;
 
-        if (isCategoryMode) {
-          rawHintText = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT).replace(
-            "{category_labels}",
-            categoryLabelList,
-          );
-          rawHintFallback = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT_FALLBACK).replace(
-            "{category_labels}",
-            categoryLabelList,
-          );
-        } else {
-          rawHintText = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT;
-          rawHintFallback = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT_FALLBACK;
-        }
-
-        const hintText = sanitizeUnknownTemplatePlaceholders(await expandPromptToolText(rawHintText, rawHintFallback));
-
-        nudgeItem = {
-          role: "user",
-          completionText: "",
-          parts: [
-            {
-              type: "text",
-              text: await params.convertMentions(
-                hintText,
-                params.client,
-                params.currentServerId,
-                params.triggererName,
-                params.botName,
-                params.personalMemoriesEnabled,
-              ),
-            },
-          ],
-          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          requiresToolCalling: true,
-        };
-      }
+      memoryItems.push({
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text: await convertMemoryText(summaryText, "template"),
+          },
+        ],
+        metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+      });
     }
 
     // Other-channel content changes independently of this channel, so it uses the tail slot even when same-channel memory is stale.
@@ -486,7 +403,7 @@ export async function buildShortTermMemoryContext(params: {
       for (const item of memoryItems) item[STM_TAIL_SLOT] = true;
     }
 
-    return { memoryItems, nudgeItem, nudgeInjectionDepth, memoryInjectionDepth: configuredMemoryInjectionDepth };
+    return { memoryItems, memoryInjectionDepth: configuredMemoryInjectionDepth };
   } catch (error) {
     await log.error(
       `[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${params.triggeringUserId}, currentChannelId=${params.currentChannelId}`,
@@ -496,6 +413,6 @@ export async function buildShortTermMemoryContext(params: {
         metadata: { userDiscId: params.triggeringUserId, currentChannelId: params.currentChannelId },
       },
     );
-    return { memoryItems: [], nudgeInjectionDepth: 0, memoryInjectionDepth: -1 };
+    return { memoryItems: [], memoryInjectionDepth: -1 };
   }
 }
