@@ -3,12 +3,12 @@ title: "Natural Nudges"
 description: "Permite que tus personas de TomoriBot inicien conversaciones cuando un canal de Discord quede en silencio y se unan a aquellas que coincidan con sus intereses, a un ritmo adaptado a la actividad de tu servidor."
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Natural Nudges permite que TomoriBot hable sin haber sido mencionada, de dos maneras:
 
 - **Intervenciones espontáneas**: cuando un canal se queda en silencio, una de tus personas elige algo que hacer, como saludar a alguien, retomar una conversación, plantear un nuevo tema o interpretar una breve escena con otra persona, publicándolo con su propia voz.
+  - Un canal no recibe una nueva intervención espontánea hasta que un miembro responda a la última en ese canal.
 - **Intervenciones activas**: cuando los miembros hablan sobre algo que le gusta a una persona, esa persona se une a la charla.
 
 Las intervenciones están pensadas para sentirse como un amigo que pasa a saludar:
@@ -113,7 +113,7 @@ Una escena es un breve diálogo entre personas, de dos a cuatro mensajes de dura
 
 ### Propósitos ocultos
 
-Junto con su mensaje de apertura, cada intervención espontánea le asigna a la persona una pequeña meta privada, como "averigua a quién más le gusta este anime". La meta se mantiene vinculada sobre la apertura y solo esa persona la ve, por lo que continúa persiguiendo el objetivo en sus respuestas posteriores. En una escena cada persona recibe su propia meta, que las demás nunca ven. Una vez que el mensaje de apertura sale del contexto que la persona recuerda, la meta desaparece. Los propósitos nunca solicitan datos personales, dinero ni nada fuera del chat. Los miembros autorizados para ver la instantánea del prompt pueden consultarlos.
+Junto con su mensaje de apertura, cada intervención espontánea le asigna a la persona una pequeña meta privada, como "averigua a quién más le gusta este anime". La meta se mantiene vinculada sobre la apertura y solo esa persona la ve, por lo que continúa persiguiendo el objetivo en sus respuestas posteriores. En una escena cada persona recibe su propia meta, que las demás nunca ven. La meta termina cuando la persona inicia otra intervención espontánea en ese canal, o cuando el mensaje de apertura sale del historial de conversación de la persona. Los propósitos nunca solicitan datos personales, dinero ni nada fuera del chat. Los miembros autorizados para ver la instantánea del prompt pueden consultarlos.
 
 ## Configuración
 

@@ -521,7 +521,11 @@ describe("idle nudge channel context", () => {
 
     expect(await runIdleNudgeAttempt(attempt)).toBe("fired");
     expect(requests).toHaveLength(1);
-    expect(chatInputs[0].naturalNudge).toEqual({ toolNames: ["generate_image"], targetUserDiscId: undefined });
+    expect(chatInputs[0].naturalNudge).toEqual({
+      toolNames: ["generate_image"],
+      targetUserDiscId: undefined,
+      opensIdleNudge: true,
+    });
     expect(chatInputs[0].sceneTurn).toBeUndefined();
     expect(refresh).toHaveBeenCalled();
     expect(recordFire.mock.calls[0][0]).toMatchObject({

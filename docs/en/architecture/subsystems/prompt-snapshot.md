@@ -27,7 +27,7 @@ Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline t
 - **Message boundary processing**: Respects conversation resets (`sliceMessagesAtResetMarker()`), link previews, stickers, and system-produced notice blocks (`extractNoticeTextFromComponents`).
 - **History truncation**: Uses `resolveContextBudget()` for ordinary providers. NovelAI selects, renders, and fits its native context through the same preparation function as generation.
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
-- **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it, as in live context building, so the snapshot shows what that persona sees.
+- **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it and it is that persona's newest one in history, as in live context building, so the snapshot shows what that persona sees.
 
 Inspection fetches raw history independently, then uses the live channel's history anchor after
 reset slicing. This read does not create, advance, invalidate, or renew the anchor. Budget

@@ -8,7 +8,7 @@ import {
   NATURAL_NUDGE_FAILURE_COOLDOWN_MS,
   NATURAL_NUDGE_FAILURE_STOP_THRESHOLD,
 } from "@/modules/natural-nudges/runtime/tuning";
-import { loadPersonaAgendas } from "@/modules/natural-nudges/runtime/agendas";
+import { loadLatestPersonaAgenda } from "@/modules/natural-nudges/runtime/agendas";
 import {
   defaultServerNaturalNudgeConfig,
   PERSONA_AUTHORED_IDLE_NUDGE_ID_PATTERN,
@@ -1068,8 +1068,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       ),
     ).toBe(true);
 
-    expect((await loadPersonaAgendas(refs.personaId, [openerId])).get(openerId)).toBe("Win the mecha argument.");
-    expect((await loadPersonaAgendas(otherPersonaId, [openerId])).get(openerId)).toBe("Get a human to take your side.");
+    expect((await loadLatestPersonaAgenda(refs.personaId, [openerId]))?.agenda).toBe("Win the mecha argument.");
+    expect((await loadLatestPersonaAgenda(otherPersonaId, [openerId]))?.agenda).toBe("Get a human to take your side.");
 
     const history = await naturalNudgeRepository.loadFireHistory(refs.serverId, new Date(0), 5);
     expect(history.latestIdleNudges[0]).toMatchObject({ opener_message_disc_id: openerId, answered: null });
@@ -1425,5 +1425,45 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     `;
     expect(row).toEqual({ detour: true, category: null, answered: null });
     expect((await naturalNudgeRepository.loadRuntimeState(refs.serverId)).consecutive_failures).toBe(0);
+  });
+
+  it("prunes old fires except each channel's latest idle fire, which loses its member and topic", async () => {
+    const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
+    const insert = async (channelDiscId: string, mode: "idle" | "active", age: number, opener: string) => {
+      const idle = mode === "idle";
+      const [row] = await testSql`
+        INSERT INTO natural_nudge_fires
+          (server_id, channel_disc_id, persona_id, mode, category, topic, target_user_id, opener_message_disc_id,
+            answered, fired_at)
+        VALUES (${otherServerId}, ${channelDiscId}, ${refs.personaId}, ${mode}, ${idle ? "ping_user" : null},
+          ${idle ? "tea blends" : null}, ${idle ? refs.userId : null}, ${opener}, true, ${daysAgo(age)})
+        RETURNING fire_id
+      `;
+      return row.fire_id as string;
+    };
+    const quietChannel = "1200000000000000771";
+    const busyChannel = "1200000000000000772";
+    const replacedInQuiet = await insert(quietChannel, "idle", 402, "1300000000000000771");
+    const latestInQuiet = await insert(quietChannel, "idle", 401, "1300000000000000772");
+    const replacedInBusy = await insert(busyChannel, "idle", 401, "1300000000000000773");
+    const oldActive = await insert(busyChannel, "active", 401, "1300000000000000774");
+    const latestInBusy = await insert(busyChannel, "idle", 300, "1300000000000000775");
+    try {
+      await naturalNudgeRepository.pruneBefore(daysAgo(365), daysAgo(365));
+      const rows = await testSql`
+        SELECT fire_id, topic, target_user_id FROM natural_nudge_fires
+        WHERE fire_id IN ${testSql([replacedInQuiet, latestInQuiet, replacedInBusy, oldActive, latestInBusy])}
+        ORDER BY fired_at
+      `;
+      expect(rows).toEqual([
+        { fire_id: latestInQuiet, topic: null, target_user_id: null },
+        { fire_id: latestInBusy, topic: "tea blends", target_user_id: refs.userId },
+      ]);
+      expect(
+        (await naturalNudgeRepository.loadLatestIdleOpeners(otherServerId, [quietChannel])).get(quietChannel),
+      ).toEqual({ openerMessageDiscId: "1300000000000000772", answered: true });
+    } finally {
+      await testSql`DELETE FROM natural_nudge_fires WHERE channel_disc_id IN ${testSql([quietChannel, busyChannel])}`;
+    }
   });
 });

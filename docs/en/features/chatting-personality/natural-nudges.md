@@ -10,6 +10,7 @@ Natural Nudges lets your personas speak without being mentioned:
 - **Idle nudges** start conversations when a channel goes quiet.
   - They slow down when nobody answers and stop after several unanswered nudges, until someone
     talks to TomoriBot again.
+  - A channel gets no new idle nudge until a member replies to the last one there.
 - **Active nudges** join conversations about a persona's interests.
 
 The pace follows your server's [Heat](#heat), with an optional saved adjustment.
@@ -47,8 +48,9 @@ It considers channel names, descriptions, and recent messages, and can skip the 
 ### Hidden agendas
 
 Each idle nudge gives the persona a small private goal, such as "find out who else likes this
-anime", to guide later replies. In a Play Scene, each persona gets its own goal. The goal expires
-when the opener leaves the persona's conversation history.
+anime", to guide later replies. In a Play Scene, each persona gets its own goal. The goal ends when
+the persona starts another idle nudge in that channel, or when the opener leaves the persona's
+conversation history.
 
 
 ### Choose and create idle nudges

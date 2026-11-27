@@ -4,7 +4,7 @@ description: How the official hosted TomoriBot instance collects, uses, and dele
 aiGenerated: false
 ---
 
-Last updated: 2026-11-07
+Last updated: 2026-11-27
 
 This policy covers the official hosted TomoriBot on Discord, including personal use, Server use, and sponsored requests. If you self-host TomoriBot, you control your own data; this policy does not govern your copy.
 
@@ -78,7 +78,7 @@ These services may process data outside your country and have their own privacy 
 | Short-term memory summaries | 90 days after last activity by default |
 | Error logs | 90 days |
 | Performance records and bot-message identifiers | 30 days |
-| Natural Nudges records | 30 days; the persona's private goal up to 90 days |
+| Natural Nudges records | 30 days; the persona's private goal up to 90 days; each channel's latest nudge is kept, without the pinged member or topic, until a newer nudge in that channel replaces it |
 | Patreon membership-update records | 30 days by default |
 | Completed or expired Patreon sign-in records | Eligible for deletion after one hour by default |
 | Detailed subscription usage | 90 days; current-period records stay until that period ends if later |

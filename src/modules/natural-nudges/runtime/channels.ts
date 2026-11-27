@@ -13,6 +13,7 @@ import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { findLastPersonaTurnBlock } from "@/utils/discord/personaTurnDetection";
 import { classifySendFailure, getBlockedSendReason, noteSendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { log } from "@/utils/misc/logger";
+import { resolveMessageProxyMessageIdentitiesForHistory } from "@/utils/messageProxy/historyAttribution";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import type { ServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import { automaticChannelWindowStart } from "@/modules/natural-nudges/runtime/meters";
@@ -21,6 +22,7 @@ import { HANGING_MAX_AGE_MS, HANGING_MIN_HUMAN_MESSAGES } from "@/modules/natura
 const TRANSCRIPT_MESSAGE_MAX_CHARS = 300;
 const PLANNER_TRANSCRIPT_MAX_CHARS = 1_500;
 const PLANNER_TRANSCRIPT_MIN_FRAGMENT_CHARS = 50;
+const REPLY_SCAN_LIMIT = 50;
 
 export interface NudgeChannel {
   channel: GuildTextBasedChannel;
@@ -97,11 +99,22 @@ export function isHangingConversation(
   return block.blockMessages.includes(newest);
 }
 
+// Message-proxy webhooks resolve to the member who sent them, so proxied replies count while feed webhooks do not.
+async function includesMemberMessage(messages: readonly Message[]): Promise<boolean> {
+  if (messages.some(isHumanMessage)) return true;
+  const webhooks = messages.filter((message) => message.webhookId && !message.system);
+  return webhooks.length > 0 && (await resolveMessageProxyMessageIdentitiesForHistory(webhooks)).size > 0;
+}
+
 export async function hasHumanReplyAfter(channel: GuildTextBasedChannel, openerMessageId: string): Promise<boolean> {
   if (!channel.lastMessageId || BigInt(channel.lastMessageId) <= BigInt(openerMessageId)) return false;
   try {
-    const after = await channel.messages.fetch({ after: openerMessageId, limit: 50 });
-    return after.some(isHumanMessage);
+    const following = [...(await channel.messages.fetch({ after: openerMessageId, limit: REPLY_SCAN_LIMIT })).values()];
+    if (await includesMemberMessage(following)) return true;
+    if (following.length < REPLY_SCAN_LIMIT) return false;
+    // Discord's `after` returns the messages right after the opener, so a full page of bot output there would hide
+    // every later member reply; a full page also means the newest page lies entirely after the opener.
+    return includesMemberMessage([...(await channel.messages.fetch({ limit: REPLY_SCAN_LIMIT })).values()]);
   } catch (error) {
     log.warn(`Natural Nudges: failed to read replies in channel ${channel.id}`, error);
     return false;
