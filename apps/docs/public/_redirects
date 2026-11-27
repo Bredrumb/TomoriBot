@@ -142,10 +142,7 @@
 /features/integrations/novelai-text/ /en/features/integrations/novelai/ 301
 /en/features/integrations/novelai-text /en/features/integrations/novelai/ 301
 /en/features/integrations/novelai-text/ /en/features/integrations/novelai/ 301
-# Cloud deployment pages moved to the release branch (docs/en/wiki/cloud/azure/), so the whole
-# subtree is absent from the built site. Its splats (in the block at the end of this file) replace
-# paired entries because this removes a subtree rather than moving pages one-to-one, and they also
-# cover the old azure-terraform-state-recovery rule whose destination is now gone too.
+# Cloud deployment pages live on the release branch only, so the built site redirects their subtree.
 /architecture/cloud /en/architecture/ 301
 /architecture/cloud/ /en/architecture/ 301
 /en/architecture/cloud /en/architecture/ 301
@@ -341,8 +338,7 @@
 /vi/self-hosting/local-endpoints/setup-local-mcp /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
 /vi/self-hosting/local-endpoints/setup-local-mcp/ /vi/self-hosting/mcp-servers/setup-local-mcp/ 301
 
-# Bare routes from before the /en/ split; a new top-level docs section needs its root pair here and
-# its splat below.
+# Bare pre-/en/ routes: a new top-level docs section needs its root pair here and its splat below.
 /architecture/introduction /en/introduction/ 301
 /architecture/introduction/ /en/introduction/ 301
 /architecture/integrations/novelai/tool-calling /en/architecture/integrations/novelai/limitations/ 301

@@ -923,8 +923,7 @@ class NaturalNudgeRepository {
     return { fires, agendas: agendas.length };
   }
 
-  // Each channel's latest idle fire outlives retention because the reply gate reads it, so it keeps only the fields
-  // that gate needs and drops the member and topic the privacy policy limits to 30 days.
+  // Retains each channel's latest idle row so the reply gate still works after 30-day privacy pruning clears its fields.
   private async pruneFiresBefore(before: Date): Promise<number> {
     const deleted = await sql`
       WITH kept AS (

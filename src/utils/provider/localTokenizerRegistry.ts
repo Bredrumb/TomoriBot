@@ -467,8 +467,6 @@ const novelaiDefinitionSchema = z.object({
 const NOVELAI_MAX_INPUT_CHARACTERS = 1_000_000;
 const NOVELAI_MAX_FRAGMENT_CODE_POINTS = 1024;
 const oversizedNovelaiFragment = new RegExp(`\\S{${NOVELAI_MAX_FRAGMENT_CODE_POINTS + 1}}`, "u");
-// Only successful loads are cached, so a transient read failure clears on the next request instead of disabling
-// NovelAI until a restart.
 const novelaiDefinitions = new Map<NovelAITokenizerFamily, z.infer<typeof novelaiDefinitionSchema>>();
 
 export function createNovelAITokenizerEncoder(family: NovelAITokenizerFamily): LocalTokenizerEncoder {

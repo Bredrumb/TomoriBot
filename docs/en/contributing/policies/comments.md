@@ -43,12 +43,22 @@ When unsure, omit the comment and make the name, type, or function boundary carr
 - Point-in-time measurements ("31k entries", "adds ~40 ms"). They read as current and go stale.
 - Commentary about the comment ("Two exclusions are load-bearing", "Important:").
 - Justification aimed at a reviewer. That belongs in the PR description.
+- Diff narration on a new guard, helper, or field, or copies of one domain rule across call sites.
+  Put why a change happened in the commit message, and keep shared rationale on the shared helper.
+- Extra clauses added to an existing comment to cover new branches.
 
-Keep each comment to one sentence. A new comment may wrap over two lines.
+Keep each comment to one sentence with no semicolon-joined clauses. A new comment may wrap over two
+lines.
 
 ```ts
 // Never sweep the client's own member: discord.js resolves permissions through it.
 ```
+
+## Editing commented code
+
+When changing code that already has a comment, do not expand the comment to describe the new code.
+Leave it alone when its constraint still holds, delete it when the updated code or a clearer name
+carries the meaning, or replace it with a shorter constraint when the invariant changed.
 
 Examples in docs are illustrative. Deployment sizes, record counts, and host details do not belong in
 this public repository (see [Docs Authoring](/contributing/localization/docs-authoring/#audience)).
@@ -70,7 +80,7 @@ names the relationship between the two halves:
 | Second half explains the first | Colon | `Retirement is process-local: a restart refetches every guild's stickers.` |
 | Cause | `, so` or `because` | `Discord rejects a second acknowledgement, so modal branches return early.` |
 | Aside | Parentheses | `The probe caches its own failure (until the next restart).` |
-| Independent clauses | Period or semicolon | `The webhook send failed. The bot path is the fallback.` |
+| Independent clauses | Period or semicolon (docs and locales) | `The webhook send failed. The bot path is the fallback.` |
 | Term and definition | Colon | `` `large-v3`: ~4-5 GB VRAM `` |
 | Numeric range | Plain hyphen | `1-5 minutes` |
 
@@ -93,9 +103,10 @@ and TOML files (`Dockerfile`, `docker-compose.yaml`, `bunfig.toml`, `docker/`, `
 `--staged` or `--base <ref>` also judges changed lines: `--base` covers everything since the merge
 base with `<ref>`, including uncommitted and untracked files, and `audit-comments` passes
 `--base HEAD`. On changed lines, `obvious-narration` becomes an error and the new-comment rules
-apply. A block counts as new when most of its lines changed, so a small edit inside an older block
-does not trigger them. Errors fail `bun run vl` (under Documentation); the checker is not part of
-the test runner.
+apply. Every changed block up to 2 lines is checked, while an older block over 2 lines counts as new
+only when most of its lines changed; `expounded-comment` still warns whenever an edit grows an
+existing block. Errors fail `bun run vl` (under Documentation); the checker is not part of the test
+runner.
 
 | Rule | Kind | Catches |
 |---|---|---|
@@ -109,7 +120,8 @@ the test runner.
 | `duplicate-comment` | Audit warning | TypeScript blocks with the same text after normalizing markers, whitespace, and case. Floor: 12 words and 60 characters |
 | `long-comment-block` | Audit warning | A non-JSDoc block of 8 lines or more outside `tests/` |
 | `long-new-comment` | Error on changed lines | A new comment over 2 lines |
-| `new-multi-sentence` | Error on changed lines | A new line-comment block with multiple sentences |
+| `new-multi-sentence` | Error on changed lines | A changed line-comment block with multiple sentences or semicolon-joined clauses |
+| `expounded-comment` | Warning on changed lines | An edited comment block that grew by 5 or more words instead of staying put, shrinking, or being removed |
 | `unexplained-comment` | Warning on changed lines | A new line-comment block with no reason, condition, or unit signal (`because`, `so`, `when`, a colon, and similar) |
 
 Each duplicate warning lists every copy, including copies across locale files. The audit skips

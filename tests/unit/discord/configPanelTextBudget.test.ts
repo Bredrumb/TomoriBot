@@ -921,9 +921,9 @@ describe("config page text budgeting at stored maxima", () => {
 
             // A cut preview stops at the shared ceiling rather than filling the page, so only
             // list truncation still has to use the remaining space.
-            // The body excludes fence runs so an uncut fence earlier on the page cannot join the next cut preview.
-            for (const block of displays.join("\n").match(/```markdown\n(?:(?!```)[\s\S])*?\n<!-- [^\n]+ -->\n```/g) ??
-              []) {
+            const cutMarkdownPreviews =
+              displays.join("\n").match(/```markdown\n(?:(?!```)[\s\S])*?\n<!-- [^\n]+ -->\n```/g) ?? [];
+            for (const block of cutMarkdownPreviews) {
               expect(getDiscordTextLength(block)).toBeLessThanOrEqual(FENCED_PREVIEW_MAX_CHARS);
             }
             const slack = DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - totalText;

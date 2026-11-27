@@ -3178,8 +3178,6 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmPromptHeader) + 1;
   const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
-  // Categories share the budget with both prompt previews because five full category slots alone exceed Discord's
-  // 4,000-character message text cap.
   const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 3);
 
   categoriesDisplay.content = categoriesContent(

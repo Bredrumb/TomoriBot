@@ -53,12 +53,19 @@ proposed follow-up's premise in source before suggesting it.
      a constant has its value, what a sentinel or dense regex means, a measured performance
      tradeoff, why a suppression stays, or a constraint someone could break while simplifying.
      Otherwise write none.
-   - Each comment is one sentence. List each added comment and its reason in your final report.
+   - Do not comment a new branch, helper, or field to explain the diff, and do not copy one domain
+     rule across call sites. Put why a change happened in the commit message.
+   - When changing code that has a comment, do not expound the comment to cover the new code: leave
+     it alone if its constraint still holds, remove it if the updated code or a clearer name carries
+     the meaning, or replace it with a shorter constraint if the invariant changed.
+   - Each comment is one sentence with no semicolon-joined clauses (at most 2 lines). List each
+     added comment and its reason in your final report.
    - No step numbering or `Rule N:` scaffolding in comments and JSDoc.
    - No prose em/en dashes or spaced double hyphens in comments, JSDoc, `docs/`, or locale strings.
      Use the punctuation that names the relationship: colon when the second half explains the first,
-     `, so` when causal, parentheses for an aside, period or semicolon between independent clauses,
-     plain hyphen for numeric ranges. In `ja`, use `：`, `。`, and `（）`. Enforced by `prose-dash`.
+     `, so` when causal, parentheses for an aside, period or semicolon between independent clauses
+     in docs and locales, plain hyphen for numeric ranges. In `ja`, use `：`, `。`, and `（）`.
+     Enforced by `prose-dash`.
    - Full policy: `docs/en/contributing/policies/comments.md`. Audit with `bun run audit-comments`.
      For how prose reads, use the `lint-prose` skill.
 3. Keep real identities and meta-dates out of public prose.

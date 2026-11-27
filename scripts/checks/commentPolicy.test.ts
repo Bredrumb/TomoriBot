@@ -315,10 +315,20 @@ describe("new comments", () => {
     "",
   ].join("\n");
 
-  it("limits new comments to two lines and one sentence", () => {
+  it("limits new comments to two lines and one sentence without semicolon-joined clauses", () => {
     expect(
       rulesFor("// The cache stays warm because callers reuse it. Another sentence.\nconst value = true;\n"),
     ).toEqual([["new-multi-sentence", "error"]]);
+    expect(
+      rulesFor(
+        "// The cache stays warm because callers reuse it; a cold miss reloads from disk.\nconst value = true;\n",
+      ),
+    ).toEqual([["new-multi-sentence", "error"]]);
+    expect(
+      rulesFor(
+        "// Escapes &amp; and `echo a; echo b` because https://example.test/a;b=1 stays literal.\nconst value = true;\n",
+      ),
+    ).toEqual([]);
     expect(
       rulesFor(
         "// The cache stays warm because\n// callers reuse it across requests.\n// This continues the rationale.\nconst value = true;\n",
@@ -329,8 +339,97 @@ describe("new comments", () => {
     ]);
   });
 
-  it("leaves an older long block alone when only one of its lines changed", () => {
+  it("checks a two-line block when its second line is edited", () => {
+    const twoLineEdited = [
+      "// The prompt rule against repeats is advisory, so case differences still",
+      "// count as the same subject; symbol-only labels stay distinct.",
+      "const value = true;",
+      "",
+    ].join("\n");
+    expect(rulesFor(twoLineEdited, new Map([["fixture.ts", new Set([2])]]))).toEqual([["new-multi-sentence", "error"]]);
+  });
+
+  it("leaves an older long block alone when only one of its lines changed without expanding", () => {
     expect(rulesFor(FOUR_LINE_BLOCK, new Map([["fixture.ts", new Set([2])]]))).toEqual([]);
+  });
+
+  it("warns when an edit expounds an existing comment instead of leaving, shrinking, or removing it", () => {
+    const baseSource = [
+      "// The prompt rule against repeats is advisory, so case differences still",
+      "// count as the same subject.",
+      "function topicKey(topic: string): string {",
+      "  return topic.toLowerCase();",
+      "}",
+      "",
+    ].join("\n");
+    const expanded = [
+      "// The prompt rule against repeats is advisory, so case differences still",
+      "// count as the same subject, while symbol-only labels keep their symbols.",
+      "function topicKey(topic: string): string {",
+      "  return topic.toLowerCase();",
+      "}",
+      "",
+    ].join("\n");
+    const shortened = [
+      "// Case differences count as the same subject because the prompt rule is advisory.",
+      "function topicKey(topic: string): string {",
+      "  return topic.toLowerCase();",
+      "}",
+      "",
+    ].join("\n");
+    const removed = ["function topicKey(topic: string): string {", "  return topic.toLowerCase();", "}", ""].join("\n");
+
+    expect(
+      inspectCommentPolicySource(expanded, "fixture.ts", {
+        baseSource,
+        changedLines: new Map([["fixture.ts", new Set([2])]]),
+      }).map((finding) => [finding.rule, finding.severity]),
+    ).toEqual([["expounded-comment", "warning"]]);
+    expect(
+      inspectCommentPolicySource(shortened, "fixture.ts", {
+        baseSource,
+        changedLines: new Map([["fixture.ts", new Set([1])]]),
+      }),
+    ).toEqual([]);
+    expect(
+      inspectCommentPolicySource(removed, "fixture.ts", {
+        baseSource,
+        changedLines: new Map([["fixture.ts", new Set([1])]]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("warns when a comment above the same statement is rewritten into a much longer explanation", () => {
+    const baseSource = [
+      "// Return immediately on a pending stop because no fallback runs.",
+      "if (hasStopRequest(channelId)) {",
+      "  return stopResult;",
+      "}",
+      "",
+    ].join("\n");
+    const rewrittenLonger = [
+      "// A pending stop runs no fallback, while the bounded settle still lets",
+      "// already-posted text reach short-term memory when review mode is off.",
+      "if (hasStopRequest(channelId)) {",
+      "  return stopResult;",
+      "}",
+      "",
+    ].join("\n");
+
+    expect(
+      inspectCommentPolicySource(rewrittenLonger, "fixture.ts", {
+        baseSource,
+        changedLines: new Map([["fixture.ts", new Set([1, 2])]]),
+      }).map((finding) => [finding.rule, finding.severity]),
+    ).toEqual([["expounded-comment", "warning"]]);
+  });
+
+  it("catches expanded narration verbs such as Emit, Hold, Skip, and Abort on changed lines", () => {
+    expect(rulesFor("// Emit the buffered chunk\nreturn chunk;\n")).toEqual([["obvious-narration", "error"]]);
+    expect(rulesFor("// Hold the pending token\nreturn null;\n")).toEqual([["obvious-narration", "error"]]);
+    expect(rulesFor("// Abort the active request\nabortController.abort();\n")).toEqual([
+      ["obvious-narration", "error"],
+    ]);
   });
 
   it("warns when a new comment states no reason, without repeating a narration error", () => {
@@ -807,6 +906,10 @@ describe("audit command line", () => {
       await mkdir(join(directory, "src"));
       await writeFile(join(directory, "scripts", "checks", "comment-policy-exceptions.json"), '{"exceptions":[]}');
       await writeFile(join(directory, "src", "committed.ts"), "const value = true;\n");
+      await writeFile(
+        join(directory, "src", "expounded.ts"),
+        "// Return early because the channel is already locked.\nif (isChannelLocked(id)) return;\n",
+      );
       await git("init", "--quiet");
       await git(
         "-c",
@@ -819,13 +922,17 @@ describe("audit command line", () => {
         "-m",
         "base",
       );
-      await git("add", "src/committed.ts");
+      await git("add", "src/committed.ts", "src/expounded.ts");
       await git("-c", "user.name=Mirri", "-c", "user.email=mirri@example.test", "commit", "--quiet", "-m", "file");
       await writeFile(join(directory, "src", "committed.ts"), longBlock);
+      await writeFile(
+        join(directory, "src", "expounded.ts"),
+        "// Return early because the channel is already locked, while queued callers wait for the next drain.\nif (isChannelLocked(id)) return;\n",
+      );
       await writeFile(join(directory, "src", "untracked.ts"), longBlock);
 
       const process = Bun.spawn({
-        cmd: ["bun", "run", join(import.meta.dir, "checkCommentPolicy.ts"), "--base", "HEAD", "src"],
+        cmd: ["bun", "run", join(import.meta.dir, "checkCommentPolicy.ts"), "--base", "HEAD", "--verbose", "src"],
         cwd: directory,
         env: withoutAuditOverrides(),
         stderr: "pipe",
@@ -834,6 +941,7 @@ describe("audit command line", () => {
       const [code, stdout] = await Promise.all([process.exited, new Response(process.stdout).text()]);
 
       expect(stdout).toContain("ERROR src/committed.ts:1 [long-new-comment]");
+      expect(stdout).toContain("WARN src/expounded.ts:1 [expounded-comment]");
       expect(stdout).toContain("ERROR src/untracked.ts:1 [long-new-comment]");
       expect(code).toBe(1);
     } finally {

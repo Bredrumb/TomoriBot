@@ -6,8 +6,6 @@ export interface PersonaAgenda {
   agenda: string;
 }
 
-// Only the newest opener's agenda applies, because older goals would otherwise stack for as long as their openers stay
-// in history.
 export async function loadLatestPersonaAgenda(
   personaId: number | null | undefined,
   messageIds: readonly string[],
@@ -20,7 +18,6 @@ export async function loadLatestPersonaAgenda(
     }
     return latest;
   } catch (error) {
-    // Losing the reminder is acceptable, so a read failure must never block the turn.
     log.warn("Natural Nudges: failed to load agendas for context", error, { personaId });
     return null;
   }

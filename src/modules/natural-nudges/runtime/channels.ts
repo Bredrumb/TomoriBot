@@ -99,7 +99,6 @@ export function isHangingConversation(
   return block.blockMessages.includes(newest);
 }
 
-// Message-proxy webhooks resolve to the member who sent them, so proxied replies count while feed webhooks do not.
 async function includesMemberMessage(messages: readonly Message[]): Promise<boolean> {
   if (messages.some(isHumanMessage)) return true;
   const webhooks = messages.filter((message) => message.webhookId && !message.system);
@@ -112,8 +111,7 @@ export async function hasHumanReplyAfter(channel: GuildTextBasedChannel, openerM
     const following = [...(await channel.messages.fetch({ after: openerMessageId, limit: REPLY_SCAN_LIMIT })).values()];
     if (await includesMemberMessage(following)) return true;
     if (following.length < REPLY_SCAN_LIMIT) return false;
-    // Discord's `after` returns the messages right after the opener, so a full page of bot output there would hide
-    // every later member reply; a full page also means the newest page lies entirely after the opener.
+    // Discord's `after` paginates forward from the opener, so a full page of bot messages would hide later replies.
     return includesMemberMessage([...(await channel.messages.fetch({ limit: REPLY_SCAN_LIMIT })).values()]);
   } catch (error) {
     log.warn(`Natural Nudges: failed to read replies in channel ${channel.id}`, error);

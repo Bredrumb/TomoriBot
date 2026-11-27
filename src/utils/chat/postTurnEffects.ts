@@ -474,8 +474,7 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }
 
-// A provider that answered has billed the call even when no text reached the channel, so only a turn whose every
-// provider call failed gets its unit back.
+// Settles quota when any segment answered because the provider bills the call even if nothing posts to Discord.
 function providerAnswered(result: GenerationTurnResult): boolean {
   return result.streamResults.some(
     (stream) =>

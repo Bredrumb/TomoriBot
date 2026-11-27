@@ -239,8 +239,6 @@ export async function enforceServerTriggerCooldownForAdmission(params: {
 // when it falls back to server.
 export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
   if (isDMChannel || incoming.isStopResponse) return false;
-  // Every occurrence of a member's scheduled task spends the server model, so it charges that member; tasks without a
-  // creator stay exempt.
   if (incoming.reminderData) return incoming.reminderData.created_by_user_id != null;
   return incoming.textQuotaSource === "user";
 }

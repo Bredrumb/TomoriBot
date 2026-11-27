@@ -125,8 +125,7 @@ export class NaturalNudgeProcessor {
   private readonly lullHours = new Map<number, number>();
   private readonly verdictCheckedAt = new Map<number, number>();
   private readonly meters = new Map<number, ServerMeters>();
-  // A reply after an opener never disappears, so only found replies are remembered; a missing one must be re-checked.
-  private readonly reopenedOpeners = new Map<string, string>();
+  private readonly answeredOpenerByChannel = new Map<string, string>();
   private readonly plannerBudget = new NudgeRequestBudget();
   private lastPruneAt = 0;
 
@@ -197,8 +196,6 @@ export class NaturalNudgeProcessor {
     this.notBefore.set(serverId, now.getTime() + hours * HOUR_MS);
   }
 
-  // The pending verdict only covers the server's newest opener for 12 hours, so each channel stays closed until a human
-  // replies after its own last idle nudge.
   private async channelsWithAnsweredOpeners(serverId: number, channels: NudgeChannel[]): Promise<NudgeChannel[]> {
     const openers = await naturalNudgeRepository.loadLatestIdleOpeners(
       serverId,
@@ -208,10 +205,14 @@ export class NaturalNudgeProcessor {
     for (const channel of channels) {
       const channelId = channel.channel.id;
       const opener = openers.get(channelId);
-      if (!opener || opener.answered === true || this.reopenedOpeners.get(channelId) === opener.openerMessageDiscId) {
+      if (
+        !opener ||
+        opener.answered === true ||
+        this.answeredOpenerByChannel.get(channelId) === opener.openerMessageDiscId
+      ) {
         replied.push(channel);
       } else if (await hasHumanReplyAfter(channel.channel, opener.openerMessageDiscId)) {
-        this.reopenedOpeners.set(channelId, opener.openerMessageDiscId);
+        this.answeredOpenerByChannel.set(channelId, opener.openerMessageDiscId);
         replied.push(channel);
       }
     }

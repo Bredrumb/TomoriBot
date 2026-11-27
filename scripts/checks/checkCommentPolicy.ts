@@ -32,16 +32,22 @@ const NUMBERED_PREFIX_PATTERNS = [
 const NUMBERED_LINE_PATTERN = new RegExp(String.raw`^(?://|#)\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`);
 const RULE_HEAD_PATTERN = /^(?:\/\/|\*|#)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
 const ACTION_HEADS = [
+  "Abort",
   "Get",
   "Set",
   "Check",
+  "Clear",
   "Return",
   "Create",
   "Delete",
+  "Emit",
+  "Ensure",
   "Update",
   "Load",
   "Fetch",
+  "Filter",
   "Build",
+  "Hold",
   "Initialize",
   "Validate",
   "Parse",
@@ -51,6 +57,8 @@ const ACTION_HEADS = [
   "Remove",
   "Convert",
   "Apply",
+  "Merge",
+  "Normalize",
   "Start",
   "Stop",
   "Handle",
@@ -62,8 +70,15 @@ const ACTION_HEADS = [
   "Copy",
   "Install",
   "Prepare",
+  "Record",
+  "Reset",
+  "Resolve",
   "Run",
+  "Skip",
   "Switch",
+  "Throw",
+  "Trim",
+  "Wait",
 ];
 const ACTION_HEAD_PATTERN = new RegExp(String.raw`^(?://|#)\s*(?:${ACTION_HEADS.join("|")})\b`);
 const REASON_SIGNALS = [
@@ -101,6 +116,51 @@ const INLINE_SUPPRESSION_PATTERN =
   /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable|yaml-language-server:|shellcheck\s|noqa\b|type:\s*ignore|pyright:|pylint:|ruff:|hadolint\s|pragma:\s*no\s*cover|mypy:|fmt:|isort:/i;
 const TEST_PATH_PATTERN = /(?:^|\/)tests\//;
 const NEW_COMMENT_MAX_LINES = 2;
+const EXPANDED_COMMENT_WORD_DELTA = 5;
+const STOPWORDS = new Set([
+  "after",
+  "also",
+  "and",
+  "are",
+  "because",
+  "before",
+  "but",
+  "can",
+  "cannot",
+  "does",
+  "each",
+  "for",
+  "from",
+  "has",
+  "have",
+  "into",
+  "its",
+  "must",
+  "not",
+  "only",
+  "other",
+  "still",
+  "than",
+  "that",
+  "the",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "this",
+  "those",
+  "through",
+  "until",
+  "was",
+  "when",
+  "where",
+  "which",
+  "while",
+  "with",
+  "without",
+  "would",
+]);
 
 // Thresholds are passed via this interface instead of ambient env reads so self-tests stay deterministic under
 // maintainer overrides.
@@ -140,6 +200,7 @@ export function resolveAuditLimits(): CommentAuditLimits {
 
 export type CommentPolicyRule =
   | "duplicate-comment"
+  | "expounded-comment"
   | "long-comment-block"
   | "long-new-comment"
   | "orphaned-comment"
@@ -167,7 +228,7 @@ export interface CommentPolicyException {
   reason: string;
   rule: Exclude<
     CommentPolicyRule,
-    "obvious-narration" | "redundant-heading" | "stale-exception" | "unexplained-comment"
+    "expounded-comment" | "obvious-narration" | "redundant-heading" | "stale-exception" | "unexplained-comment"
   >;
   text: string;
 }
@@ -179,6 +240,7 @@ interface InspectionAuditBlocks {
 export interface CommentPolicyOptions {
   auditLimits?: CommentAuditLimits;
   auditNarration?: boolean;
+  baseSources?: ReadonlyMap<string, string>;
   changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
   exceptionPath?: string;
   paths?: string[];
@@ -261,7 +323,10 @@ export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Pr
       continue;
     }
 
-    const fileFindings = inspectCommentPolicySource(source, file, options);
+    const fileFindings = inspectCommentPolicySource(source, file, {
+      ...options,
+      baseSource: options.baseSources?.get(file),
+    });
     // Standalone servers, paired installers, and per-cloud workflows cannot import shared helpers, so cross-file
     // duplicate checks stay on TypeScript.
     if (options.auditNarration && !isHashCommentPath(file)) {
@@ -303,7 +368,9 @@ export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Pr
 export function inspectCommentPolicySource(
   source: string,
   file = "fixture.ts",
-  options: Pick<CommentPolicyOptions, "auditLimits" | "auditNarration" | "changedLines"> = {},
+  options: Pick<CommentPolicyOptions, "auditLimits" | "auditNarration" | "changedLines"> & {
+    baseSource?: string;
+  } = {},
 ): CommentPolicyFinding[] {
   const limits = options.auditLimits ?? DEFAULT_AUDIT_LIMITS;
   if (isHashCommentPath(file)) {
@@ -320,6 +387,7 @@ export function inspectCommentPolicySource(
       ...collectHashStructuralCommentFindings(tokens, file),
       ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, limits) : []),
       ...collectNewCommentFindings(source, file, options.changedLines),
+      ...collectExpoundedCommentFindings(source, options.baseSource, file, options.changedLines),
     ];
   }
   assertParseable(source, file);
@@ -334,6 +402,7 @@ export function inspectCommentPolicySource(
     ...collectNewCommentFindings(source, file, options.changedLines).filter(
       (finding) => finding.rule !== "unexplained-comment" || !headings.some((heading) => heading.line === finding.line),
     ),
+    ...collectExpoundedCommentFindings(source, options.baseSource, file, options.changedLines),
   ];
 }
 
@@ -411,8 +480,19 @@ export function collectLongCommentBlockFindings(
     }));
 }
 
-// A block counts as new only when most of its prose lines changed, so a small edit inside an older long block does
-// not force rewriting it.
+function maskCommentDataSpans(prose: string): string {
+  return prose
+    .replace(/`[^`]*`/g, (match) => " ".repeat(match.length))
+    .replace(/https?:\/\/\S+/g, (match) => " ".repeat(match.length))
+    .replace(/&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]{1,15});/gi, (match) => " ".repeat(match.length));
+}
+
+function hasMultipleSentences(prose: string): boolean {
+  const masked = maskCommentDataSpans(prose);
+  return /[.!?]["')\]]*\s+[A-Z]/.test(masked) || /;\s*\S/.test(masked);
+}
+
+// Older long blocks count as new only when most lines changed, so small edits inside them do not force a rewrite.
 export function collectNewCommentFindings(
   source: string,
   file: string,
@@ -422,8 +502,6 @@ export function collectNewCommentFindings(
   if (!changed?.size) {
     return [];
   }
-  const isNew = (lineNumbers: readonly number[]): boolean =>
-    lineNumbers.filter((line) => changed.has(line)).length * 2 > lineNumbers.length;
 
   const findings: CommentPolicyFinding[] = [];
   const lengthFinding = (startLine: number, lineCount: number, text: string): CommentPolicyFinding => ({
@@ -437,17 +515,20 @@ export function collectNewCommentFindings(
 
   const marker = isHashCommentPath(file) ? "#" : "//";
   for (const block of collectCommentBlocks(source, file)) {
-    if (!isNew(block.lineNumbers)) continue;
+    const changedCount = block.lineNumbers.filter((line) => changed.has(line)).length;
+    if (changedCount === 0) continue;
+    if (block.lines.length > NEW_COMMENT_MAX_LINES && changedCount * 2 <= block.lineNumbers.length) continue;
+
     const text = `${marker} ${block.lines[0] ?? ""}`;
     if (block.lines.length > NEW_COMMENT_MAX_LINES) {
       findings.push(lengthFinding(block.startLine, block.lines.length, text));
     }
     const prose = block.lines.join(" ");
-    if (/[.!?]["')\]]*\s+[A-Z]/.test(prose)) {
+    if (hasMultipleSentences(prose)) {
       findings.push({
         file,
         line: block.startLine,
-        message: "Keep one sentence per comment.",
+        message: "Keep one sentence per comment without semicolon-joined clauses.",
         rule: "new-multi-sentence",
         severity: "error",
         text,
@@ -464,6 +545,119 @@ export function collectNewCommentFindings(
         text,
       });
     }
+  }
+
+  return findings;
+}
+
+function contentWords(normalized: string): Set<string> {
+  return new Set(normalized.split(/[^a-z0-9_]+/).filter((word) => word.length >= 3 && !STOPWORDS.has(word)));
+}
+
+function blockAnchorLine(sourceLines: readonly string[], block: CommentBlock, isHash: boolean): string | undefined {
+  const endLine = block.lineNumbers.at(-1) ?? block.startLine;
+  for (let index = endLine; index < Math.min(sourceLines.length, endLine + 4); index += 1) {
+    const trimmed = (sourceLines[index] ?? "").trim();
+    if (!trimmed) continue;
+    if (isHash ? trimmed.startsWith("#") : trimmed.startsWith("//") || trimmed.startsWith("/*")) continue;
+    if (trimmed.length < 8 || /^(?:try|else|\}\s*else|finally|do)\b[\s{]*$/.test(trimmed)) return undefined;
+    return trimmed;
+  }
+  return undefined;
+}
+
+function sharesCommentOrigin(
+  base: CommentBlock,
+  baseAnchor: string | undefined,
+  current: CommentBlock,
+  currentAnchor: string | undefined,
+): boolean {
+  if (baseAnchor && baseAnchor === currentAnchor) {
+    return true;
+  }
+  if (base.normalized.length >= 25 && current.normalized.startsWith(base.normalized.slice(0, 25))) {
+    return true;
+  }
+  const baseWords = contentWords(base.normalized);
+  if (baseWords.size < 3) {
+    return false;
+  }
+  const currentWords = contentWords(current.normalized);
+  let shared = 0;
+  for (const word of baseWords) {
+    if (currentWords.has(word)) shared += 1;
+  }
+  return shared * 2 >= baseWords.size;
+}
+
+export function collectExpoundedCommentFindings(
+  source: string,
+  baseSource: string | undefined,
+  file: string,
+  changedLines: ReadonlyMap<string, ReadonlySet<number>> | undefined,
+): CommentPolicyFinding[] {
+  const changed = changedLines?.get(file);
+  if (!baseSource || !changed?.size) {
+    return [];
+  }
+  const baseBlocks = collectCommentBlocks(baseSource, file).filter((block) => block.words > 0);
+  const currentBlocks = collectCommentBlocks(source, file).filter((block) => block.words > 0);
+  if (baseBlocks.length === 0 || currentBlocks.length === 0) {
+    return [];
+  }
+
+  const unchangedCounts = new Map<string, number>();
+  for (const block of currentBlocks) {
+    if (!block.lineNumbers.some((line) => changed.has(line))) {
+      unchangedCounts.set(block.normalized, (unchangedCounts.get(block.normalized) ?? 0) + 1);
+    }
+  }
+  const editedBase: CommentBlock[] = [];
+  for (const block of baseBlocks) {
+    const remaining = unchangedCounts.get(block.normalized) ?? 0;
+    if (remaining > 0) {
+      unchangedCounts.set(block.normalized, remaining - 1);
+    } else {
+      editedBase.push(block);
+    }
+  }
+  if (editedBase.length === 0) {
+    return [];
+  }
+
+  const isHash = isHashCommentPath(file);
+  const marker = isHash ? "#" : "//";
+  const baseLines = baseSource.split(/\r?\n/);
+  const currentLines = source.split(/\r?\n/);
+  const baseAnchors = editedBase.map((block) => blockAnchorLine(baseLines, block, isHash));
+  const usedBase = new Set<number>();
+  const findings: CommentPolicyFinding[] = [];
+
+  for (const current of currentBlocks) {
+    if (!current.lineNumbers.some((line) => changed.has(line))) continue;
+    if (editedBase.some((base, index) => !usedBase.has(index) && base.normalized === current.normalized)) {
+      const exactIndex = editedBase.findIndex(
+        (base, index) => !usedBase.has(index) && base.normalized === current.normalized,
+      );
+      if (exactIndex !== -1) usedBase.add(exactIndex);
+      continue;
+    }
+    const currentAnchor = blockAnchorLine(currentLines, current, isHash);
+    const matchIndex = editedBase.findIndex(
+      (base, index) => !usedBase.has(index) && sharesCommentOrigin(base, baseAnchors[index], current, currentAnchor),
+    );
+    if (matchIndex === -1) continue;
+    usedBase.add(matchIndex);
+    const base = editedBase[matchIndex];
+    if (!base || current.words < base.words + EXPANDED_COMMENT_WORD_DELTA) continue;
+    findings.push({
+      file,
+      line: current.startLine,
+      message: `This edit expanded an existing comment (${base.words} -> ${current.words} words); leave it alone, remove it if the code now states it, or replace it with a shorter constraint.`,
+      rule: "expounded-comment",
+      severity: "warning",
+      text: `${marker} ${current.lines[0] ?? ""}`,
+    });
   }
 
   return findings;
@@ -1373,16 +1567,19 @@ async function filterGitIgnoredFiles(repoRoot: string, paths: string[]): Promise
 
 // Diffs include working tree and untracked files (or staged changes) because gates run pre-commit when committed-only
 // diffs miss edits.
-async function collectChangedLines(
+async function collectChangedState(
   repoRoot: string,
   mode: { baseRef?: string; staged: boolean },
   paths: string[],
-): Promise<Map<string, Set<number>>> {
+): Promise<{ baseSources: Map<string, string>; changedLines: Map<string, Set<number>> }> {
   const args = ["diff", "--unified=0", "--no-color"];
+  let baseRev: string | undefined;
   if (mode.staged) {
     args.push("--cached");
+    baseRev = (await runGitOptional(repoRoot, ["rev-parse", "--verify", "HEAD"]))?.trim();
   } else if (mode.baseRef) {
-    args.push((await runGit(repoRoot, ["merge-base", mode.baseRef, "HEAD"])).trim());
+    baseRev = (await runGit(repoRoot, ["merge-base", mode.baseRef, "HEAD"])).trim();
+    args.push(baseRev);
   }
   args.push("--", ...paths);
   const stdout = await runGit(repoRoot, args);
@@ -1410,6 +1607,9 @@ async function collectChangedLines(
     changed.set(file, lines);
   }
 
+  const baseCandidates = [...changed.keys()].filter((entry) => isTypeScriptPath(entry) || isHashCommentPath(entry));
+  const baseSources = baseRev ? await loadBaseSources(repoRoot, baseRev, baseCandidates) : new Map<string, string>();
+
   if (!mode.staged) {
     const untracked = await runGit(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...paths]);
     for (const file of untracked.split("\0").filter(Boolean)) {
@@ -1417,7 +1617,70 @@ async function collectChangedLines(
       changed.set(normalizePath(file), new Set(Array.from({ length: lineCount }, (_, index) => index + 1)));
     }
   }
-  return changed;
+  return { baseSources, changedLines: changed };
+}
+
+async function loadBaseSources(repoRoot: string, baseRev: string, files: string[]): Promise<Map<string, string>> {
+  const sources = new Map<string, string>();
+  if (files.length === 0) {
+    return sources;
+  }
+  const proc = Bun.spawn({
+    cmd: ["git", "cat-file", "--batch"],
+    cwd: repoRoot,
+    stderr: "pipe",
+    stdin: "pipe",
+    stdout: "pipe",
+  });
+  proc.stdin.write(`${files.map((file) => `${baseRev}:${file}`).join("\n")}\n`);
+  proc.stdin.end();
+  const [exitCode, rawStdout] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).arrayBuffer(),
+    new Response(proc.stderr).text(),
+  ]);
+  if (exitCode !== 0) {
+    return sources;
+  }
+
+  const bytes = new Uint8Array(rawStdout);
+  const decoder = new TextDecoder();
+  let offset = 0;
+  for (const file of files) {
+    const newline = bytes.indexOf(10, offset);
+    if (newline === -1) break;
+    const header = decoder.decode(bytes.subarray(offset, newline));
+    offset = newline + 1;
+    if (header.endsWith(" missing")) {
+      continue;
+    }
+    const parts = header.split(" ");
+    const kind = parts[1];
+    const size = Number.parseInt(parts[2] ?? "", 10);
+    if (!Number.isSafeInteger(size) || size < 0 || offset + size > bytes.length) {
+      break;
+    }
+    if (kind === "blob") {
+      sources.set(file, decoder.decode(bytes.subarray(offset, offset + size)));
+    }
+    offset += size + (bytes[offset + size] === 10 ? 1 : 0);
+  }
+  return sources;
+}
+
+async function runGitOptional(repoRoot: string, args: string[]): Promise<string | undefined> {
+  const proc = Bun.spawn({
+    cmd: ["git", ...args],
+    cwd: repoRoot,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [exitCode, stdout] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  return exitCode === 0 ? stdout : undefined;
 }
 
 async function runGit(repoRoot: string, args: string[]): Promise<string> {
@@ -1520,14 +1783,15 @@ async function main(): Promise<void> {
     return;
   }
   const paths = args.paths.length ? args.paths : DEFAULT_PATHS;
-  const changedLines =
+  const changedState =
     args.baseRef || args.staged
-      ? await collectChangedLines(repoRoot, { baseRef: args.baseRef, staged: args.staged }, paths)
+      ? await collectChangedState(repoRoot, { baseRef: args.baseRef, staged: args.staged }, paths)
       : undefined;
   const result = await checkCommentPolicy({
     auditLimits: resolveAuditLimits(),
     auditNarration: args.auditNarration,
-    changedLines,
+    baseSources: changedState?.baseSources,
+    changedLines: changedState?.changedLines,
     paths,
     repoRoot,
   });

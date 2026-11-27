@@ -1,8 +1,7 @@
 import { canRunScheduledWork, type ScheduledWorkContext } from "@/timers/scheduledWorkContext";
 import { log } from "@/utils/misc/logger";
 
-// Round due times start many servers' turns at once, and each turn shares this process's database pool, heap, and
-// Discord rate limit with live chat; raise it when `scheduled_work_lanes_full` samples recur.
+// Caps concurrent server lanes so synchronized due times cannot starve live chat, tuned via `scheduled_work_lanes_full`.
 export const MAX_SCHEDULED_WORK_LANES = 16;
 
 export interface ScheduledWorkTask {
@@ -45,7 +44,6 @@ export function startScheduledWorkLanes(
       waiting++;
       continue;
     }
-    // Registering before the first task runs keeps a lane that settles immediately from deleting itself first.
     const lane = Promise.resolve()
       .then(() => runLane(serverId, queue, work))
       .finally(() => {

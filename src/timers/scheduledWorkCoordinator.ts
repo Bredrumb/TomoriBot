@@ -215,8 +215,7 @@ export class ScheduledWorkCoordinator {
     );
   }
 
-  // A lane from a replaced coordinator settles into a stopped instance, so that server waits for the new reconcile
-  // tick (one interval at most); route this through a module-level handler if lease swaps become routine.
+  // After a lease swap, a settling lane waits at most one reconcile tick unless routed through a module-level callback.
   private handleLaneSettled(): void {
     if (!this.isRunning || this.isProcessing) return;
     this.scheduleNextWake(this.createWorkContext()).catch((error) => {
@@ -229,7 +228,6 @@ export class ScheduledWorkCoordinator {
       return;
     }
 
-    // A due row waiting for a free lane would otherwise arm a zero-delay wake that dispatches nothing.
     if (isScheduledWorkLaneCapacityFull()) return;
 
     // Running lanes are skipped because their still-due rows would arm a zero-delay spin until each lane settles.
@@ -243,8 +241,7 @@ export class ScheduledWorkCoordinator {
     const delayMs = Math.max(0, nextDueTime.getTime() - Date.now());
     const clampedDelayMs = Math.min(delayMs, MAX_TIMEOUT_MS);
     const wakeAt = Date.now() + clampedDelayMs;
-    // Refreshes overlap with each other and with immediate runs, so one may only bring the armed wake forward; only a
-    // cycle start or stop cancels a wake.
+    // Overlapping refreshes may only move an armed wake earlier, never push it back.
     if (this.wakeTimeout && this.nextWakeAt && this.nextWakeAt.getTime() <= wakeAt) return;
 
     this.clearWakeTimeout();

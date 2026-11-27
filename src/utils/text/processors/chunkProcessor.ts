@@ -574,8 +574,7 @@ function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
 
   const label = match[1] ?? "";
   const labeledOpening = `\`\`\`${label}\n`;
-  // A label that would leave the code under half of each message is a word run the fence opens with, so it stays in
-  // the content where it cannot shrink the line limit toward zero and stall the split.
+  // Treat an oversized fence label as body text so opening overhead cannot starve maxLineLength.
   const keepsLabel = labeledOpening.length + 3 <= chunkLength / 2;
   const opening = keepsLabel ? labeledOpening : "```\n";
   const content = keepsLabel || !label ? match[2] : `${label}\n${match[2]}`;
@@ -596,7 +595,6 @@ function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
     chunkLines.push(line);
   }
 
-  // The newline before a closing fence leaves one empty line, which alone would post an empty code block.
   if (chunkLines.some((line) => line.length > 0)) chunks.push(`${opening}${chunkLines.join("\n")}\`\`\``);
   return chunks;
 }

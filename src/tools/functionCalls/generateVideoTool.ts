@@ -519,8 +519,7 @@ export class GenerateVideoTool extends BaseTool {
       }
       quotaSpent = true;
 
-      // /kill stops awaiting this tool but cannot stop it, so a native provider that ignores the
-      // signal still finishes here; posting now would deliver a reply the user killed.
+      // A native provider that ignores /kill's abort signal still finishes here, so check again before posting.
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Video generation was cancelled." };
       }
@@ -598,7 +597,6 @@ export class GenerateVideoTool extends BaseTool {
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return notifyProviderToolFailure(context, denied);
       if (context.abortSignal?.aborted) {
-        // Cancellation cannot recall a submitted job, so the provider still bills it and the unit stays spent.
         quotaSpent ||= providerRequested;
         return { success: false, error: "Video generation was cancelled." };
       }

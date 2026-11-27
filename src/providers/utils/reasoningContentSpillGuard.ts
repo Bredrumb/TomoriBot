@@ -120,8 +120,6 @@ export class ReasoningContentSpillGuard {
       return { type: "emit", content: candidate };
     }
 
-    // Emit unchanged because a boundary inside a link belongs to the address, and stripping there loses reply text;
-    // pathless hosts and dotted words like node.js stay unprotected until one is reported.
     if (isInsideLink(core, firstBoundaryIndex)) {
       return { type: "emit", content: candidate };
     }
@@ -147,14 +145,10 @@ export class ReasoningContentSpillGuard {
     const isGluedBoundary = remainder.length === trimmedRemainder.length;
     const fragmentIsMultiWordClause = /\s/u.test(firstSentence.trim());
     if (isGluedBoundary && (looksLikeAnswerStart(trimmedRemainder) || fragmentIsMultiWordClause)) {
-      // Hold while the glued word could still be a streaming domain label because github.com only reads as a link
-      // once its path arrives in a later delta.
       if (
         !isStreamEnd &&
-        core[firstBoundaryIndex] === "." &&
-        /^[\p{L}\p{N}-]+$/u.test(remainder) &&
-        !looksLikeAnswerStart(trimmedRemainder) &&
-        core.length < MAX_PENDING_CONTENT_CHARS
+        core.length < MAX_PENDING_CONTENT_CHARS &&
+        couldGrowIntoSchemelessLink(core[firstBoundaryIndex], remainder, trimmedRemainder)
       ) {
         return { type: "hold" };
       }
@@ -200,6 +194,14 @@ function isInsideLink(text: string, index: number): boolean {
     }
     return false;
   });
+}
+
+function couldGrowIntoSchemelessLink(
+  boundaryChar: string | undefined,
+  remainder: string,
+  trimmedRemainder: string,
+): boolean {
+  return boundaryChar === "." && /^[\p{L}\p{N}-]+$/u.test(remainder) && !looksLikeAnswerStart(trimmedRemainder);
 }
 
 function findFirstSentenceBoundaryIndex(text: string): number {

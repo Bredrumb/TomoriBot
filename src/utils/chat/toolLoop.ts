@@ -676,13 +676,12 @@ async function streamOnce(
     return result.status === "stopped_by_user" && sawStreamProgress ? { ...result, answeredBeforeStop: true } : result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop (such as /kill) runs no fallback, but the bounded settle still lets text the stream already
-      // posted reach short-term memory; a drafted reply was never posted, so it keeps only usage.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         const settled = await settleAbandonedStream(streamPromise);
         return {
           status: "stopped_by_user",
           usage: settled?.usage,
+          // Review mode buffers an unposted draft, so killing it must not write the draft into short-term memory.
           ...(params.context.responseReview
             ? {}
             : {
