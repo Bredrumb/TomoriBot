@@ -66,7 +66,12 @@ afterEach(() => {
   invalidatePersonalSpotlightCache(persona.server_id);
 });
 
-function invocation(voice: boolean, connect: boolean, error?: Error) {
+function invocation(
+  voice: boolean,
+  connect: boolean,
+  error?: Error,
+  me: object = { isCommunicationDisabled: () => false },
+) {
   const fetch = mock(async (): Promise<Collection<string, Message>> => {
     if (error) throw error;
     return new Collection();
@@ -82,7 +87,7 @@ function invocation(voice: boolean, connect: boolean, error?: Error) {
     channel,
     channelId,
     guildId,
-    guild: { id: guildId, members: { me: {} }, channels: { cache: new Map([[channelId, channel]]) } },
+    guild: { id: guildId, members: { me }, channels: { cache: new Map([[channelId, channel]]) } },
   });
   const editReply = fake.interaction.editReply;
   fake.interaction.editReply = async (...args) => {
@@ -144,6 +149,27 @@ describe("/respond history permissions", () => {
     const error = new Error("Network failure");
     const { interaction } = invocation(false, false, error);
     await expect(execute({} as Client, interaction, createUserRow(), "en-US")).rejects.toBe(error);
+  });
+});
+
+describe("/respond delivery blocks", () => {
+  it("tells the invoker the bot is timed out instead of starting a turn admission would drop", async () => {
+    const until = Date.now() + 3_600_000;
+    const { interaction, calls, fetch } = invocation(false, true, undefined, {
+      isCommunicationDisabled: () => true,
+      communicationDisabledUntilTimestamp: until,
+    });
+
+    await execute({} as Client, interaction, createUserRow(), "en-US");
+
+    expect(calls.map((call) => call.method)).not.toContain("deferReply");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(chat.tomoriChat).not.toHaveBeenCalled();
+    expect(description(calls)).toBe(
+      localizedCopy("en-US", "commands.shared.send_blocked.timed_out_description", {
+        time: `<t:${Math.floor(until / 1000)}:f>`,
+      }),
+    );
   });
 });
 

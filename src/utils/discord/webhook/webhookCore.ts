@@ -883,6 +883,7 @@ async function selectManagedWebhookIdentity(
   initialWebhook: Webhook,
   identity: ResolvedWebhookIdentity,
   assertOwned: () => void,
+  preserveWebhook: boolean,
 ): Promise<WebhookIdentitySelection> {
   assertOwned();
   const initialSlot = managedWebhookSlots.get(initialWebhook.id);
@@ -905,6 +906,11 @@ async function selectManagedWebhookIdentity(
         avatarUrl: sanitizeAvatarUrl(identity.avatarUrl) ?? GENERIC_WEBHOOK_AVATAR_URL,
       },
     };
+  }
+
+  if (preserveWebhook) {
+    await ensureWebhookAvatarState(initialSlot.webhook, identity, true, assertOwned);
+    return { webhook: initialSlot.webhook, webhookId: initialWebhook.id, identity };
   }
 
   let rows: ManagedDiscordWebhookRow[];
@@ -1041,6 +1047,7 @@ export async function dispatchWebhookWithIdentity<T>(
   webhook: Webhook,
   identity: ResolvedWebhookIdentity | undefined,
   operation: (selection: WebhookIdentitySelection) => Promise<T>,
+  { preserveWebhook = false } = {},
 ): Promise<WebhookIdentityDelivery<T>> {
   const assertOwned = captureDiscordOwnership(webhook.guildId);
   let operationStarted = false;
@@ -1061,7 +1068,7 @@ export async function dispatchWebhookWithIdentity<T>(
     assertOwned();
     let selection: WebhookIdentitySelection;
     try {
-      selection = await selectManagedWebhookIdentity(webhook, identity ?? {}, assertOwned);
+      selection = await selectManagedWebhookIdentity(webhook, identity ?? {}, assertOwned, preserveWebhook);
     } catch (error) {
       throw new DiscordDeliveryError("pre_dispatch", error);
     }

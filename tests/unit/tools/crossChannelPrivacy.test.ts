@@ -410,7 +410,7 @@ describe("cross-channel request attribution", () => {
         const guild = {
           id: "guild",
           members: {
-            me: {},
+            me: { isCommunicationDisabled: () => false },
             cache: new Collection(),
             fetch: async (id: string) => ({ id, user: { username: id }, roles: { cache: new Collection() } }),
           },

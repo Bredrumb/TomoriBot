@@ -53,8 +53,9 @@ The assembled `GenerationTurnResult` passes back up the chat pipeline:
    the next key or model, which continues the reply from the posted text. Delivered text remains
    in the result on every exit path, so partial replies still reach short-term memory.
 2. **Delivery finalization (`responseSink.finalize`):**
-   Once an attempt succeeds or fallbacks are exhausted, `runGenerationTurn` sends fallback model notices
-   if applicable and invokes `responseSink.finalize(result)` to conclude Discord message streaming.
+   `runGenerationTurn` invokes `responseSink.finalize(result)` to conclude Discord message streaming.
+   A successful fallback can include details for the chat handler to offer in the
+   [reply controls row](/architecture/subsystems/reply-controls/).
 3. **Post-turn effects (`runPostTurnEffects`):**
    The root chat handler (`tomoriChat`) receives the result and runs post-turn effects:
    - Appends `result.personaResponses` to short-term memory dialogue history.

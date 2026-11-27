@@ -4,8 +4,8 @@ export default {
     restarting: `TomoriBot 正在重启。请稍后重试。`,
     reply_controls: {
       unavailable: `回复控制不可用`,
-      only_triggerer: `只有触发这条回复的人可以使用它的控制按钮。`,
-      stale: `这条回复已无法再使用「重试」或「继续」。`,
+      only_triggerer: `只有触发这条回复的人可以重试或继续。`,
+      stale: `这条回复的控制按钮已不可用。`,
       newer_messages: `只有当这条回复是对话中的最后一条消息时，才可以使用这些控制按钮。`,
     },
     panel_notice: {

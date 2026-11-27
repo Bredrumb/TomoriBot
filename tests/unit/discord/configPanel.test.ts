@@ -2,6 +2,7 @@ import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
   CONFIG_CATEGORY_ORDER,
@@ -1630,9 +1631,13 @@ describe("config Behavior pages", () => {
     const member = build(GUILD_MEMBER, { category: "behavior", page: "trigger", behaviorView });
     expect(walk(member).some((component) => component.content?.includes("Cascade limit: 3"))).toBe(false);
     expect(buttonFor(member, { action: "behavior-dtm-set", locale: "en-US", enabled: true })).toBeUndefined();
+
+    const dm = build(DM_OWNER, { category: "behavior", page: "trigger", behaviorView });
+    const nudgesHeading = localizedCopy("en-US", "commands.config.panel.page_plugins_natural_nudges");
+    expect(walk(dm).some((component) => component.content?.includes(`**${nudgesHeading}**`))).toBe(false);
   });
 
-  it("fits reply reaction controls with random triggers and a receipt across locales", () => {
+  it("shows the current reply-control states below the buttons within panel limits", () => {
     expectForEveryLocale((locale) => {
       const trigger = behaviorView.trigger.randomTriggers[0];
       if (!trigger) throw new Error("Expected a random trigger fixture");
@@ -1641,19 +1646,48 @@ describe("config Behavior pages", () => {
         trigger_id: index + 1,
         channel_disc_id: String(300000000000000000n + BigInt(index)),
       }));
-      const payload = build(GUILD_MANAGER, {
-        locale,
-        category: "behavior",
-        page: "trigger",
-        behaviorView: {
-          ...behaviorView,
-          trigger: { ...behaviorView.trigger, randomTriggers, fastRegenerationRetryEnabled: true },
-        },
-        receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
-      });
-      expect(buttonFor(payload, { action: "behavior-retry-set", locale, enabled: false })?.disabled).toBe(false);
-      expect(buttonFor(payload, { action: "behavior-continue-set", locale, enabled: true })?.disabled).toBe(false);
-      expectSafePanelPayload(payload, locale);
+      for (const [retryEnabled, continueEnabled] of [
+        [true, false],
+        [false, true],
+      ] as const) {
+        const payload = build(GUILD_MANAGER, {
+          locale,
+          category: "behavior",
+          page: "trigger",
+          behaviorView: {
+            ...behaviorView,
+            trigger: {
+              ...behaviorView.trigger,
+              randomTriggers,
+              fastRegenerationRetryEnabled: retryEnabled,
+              fastRegenerationContinueEnabled: continueEnabled,
+            },
+          },
+          receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+        });
+        expect(buttonFor(payload, { action: "behavior-retry-set", locale, enabled: !retryEnabled })?.disabled).toBe(
+          false,
+        );
+        const continueRoute = { action: "behavior-continue-set", locale, enabled: !continueEnabled } as const;
+        expect(buttonFor(payload, continueRoute)?.disabled).toBe(false);
+        const seen = walk(payload);
+        const continueIndex = seen.findIndex((component) => component.customId === buildConfigRouteId(continueRoute));
+        const summary = seen[continueIndex + 1]?.content ?? "";
+        expect(summary.split("\n").filter((line) => line.startsWith("> - "))).toHaveLength(2);
+        expect(summary).toMatch(
+          localizedProse(
+            locale,
+            retryEnabled ? "commands.config.panel.retry_reply_on" : "commands.config.panel.retry_reply_off",
+          ),
+        );
+        expect(summary).toMatch(
+          localizedProse(
+            locale,
+            continueEnabled ? "commands.config.panel.continue_reply_on" : "commands.config.panel.continue_reply_off",
+          ),
+        );
+        expectSafePanelPayload(payload, locale);
+      }
     });
   });
 
@@ -1834,27 +1868,62 @@ describe("config Behavior pages", () => {
     });
   });
 
-  it("keeps the overflow removal selector off the ordinary Trigger page", () => {
+  it("fits Natural Nudges below the bounded schedule summary in every locale", () => {
     const first = behaviorView.trigger.randomTriggers[0];
+    const personas = Array.from({ length: RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE + 1 }, (_entry, index) =>
+      makePersona({
+        persona_id: index + 1,
+        persona_nickname: `Persona ${index + 1}`.padEnd(PERSONA_NICKNAME_MAX_LENGTH, "a"),
+      }),
+    );
+    const randomTriggers = Array.from({ length: CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY + 1 }, (_entry, index) => ({
+      ...first,
+      trigger_id: index + 1,
+      persona_id: personas[index % personas.length].persona_id,
+      channel_disc_id: String(300000000000000000n + BigInt(index)),
+      timer_hours: 168,
+      chance_percent: 100,
+    }));
     const overflowingView = {
       ...behaviorView,
-      trigger: {
-        ...behaviorView.trigger,
-        randomTriggers: Array.from({ length: 51 }, (_entry, index) => ({
-          ...first,
-          trigger_id: index + 1,
-        })),
-      },
+      trigger: { ...behaviorView.trigger, randomTriggers },
     };
-    const payload = build(GUILD_MANAGER, { category: "behavior", page: "trigger", behaviorView: overflowingView });
-    expect(buttonFor(payload, { action: "behavior-random-remove-open", locale: "en-US" })).toMatchObject({
-      disabled: false,
+    expectForEveryLocale((locale) => {
+      const remove = { action: "behavior-random-remove-open", locale } as const;
+      const naturalNudges = localizedCopy(locale, "commands.config.panel.page_plugins_natural_nudges");
+      const hint = localizedProse(locale, "commands.config.panel.trigger_natural_nudges_hint", {
+        plugins: localizedCopy(locale, "commands.config.panel.category_plugins"),
+        natural_nudges: naturalNudges,
+      });
+      for (const readStatus of ["fresh", "stale"] as const) {
+        const payload = build(GUILD_MANAGER, {
+          locale,
+          category: "behavior",
+          page: "trigger",
+          personas,
+          readStatus,
+          behaviorView: overflowingView,
+          receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+        });
+        expect(buttonFor(payload, remove)?.disabled).toBe(readStatus === "stale");
+        expect(buttonFor(payload, { action: "behavior-random-remove-select", locale })).toBeUndefined();
+        const seen = walk(payload);
+        expect(seen.some((component) => component.customId?.includes("beh-random-rem-page"))).toBe(false);
+        const summary =
+          seen.find((component) => component.content?.includes(`<#${randomTriggers[0].channel_disc_id}>`))?.content ??
+          "";
+        expect(summary).toMatch(
+          localizedProse(locale, "commands.config.panel.random_trigger_more", {
+            count: randomTriggers.length - 25,
+          }),
+        );
+        const afterRemove =
+          seen[seen.findIndex((component) => component.customId === buildConfigRouteId(remove)) + 1]?.content ?? "";
+        expect(afterRemove).toStartWith(`**${naturalNudges}**\n`);
+        expect(afterRemove).toMatch(hint);
+        expectSafePanelPayload(payload, `${locale}/${readStatus}`);
+      }
     });
-    expect(buttonFor(payload, { action: "behavior-random-remove-select", locale: "en-US" })).toBeUndefined();
-    expect(walk(payload).some((component) => component.customId?.includes("beh-random-rem-page") === true)).toBe(false);
-    expect(walk(payload).some((component) => component.content?.includes("more trigger(s) are on later pages"))).toBe(
-      true,
-    );
   });
 
   it("shows the removal-range selector and Cancel only inside the explicit removal-range state", () => {

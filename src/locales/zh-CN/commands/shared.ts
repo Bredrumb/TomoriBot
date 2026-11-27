@@ -22,5 +22,14 @@ export default {
       main_persona_description: `主人格`,
       alter_persona_description: `副人格`,
     },
+    send_blocked: {
+      cannot_send_title: `我无法在这里发送消息`,
+      cannot_send_description: `我需要这个频道的**查看频道**和**发送消息**权限（子区中则是**在子区中发送消息**）才能在这里回复聊天，目前至少缺少其中一项。请让服务器管理员把这两项权限都授予我。`,
+      missing_permissions_description: `我无法读取自己在这个频道的权限，因此暂时不会在这里回复聊天。请稍后再试；如果一直这样，请检查我的身份组权限。`,
+      timed_out_title: `我被禁言了`,
+      timed_out_description: `有版主在这个服务器里把我禁言了，所以在 {time} 之前 Discord 会拦截我的消息。如果想让我更早回复，请在我的成员资料里解除禁言。`,
+      send_refused_title: `Discord 拒绝了我上一条消息`,
+      send_refused_description: `Discord 拒绝了我在这个频道的上一条消息，通常是因为权限变动或我被禁言了。我会在 {time} 再次尝试这个频道。`,
+    },
   },
 };

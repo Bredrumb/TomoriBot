@@ -1,4 +1,5 @@
 import { BaseGuildTextChannel, type Message } from "discord.js";
+import { isReplyControlMessage } from "@/utils/discord/replyControlMessage";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { log } from "@/utils/misc/logger";
 
@@ -37,7 +38,9 @@ export async function deletePersonaTurnMessages(
   for (const message of blockMessages) {
     const webhookId = message.webhookId;
     if (!webhookId) {
-      directMessages.push(message);
+      if (message.reference?.messageId && isReplyControlMessage(message, channel.client.user?.id))
+        await deleteIndividually(message);
+      else directMessages.push(message);
       continue;
     }
     if (!webhooks.has(webhookId)) {

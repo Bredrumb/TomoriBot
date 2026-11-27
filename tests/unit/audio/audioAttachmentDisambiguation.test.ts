@@ -129,7 +129,7 @@ describe("audioAttachmentDisambiguation", () => {
       const guild = {
         id: guildId,
         preferredLocale: "en-US",
-        members: { cache: { get: () => null } },
+        members: { me: { isCommunicationDisabled: () => false }, cache: { get: () => null } },
       };
 
       const channel = {
@@ -202,7 +202,7 @@ describe("audioAttachmentDisambiguation", () => {
       const guild = {
         id: guildId,
         preferredLocale: "en-US",
-        members: { cache: { get: () => null } },
+        members: { me: { isCommunicationDisabled: () => false }, cache: { get: () => null } },
       };
 
       const incoming = {

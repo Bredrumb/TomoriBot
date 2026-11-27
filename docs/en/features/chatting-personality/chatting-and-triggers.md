@@ -34,14 +34,16 @@ To make the main persona reply to every eligible message in the server without n
 ### Reply controls
 
 Server managers can enable Retry and Continue in `/config` > `Behavior` > `Trigger Behavior` >
-`Reply Controls`. Only the member who prompted a reply can use its buttons, and only while the
-reply is at the end of the conversation. New messages hide the buttons. Deleting those messages
-brings the buttons back if the same unused reply is last again. Using a button, a newer persona
-reply, or `/refresh` retires those controls.
+`Reply Controls`. The member who prompted the reply can use either action. New channel messages
+hide the row below the reply. Deleting those messages brings it back if the same reply is last
+again. An accepted Retry or Continue, a newer persona reply, or `/refresh` retires the row.
 
 - `↻` retries the whole reply by deleting it and asking the same persona to answer again. The bot
   needs `Manage Messages` to delete replies sent under its own account.
 - `→` asks the same persona to continue in a new message.
+- `Fallback Used` shows which model answered and why earlier attempts failed. Anyone who can see
+  the row can open the details and the row stays visible. The button can appear even when Retry and
+  Continue are off.
 
 ### Managing Trigger Words
 <!-- anchor: managing-trigger-words -->

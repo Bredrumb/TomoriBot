@@ -29,6 +29,11 @@ flowchart TD
 is attached, it logs a warning with the error details. Otherwise, it emits an informational log containing
 the disposition and admission reason.
 
+A `"blocked"` disposition for a direct address (a bot mention or a manual trigger) also emits the
+`chat_admission_blocked` metric with the reason, guild ID, and channel ID. Production log files drop info
+logs, so this metric is the only durable record of why a ping went unanswered. Other blocked messages are
+not counted, because admission blocks every message in a channel the bot can read but not post in.
+
 ### Caller notifications and return contract
 
 `tomoriChat()` returns the final `ChatAdmissionDisposition` to its caller:

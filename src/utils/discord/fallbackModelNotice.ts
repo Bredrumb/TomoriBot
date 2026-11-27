@@ -1,30 +1,19 @@
-import type { Message } from "discord.js";
 import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
-import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "@/utils/discord/textDisplayModal";
 import { NOTICE_CONFIG_HINT_KEY } from "@/constants/toolNotices";
-import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
-import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
-import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-
-const FALLBACK_DETAILS_BUTTON_ID = "fallback_notice_details";
-const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
 
 export interface FallbackNoticeAttempt {
   modelCodename: string;
   errorDetail: string;
 }
 
-interface SendFallbackModelUsageNoticeOptions {
-  context: ToolContext;
+export interface FallbackNotice {
+  slot: number;
+  successModelCodename: string;
   failures: FallbackNoticeAttempt[];
-  successModel: LlmRow;
-  // Only true when a personal-credential turn falls back onto the server route because other routes are either
-  // server-owned or user-configured.
-  offerPersonalFallbackOptOut?: boolean;
+  offerPersonalFallbackOptOut: boolean;
 }
 
 // Characters reserved for the description text wrapping the failure list (slot/model prefix line),
@@ -49,7 +38,7 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
 
 // Route lead models missing from the fallback list report the route's first slot because borrowing the failure count
 // would name a slot absent from config.
-export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
+export function resolveFallbackSlot(context: Pick<ToolContext, "tomoriState">, successModel: LlmRow): number {
   const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
     entry.kind === "llm"
       ? entry.model.llm_id === successModel.llm_id
@@ -69,78 +58,20 @@ export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow):
   return 1;
 }
 
-export async function sendFallbackModelUsageNotice({
-  context,
-  failures,
-  successModel,
-  offerPersonalFallbackOptOut = false,
-}: SendFallbackModelUsageNoticeOptions): Promise<void> {
-  const slot = resolveFallbackSlot(context, successModel);
-  const descriptionVars = (locale: string) => ({
-    slot,
-    success_model: successModel.llm_codename,
-    failure_list: buildFailureList(locale, failures),
+export function describeFallbackDetails(locale: string, notice: FallbackNotice): string {
+  return localizer(locale, "genai.fallback_used_details_description", {
+    slot: notice.slot,
+    success_model: notice.successModelCodename,
+    failure_list: buildFailureList(locale, notice.failures),
   });
-  const detailsOptions = {
-    titleKey: "genai.fallback_used_title",
-    descriptionKey: "genai.fallback_used_details_description",
-    descriptionVars: descriptionVars(context.locale),
-    color: ColorCode.INFO,
-  } as const;
+}
 
-  if (!isNoticeEmbedVisible(context.tomoriState.config, "fallback_model_usage")) {
-    await routeHiddenToolNotice(context, detailsOptions, "Fallback model usage notice");
-    return;
-  }
-
-  const renderDetails = (locale: string) => {
-    const optOutFooter = offerPersonalFallbackOptOut
-      ? `\n-# ${localizer(locale, "genai.fallback_used_personal_opt_out_footer")}`
-      : "";
-    return {
-      title: localizer(locale, detailsOptions.titleKey),
-      content: `${localizer(locale, detailsOptions.descriptionKey, descriptionVars(locale))}\n\n-# ${localizer(
-        locale,
-        NOTICE_CONFIG_HINT_KEY,
-      )}${optOutFooter}`,
-    };
+export function renderFallbackDetails(locale: string, notice: FallbackNotice): { title: string; content: string } {
+  const optOutFooter = notice.offerPersonalFallbackOptOut
+    ? `\n-# ${localizer(locale, "genai.fallback_used_personal_opt_out_footer")}`
+    : "";
+  return {
+    title: localizer(locale, "genai.fallback_used_title"),
+    content: `${describeFallbackDetails(locale, notice)}\n\n-# ${localizer(locale, NOTICE_CONFIG_HINT_KEY)}${optOutFooter}`,
   };
-
-  try {
-    const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");
-    const buttonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel);
-    const disabledButtonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel, true);
-
-    // Webhooks target the parent channel, so threadId is required when editing a notice inside a thread.
-    const threadId =
-      "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-        ? context.channel.id
-        : undefined;
-
-    const outcome = await sendToolPersonaPost(context, context.tomoriState, { components: [buttonRow] });
-    if (outcome.status !== "sent") return;
-    const noticeMessage: Message = outcome.message;
-
-    attachTextDisplayModalCollector({
-      message: noticeMessage,
-      customId: FALLBACK_DETAILS_BUTTON_ID,
-      render: renderDetails,
-      timeoutMs: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-      logLabel: "Fallback model details",
-      onExpire: async () => {
-        if (outcome.receipt.route === "webhook") {
-          const author = await resolveAuthoringWebhook(context.channel, outcome.receipt.webhookId, context.webhook);
-          if (!author) throw new Error("Authoring webhook unavailable for fallback notice edit");
-          await author.editMessage(noticeMessage.id, {
-            components: [disabledButtonRow],
-            ...(threadId ? { threadId } : {}),
-          });
-          return;
-        }
-        await noticeMessage.edit({ components: [disabledButtonRow] });
-      },
-    });
-  } catch (error) {
-    log.warn("Failed to send compact fallback model notice", error as Error);
-  }
 }

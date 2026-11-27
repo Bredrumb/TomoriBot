@@ -41,6 +41,7 @@ order.
 
 - [Multi-Persona](/architecture/subsystems/multi-persona/): Main and alter persona configurations,
   lineage scoping, webhook identity masking, and keyword trigger routing.
+- [Reply Controls](/architecture/subsystems/reply-controls/) covers row delivery, visibility, and button interactions.
 - [Persona Presets](/architecture/subsystems/persona-presets/): Seed catalog definitions,
   copy-on-write pointers, asset storage reconciliation, and guild avatar updates.
 - [Natural Nudges](/architecture/subsystems/natural-nudges/): Unprompted idle nudges, the decide, plan,

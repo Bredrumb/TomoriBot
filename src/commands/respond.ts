@@ -22,6 +22,7 @@ import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import { CooldownType } from "@/types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
+import { botSendBlockNotice, resolveBotSendBlock } from "@/utils/discord/botSendBlock";
 
 const RESPOND_PROMPT_MAX_LENGTH = 2000;
 
@@ -110,6 +111,16 @@ export async function execute(
         titleKey: "general.errors.channel_missing_permissions_title",
         descriptionKey: "general.errors.channel_missing_permissions_description",
         color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const sendBlock = resolveBotSendBlock(guildChannel, botMember);
+    if (sendBlock) {
+      await replyInfoEmbed(interaction, locale, {
+        ...botSendBlockNotice(sendBlock),
+        color: ColorCode.WARN,
         flags: MessageFlags.Ephemeral,
       });
       return;

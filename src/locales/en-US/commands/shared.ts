@@ -22,5 +22,14 @@ export default {
       main_persona_description: `Main Persona`,
       alter_persona_description: `Alter Persona`,
     },
+    send_blocked: {
+      cannot_send_title: `I Can't Send Messages Here`,
+      cannot_send_description: `I need **View Channel** and **Send Messages** in this channel (or **Send Messages in Threads** in a thread) to reply to chat here, and at least one is missing. Ask a server manager to grant both.`,
+      missing_permissions_description: `I couldn't read my own permissions in this channel, so I'm not replying to chat here. Try again in a moment, and if this keeps happening, check my role's permissions.`,
+      timed_out_title: `I'm Timed Out`,
+      timed_out_description: `A moderator timed me out in this server, so Discord blocks my messages until {time}. Remove the timeout from my member profile if you want me to reply sooner.`,
+      send_refused_title: `Discord Refused My Last Message`,
+      send_refused_description: `Discord rejected my last message in this channel, usually because a permission changed or I was timed out. I'll try this channel again {time}.`,
+    },
   },
 };

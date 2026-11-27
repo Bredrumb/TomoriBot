@@ -141,6 +141,7 @@ import type { NaturalNudgesPanelState } from "@/modules/natural-nudges/discord/o
 import { buildNaturalNudgesSettingsBody, buildPersonaNudgesBody } from "@/modules/natural-nudges/discord/panel";
 
 const RANDOM_TRIGGER_PAGE_SIZE = CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY;
+const RANDOM_TRIGGER_SUMMARY_LIMIT = 25;
 
 const CHANNEL_PROMPT_MODE_KEYS: Record<ChannelPromptMode, string> = {
   append: "commands.config.panel.channels_overrides_prompt_mode_append",
@@ -2612,19 +2613,8 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       persona.persona_id === undefined ? [] : [[persona.persona_id, persona.persona_nickname] as const],
     ),
   );
-  const triggerPageCount = Math.ceil(view.randomTriggers.length / RANDOM_TRIGGER_PAGE_SIZE);
-  const selectedTriggerPage = Math.min(
-    Math.max(Math.floor((input.randomTriggerPageStart ?? 0) / RANDOM_TRIGGER_PAGE_SIZE), 0),
-    Math.max(triggerPageCount - 1, 0),
-  );
-  const visibleTriggers = view.randomTriggers.slice(
-    selectedTriggerPage * RANDOM_TRIGGER_PAGE_SIZE,
-    (selectedTriggerPage + 1) * RANDOM_TRIGGER_PAGE_SIZE,
-  );
-  const remainingTriggerCount = Math.max(
-    0,
-    view.randomTriggers.length - (selectedTriggerPage + 1) * RANDOM_TRIGGER_PAGE_SIZE,
-  );
+  const visibleTriggers = view.randomTriggers.slice(0, RANDOM_TRIGGER_SUMMARY_LIMIT);
+  const remainingTriggerCount = view.randomTriggers.length - visibleTriggers.length;
   const triggerSummary = visibleTriggers.length
     ? visibleTriggers
         .map((trigger) => {
@@ -2641,6 +2631,14 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
           })}`
         : "")
     : `> ${localizer(locale, "commands.config.panel.none_label")}`;
+  const naturalNudgesTitle = localizer(locale, "commands.config.panel.page_plugins_natural_nudges");
+  const naturalNudgesHint =
+    input.actor.workspaceKind === "guild"
+      ? `**${naturalNudgesTitle}**\n${localizer(locale, "commands.config.panel.trigger_natural_nudges_hint", {
+          plugins: localizer(locale, "commands.config.panel.category_plugins"),
+          natural_nudges: naturalNudgesTitle,
+        })}\n\n`
+      : "";
   components.push(
     {
       type: ComponentType.TextDisplay,
@@ -2672,7 +2670,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
     }),
     {
       type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.trigger_matching_title")}**\n${localizer(
+      content: `${naturalNudgesHint}**${localizer(locale, "commands.config.panel.trigger_matching_title")}**\n${localizer(
         locale,
         "commands.config.panel.trigger_matching_description",
       )}\n> ${localizer(locale, "commands.config.panel.cascade_limit_label")}: ${view.cascadeLimit}\n> ${localizer(
@@ -2816,6 +2814,20 @@ ${localizer(locale, "commands.config.panel.reply_controls_description")}`,
           disabled: writesDisabled,
         },
       ],
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: `> - ${localizer(
+        locale,
+        view.fastRegenerationRetryEnabled
+          ? "commands.config.panel.retry_reply_on"
+          : "commands.config.panel.retry_reply_off",
+      )}\n> - ${localizer(
+        locale,
+        view.fastRegenerationContinueEnabled
+          ? "commands.config.panel.continue_reply_on"
+          : "commands.config.panel.continue_reply_off",
+      )}`,
     },
   );
   return components;

@@ -41,7 +41,7 @@ async function runWelcome(privacyLevel = PrivacyLevel.MINIMAL, takeHandoff = fal
     id: "fixture-guild",
     name: "Lantern Lounge",
     preferredLocale: "en-US",
-    members: { me: null, cache: new Map() },
+    members: { me: { isCommunicationDisabled: () => false }, cache: new Map() },
     channels: { fetch: async () => channel },
   };
   const channel = Object.assign(Object.create(TextChannel.prototype), {

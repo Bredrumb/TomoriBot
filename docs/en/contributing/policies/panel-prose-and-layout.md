@@ -102,6 +102,7 @@ stm_title: `[Short-Term Memory](https://docs.tomoribot.app/en/features/knowledge
 Keep the `/en/` segment, as every docs link in `src/locales/en-US/` does.
 
 ## Selects
+<!-- anchor: selects -->
 
 - Say what the select does above it. If its first option adds something, say so too (`Select or add a
   personal memory below:`), because users do not look inside a dropdown for an add action.

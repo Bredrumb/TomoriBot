@@ -4,8 +4,8 @@ export default {
     restarting: `O TomoriBot está reiniciando. Por favor, tente novamente em breve.`,
     reply_controls: {
       unavailable: `Controle de Resposta Indisponível`,
-      only_triggerer: `Apenas a pessoa que solicitou esta resposta pode usar seus controles.`,
-      stale: `Esta resposta não está mais disponível para Tentar Novamente ou Continuar.`,
+      only_triggerer: `Apenas a pessoa que solicitou esta resposta pode tentar novamente ou continuar.`,
+      stale: `Os controles desta resposta não estão mais disponíveis.`,
       newer_messages: `Esses controles ficam disponíveis quando esta resposta é a última mensagem da conversa.`,
     },
     panel_notice: {

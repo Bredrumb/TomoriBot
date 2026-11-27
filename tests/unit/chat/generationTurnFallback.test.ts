@@ -11,7 +11,6 @@ import type { Client, Message } from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
-import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -24,7 +23,7 @@ import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
 import * as realToolLoop from "@/utils/chat/toolLoop";
-import * as realFallbackModelNotice from "@/utils/discord/fallbackModelNotice";
+import * as toolProgressNotice from "@/utils/discord/toolProgressNotice";
 import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
 import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
 import * as realProviderFactory from "@/utils/provider/providerFactory";
@@ -56,11 +55,6 @@ const rotationKeyQueue: realKeyRotation.SelectedKeyResult[] = [];
 const subscriptionLimits = new Map<string, number>();
 const subscriptionReads: string[] = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
-const fallbackNoticeCalls: Array<{
-  failures: FallbackNoticeAttempt[];
-  successModel: LlmRow;
-  offerPersonalFallbackOptOut: boolean | undefined;
-}> = [];
 const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 const serverSavedConfigLoads: Array<{ serverId: number; provider: string }> = [];
 let personalKeyAvailable = true;
@@ -98,7 +92,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
   "@/utils/db/repositories": realRepositories,
-  "@/utils/discord/fallbackModelNotice": realFallbackModelNotice,
   "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
   "@/utils/provider/personalProviderRuntime": realPersonalProviderRuntime,
   "@/utils/provider/providerFactory": realProviderFactory,
@@ -176,21 +169,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
   serverRepository: overrideMembers(realRepositories.serverRepository, {
     loadServerState: async () => null,
   }),
-}));
-
-scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
-  ...realFallbackModelNotice,
-  sendFallbackModelUsageNotice: async (args: {
-    failures: FallbackNoticeAttempt[];
-    successModel: LlmRow;
-    offerPersonalFallbackOptOut?: boolean;
-  }) => {
-    fallbackNoticeCalls.push({
-      failures: args.failures,
-      successModel: args.successModel,
-      offerPersonalFallbackOptOut: args.offerPersonalFallbackOptOut,
-    });
-  },
 }));
 
 scopedMock.module("@/utils/chat/admissionGuards", () => ({
@@ -799,7 +777,6 @@ describe("runGenerationTurn fallback behavior", () => {
     queuedDeliveries.length = 0;
     toolLoopCalls.length = 0;
     providerConfigCalls.length = 0;
-    fallbackNoticeCalls.length = 0;
     personalSavedConfigLoads.length = 0;
     serverSavedConfigLoads.length = 0;
     personalKeyAvailable = true;
@@ -980,13 +957,33 @@ describe("runGenerationTurn fallback behavior", () => {
     ]);
     expect(emittedErrors).toHaveLength(0);
     expect(finalizedResults).toEqual([fallbackSuccess]);
-    expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.failures).toEqual([
+    expect(result.fallbackNotice?.failures).toEqual([
       { modelCodename: "primary-model", errorDetail: "rate_limit (429)" },
     ]);
-    expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
+    expect(result.fallbackNotice?.successModelCodename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("routes hidden fallback details to the thought log without offering a button", async () => {
+    const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "fallback-model"));
+    context.currentPersona.config.tool_notice_hidden_keys = ["fallback_model_usage"];
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const routeHiddenNotice = spyOn(toolProgressNotice, "routeHiddenToolNotice").mockResolvedValue(true);
+    try {
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      const result = await runGenerationTurn(context, collectingSink());
+
+      expect(result.status).toBe("completed");
+      expect(result.fallbackNotice).toBeUndefined();
+      expect(routeHiddenNotice).toHaveBeenCalledWith(
+        expect.objectContaining({ tomoriState: context.currentPersona }),
+        expect.objectContaining({ titleKey: "genai.fallback_used_title" }),
+        expect.any(String),
+      );
+    } finally {
+      routeHiddenNotice.mockRestore();
+    }
   });
 
   it("retries an interrupted stream once on the same key, continuing the posted text", async () => {
@@ -1043,10 +1040,11 @@ describe("runGenerationTurn fallback behavior", () => {
       finalize: mock(async () => undefined),
     };
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    expect(await runGenerationTurn(context, sink)).toBe(uncertain);
+    const result = await runGenerationTurn(context, sink);
+    expect(result).toBe(uncertain);
     expect(toolLoopCalls).toHaveLength(1);
     expect(queuedResults).toHaveLength(1);
-    expect(fallbackNoticeCalls).toEqual([]);
+    expect(result.fallbackNotice).toBeUndefined();
     expect(timeoutNotices).toEqual([]);
     expect(sink.emitStreamResult).not.toHaveBeenCalled();
     expect(sink.finalize).toHaveBeenCalledWith(uncertain);
@@ -1231,7 +1229,7 @@ describe("runGenerationTurn fallback behavior", () => {
     const sink = collectingSink();
 
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, sink);
+    const result = await runGenerationTurn(context, sink);
 
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
     // The server route keeps the server's own credentials and the server's whole failover tail,
@@ -1247,9 +1245,8 @@ describe("runGenerationTurn fallback behavior", () => {
     ]);
     expect(context.shouldApplyTextQuota).toBe(true);
     expect(context.textQuotaState?.consumed).toBe(false);
-    expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.offerPersonalFallbackOptOut).toBe(true);
-    expect(fallbackNoticeCalls[0]?.failures).toEqual([
+    expect(result.fallbackNotice?.offerPersonalFallbackOptOut).toBe(true);
+    expect(result.fallbackNotice?.failures).toEqual([
       { modelCodename: "personal-primary", errorDetail: "rate_limit (429)" },
     ]);
   });
@@ -1264,7 +1261,7 @@ describe("runGenerationTurn fallback behavior", () => {
     const sink = collectingSink();
 
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, sink);
+    const result = await runGenerationTurn(context, sink);
 
     // Building the server pool eagerly would resolve server provider config and take the server's
     // quota admission for a turn that never leaves the personal route.
@@ -1272,7 +1269,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(textQuotaAdmissions).toHaveLength(0);
     expect(context.shouldApplyTextQuota).toBe(false);
     expect(context.textQuotaState).toBeNull();
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("resolves the server route from the persona's server model rather than the personal overlay", async () => {
@@ -1424,7 +1421,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.shouldApplyTextQuota).toBe(true);
     expect(context.textQuotaState?.consumed).toBe(false);
     expect(result.personaResponses).toHaveLength(0);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("refuses the server model fallback while the server's message cooldown is active", async () => {
@@ -1639,11 +1636,10 @@ describe("runGenerationTurn fallback behavior", () => {
     const sink = collectingSink();
 
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, sink);
+    const result = await runGenerationTurn(context, sink);
 
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "personal-fallback"]);
-    expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.offerPersonalFallbackOptOut).toBe(false);
+    expect(result.fallbackNotice?.offerPersonalFallbackOptOut).toBe(false);
   });
 
   it("keeps the server route's model order when only the personal randomizer is on", async () => {
@@ -1740,12 +1736,12 @@ describe("runGenerationTurn fallback behavior", () => {
     };
 
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, sink);
+    const result = await runGenerationTurn(context, sink);
 
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["primary-model"]);
     expect(personalSavedConfigLoads).toEqual([{ userId: 4, provider: "deepseek" }]);
     expect(emittedErrors).toHaveLength(1);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("continues the timed-out primary's posted text on the fallback model instead of deleting it", async () => {
@@ -1901,7 +1897,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result).toBe(interruptedResult);
     expect(finalizedResults).toEqual([interruptedResult]);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("does not post fallback notice when fallback is stopped by a natural stop", async () => {
@@ -1936,7 +1932,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result).toBe(stoppedResult);
     expect(finalizedResults).toEqual([stoppedResult]);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("abandons the fallback chain when the destination refuses the send for missing access", async () => {
@@ -1966,7 +1962,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result.status).toBe("skipped");
     expect(queuedResults).toHaveLength(1);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("abandons the fallback chain when the destination is reported as deleted", async () => {
@@ -1995,7 +1991,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result.status).toBe("skipped");
     expect(queuedResults).toHaveLength(1);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
   });
 
   it("suppresses completed fallback notice when a follow-up request is already pending", async () => {
@@ -2040,7 +2036,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result).toBe(fallbackSuccess);
     expect(finalizedResults).toEqual([fallbackSuccess]);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
     expect(StreamOrchestrator.hasStopRequest(context.channel.id)).toBe(false);
   });
 
@@ -2089,7 +2085,7 @@ describe("runGenerationTurn fallback behavior", () => {
 
     expect(result).toBe(fallbackSuccess);
     expect(finalizedResults).toEqual([fallbackSuccess]);
-    expect(fallbackNoticeCalls).toHaveLength(0);
+    expect(result.fallbackNotice).toBeUndefined();
     expect(StreamOrchestrator.getAndClearStopContext(context.channel.id)).not.toBeNull();
   });
 

@@ -98,10 +98,10 @@ attempt continues the reply from where the failed one stopped:
 
 - **Suppression during failover**: error embeds are suppressed while further rotation keys or fallback
   models remain available, preventing transient provider hiccups from posting false failure notices.
-- **Fallback notice**: if a fallback model succeeds (`index > 0`), `sendFallbackModelUsageNotice()`
-  renders a compact Discord button notice informing users that a fallback model answered the turn.
-  Each failed attempt is listed by error type and display-safe code only, because context assembly
-  reads the notice back for the model; the upstream message stays in the operator log.
+- A successful fallback can attach details to the generation result for the
+  [reply controls row](/architecture/subsystems/reply-controls/). If the notice is hidden, the
+  thought log can receive it instead. Both surfaces use classified error types and display-safe
+  codes because upstream error text can contain credentials.
 - **Impersonation completion**: provider error results carry `providerFailureReported` after the stream
   handler schedules their report. The impersonation command keeps its safe error reply and skips a
   duplicate report; failures outside that stream path retain command-level error logging.

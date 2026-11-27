@@ -2,6 +2,7 @@ import { applyPromptLayoutInserts } from "@/utils/text/context/promptLayout";
 import { mapWithConcurrency } from "@/utils/async/bounded";
 import { isHistoryWindowMessageDeleted, readChannelHistory, selectAnchoredHistory } from "@/utils/chat/historyWindow";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
+import { isReplyControlMessage } from "@/utils/discord/replyControlMessage";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
@@ -869,6 +870,8 @@ async function buildSimplifiedHistory(
       log.warn(`[fastRegeneration] Could not load history anchor messageId=${trigger.id}`, error);
     }
   }
+  const botUserId = turn.lockedTurn.admission.client.user?.id;
+  messages = messages.filter((message) => !isReplyControlMessage(message, botUserId));
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
   await Promise.all(messages.map(verifyMessageWebhook));

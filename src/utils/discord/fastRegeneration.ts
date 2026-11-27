@@ -2,11 +2,10 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType,
   DiscordAPIError,
+  MessageFlags,
   RESTJSONErrorCodes,
   type Message,
-  type MessageEditOptions,
 } from "discord.js";
 import type { ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { getChannelTurnAbortSignal } from "@/utils/chat/channelQueue";
@@ -17,19 +16,22 @@ import { deletePersonaTurnMessages, tryAcquirePersonaTurnDeletion } from "@/util
 import { log } from "@/utils/misc/logger";
 
 import { buildInteractionRouteId } from "@/utils/discord/interactions/routeRegistry";
+import type { FallbackNotice } from "@/utils/discord/fallbackModelNotice";
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
-import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
+import { isReplyControlMessage, REPLY_CONTROLS_NAMESPACE } from "@/utils/discord/replyControlMessage";
+import { type PersonaPostContext, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
 import { captureDiscordOwnership } from "@/utils/discord/webhook/webhookCore";
 import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
+import { localizer } from "@/utils/text/localizer";
 
-export const REPLY_CONTROLS_NAMESPACE = "reply-controls";
 export const REPLY_CONTROLS_VERSION = "v1";
-const ACTIONS = ["retry", "continue"] as const;
-type Action = (typeof ACTIONS)[number];
+const REGENERATION_LABELS = { retry: "↻", continue: "→" } as const;
+type RegenerationAction = keyof typeof REGENERATION_LABELS;
+type Action = RegenerationAction | "fallback";
 export type FastRegenerationDecline = "unavailable" | "newer-messages";
 
 export interface FastRegenerationRequest {
-  action: Action;
+  action: RegenerationAction;
   replyId: string;
   messageIds: readonly string[];
   relatedDeliveryIds: ReadonlySet<string>;
@@ -44,33 +46,30 @@ interface ControlSurface {
 }
 
 interface ReplyControls {
-  channel: Message["channel"];
+  postContext: PersonaPostContext;
   locale: string;
   botUserId: string | undefined;
-  webhook: NonNullable<ChatTurnContext["responseTarget"]>["webhook"];
   replyId: string;
   trigger: Message;
   userId: string;
-  personaId: number;
+  personaId: number | undefined;
   messageIds: string[];
   relatedDeliveryIds: Set<string>;
   actions: readonly Action[];
-  companionId?: string;
+  fallback?: FallbackNotice;
+  surface?: ControlSurface;
   visible: boolean;
   historyRevision: number;
-  publication: Promise<ControlSurface | undefined>;
+  publication: Promise<void>;
 }
 
 const replyControlsByChannel = new Map<string, ReplyControls>();
 
-function ownsRow(component: Message["components"][number]): boolean {
-  return (
-    component.type === ComponentType.ActionRow &&
-    component.components.some((child) => child.customId?.startsWith(`${REPLY_CONTROLS_NAMESPACE}:`))
-  );
-}
-
-async function isLatestReply(channel: Message["channel"], replyId: string, relatedIds: ReadonlySet<string>) {
+async function isLatestReply(
+  channel: Pick<PersonaPostContext["channel"] | Message["channel"], "messages">,
+  replyId: string,
+  relatedIds: ReadonlySet<string>,
+) {
   const latest = await channel.messages.fetch({
     limit: Math.min(MAX_MESSAGE_FETCH_LIMIT, relatedIds.size + 1),
     cache: false,
@@ -78,14 +77,14 @@ async function isLatestReply(channel: Message["channel"], replyId: string, relat
   return latest.find((message) => !relatedIds.has(message.id))?.id === replyId;
 }
 
-function setControlsVisible(entry: ReplyControls, visible: boolean): Promise<ControlSurface | undefined> {
+function setControlsVisible(entry: ReplyControls, visible: boolean): Promise<void> {
   if (entry.visible === visible) return entry.publication;
   entry.visible = visible;
+  if (visible) entry.surface = undefined;
   entry.publication = entry.publication
-    .then(async (surface) => {
-      if (visible) return publishControls(entry);
-      await surface?.remove();
-      return undefined;
+    .then(async () => {
+      if (visible) entry.surface = await publishControls(entry);
+      else await entry.surface?.remove();
     })
     .catch((error) => {
       if (!(error instanceof DiscordAPIError && error.code === RESTJSONErrorCodes.UnknownMessage)) {
@@ -94,7 +93,6 @@ function setControlsVisible(entry: ReplyControls, visible: boolean): Promise<Con
           error,
         );
       }
-      return undefined;
     });
   return entry.publication;
 }
@@ -112,12 +110,15 @@ export function clearReplyControls(channelId: string): void {
 }
 
 async function reconcileLatestReply(entry: ReplyControls): Promise<void> {
+  const { channel } = entry.postContext;
   const revision = ++entry.historyRevision;
+  await entry.publication;
+  if (entry.historyRevision !== revision || replyControlsByChannel.get(channel.id) !== entry) return;
   const relatedIds = new Set(entry.relatedDeliveryIds);
-  if (entry.companionId) relatedIds.add(entry.companionId);
+  if (entry.surface) relatedIds.add(entry.surface.messageId);
   try {
-    const visible = await isLatestReply(entry.channel, entry.replyId, relatedIds);
-    if (entry.historyRevision === revision && replyControlsByChannel.get(entry.channel.id) === entry) {
+    const visible = await isLatestReply(channel, entry.replyId, relatedIds);
+    if (entry.historyRevision === revision && replyControlsByChannel.get(channel.id) === entry) {
       await setControlsVisible(entry, visible);
     }
   } catch (error) {
@@ -129,13 +130,11 @@ export function observeReplyControlMessage(message: Message): void {
   const entry = replyControlsByChannel.get(message.channelId);
   if (
     !entry ||
+    message.flags.has(MessageFlags.Ephemeral) ||
     BigInt(message.id) <= BigInt(entry.replyId) ||
     entry.relatedDeliveryIds.has(message.id) ||
-    message.id === entry.companionId ||
-    (!message.webhookId &&
-      message.author.id === entry.botUserId &&
-      message.reference?.messageId === entry.replyId &&
-      message.components.some(ownsRow))
+    message.id === entry.surface?.messageId ||
+    isReplyControlMessage(message, entry.botUserId)
   )
     return;
 
@@ -152,29 +151,37 @@ export async function observeReplyControlDeletions(channelId: string, messageIds
       removeControls(channelId, entry);
       return;
     }
-    if (id !== entry.companionId && BigInt(id) > BigInt(entry.replyId)) removedNewerMessage = true;
+    if (id !== entry.surface?.messageId && BigInt(id) > BigInt(entry.replyId)) removedNewerMessage = true;
   }
   if (removedNewerMessage) await reconcileLatestReply(entry);
 }
 
-export async function resolveFastRegeneration(
+export function resolveFallbackDetails(channelId: string, messageId: string): FallbackNotice | undefined {
+  const entry = replyControlsByChannel.get(channelId);
+  return entry?.visible && entry.surface?.messageId === messageId ? entry.fallback : undefined;
+}
+
+export function resolveFastRegeneration(
   channelId: string,
   controlsMessageId: string,
   userId: string,
-  action: Action,
-): Promise<
+  action: RegenerationAction,
+):
   | { status: "denied" | "stale" }
-  | { status: "ready"; trigger: Message; reply: Message; personaId: number; request: FastRegenerationRequest }
-> {
+  | { status: "ready"; trigger: Message; reply: Message; personaId: number; request: FastRegenerationRequest } {
   const entry = replyControlsByChannel.get(channelId);
-  if (!entry?.visible || !entry.actions.includes(action)) return { status: "stale" };
-  const surface = await entry.publication;
-  if (!entry.visible || surface?.messageId !== controlsMessageId || replyControlsByChannel.get(channelId) !== entry) {
+  const surface = entry?.surface;
+  if (
+    !entry?.visible ||
+    surface?.messageId !== controlsMessageId ||
+    entry.personaId === undefined ||
+    !entry.actions.includes(action)
+  ) {
     return { status: "stale" };
   }
   if (entry.userId !== userId) return { status: "denied" };
   const relatedDeliveryIds = new Set(entry.relatedDeliveryIds);
-  if (surface.messageId !== entry.replyId) relatedDeliveryIds.add(surface.messageId);
+  relatedDeliveryIds.add(surface.messageId);
   return {
     status: "ready",
     trigger: entry.trigger,
@@ -185,73 +192,57 @@ export async function resolveFastRegeneration(
       replyId: entry.replyId,
       messageIds: entry.messageIds,
       relatedDeliveryIds,
-      consume: () => entry.visible && removeControls(channelId, entry),
+      consume: () => entry.visible && entry.surface === surface && removeControls(channelId, entry),
     },
   };
 }
 
 async function publishControls(entry: ReplyControls): Promise<ControlSurface | undefined> {
-  const { channel, locale } = entry;
+  const { channel } = entry.postContext;
   const isCurrent = () => entry.visible && replyControlsByChannel.get(channel.id) === entry;
   if (!isCurrent()) return;
-  const assertOwned = captureDiscordOwnership(entry.trigger.guildId);
+  const guildId = entry.trigger.guildId;
+  const assertOwned = captureDiscordOwnership(guildId ?? channel.id, !guildId);
   const reply = await channel.messages.fetch({ message: entry.replyId, cache: false, force: true });
   if (!isCurrent()) return;
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     entry.actions.map((action) =>
       new ButtonBuilder()
-        .setCustomId(buildInteractionRouteId(REPLY_CONTROLS_NAMESPACE, REPLY_CONTROLS_VERSION, action, locale))
-        .setLabel(action === "retry" ? "↻" : "→")
+        .setCustomId(buildInteractionRouteId(REPLY_CONTROLS_NAMESPACE, REPLY_CONTROLS_VERSION, action, entry.locale))
+        .setLabel(
+          action === "fallback"
+            ? localizer(entry.locale, "genai.fallback_used_details_button")
+            : REGENERATION_LABELS[action],
+        )
         .setStyle(ButtonStyle.Secondary),
     ),
   );
-  const existing = reply.components.filter((component) => !ownsRow(component));
-
-  let edit: ((components: NonNullable<MessageEditOptions["components"]>) => Promise<Message>) | undefined;
-  if (reply.webhookId) {
-    const author = await resolveAuthoringWebhook(channel, reply.webhookId, entry.webhook);
-    if (author && (!author.applicationId || author.applicationId === entry.botUserId)) {
-      edit = (components) =>
-        author.editMessage(reply.id, {
-          components,
-          withComponents: true,
-          ...(channel.isThread() ? { threadId: channel.id } : {}),
-        });
-    }
-  } else if (reply.author.id === entry.botUserId) {
-    edit = (components) => reply.edit({ components });
+  const outcome = await sendPersonaPost(
+    {
+      ...entry.postContext,
+      isExecutionCancelled: () => {
+        assertOwned();
+        return !isCurrent();
+      },
+    },
+    { components: [row] },
+  );
+  if (outcome.status === "sent") {
+    const { message, webhook } = outcome;
+    return {
+      messageId: message.id,
+      reply,
+      remove: () => {
+        assertOwned();
+        return webhook
+          ? webhook.deleteMessage(message.id, channel.isThread() ? channel.id : undefined)
+          : message.delete();
+      },
+    };
   }
 
-  if (!isCurrent()) return;
-  if (edit) {
-    const editReply = edit;
-    try {
-      assertOwned();
-      const edited = await editReply([...existing, row]);
-      if (edited.components.some(ownsRow)) {
-        return {
-          messageId: reply.id,
-          reply,
-          remove: async () => {
-            const current = await channel.messages.fetch({ message: reply.id, cache: false, force: true });
-            const remaining = current.components.filter((component) => !ownsRow(component));
-            if (remaining.length === current.components.length) return;
-            assertOwned();
-            await editReply(remaining);
-          },
-        };
-      }
-    } catch (error) {
-      if (
-        !reply.webhookId ||
-        !(error instanceof DiscordAPIError && error.code === RESTJSONErrorCodes.InvalidFormBodyOrContentType)
-      )
-        throw error;
-    }
-  }
-
-  if (channel.isDMBased() || !channel.isSendable() || !isCurrent()) return;
+  if (!reply.webhookId || outcome.status === "unconfirmed" || !isCurrent()) return;
   const controlsMessage = await sendChannelMessageOnce(
     channel,
     {
@@ -260,10 +251,10 @@ async function publishControls(entry: ReplyControls): Promise<ControlSurface | u
       allowedMentions: { repliedUser: false },
     },
     () => {
+      assertOwned();
       if (!isCurrent()) throw new DOMException("Reply controls were superseded", "AbortError");
     },
   );
-  entry.companionId = controlsMessage.id;
   return {
     messageId: controlsMessage.id,
     reply,
@@ -286,52 +277,61 @@ export async function offerFastRegeneration(context: ChatTurnContext, result: Ge
     removeControls(channel.id, previous);
   }
 
+  if (result.status !== "completed" || !channel.isSendable() || channel.partial) return;
+  const receipts = context.streamingContext.deliveryReceipts ?? [];
+  const delivery = receipts.find((receipt) => receipt.messageId === reply.messageId);
+  if (!delivery) return;
+
   const incoming = context.turn.lockedTurn.admission.incoming;
   const personaId = currentPersona.persona_id;
-  if (
-    result.status !== "completed" ||
-    result.personaResponses.length === 0 ||
-    !message.guildId ||
-    personaId === undefined ||
-    incoming.textQuotaSource !== "user" ||
-    incoming.isPersonaJob ||
-    incoming.isUserImpersonation ||
-    incoming.isStopResponse ||
-    incoming.naturalNudge ||
-    incoming.sceneTurn ||
-    incoming.reminderRecipientID ||
-    incoming.reminderData ||
-    incoming.borrowsTriggerMessage ||
-    (!incoming.manualTriggerInvoker && (message.author.bot || message.author.id !== userDiscId))
-  )
-    return;
+  const canRegenerate =
+    result.personaResponses.length > 0 &&
+    Boolean(message.guildId) &&
+    personaId !== undefined &&
+    incoming.textQuotaSource === "user" &&
+    !incoming.isPersonaJob &&
+    !incoming.isUserImpersonation &&
+    !incoming.isStopResponse &&
+    !incoming.naturalNudge &&
+    !incoming.sceneTurn &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData &&
+    !incoming.borrowsTriggerMessage &&
+    (incoming.manualTriggerInvoker || (!message.author.bot && message.author.id === userDiscId));
 
   const config = currentPersona.config;
-  const actions = ACTIONS.filter((action) =>
-    action === "retry" ? config.fast_regeneration_retry_enabled : config.fast_regeneration_continue_enabled,
-  );
+  const actions: Action[] = [];
+  if (canRegenerate && config.fast_regeneration_retry_enabled) actions.push("retry");
+  if (canRegenerate && config.fast_regeneration_continue_enabled) actions.push("continue");
+  if (result.fallbackNotice) actions.push("fallback");
   if (actions.length === 0) return;
 
   const messageIds = [...new Set(refs.map((ref) => ref.messageId))];
   const entry: ReplyControls = {
-    channel,
+    postContext: {
+      channel,
+      persona: currentPersona,
+      deliveryMode: context.streamingContext.deliveryMode,
+      webhook: context.responseTarget?.webhook,
+      followupTo: delivery,
+    },
     locale: context.locale,
     botUserId: context.client.user?.id,
-    webhook: context.responseTarget?.webhook,
     replyId: reply.messageId,
     trigger: message,
     userId: userDiscId,
     personaId,
     messageIds,
     relatedDeliveryIds: new Set(
-      (context.streamingContext.deliveryReceipts ?? [])
+      receipts
         .filter((receipt) => receipt.channelId === channel.id && BigInt(receipt.messageId) > BigInt(reply.messageId))
         .map((receipt) => receipt.messageId),
     ),
     actions,
+    fallback: result.fallbackNotice,
     visible: false,
     historyRevision: 0,
-    publication: Promise.resolve(undefined),
+    publication: Promise.resolve(),
   };
   replyControlsByChannel.set(channel.id, entry);
   await reconcileLatestReply(entry);

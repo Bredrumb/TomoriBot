@@ -29,6 +29,7 @@ import {
   offerFastRegeneration,
   prepareFastRegeneration,
 } from "@/utils/discord/fastRegeneration";
+import { isReplyControlMessage } from "@/utils/discord/replyControlMessage";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 
 export {
@@ -234,6 +235,7 @@ async function runAdmittedChatTurn(
 }
 
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
+  if (isReplyControlMessage(message, client.user?.id)) return;
   observeReplyControlMessage(message);
   // Discord's ChannelPinnedMessage carries a context messageReference rather than a conversational reply, so skip it
   // before triggering.

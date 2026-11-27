@@ -11,6 +11,7 @@ import { invalidateUserCache } from "@/utils/cache/userCache";
 import {
   evaluateChatAdmission,
   evaluateMessageProxyOriginalSpeedbump,
+  handleChatDisposition,
   normalizeChatInvocation,
   resolveAdmissionChannelScope,
   resolveReferencedMessage,
@@ -39,6 +40,7 @@ import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
 import { clearMessageProxyGuildPresenceStateForTests } from "@/utils/messageProxy/guildPresence";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
+import { log } from "@/utils/misc/logger";
 import {
   clearMessageProxyExpectationStateForTests,
   createMessageProxyExpectation,
@@ -1235,6 +1237,54 @@ describe("shutdown chat admission", () => {
       expect(entry.pendingHistoryReplay).toBeUndefined();
     } finally {
       channelLocks.delete(channelId);
+    }
+  });
+});
+
+describe("handleChatDisposition blocked metric", () => {
+  it("counts blocked direct addresses but not ordinary chatter or ignored messages", async () => {
+    const metricSpy = spyOn(log, "metric").mockImplementation(() => {});
+    const mentionsBot = new Map([["tomori", {}]]);
+    const cases = [
+      { label: "blocked mention", disposition: "blocked", mentions: mentionsBot, manual: false, counted: true },
+      { label: "blocked manual trigger", disposition: "blocked", mentions: new Map(), manual: true, counted: true },
+      { label: "blocked chatter", disposition: "blocked", mentions: new Map(), manual: false, counted: false },
+      { label: "ignored mention", disposition: "ignore", mentions: mentionsBot, manual: false, counted: false },
+    ] as const;
+    const failures = collectCaseFailures();
+
+    try {
+      for (const testCase of cases) {
+        metricSpy.mockClear();
+        await handleChatDisposition({
+          incoming: {
+            client: { user: { id: "tomori" } },
+            message: {
+              guildId: "300000000000000041",
+              channelId: "300000000000000042",
+              mentions: { users: testCase.mentions },
+            },
+            isManuallyTriggered: testCase.manual,
+          } as unknown as ChatIncoming,
+          disposition: testCase.disposition,
+          locale: "en-US",
+          reason: "bot_timed_out_in_guild",
+        });
+        failures.check(testCase.label, () => {
+          if (testCase.counted) {
+            expect(metricSpy).toHaveBeenCalledWith("chat_admission_blocked", {
+              reason: "bot_timed_out_in_guild",
+              guildId: "300000000000000041",
+              channelId: "300000000000000042",
+            });
+          } else {
+            expect(metricSpy).not.toHaveBeenCalled();
+          }
+        });
+      }
+      failures.expectNoFailures();
+    } finally {
+      metricSpy.mockRestore();
     }
   });
 });

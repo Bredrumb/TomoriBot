@@ -3,7 +3,9 @@ import { stubAllShardOwnership } from "../../helpers/shardOwnership";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  ButtonStyle,
   Collection,
+  ComponentType,
   RateLimitError,
   Webhook,
   type BaseGuildTextChannel,
@@ -46,9 +48,9 @@ import {
 import { sendPersonaPost, recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { attachShowMarkdownCollector } from "@/utils/discord/markdownTableButton";
-import { sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
+import { buildTextDisplayModalRow } from "@/utils/discord/textDisplayModal";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { personaSpriteMessageRepository } from "@/utils/db/repositories/PersonaSpriteMessageRepository";
 import { deliverVoiceMessage, postVoiceTranscriptCaption } from "@/utils/discord/webhook/voiceMessageDelivery";
 import { createExpressionDeliveryState, deliverExpression } from "@/utils/chat/expressionDelivery";
@@ -730,7 +732,11 @@ describe("managed local avatar dispatch", () => {
     expect(encoded).not.toContain("data:image");
   });
 
-  it("records a managed stream's generic avatar and keeps following persona posts and notices on that appearance", async () => {
+  const replyControls = {
+    components: [buildTextDisplayModalRow([{ customId: "reply-controls:v1:fallback:en-US", label: "Fallback Used" }])],
+  };
+
+  it("records a managed stream's generic avatar and keeps following persona posts and reply controls on that appearance", async () => {
     const pool = makePool();
     const primary = await pool.primary(avatarA);
     primary.edit.mockImplementation(async () => {
@@ -775,16 +781,15 @@ describe("managed local avatar dispatch", () => {
       },
       { content: "artifact" },
     );
-    await sendFallbackModelUsageNotice({
-      context: {
-        channel: stream.channel,
-        webhook: primary,
-        tomoriState: stream.context.tomoriState,
-        locale: "en-US",
-      } as unknown as ToolContext,
-      failures: [],
-      successModel: createLlmRow(),
-    });
+    await sendPersonaPost(
+      {
+        channel: stream.channel as unknown as SendableChannel,
+        persona: stream.context.tomoriState,
+        webhook: primary as unknown as Webhook,
+        followupTo: stream.context.deliveryReceipts?.[0],
+      },
+      replyControls,
+    );
     expect(pool.delivered.map((delivery) => delivery.avatar)).toEqual([
       GENERIC_WEBHOOK_AVATAR_URL,
       GENERIC_WEBHOOK_AVATAR_URL,
@@ -793,8 +798,8 @@ describe("managed local avatar dispatch", () => {
     expect(primary.edit).toHaveBeenCalledTimes(1);
   });
 
-  it("returns or records the generic delivered identity for independent persona posts, fallback notices, and tool replies", async () => {
-    for (const caller of ["persona", "notice", "reply"] as const) {
+  it("returns or records the generic delivered identity for independent persona posts, reply controls, and tool replies", async () => {
+    for (const caller of ["persona", "controls", "reply"] as const) {
       clearWebhookCache();
       clearAllChannelDeliveryContinuity();
       const pool = makePool();
@@ -818,25 +823,23 @@ describe("managed local avatar dispatch", () => {
           },
           { content: "artifact" },
         );
-      } else if (caller === "notice") {
-        recordPersonaDelivery({
-          channelId: stream.channel.id,
-          messageId: "_previous",
-          route: "webhook",
-          webhookId: primary.id,
-          identity: { username: "Juno", avatarDataUri: avatarB },
-          speaker: { personaId: 2, kind: "appearance" },
-        });
-        await sendFallbackModelUsageNotice({
-          context: {
-            channel: stream.channel,
-            webhook: primary,
-            tomoriState: stream.context.tomoriState,
-            locale: "en-US",
-          } as unknown as ToolContext,
-          failures: [],
-          successModel: createLlmRow(),
-        });
+      } else if (caller === "controls") {
+        await sendPersonaPost(
+          {
+            channel: stream.channel as unknown as SendableChannel,
+            persona: stream.context.tomoriState,
+            webhook: primary as unknown as Webhook,
+            followupTo: {
+              channelId: stream.channel.id,
+              messageId: "_previous",
+              route: "webhook",
+              webhookId: primary.id,
+              identity: { username: "Juno", avatarUrl: GENERIC_WEBHOOK_AVATAR_URL },
+              speaker: { personaId: 2, kind: "appearance" },
+            },
+          },
+          replyControls,
+        );
       } else {
         if (!stream.context.replyToMessage) throw new Error("Missing reply fixture");
         const delivery = await sendPersonaPost(
@@ -1015,8 +1018,8 @@ describe("managed local avatar dispatch", () => {
     }
   });
 
-  it("disables embed, expand, table, and fallback buttons through the authoring pool webhook after cache restoration", async () => {
-    for (const artifact of ["embed", "expand", "table", "fallback"] as const) {
+  it("disables embed, expand, and table buttons through the authoring pool webhook after cache restoration", async () => {
+    for (const artifact of ["embed", "expand", "table"] as const) {
       clearWebhookCache();
       clearAllChannelDeliveryContinuity();
       const pool = makePool();
@@ -1072,36 +1075,13 @@ describe("managed local avatar dispatch", () => {
           { titleKey: "genai.fallback_used_title" },
           "purpose ".repeat(40),
         );
-      } else if (artifact === "table") {
+      } else {
         const message = await sendWebhookMessageWithIdentity(
           primary as unknown as Webhook,
           { threadId: channel.id },
           { username: "Juno", avatarDataUri: avatarB },
         );
         attachShowMarkdownCollector(message, "en-US", primary as unknown as Webhook, channel.id);
-      } else {
-        recordChannelDeliveredWebhookIdentity(
-          channel.id,
-          { username: "Juno", avatarDataUri: avatarB },
-          "_previous",
-          { personaId: 2, kind: "appearance" },
-          primary.id,
-        );
-        await sendFallbackModelUsageNotice({
-          context: {
-            channel,
-            webhook: primary,
-            tomoriState: createPersona({
-              persona_id: 2,
-              persona_nickname: "Juno",
-              webhook_avatar_url: avatarB,
-              is_alter: true,
-            }),
-            locale: "en-US",
-          } as unknown as ToolContext,
-          failures: [],
-          successModel: createLlmRow(),
-        });
       }
       expect(pool.collectors).toHaveLength(1);
       Object.defineProperty(pool.messages.get("_message_1"), "channel", { value: null });
@@ -1115,6 +1095,36 @@ describe("managed local avatar dispatch", () => {
       expect(pool.messages.get("_message_1")?.edit).not.toHaveBeenCalled();
       mock.restore();
     }
+  });
+
+  it("posts a restored controls row through the webhook that delivered its thread reply", async () => {
+    const pool = makePool();
+    const primary = await pool.primary(avatarA);
+    const extra = await pool.store("_extra", "avatar_pool_1", avatarB);
+    const stream = makeStream(pool, primary as unknown as Webhook);
+    const { channel } = stream.context;
+    await stream.updater.sendSinglePayload(
+      { content: "reply", identityOverride: { username: "Juno", avatarDataUri: avatarB } },
+      "reply",
+      stream.context,
+      stream.state,
+    );
+    const reply = stream.context.deliveryReceipts?.[0];
+    if (!reply) throw new Error("Missing reply receipt");
+    expect(reply.webhookId).toBe(extra.id);
+    await extra.edit({ avatar: avatarA });
+    const alternate = await pool.store("_alternate", "avatar_pool_2", avatarB);
+    clearWebhookCache();
+
+    const row = await sendPersonaPost(
+      { channel, persona: stream.context.tomoriState, webhook: stream.context.webhook, followupTo: reply },
+      replyControls,
+    );
+    if (row.status !== "sent") throw new Error("Missing row receipt");
+    expect(row.receipt).toMatchObject({ webhookId: extra.id, identity: reply.identity });
+    expect(pool.delivered.at(-1)).toMatchObject({ username: "Juno", avatar: avatarB, threadId: channel.id });
+    expect(row.webhook?.id).toBe(extra.id);
+    expect(alternate.send).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1351,6 +1361,32 @@ describe("managed local avatar dispatch", () => {
     spyOn(personaCache, "getCachedMainPersona").mockResolvedValue(main);
     spyOn(personaCache, "getCachedAllPersonas").mockResolvedValue([main, alter]);
     if (action === "turn") {
+      const rowId = "123456789012345679";
+      const deleteRow = mock(async () => {
+        pool.messages.delete(rowId);
+      });
+      pool.messages.set(rowId, {
+        ...sent,
+        id: rowId,
+        author: { id: pool.channel.client.user.id, bot: true },
+        webhookId: null,
+        content: "",
+        reference: { messageId: sent.id },
+        components: [
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                label: "Fallback Used",
+                customId: "reply-controls:v1:fallback:en-US",
+              },
+            ],
+          },
+        ],
+        delete: deleteRow,
+      } as unknown as Message);
       const { interaction, calls } = makeFakeInteraction({
         guild: { id: pool.channel.guildId, members: { me: null } },
         guildId: pool.channel.guildId,
@@ -1365,6 +1401,7 @@ describe("managed local avatar dispatch", () => {
         "en-US",
       );
       expect(calls[0].method).toBe("deferReply");
+      expect(deleteRow).toHaveBeenCalledTimes(1);
     } else {
       const result = await new ManageMessageTool().execute(
         { action, message_id: sent.id, ...(action === "edit" ? { content: "after" } : {}) },

@@ -60,14 +60,6 @@ export function buildTextDisplayModal({ customId, title, content }: TextDisplayM
   return modal;
 }
 
-export function buildTextDisplayModalButton(
-  customId: string,
-  label: string,
-  disabled = false,
-): ActionRowBuilder<ButtonBuilder> {
-  return buildTextDisplayModalRow([{ customId, label }], disabled);
-}
-
 export function buildTextDisplayModalRow(
   buttons: TextDisplayModalButtonSpec[],
   disabled = false,

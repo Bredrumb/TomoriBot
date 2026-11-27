@@ -4,8 +4,8 @@ export default {
     restarting: `TomoriBotは再起動中です。しばらくしてからもう一度お試しください。`,
     reply_controls: {
       unavailable: `返信コントロールを利用できません`,
-      only_triggerer: `この返信をトリガーした本人のみがコントロールを使用できます。`,
-      stale: `この返信では再試行または続行を使用できなくなりました。`,
+      only_triggerer: `この返信を再試行または続行できるのは、返信を促した本人だけです。`,
+      stale: `この返信のコントロールは利用できなくなりました。`,
       newer_messages: `これらのコントロールは、この返信が会話の最後のメッセージである場合に使用できます。`,
     },
     panel_notice: {
