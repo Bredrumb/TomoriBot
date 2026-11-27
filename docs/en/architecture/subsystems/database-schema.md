@@ -198,7 +198,7 @@ flowchart TD
   - `server_nsfw_configs`: jailbreak toggles and content filters.
   - `server_byok_configs`: bring-your-own-key permissions.
   - `server_memory_configs`: memory retrieval limits and decay parameters.
-  - `server_stm_configs`: STM render mode, refresh cadence, and injection depths.
+  - `server_stm_configs`: STM render mode, refresh cadence, injection depth, and summarizer instructions override.
 
 Speech selections reference either `custom_endpoints` or `speech_models` for each mode, with
 `ON DELETE SET NULL`. Database validation checks server ownership, model mode, scoped registration,
@@ -342,7 +342,8 @@ Natural Nudges stores events and derives its meters on read
 - **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User and nullable
   `topic` for the idle planner's 1-200 character subject. Active Nudge
   rows (`mode = 'active'`) have no topic, category, or verdict and set `detour` when another persona took the
-  turn. Pruned after 30 days.
+  turn. Pruned after 30 days, except each channel's latest idle row, which the reply gate still reads; it
+  keeps its fields but loses `topic` and `target_user_id`.
 - **`natural_nudge_agendas`**: hidden agendas keyed by `(message_disc_id, persona_id)`. Pruned after
   90 days; `target_user_id` cascades so erasing a user removes agendas built from their data.
 

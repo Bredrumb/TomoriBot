@@ -20,7 +20,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
           {
             delta: {
               tool_calls: [
-                { index: 0, id: "call_1", function: { name: "update_short_term_memory", arguments: '{"scene"' } },
+                { index: 0, id: "call_1", function: { name: "create_thread", arguments: '{"thread_name"' } },
               ],
             },
           },
@@ -38,7 +38,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
                 {
                   index: 0,
                   function: {
-                    arguments: ': "hallway", "bodies": "Noah: coat still on',
+                    arguments: ': "Tea break", "first_message": "The kettle is ready.',
                   },
                 },
               ],
@@ -50,7 +50,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
     );
 
     expect(finished.type).toBe("function_call");
-    expect(finished.functionCall?.args).toEqual({ scene: "hallway" });
+    expect(finished.functionCall?.args).toEqual({ thread_name: "Tea break" });
     expect(finished.functionCall?.id).toBe("call_1");
     expect(finished.functionCall?.argumentsTruncated).toBe(true);
   });
@@ -60,7 +60,7 @@ describe("streamed tool arguments truncated mid-payload", () => {
     const open = adapter.processChunk(
       makeAnthropicChunk("content_block_start", {
         index: 0,
-        content_block: { type: "tool_use", id: "toolu_1", name: "update_short_term_memory" },
+        content_block: { type: "tool_use", id: "toolu_1", name: "create_thread" },
       }),
     );
     expect(open.type).toBe("text");
@@ -68,14 +68,14 @@ describe("streamed tool arguments truncated mid-payload", () => {
     adapter.processChunk(
       makeAnthropicChunk("content_block_delta", {
         index: 0,
-        delta: { type: "input_json_delta", partial_json: '{"scene": "hallway", "bodies": "Noah: coat' },
+        delta: { type: "input_json_delta", partial_json: '{"thread_name": "Tea break", "first_message": "The kettle' },
       }),
     );
 
     const finished: ProcessedChunk = adapter.processChunk(makeAnthropicChunk("content_block_stop", { index: 0 }));
 
     expect(finished.type).toBe("function_call");
-    expect(finished.functionCall?.args).toEqual({ scene: "hallway" });
+    expect(finished.functionCall?.args).toEqual({ thread_name: "Tea break" });
     expect(finished.functionCall?.id).toBe("toolu_1");
     expect(finished.functionCall?.argumentsTruncated).toBe(true);
   });

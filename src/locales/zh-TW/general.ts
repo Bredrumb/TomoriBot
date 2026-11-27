@@ -4,8 +4,8 @@ export default {
     restarting: `TomoriBot 正在重新啟動。請稍後再試。`,
     reply_controls: {
       unavailable: `無法使用回覆控制`,
-      only_triggerer: `只有觸發這則回覆的人可以使用它的控制項。`,
-      stale: `這則回覆已無法再使用重試或繼續。`,
+      only_triggerer: `只有觸發這則回覆的人可以重試或繼續。`,
+      stale: `這則回覆的控制項已無法使用。`,
       newer_messages: `只有當這則回覆是對話中的最後一則訊息時，才能使用這些控制項。`,
     },
     panel_notice: {

@@ -1120,6 +1120,7 @@ export function buildSetupSettingsModal(
   locale: string,
   nonce: string,
   catalogs: SetupSettingsCatalogs,
+  context: SetupDraftContext,
   existing?: SetupDraftStartingSettings | null,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   const modalNonce = Date.now().toString(36);
@@ -1246,7 +1247,7 @@ export function buildSetupSettingsModal(
             label: localizer(locale, SETUP_FEATURE_KEYS[feature].label),
             description: localizer(locale, SETUP_FEATURE_KEYS[feature].description),
             value: feature,
-            default: existing ? existing.features.includes(feature) : feature !== "short_term_memory",
+            default: existing?.features.includes(feature) ?? (context === "guild" || feature !== "short_term_memory"),
           })),
         },
       },

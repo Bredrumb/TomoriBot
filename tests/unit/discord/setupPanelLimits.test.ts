@@ -90,7 +90,7 @@ function getContainerComponents(
 describe("setupPanel Components V2 layout and limits", () => {
   it("offers the agreed feature checklist within modal limits and restores saved selections in every locale", () => {
     expectForEveryLocale((locale) => {
-      const initial = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS);
+      const initial = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS, "guild");
       expect(validateRawModalLimits(initial).violations).toEqual([]);
       const group = initial.components.at(-1)?.component;
       expect(group?.type).toBe(22);
@@ -107,9 +107,14 @@ describe("setupPanel Components V2 layout and limits", () => {
         "user_info_updates",
         "short_term_memory",
       ]);
-      expect(group?.options?.filter((option) => option.default).map((option) => option.value)).toEqual(
-        SETUP_FEATURES.filter((feature) => feature !== "short_term_memory"),
-      );
+      expect(group?.options?.filter((option) => option.default).map((option) => option.value)).toEqual([
+        ...SETUP_FEATURES,
+      ]);
+      const dmSettings = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS, "dm");
+      expect(
+        dmSettings.components.at(-1)?.component?.options?.find((option) => option.value === "short_term_memory")
+          ?.default,
+      ).toBe(false);
       for (const feature of SETUP_FEATURES) {
         const option = group?.options?.find((entry) => entry.value === feature);
         const labelKey = `commands.setup.wizard.settings_features.${feature}.label`;
@@ -124,7 +129,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       if (!startingSettings) throw new Error("Expected completed starting settings");
       for (const features of [[], ["expressions", "short_term_memory"]] as const) {
         const existing = { ...startingSettings, features: [...features] };
-        const reopened = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS, existing);
+        const reopened = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS, "guild", existing);
         expect(validateRawModalLimits(reopened).violations).toEqual([]);
         expect(
           reopened.components

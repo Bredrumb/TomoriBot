@@ -6,7 +6,7 @@ aiGenerated: false
 
 *Bản dịch này chỉ nhằm mục đích thuận tiện cho bạn tham khảo. Trong trường hợp có sự mâu thuẫn giữa bản dịch và bản tiếng Anh, bản tiếng Anh sẽ được ưu tiên áp dụng.*
 
-Cập nhật lần cuối: 2026-10-22
+Cập nhật lần cuối: 2026-11-27
 
 Chính sách này áp dụng cho TomoriBot chính thức được host trên Discord, gồm sử dụng cá nhân, trong Máy chủ và các yêu cầu được tài trợ. Nếu bạn self-hosting TomoriBot, bạn kiểm soát dữ liệu của mình; chính sách này không áp dụng cho bản sao đó.
 
@@ -81,7 +81,7 @@ Các dịch vụ này có thể xử lý dữ liệu ngoài quốc gia của b�
 | Bản tóm tắt bộ nhớ ngắn hạn | Mặc định 90 ngày sau hoạt động gần nhất |
 | Nhật ký lỗi | 90 ngày |
 | Bản ghi hiệu suất và mã định danh tin nhắn bot | 30 ngày |
-| Bản ghi Natural Nudges | 30 ngày; mục tiêu riêng của persona tối đa 90 ngày |
+| Bản ghi Natural Nudges | 30 ngày; mục tiêu riêng của persona tối đa 90 ngày; gợi ý gần nhất của mỗi kênh được giữ lại, không kèm thành viên được tag hoặc chủ đề, cho đến khi một gợi ý mới hơn trong kênh đó thay thế |
 | Bản ghi cập nhật thành viên Patreon | Mặc định 30 ngày |
 | Bản ghi đăng nhập Patreon đã hoàn tất hoặc hết hạn | Mặc định đủ điều kiện xóa sau một giờ |
 | Chi tiết sử dụng gói đăng ký | 90 ngày; bản ghi kỳ hiện tại giữ đến khi kỳ kết thúc nếu muộn hơn |

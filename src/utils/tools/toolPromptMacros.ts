@@ -1,5 +1,4 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
-import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { expandDeliberateToolAllowedNames, isToolAllowedByDeliberateMode } from "@/utils/tools/deliberateToolMode";
 import { applyToolActionAvailability, getActionSelector, getAvailableToolSelectors } from "@/utils/tools/toolActions";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -33,7 +32,6 @@ export interface ToolPromptMacroContext {
   capabilities?: PromptCapabilityValues | null;
   deliberateToolAllowedNames?: readonly string[] | null;
   streamContext?: StreamingContext;
-  availableToolNames?: ReadonlySet<string> | null;
 }
 
 export interface ToolPromptMacroResolver {
@@ -50,7 +48,6 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{capabilities_tool}": "review_capabilities",
   "{memory_tool}": "create_long_term_memory",
   "{memory_update_tool}": "update_long_term_memory",
-  "{short_term_memory_tool}": "update_short_term_memory",
   "{task_tool}": "create_task",
   "{task_update_tool}": "update_task",
   "{cross_channel_tool}": "cross_channel_message",
@@ -157,22 +154,6 @@ export function resolvePromptCapabilityValues(
     user_blocking: config.user_blocking_enabled,
     short_term_memory: config.short_term_memory_enabled,
     time_awareness: config.time_awareness_enabled,
-  };
-}
-
-export function resolvePromptCapabilityValuesFromToolState(state: ToolStateForContext): PromptCapabilityValues {
-  return {
-    tool_use: state.llm.has_tools,
-    self_teaching: state.config.self_teaching_enabled,
-    sticker_usage: state.config.sticker_usage_enabled,
-    web_search: state.config.web_search_enabled,
-    manage_message: state.config.manage_message_enabled,
-    thread_creation: state.config.thread_creation_enabled,
-    image_generation: state.config.imagegen_enabled,
-    video_generation: state.config.videogen_enabled,
-    voice_message: state.config.voice_message_enabled,
-    user_blocking: state.config.user_blocking_enabled,
-    short_term_memory: true,
   };
 }
 
@@ -284,30 +265,6 @@ async function loadToolPromptMacroAvailability(
   }
 
   try {
-    const preloadedToolNames = context?.availableToolNames;
-    if (preloadedToolNames) {
-      const guildToolNames = await loadGuildToolFamilyNames(stateForContext.server_id).catch(() => ({
-        webSearch: [],
-        urlFetcher: [],
-      }));
-      const families = Object.fromEntries([
-        ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
-        ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
-      ]);
-      const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(
-        context?.deliberateToolAllowedNames,
-        families,
-      );
-      const availableToolNames = deliberateToolAllowedNames
-        ? new Set([...preloadedToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
-        : new Set(preloadedToolNames);
-      return {
-        availableToolNames,
-        guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => availableToolNames.has(name)),
-        guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => availableToolNames.has(name)),
-      };
-    }
-
     const {
       builtInTools,
       mcpFunctionNames,
@@ -345,20 +302,6 @@ async function loadToolPromptMacroAvailability(
     log.warn("[ToolPromptMacros] Failed to load tool availability for prompt macro expansion", error);
     return fallbackAvailability;
   }
-}
-
-async function loadGuildToolFamilyNames(serverId: string): Promise<{ webSearch: string[]; urlFetcher: string[] }> {
-  const parsedServerId = Number.parseInt(serverId, 10);
-  if (!Number.isFinite(parsedServerId)) {
-    return { webSearch: [], urlFetcher: [] };
-  }
-
-  const guildMcpManager = getGuildMcpManager();
-  const { routes } = await guildMcpManager.getGuildMCPRouting(parsedServerId);
-  return {
-    webSearch: [...routes].filter(([, route]) => route.config.server_type === "web_search").map(([name]) => name),
-    urlFetcher: [...routes].filter(([, route]) => route.config.server_type === "url_fetcher").map(([name]) => name),
-  };
 }
 
 function resolveWebSearchToolName(availability: ToolPromptMacroAvailability): string | null {

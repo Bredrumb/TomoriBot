@@ -116,7 +116,6 @@ describe("seeded turn anchor in history", () => {
         contextItems: [],
         tailDirectives: [],
         lowerPriorityTailDirectives: [],
-        nudgeInjectionDepth: 0,
         messageIdMap: new MessageIdMap(),
       }),
     ];

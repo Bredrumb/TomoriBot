@@ -103,13 +103,13 @@ export interface StreamResult {
   // Scoped to one tool-loop request so turn totals must sum across segments, while omission signals
   // character-estimate fallback when providers omit usage.
   usage?: TokenUsage;
-  // A stop that lands after the provider began answering still leaves a billed call, so quota keeps the unit.
   answeredBeforeStop?: boolean;
 }
 
 export interface ProviderConfig {
   model: string;
   apiKey: string;
+  endpointUrl?: string;
   temperature: number;
   disabledParams?: SupportedParam[];
   maxOutputTokens?: number;

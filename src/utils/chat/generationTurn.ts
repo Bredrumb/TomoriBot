@@ -9,10 +9,16 @@ import type { StreamingContext, ToolContext } from "@/types/tool/interfaces";
 import { resolveRouteTextModel } from "@/utils/provider/textModelSelection";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
-import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
+import {
+  describeFallbackDetails,
+  type FallbackNotice,
+  type FallbackNoticeAttempt,
+  resolveFallbackSlot,
+} from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
+import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
@@ -150,6 +156,7 @@ async function runGenerationAttempts(
     context.streamingContext.deliveredMessageRefs ??= [];
     const carried: DeliveredTurnOutput = { text: "", details: "", streamResults: [] };
     let supersededResult: GenerationTurnResult | undefined;
+    let deliveringAttempt: GenerationTurnResult["answeringAttempt"];
     // Starting index of the server fallback route (null until used) so the receipt knows when to offer personal
     // fallback opt-out.
     let serverRouteStartIndex: number | null = null;
@@ -186,7 +193,6 @@ async function runGenerationAttempts(
         isUserImpersonation: context.isUserImpersonation,
         tomoriState: attempt.tomoriState,
         streamContext: context.streamingContext,
-        sendsTools: (attempt.providerConfig.tools?.length ?? 0) > 0,
       });
 
       let rotationKeyId = attempt.rotationKeyId;
@@ -262,6 +268,18 @@ async function runGenerationAttempts(
             attempt.activity,
           ),
         );
+        if (result.personaResponses.length > 0) {
+          const { apiKey, model, endpointUrl } = attempt.providerConfig;
+          deliveringAttempt = {
+            providerName: attempt.provider.getInfo().name,
+            modelCodename: attempt.tomoriState.llm.llm_codename,
+            providerConfig: { apiKey, model },
+            endpointUrl,
+            activity: attempt.activity,
+            usageContext: context.usageContext,
+            credentialSource: attempt.credentialSource,
+          };
+        }
         supersededResult = result;
         if (carried.text && result.status === "empty_response" && !isRetryableEmptyResponse(result)) {
           result = { ...result, status: "completed" };
@@ -374,11 +392,15 @@ async function runGenerationAttempts(
       }
 
       if (!isRetryableStatus || index === attempts.length - 1) {
+        let fallbackNotice: FallbackNotice | undefined;
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
-          await sendFallbackNoticeIfNeeded(context, attempt, failures, {
-            offerPersonalFallbackOptOut: serverRouteStartIndex !== null && index >= serverRouteStartIndex,
-          });
+          fallbackNotice = await resolveFallbackNotice(
+            context,
+            attempt,
+            failures,
+            serverRouteStartIndex !== null && index >= serverRouteStartIndex,
+          );
         } else if (context.supporterProviderFailure && (result.status === "error" || result.status === "timeout")) {
           await sendSupporterFailureNotice(context);
         }
@@ -398,6 +420,8 @@ async function runGenerationAttempts(
         // After the errors are emitted, because a carried attempt's error was suppressed for the
         // retry and must not surface as a second embed.
         const finalResult = prependDeliveredOutput(result, context, carried);
+        if (fallbackNotice) finalResult.fallbackNotice = fallbackNotice;
+        if (finalResult.personaResponses.length > 0) finalResult.answeringAttempt = deliveringAttempt;
         if (context.responseReview) finalResult.usageEntries = context.responseReview.usage;
         await responseSink.finalize(finalResult);
         return finalResult;
@@ -793,18 +817,26 @@ async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: S
   }
 }
 
-async function sendFallbackNoticeIfNeeded(
+async function resolveFallbackNotice(
   context: ChatTurnContext,
   attempt: GenerationAttempt,
   failures: FallbackNoticeAttempt[],
-  options: { offerPersonalFallbackOptOut: boolean },
-): Promise<void> {
+  offerPersonalFallbackOptOut: boolean,
+): Promise<FallbackNotice | undefined> {
   if (context.isUserImpersonation || failures.length === 0 || !context.shouldSurfaceUserErrors) {
     return;
   }
 
-  await sendFallbackModelUsageNotice({
-    context: {
+  const notice: FallbackNotice = {
+    slot: resolveFallbackSlot({ tomoriState: context.currentPersona }, attempt.successModel),
+    successModelCodename: attempt.successModel.llm_codename,
+    failures,
+    offerPersonalFallbackOptOut,
+  };
+  if (isNoticeEmbedVisible(context.currentPersona.config, "fallback_model_usage")) return notice;
+
+  await routeHiddenToolNotice(
+    {
       channel: context.channel as ToolContext["channel"],
       client: context.client,
       message: context.message,
@@ -818,10 +850,13 @@ async function sendFallbackNoticeIfNeeded(
       personaUsername: context.responseTarget?.personaUsername,
       personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
     },
-    failures,
-    successModel: attempt.successModel,
-    offerPersonalFallbackOptOut: options.offerPersonalFallbackOptOut,
-  });
+    {
+      titleKey: "genai.fallback_used_title",
+      description: describeFallbackDetails(context.locale, notice),
+      color: ColorCode.INFO,
+    },
+    "Fallback model usage notice",
+  );
 }
 
 async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Promise<void> {
@@ -1147,8 +1182,7 @@ function extractErrorCode(streamResult: StreamResult | undefined): string {
   return String(record.code ?? record.type ?? record.message ?? streamResult?.status ?? "unknown");
 }
 
-// Public fallback notices carry only classified codes because upstream error text can echo request headers and is
-// read back into model context.
+// Fallback details carry only classified codes because upstream error text can echo request headers.
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
   if (data && typeof data === "object" && !(data instanceof Error) && "type" in data) {
@@ -1163,15 +1197,9 @@ async function prepareProviderContextItems(args: {
   isUserImpersonation: boolean;
   tomoriState: TomoriState;
   streamContext: StreamingContext;
-  // Must come from the built provider config rather than tomoriState because a provider's live capability catalog can
-  // withdraw tools the state still allows.
-  sendsTools: boolean;
 }): Promise<StructuredContextItem[]> {
   const deliberateToolAllowedNames = args.streamContext.deliberateToolAllowedNames;
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, deliberateToolAllowedNames);
-  if (!args.sendsTools) {
-    contextItems = contextItems.filter((item) => !item.requiresToolCalling);
-  }
 
   // Adapt verbatim schemas and nudge independently into new arrays per fallback attempt, because contexts can carry
   // the nudge even when no tool schemas resolve.
@@ -1261,7 +1289,7 @@ function injectVerbatimToolDefinitionsItem(
 // DIALOGUE_HISTORY items are counted rather than messages (unlike stage 11) because only tags remain recoverable here
 // and approximate tail placement suffices.
 function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
-  const nudgeItem: StructuredContextItem = {
+  const verbatimNudge: StructuredContextItem = {
     role: "user",
     parts: [{ type: "text", text: VERBATIM_NUDGE_CONTEXT_TEXT }],
     metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
@@ -1281,7 +1309,7 @@ function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredCont
     }
     dialogueSeen += 1;
   }
-  return [...items.slice(0, insertionIndex), nudgeItem, ...items.slice(insertionIndex)];
+  return [...items.slice(0, insertionIndex), verbatimNudge, ...items.slice(insertionIndex)];
 }
 
 function dropOldestHistoryExchangePairs(

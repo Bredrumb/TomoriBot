@@ -764,6 +764,28 @@ class NaturalNudgeRepository {
     return rows.map((row) => row.topic);
   }
 
+  async loadLatestIdleOpeners(
+    serverId: number,
+    channelDiscIds: readonly string[],
+  ): Promise<Map<string, { openerMessageDiscId: string; answered: boolean | null }>> {
+    const openers = new Map<string, { openerMessageDiscId: string; answered: boolean | null }>();
+    if (channelDiscIds.length === 0) return openers;
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ channel_disc_id: string; opener_message_disc_id: string; answered: boolean | null }>>`
+      SELECT DISTINCT ON (channel_disc_id) channel_disc_id, opener_message_disc_id, answered
+      FROM natural_nudge_fires
+      WHERE server_id = ${serverId} AND mode = 'idle'
+        AND channel_disc_id = ANY(${sql.array([...channelDiscIds], "TEXT")})
+      ORDER BY channel_disc_id, fired_at DESC
+    `,
+      "load latest idle nudge openers",
+    );
+    for (const row of rows) {
+      openers.set(row.channel_disc_id, { openerMessageDiscId: row.opener_message_disc_id, answered: row.answered });
+    }
+    return openers;
+  }
+
   async setFireAnswered(fireId: number, answered: boolean): Promise<void> {
     await sql`UPDATE natural_nudge_fires SET answered = ${answered} WHERE fire_id = ${fireId} AND answered IS NULL`;
   }
@@ -895,10 +917,30 @@ class NaturalNudgeRepository {
 
   async pruneBefore(firesBefore: Date, agendasBefore: Date): Promise<{ fires: number; agendas: number }> {
     const [fires, agendas] = await Promise.all([
-      sql`DELETE FROM natural_nudge_fires WHERE fired_at < ${firesBefore} RETURNING fire_id`,
+      this.pruneFiresBefore(firesBefore),
       sql`DELETE FROM natural_nudge_agendas WHERE created_at < ${agendasBefore} RETURNING message_disc_id`,
     ]);
-    return { fires: fires.length, agendas: agendas.length };
+    return { fires, agendas: agendas.length };
+  }
+
+  // Retains each channel's latest idle row so the reply gate still works after 30-day privacy pruning clears its fields.
+  private async pruneFiresBefore(before: Date): Promise<number> {
+    const deleted = await sql`
+      WITH kept AS (
+        SELECT DISTINCT ON (server_id, channel_disc_id) fire_id
+        FROM natural_nudge_fires
+        WHERE mode = 'idle'
+        ORDER BY server_id, channel_disc_id, fired_at DESC, fire_id DESC
+      )
+      DELETE FROM natural_nudge_fires
+      WHERE fired_at < ${before} AND fire_id NOT IN (SELECT fire_id FROM kept)
+      RETURNING fire_id
+    `;
+    await sql`
+      UPDATE natural_nudge_fires SET topic = NULL, target_user_id = NULL
+      WHERE fired_at < ${before} AND (topic IS NOT NULL OR target_user_id IS NOT NULL)
+    `;
+    return deleted.length;
   }
 }
 

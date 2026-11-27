@@ -35,7 +35,11 @@ const BOT_ID = "100000000000000005";
 const WEBHOOK_ID = "100000000000000006";
 
 function setup() {
-  const guild = { id: GUILD_ID, preferredLocale: "en-US", members: { cache: new Map() } };
+  const guild = {
+    id: GUILD_ID,
+    preferredLocale: "en-US",
+    members: { me: { isCommunicationDisabled: () => false }, cache: new Map() },
+  };
   const channel: TextChannel = Object.assign(Object.create(TextChannel.prototype), {
     id: CHANNEL_ID,
     guild,

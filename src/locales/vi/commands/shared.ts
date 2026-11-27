@@ -22,5 +22,14 @@ export default {
       main_persona_description: `Persona chính`,
       alter_persona_description: `Persona alter`,
     },
+    send_blocked: {
+      cannot_send_title: `Mình không thể gửi tin nhắn ở đây`,
+      cannot_send_description: `Mình cần quyền **Xem kênh** và **Gửi tin nhắn** trong kênh này (hoặc **Gửi tin nhắn trong chủ đề** nếu ở trong chủ đề) để trả lời ở đây, nhưng hiện đang thiếu ít nhất một quyền. Hãy nhờ người quản lý máy chủ cấp cả hai quyền.`,
+      missing_permissions_description: `Mình không thể đọc quyền của mình trong kênh này, nên mình không trả lời ở đây. Hãy thử lại sau giây lát, và nếu tình trạng này vẫn tiếp diễn, hãy kiểm tra quyền vai trò của mình.`,
+      timed_out_title: `Mình đang bị hạn chế`,
+      timed_out_description: `Một điều hành viên đã hạn chế mình trong máy chủ này, nên Discord chặn tin nhắn của mình cho đến {time}. Hãy xóa hạn chế khỏi hồ sơ thành viên của mình nếu bạn muốn mình trả lời sớm hơn.`,
+      send_refused_title: `Discord đã từ chối tin nhắn gần nhất của mình`,
+      send_refused_description: `Discord đã từ chối tin nhắn gần nhất của mình trong kênh này, thường do quyền hạn thay đổi hoặc mình bị hạn chế. Mình sẽ thử lại ở kênh này {time}.`,
+    },
   },
 };

@@ -172,7 +172,6 @@ async function buildTurnContext(
         nativeContextItems: options.nativeContext ? [...contextItems] : undefined,
         tailDirectives: [],
         lowerPriorityTailDirectives: [],
-        nudgeInjectionDepth: 0,
         messageIdMap: new MessageIdMap(),
       };
     }),
@@ -193,6 +192,13 @@ describe("Natural Nudges turn context", () => {
     const agenda = context.simplifiedMessages.find((message) => message.id === "synthetic-nudge-agenda-persona-last");
     expect(agenda?.isSystemNotice).toBe(true);
     expect(context.simplifiedMessages.find((message) => message.id === "persona-last")?.isSystemNotice).toBe(false);
+  });
+
+  it("leaves the previous opener's agenda out of a new idle opener, which carries its own goal", async () => {
+    const { context } = await buildTurnContext({ toolNames: [], opensIdleNudge: true }, { agenda: "Check the map" });
+    expect(context.simplifiedMessages.some((message) => message.id === "synthetic-nudge-agenda-persona-last")).toBe(
+      false,
+    );
   });
 
   it("admits the idle nudge's tools under Deliberate Tool Mode", async () => {

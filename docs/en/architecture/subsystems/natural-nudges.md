@@ -68,7 +68,8 @@ flowchart TD
   proc -->|"failure or unanswered stop?"| stop["stop"]
   proc --> heat["heat → idle nudges per day → due time, level's daily cap, waking hours"]
   heat --> lull["lull: effective channels quiet for 1-3 hours (gateway lastMessageId)"]
-  lull --> model["planner model: llm_id, else chat model;<br/>no_model abort and backoff unless it resolves"]
+  lull --> replied["drop channels whose last idle opener has no human reply since;<br/>awaiting_reply abort and backoff when none remain"]
+  replied --> model["planner model: llm_id, else chat model;<br/>no_model abort and backoff unless it resolves"]
   model --> persona["persona raffle → persona scope filter →<br/>channel sample → channel/tool eligibility"]
   persona --> cat["category raffle → target lottery when required →<br/>full prerequisites → weighted nudge shortlist<br/>(Play Scene: one shared partner draw and compatible channels)"]
   cat --> detached["detached: planIdleNudge → recheckBeforeSend →<br/>tomoriChat({ naturalNudge, sceneTurn? })"]
@@ -92,9 +93,13 @@ hours come from `stat_counters`:
   decays from its full value.
 - **Waking hours** come from 30 days of `active_hour`, with a fixed local night below 50 turns.
 
-Each delivered idle fire stores its planner topic until the fire is pruned after 30 days; Active Nudge
+Each delivered idle fire stores its planner topic for 30 days. Pruning then deletes the fire, except
+each channel's latest idle fire, which the reply gate needs and which keeps no topic or target; Active Nudge
 fires leave it null. The planner sees the lead persona's five latest idle topics in this server as
 escaped data and must avoid repeating a subject, declining if every fitting nudge would repeat one.
+That rule is advisory, so `planIdleNudge` also declines a plan whose topic matches one of those
+entries once case, spacing, and punctuation are ignored (`planner_repeated_topic`). The schema asks
+the planner to copy an entry's wording when the subject matches, which keeps that check reliable.
 
 Human `/reward` turns contribute three times as much heat as an ordinary turn; `/punish` contributes
 once. Their `message_sent` rows use `reward` or `punish` as the metric key and still count as one
@@ -117,7 +122,14 @@ times. Token and model stats still record.
   `active_hour` with the channel ID (a thread's parent), and turns that borrow a trigger skip it, so
   only human-triggered turns make a channel eligible. 14 days is heat's horizon; with stat tracking
   off, the automatic set stays empty along with heat. Idle planning excludes channels where the bot
-  lacks send permission. Fire-time admission still enforces send permission, the channel whitelist,
+  lacks send permission, and channels whose last idle opener has no human reply after it
+  (`loadLatestIdleOpeners` with `hasHumanReplyAfter`). The pending verdict covers only the server's
+  newest opener for 12 hours, so this per-channel check is what stops a nudge from landing on an
+  ignored one. `hasHumanReplyAfter`, which also decides that verdict, reads the page right after the
+  opener and, when that page is full, the newest page too, because Discord's `after` never reaches
+  past a long run of bot messages. Webhook messages count as replies only when they resolve to a
+  member through message-proxy attribution. The processor remembers a found reply per channel and
+  opener, so a reopened channel is not re-read on every lull. Fire-time admission still enforces send permission, the channel whitelist,
   and persona access.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
@@ -236,7 +248,12 @@ activity still controls dormancy.
   another channel. STM sharing does not relax planner isolation.
 - **Agendas belong to one persona.** `natural_nudge_agendas` rows key by `(message_disc_id,
   persona_id)`. Context rebuild and the prompt snapshot render an agenda above its opener only for
-  that persona (`runtime/agendas.ts`). The agenda expires when the opener leaves the context window.
+  that persona, and only the newest one in the visible history (`loadLatestPersonaAgenda` in
+  `runtime/agendas.ts`), so older goals never stack. The agenda expires when a newer opener with an
+  agenda for that persona enters the same history, or when the opener leaves the context window. A
+  new idle opener's own turn (`naturalNudge.opensIdleNudge` with scene turn 0) skips stored agendas,
+  because its goal arrives in the opener context while its agenda row is written only after delivery.
+  An opener that cannot be anchored records no agenda row, so the previous goal stays in that case.
 - **Opener anchoring.** The fire row and agenda anchor to `GenerationTurnResult.firstDeliveredMessageId`,
   carried from the stream state. When a tool delivered the opener, the runner looks for the first
   bot or managed-webhook message after the anchor instead.

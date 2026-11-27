@@ -22,5 +22,14 @@ export default {
       main_persona_description: `Persona principal`,
       alter_persona_description: `Alter`,
     },
+    send_blocked: {
+      cannot_send_title: `No puedo enviar mensajes aquí`,
+      cannot_send_description: `Necesito **Ver canal** y **Enviar mensajes** en este canal (o **Enviar mensajes en hilos** en un hilo) para responder al chat aquí, y falta al menos uno. Pídele a un administrador del servidor que conceda ambos.`,
+      missing_permissions_description: `No pude leer mis propios permisos en este canal, así que no responderé al chat aquí. Inténtalo de nuevo en un momento y, si esto sigue ocurriendo, revisa los permisos de mi rol.`,
+      timed_out_title: `Tengo una suspensión temporal`,
+      timed_out_description: `Un moderador me aplicó una suspensión temporal en este servidor, así que Discord bloquea mis mensajes hasta {time}. Quita la suspensión desde mi perfil de miembro si quieres que responda antes.`,
+      send_refused_title: `Discord rechazó mi último mensaje`,
+      send_refused_description: `Discord rechazó mi último mensaje en este canal, normalmente porque cambió un permiso o recibí una suspensión temporal. Volveré a intentar en este canal {time}.`,
+    },
   },
 };

@@ -78,9 +78,7 @@ const workspaceRow: Record<string, unknown> = {
   refresh_cadence: 5,
   render_mode: "supersede",
   crude_message_count: 10,
-  tool_description_override: null,
-  update_nudge_override: null,
-  nudge_injection_depth: 1,
+  summarizer_instructions_override: "Keep unresolved plans.",
   content_injection_depth: 2,
 };
 
@@ -253,9 +251,7 @@ describe("v2 config export projections", () => {
       refresh_cadence: 5,
       render_mode: "supersede",
       crude_message_count: 10,
-      tool_description_override: null,
-      update_nudge_override: null,
-      nudge_injection_depth: 1,
+      summarizer_instructions_override: "Keep unresolved plans.",
       content_injection_depth: 2,
     });
   });

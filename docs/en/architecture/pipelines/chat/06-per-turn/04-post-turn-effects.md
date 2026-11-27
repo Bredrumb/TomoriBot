@@ -17,7 +17,7 @@ flowchart TD
   s1 --> s2["2. maybeScheduleEmptyResponseRetry()<br/>re-enters tomoriChat(skipLock=true) on empty output"]
   s2 --> s3["3. settleTextQuota()<br/>keeps the reservation for a reply or releases it"]
   s3 --> s4["4. updateSelfReplyBookkeeping()<br/>updates last-responded persona and chain counters"]
-  s4 --> s5["5. writeShortTermMemory()<br/>stores conversation turn in STM cache per persona"]
+  s4 --> s5["5. writeShortTermMemory()<br/>captures dialogue and schedules a summary when due"]
   s5 --> s6["6. emitThoughtLog()<br/>sends reasoning or BYOK attribution embeds"]
   s6 --> s7["7. scheduleBoomerangFollowUp()<br/>schedules cross-channel re-entry via setImmediate"]
   s7 --> s8["8. rememberLastReplyUsage()<br/>caches prompt token usage for /context inspection"]
@@ -43,10 +43,11 @@ flowchart TD
    from the same trigger may still spend it.
 4. **Self-reply bookkeeping**: on non-empty responses, `setLastRespondedPersona()` records which persona
    spoke last. For non-stop real user messages, it increments `selfReplyChainState.triggerCount`.
-5. **Short-term memory write**: for non-stop responses where the user is not full-privacy,
-   `writeShortTermMemory()` saves conversation turns to cache via `storeShortTermMemory()` for each responding
-   persona. It then increments the cadence counter via `incrementStmTurnCounter()`, driving proactive memory
-   refresh nudges in future turns.
+5. **Short-term memory write**. `writeShortTermMemory()` records delivered dialogue per persona
+   and advances the scope's cadence counter. A turn that ends in an error or timeout can contribute
+   delivered text. An eligible reply can also schedule a
+   [background summary](/architecture/pipelines/memory/stm/02-summary-upgrade/) using the finishing
+   attempt's credentials. The post-turn stage does not await that request.
 6. **Thought log emission**: if a thought-log channel is configured in a guild text channel, `emitThoughtLog()`
    sends reasoning and duration details via `sendThoughtLogEmbed()`. When personal BYOK or the model randomizer
    was used, the embed names the user's provider or the model that answered, and a turn without reasoning

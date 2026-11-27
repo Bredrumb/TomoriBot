@@ -8,14 +8,17 @@ import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/contex
 import type {
   FunctionCall,
   FunctionResponseImageMetadata,
+  ProviderConfig,
   StreamResult,
   ThoughtLogPayload,
 } from "@/types/provider/interfaces";
+import type { StoredCredentialActivity } from "@/utils/security/apiKeyRetention";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
 import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
 import type { FastRegenerationRequest } from "@/utils/discord/fastRegeneration";
+import type { FallbackNotice } from "@/utils/discord/fallbackModelNotice";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -91,6 +94,7 @@ export interface NaturalNudgeTurn {
   toolNames: readonly string[];
   // Ping User target: restricts pings to this user and resolves {user} and triggerer name to them.
   targetUserDiscId?: string;
+  opensIdleNudge?: true;
 }
 
 export interface TomoriChatInput {
@@ -305,6 +309,8 @@ export interface ChatTurnContext {
   // Shared by reference across every attempt of this persona turn so retries do not reset ExpressionDeliveryState.
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
+  fetchedHistoryOldestTimestamp?: number;
+  oldestQueuedMessageTimestamp?: number;
   reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
@@ -369,11 +375,21 @@ export interface ToolHistoryEntry {
 
 export interface GenerationTurnResult {
   status: StreamResult["status"] | "skipped";
+  fallbackNotice?: FallbackNotice;
   streamResults: StreamResult[];
   usageEntries?: import("@/utils/chat/responseReview").TurnUsageEntry[];
   personaResponses: ChatPersonaResponse[];
   toolResponseDelivered?: boolean;
   firstDeliveredMessageId?: string;
+  answeringAttempt?: {
+    providerName: string;
+    modelCodename: string;
+    providerConfig: Pick<ProviderConfig, "apiKey" | "model">;
+    endpointUrl?: string;
+    activity?: StoredCredentialActivity;
+    usageContext?: ProviderUsageContext;
+    credentialSource: ChatTurnContext["textCredentialSource"];
+  };
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
 }

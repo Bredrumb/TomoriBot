@@ -141,6 +141,7 @@ export interface ProviderPresetGenerationRequest {
 }
 
 export interface ProviderCompactSummaryRequest {
+  deferFailureReport?: boolean;
   apiKey: string;
   model: string;
   endpointUrl?: string;

@@ -196,7 +196,7 @@ function renderedPayloads(): Array<[string, unknown]> {
     ["endpoint connection modal", buildSetupEndpointConnectionModal(LOCALE, NONCE)],
     ["endpoint model modal", buildSetupEndpointModelModal(LOCALE, NONCE)],
     ["user byok modal", buildSetupByokModal(LOCALE, NONCE)],
-    ["settings modal", buildSetupSettingsModal(LOCALE, NONCE, CATALOGS)],
+    ["settings modal", buildSetupSettingsModal(LOCALE, NONCE, CATALOGS, "guild")],
     ["policies modal", buildSetupPoliciesModal(LOCALE, NONCE)],
   ];
 }

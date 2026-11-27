@@ -8,12 +8,6 @@ export default {
         supersede_option: `取代（分类替换原始对话轮次）`,
         crude_summary_option: `原始对话轮次 + 摘要（两者叠加显示）`,
       },
-      "prompt-edit": {
-        tool_description_label: `工具说明`,
-        tool_description_description: `STM 工具在模型眼中的说明。`,
-        update_nudge_label: `记忆提示`,
-        update_nudge_description: `注入上下文的提示词，提醒模型使用 STM 工具。`,
-      },
       "categories-edit": {
         slot_1_label: `分类 1`,
         slot_2_label: `分类 2`,

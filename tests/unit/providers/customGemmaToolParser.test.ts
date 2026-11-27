@@ -28,11 +28,9 @@ function run(chunks: string[]): {
 
 describe("GemmaToolCallParser — special-token dialect (<|tool_call>)", () => {
   it("parses a complete special-token call and emits no visible text", () => {
-    const { visible, calls } = run([
-      '<|tool_call>call:update_short_term_memory{summary:<|"|>They had tea.<|"|>}<tool_call|>',
-    ]);
+    const { visible, calls } = run(['<|tool_call>call:web_search{query:<|"|>They had tea.<|"|>}<tool_call|>']);
     expect(visible).toBe("");
-    expect(calls).toEqual([{ name: "update_short_term_memory", args: { summary: "They had tea." } }]);
+    expect(calls).toEqual([{ name: "web_search", args: { query: "They had tea." } }]);
   });
 
   it("passes normal prose through unchanged", () => {
@@ -44,11 +42,9 @@ describe("GemmaToolCallParser — special-token dialect (<|tool_call>)", () => {
 
 describe("GemmaToolCallParser — tool_code dialect (<tool_code>)", () => {
   it("parses a complete Python-call block and emits no visible text", () => {
-    const { visible, calls } = run([
-      '<tool_code>update_short_term_memory(summary="Nerine and Pali had tea.")</tool_code>',
-    ]);
+    const { visible, calls } = run(['<tool_code>web_search(query="Nerine and Pali had tea.")</tool_code>']);
     expect(visible).toBe("");
-    expect(calls).toEqual([{ name: "update_short_term_memory", args: { summary: "Nerine and Pali had tea." } }]);
+    expect(calls).toEqual([{ name: "web_search", args: { query: "Nerine and Pali had tea." } }]);
   });
 
   it("keeps text before the block visible, and resumes visible text in a later chunk", () => {
@@ -60,14 +56,9 @@ describe("GemmaToolCallParser — tool_code dialect (<tool_code>)", () => {
   });
 
   it("handles a block split across chunk boundaries", () => {
-    const { visible, calls } = run([
-      "<tool_co",
-      'de>update_short_term_memory(summary="split val',
-      'ue")</tool_',
-      "code>",
-    ]);
+    const { visible, calls } = run(["<tool_co", 'de>web_search(query="split val', 'ue")</tool_', "code>"]);
     expect(visible).toBe("");
-    expect(calls).toEqual([{ name: "update_short_term_memory", args: { summary: "split value" } }]);
+    expect(calls).toEqual([{ name: "web_search", args: { query: "split value" } }]);
   });
 
   it("parses mixed scalar and string args, including single quotes", () => {

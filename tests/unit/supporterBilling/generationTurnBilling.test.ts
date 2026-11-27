@@ -6,7 +6,6 @@ import { stubGlobalFetch } from "../../helpers/fetchStub";
 import type { Client, Message } from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
 import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
-import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -16,7 +15,6 @@ import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
 import * as realToolLoop from "@/utils/chat/toolLoop";
-import * as realFallbackModelNotice from "@/utils/discord/fallbackModelNotice";
 import * as realEmbedHelper from "@/utils/discord/embedHelper";
 import * as realSupporterRuntime from "@/modules/supporter-billing/runtime";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
@@ -49,11 +47,6 @@ const toolLoopCalls: Array<{
   usageContext?: ChatTurnContext["usageContext"];
 }> = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
-const fallbackNoticeCalls: Array<{
-  failures: FallbackNoticeAttempt[];
-  successModel: LlmRow;
-  offerPersonalFallbackOptOut: boolean | undefined;
-}> = [];
 const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 const subscriptionNotices: Array<{ titleKey?: string; description?: string }> = [];
 const usageRecords: Array<{ sponsorIdentityId: number | null } & realSupporterRuntime.SupporterUsageReport> = [];
@@ -100,7 +93,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
   "@/utils/db/repositories": realRepositories,
-  "@/utils/discord/fallbackModelNotice": realFallbackModelNotice,
   "@/utils/discord/embedHelper": realEmbedHelper,
   "@/modules/supporter-billing/runtime": realSupporterRuntime,
   "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
@@ -181,21 +173,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
   serverRepository: overrideMembers(realRepositories.serverRepository, {
     loadServerState: async () => null,
   }),
-}));
-
-scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
-  ...realFallbackModelNotice,
-  sendFallbackModelUsageNotice: async (args: {
-    failures: FallbackNoticeAttempt[];
-    successModel: LlmRow;
-    offerPersonalFallbackOptOut?: boolean;
-  }) => {
-    fallbackNoticeCalls.push({
-      failures: args.failures,
-      successModel: args.successModel,
-      offerPersonalFallbackOptOut: args.offerPersonalFallbackOptOut,
-    });
-  },
 }));
 
 scopedMock.module("@/utils/discord/embedHelper", () => ({
@@ -868,7 +845,6 @@ describe("runGenerationTurn fallback behavior", () => {
     queuedDeliveries.length = 0;
     toolLoopCalls.length = 0;
     providerConfigCalls.length = 0;
-    fallbackNoticeCalls.length = 0;
     personalSavedConfigLoads.length = 0;
     subscriptionNotices.length = 0;
     usageRecords.length = 0;
@@ -1023,13 +999,13 @@ describe("runGenerationTurn fallback behavior", () => {
       successfulReply(),
     );
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, collectingSink());
+    const result = await runGenerationTurn(context, collectingSink());
     expect(toolLoopCalls.map((call) => call.model)).toEqual([primary.llm_codename, byokFallback.llm_codename]);
     expect(context).toMatchObject({ textCredentialSource: "server" });
     expect(subscriptionNotices).toEqual([]);
-    expect(fallbackNoticeCalls).toEqual([
+    expect(result.fallbackNotice).toEqual(
       expect.objectContaining({
-        successModel: byokFallback,
+        successModelCodename: byokFallback.llm_codename,
         failures: [
           {
             modelCodename: primary.llm_codename,
@@ -1039,7 +1015,7 @@ describe("runGenerationTurn fallback behavior", () => {
           },
         ],
       }),
-    ]);
+    );
   });
 
   it("maps an OpenRouter key-limit rejection to the exhaustion notice and configured fallback", async () => {
@@ -1048,7 +1024,6 @@ describe("runGenerationTurn fallback behavior", () => {
       setSupporterEnv();
       toolLoopCalls.length = 0;
       subscriptionNotices.length = 0;
-      fallbackNoticeCalls.length = 0;
       const primary = makeOpenRouterLlm(101, "openrouter/allowed-primary");
       const sharedFallback = makeOpenRouterLlm(102, "openrouter/shared-fallback");
       const byokFallback = makeLlm(103, "byok-fallback");
@@ -1068,11 +1043,11 @@ describe("runGenerationTurn fallback behavior", () => {
         }),
         successfulReply(),
       );
-      expect((await runGenerationTurn(context, collectingSink())).status).toBe("completed");
+      const result = await runGenerationTurn(context, collectingSink());
+      expect(result.status).toBe("completed");
       expect(toolLoopCalls.map((call) => call.model)).toEqual([primary.llm_codename, byokFallback.llm_codename]);
       expect(subscriptionNotices).toEqual([]);
-      expect(fallbackNoticeCalls).toHaveLength(1);
-      expect(fallbackNoticeCalls[0]?.failures[0]?.errorDetail).toMatch(
+      expect(result.fallbackNotice?.failures[0]?.errorDetail).toMatch(
         localizedProse(context.locale, "commands.subscribe.request.allowance_reason"),
       );
     }
@@ -1124,10 +1099,11 @@ describe("runGenerationTurn fallback behavior", () => {
     );
     serverSupporterFunding = makeSupporterFunding();
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    expect((await runGenerationTurn(context, collectingSink())).status).toBe("completed");
+    const result = await runGenerationTurn(context, collectingSink());
+    expect(result.status).toBe("completed");
     expect(toolLoopCalls.map((call) => call.model)).toEqual([primary.llm_codename, sharedFallback.llm_codename]);
     expect(subscriptionNotices).toEqual([]);
-    expect(fallbackNoticeCalls[0]?.failures[0]?.errorDetail).toMatch(
+    expect(result.fallbackNotice?.failures[0]?.errorDetail).toMatch(
       localizedProse(context.locale, "commands.subscribe.request.capacity_reason"),
     );
   });
@@ -1512,11 +1488,12 @@ describe("runGenerationTurn fallback behavior", () => {
       { status: "timeout", streamResults: [{ status: "timeout" }], personaResponses: [] },
     );
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    expect((await runGenerationTurn(context, collectingSink())).status).toBe("timeout");
+    const result = await runGenerationTurn(context, collectingSink());
+    expect(result.status).toBe("timeout");
     expect(subscriptionNotices).toEqual([
       expect.objectContaining({ ...getSupporterRequestFailureCopy(denied, context.locale), color: ColorCode.ERROR }),
     ]);
-    expect(fallbackNoticeCalls).toEqual([]);
+    expect(result.fallbackNotice).toBeUndefined();
     expect(timeoutNotices).toEqual([]);
     expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
   });

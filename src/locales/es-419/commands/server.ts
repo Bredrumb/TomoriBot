@@ -8,12 +8,6 @@ export default {
         supersede_option: `Reemplazar (las categorías reemplazan los turnos sin procesar)`,
         crude_summary_option: `Sin procesar + resumen (mostrar ambos de forma aditiva)`,
       },
-      "prompt-edit": {
-        tool_description_label: `Descripción de herramienta`,
-        tool_description_description: `Cómo se describe la herramienta de memoria a corto plazo al modelo.`,
-        update_nudge_label: `Aviso de memoria`,
-        update_nudge_description: `Prompt inyectado en el contexto que insta al modelo a usar la herramienta de memoria a corto plazo.`,
-      },
       "categories-edit": {
         slot_1_label: `Categoría 1`,
         slot_2_label: `Categoría 2`,

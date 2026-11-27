@@ -236,14 +236,6 @@ export default {
         thread: [],
         capabilities: [],
       },
-      explicit_memory: [
-        "remember",
-        "don't forget",
-        "note",
-        "commit to memory",
-        "for future conversations",
-        "for future reference",
-      ],
     },
   },
 };

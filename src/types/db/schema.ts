@@ -1055,14 +1055,10 @@ export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
 export const serverStmConfigSchema = z.object({
   server_id: z.number().int(),
-  refresh_cadence: z.number().int().default(5),
+  refresh_cadence: z.number().int().default(10),
   render_mode: z.enum(["supersede", "crude_summary"]).default("crude_summary"),
   crude_message_count: z.number().int().default(6),
-  tool_description_override: z.string().nullable().optional(),
-  // Falls back to the seeded default nudge when NULL.
-  update_nudge_override: z.string().nullable().optional(),
-  // Dialogue items from the bottom where 0 appends and N inserts before the Nth item.
-  nudge_injection_depth: z.number().int().default(2),
+  summarizer_instructions_override: z.string().nullable().optional(),
   // Dialogue items from the bottom (-1 anchors stale content at the top and places fresh content at the closer tail
   // slot).
   content_injection_depth: z.number().int().default(-1),
@@ -1105,6 +1101,7 @@ const shortTermMemoryRowSchema = z.object({
   scope_kind: z.enum(["server", "user"]),
   categories: z.preprocess(normalizeStmCategories, z.record(z.string(), z.string()).default({})),
   summary: z.string().nullable().optional(),
+  summarized_through: z.date().nullable().optional(),
   turns_since_refresh: z.number().int().default(0),
   last_refreshed_turn: z.number().int().default(0),
   updated_at: z.date().optional(),

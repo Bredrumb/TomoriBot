@@ -254,9 +254,7 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "refresh_cadence",
         "render_mode",
         "crude_message_count",
-        "tool_description_override",
-        "update_nudge_override",
-        "nudge_injection_depth",
+        "summarizer_instructions_override",
         "content_injection_depth",
       ],
     },
@@ -855,6 +853,9 @@ class ImportRepository {
       }
       const tablePatches = prepared.tablePatches.map((tablePatch) => ({ ...tablePatch, id: serverId }));
       await sql.begin(async (tx: SQL) => {
+        if (prepared.stmCategories !== undefined) {
+          await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
+        }
         await this.writeImportedSelectionPayers(tx, serverId, tablePatches, prepared.nudges);
         for (const tablePatch of tablePatches) await this.updateConfigRow(tx, tablePatch);
         if (prepared.stmCategories !== undefined) await this.updateStmCategories(tx, serverId, prepared.stmCategories);

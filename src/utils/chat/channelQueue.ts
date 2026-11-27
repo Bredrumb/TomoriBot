@@ -923,6 +923,17 @@ export function excludeMessagesAwaitingOwnTurn(
   return messages.filter((message) => !pendingMessageIds.has(message.id) || isSelfTriggerMessage(message, allPersonas));
 }
 
+export function oldestMessageAwaitingOwnTurn(
+  channelId: string,
+  triggerMessageId: string,
+  allPersonas: TomoriState[],
+): number | undefined {
+  const messages = channelLocks.get(channelId)?.messageQueue.map((queued) => queued.message) ?? [];
+  const included = new Set(excludeMessagesAwaitingOwnTurn(messages, channelId, triggerMessageId, allPersonas));
+  const excluded = messages.filter((message) => !included.has(message));
+  return excluded.length > 0 ? Math.min(...excluded.map((message) => message.createdTimestamp)) : undefined;
+}
+
 function clearQueuedSelfReplyWork(
   channelId: string,
   allPersonas: TomoriState[],

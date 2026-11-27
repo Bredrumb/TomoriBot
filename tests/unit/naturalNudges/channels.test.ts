@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { ChannelType, PermissionFlagsBits, type Client, type Message } from "discord.js";
+import {
+  ChannelType,
+  Collection,
+  PermissionFlagsBits,
+  type Client,
+  type GuildTextBasedChannel,
+  type Message,
+} from "discord.js";
 import {
   buildMatcherEvidence,
   buildPlannerTranscript,
   clipAtBoundary,
+  hasHumanReplyAfter,
   resolveAllowedChannels,
 } from "@/modules/natural-nudges/runtime/channels";
 import * as userCache from "@/utils/cache/userCache";
+import * as historyAttribution from "@/utils/messageProxy/historyAttribution";
 import { PrivacyLevel } from "@/types/db/schema";
 import { resetSendFailureCacheForTesting } from "@/utils/discord/stream/sendFailureCache";
 
@@ -150,5 +159,60 @@ describe("resolveAllowedChannels", () => {
     await resolveAllowedChannels(client, [DELETED_CHANNEL]);
 
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("reply detection after an idle opener", () => {
+  const OPENER = "1300000000000000100";
+  const reply = (id: number, kind: "member" | "bot" | "webhook") =>
+    ({
+      id: String(1300000000000000100n + BigInt(id)),
+      author: { bot: kind !== "member" },
+      webhookId: kind === "webhook" ? "1300000000000000999" : null,
+      system: false,
+    }) as unknown as Message;
+  const channelWith = (following: Message[], latest: Message[]) => {
+    const fetch = mock(
+      async (options: { after?: string }) =>
+        new Collection((options.after ? following : latest).map((message) => [message.id, message])),
+    );
+    const channel = {
+      id: "1300000000000000001",
+      lastMessageId: (latest.at(-1) ?? following.at(-1))?.id,
+      messages: { fetch },
+    } as unknown as GuildTextBasedChannel;
+    return { channel, fetch };
+  };
+  const botRun = (from: number, count: number) =>
+    Array.from({ length: count }, (_, index) => reply(from + index, "bot"));
+
+  it("finds a member reply that a full page of bot messages right after the opener would hide", async () => {
+    const { channel, fetch } = channelWith(botRun(1, 50), [...botRun(200, 49), reply(300, "member")]);
+    expect(await hasHumanReplyAfter(channel, OPENER)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops after a short page, which already covers everything after the opener", async () => {
+    const { channel, fetch } = channelWith(botRun(1, 10), []);
+    expect(await hasHumanReplyAfter(channel, OPENER)).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts a message-proxy reply as a member while other webhooks stay non-human", async () => {
+    const proxied = reply(1, "webhook");
+    const feed = reply(2, "webhook");
+    const resolve = spyOn(historyAttribution, "resolveMessageProxyMessageIdentitiesForHistory");
+    try {
+      resolve.mockResolvedValue(new Map());
+      expect(await hasHumanReplyAfter(channelWith([feed], []).channel, OPENER)).toBe(false);
+      resolve.mockResolvedValue(
+        new Map([
+          [proxied.id, { serviceId: "fixture", userDiscId: "fixture-user", displayName: "Mirri", senderDiscId: "1" }],
+        ]),
+      );
+      expect(await hasHumanReplyAfter(channelWith([proxied], []).channel, OPENER)).toBe(true);
+    } finally {
+      resolve.mockRestore();
+    }
   });
 });

@@ -145,7 +145,6 @@ export default {
     tool_interact_with_recent_message: "回应或回复消息",
     tool_create_long_term_memory: "保存记忆",
     tool_update_long_term_memory: "更新记忆",
-    tool_update_short_term_memory: "更新短期记忆",
     tool_process_youtube_video: "观看 YouTube 视频",
     idle_nudge_titles: {
       ping_user_check_in: "问候近况",

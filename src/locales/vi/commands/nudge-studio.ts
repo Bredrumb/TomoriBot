@@ -152,7 +152,6 @@ export default {
     tool_interact_with_recent_message: "Thả cảm xúc hoặc phản hồi tin nhắn",
     tool_create_long_term_memory: "Lưu bộ nhớ",
     tool_update_long_term_memory: "Cập nhật bộ nhớ",
-    tool_update_short_term_memory: "Cập nhật bộ nhớ ngắn hạn",
     tool_process_youtube_video: "Xem video YouTube",
     idle_nudge_titles: {
       ping_user_check_in: "Hỏi thăm",

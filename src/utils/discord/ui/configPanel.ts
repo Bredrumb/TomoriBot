@@ -88,7 +88,7 @@ import {
   buildPanelReceiptContainer,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
-import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
+import { DEFAULT_STM_RENDER_MODE, RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import {
   SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
   selectablePersonas,
@@ -104,8 +104,7 @@ import {
 } from "@/utils/discord/ui/configModelsPanel";
 import { resolveSelectedVoiceSample } from "@/utils/discord/ui/configVoicesPanel";
 import { NOTICE_VERBOSITY_LEVELS, TOOL_NOTICE_DEFINITIONS, type NoticeVerbosity } from "@/constants/toolNotices";
-import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
-import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
+import { DEFAULT_STM_REFRESH_CADENCE, DEFAULT_STM_SUMMARIZER_INSTRUCTIONS } from "@/utils/memory/stmSummarizer";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
@@ -141,6 +140,7 @@ import type { NaturalNudgesPanelState } from "@/modules/natural-nudges/discord/o
 import { buildNaturalNudgesSettingsBody, buildPersonaNudgesBody } from "@/modules/natural-nudges/discord/panel";
 
 const RANDOM_TRIGGER_PAGE_SIZE = CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY;
+const RANDOM_TRIGGER_SUMMARY_LIMIT = 25;
 
 const CHANNEL_PROMPT_MODE_KEYS: Record<ChannelPromptMode, string> = {
   append: "commands.config.panel.channels_overrides_prompt_mode_append",
@@ -2612,19 +2612,8 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       persona.persona_id === undefined ? [] : [[persona.persona_id, persona.persona_nickname] as const],
     ),
   );
-  const triggerPageCount = Math.ceil(view.randomTriggers.length / RANDOM_TRIGGER_PAGE_SIZE);
-  const selectedTriggerPage = Math.min(
-    Math.max(Math.floor((input.randomTriggerPageStart ?? 0) / RANDOM_TRIGGER_PAGE_SIZE), 0),
-    Math.max(triggerPageCount - 1, 0),
-  );
-  const visibleTriggers = view.randomTriggers.slice(
-    selectedTriggerPage * RANDOM_TRIGGER_PAGE_SIZE,
-    (selectedTriggerPage + 1) * RANDOM_TRIGGER_PAGE_SIZE,
-  );
-  const remainingTriggerCount = Math.max(
-    0,
-    view.randomTriggers.length - (selectedTriggerPage + 1) * RANDOM_TRIGGER_PAGE_SIZE,
-  );
+  const visibleTriggers = view.randomTriggers.slice(0, RANDOM_TRIGGER_SUMMARY_LIMIT);
+  const remainingTriggerCount = view.randomTriggers.length - visibleTriggers.length;
   const triggerSummary = visibleTriggers.length
     ? visibleTriggers
         .map((trigger) => {
@@ -2641,6 +2630,14 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
           })}`
         : "")
     : `> ${localizer(locale, "commands.config.panel.none_label")}`;
+  const naturalNudgesTitle = localizer(locale, "commands.config.panel.page_plugins_natural_nudges");
+  const naturalNudgesHint =
+    input.actor.workspaceKind === "guild"
+      ? `**${naturalNudgesTitle}**\n${localizer(locale, "commands.config.panel.trigger_natural_nudges_hint", {
+          plugins: localizer(locale, "commands.config.panel.category_plugins"),
+          natural_nudges: naturalNudgesTitle,
+        })}\n\n`
+      : "";
   components.push(
     {
       type: ComponentType.TextDisplay,
@@ -2672,7 +2669,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
     }),
     {
       type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.trigger_matching_title")}**\n${localizer(
+      content: `${naturalNudgesHint}**${localizer(locale, "commands.config.panel.trigger_matching_title")}**\n${localizer(
         locale,
         "commands.config.panel.trigger_matching_description",
       )}\n> ${localizer(locale, "commands.config.panel.cascade_limit_label")}: ${view.cascadeLimit}\n> ${localizer(
@@ -2816,6 +2813,20 @@ ${localizer(locale, "commands.config.panel.reply_controls_description")}`,
           disabled: writesDisabled,
         },
       ],
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: `> - ${localizer(
+        locale,
+        view.fastRegenerationRetryEnabled
+          ? "commands.config.panel.retry_reply_on"
+          : "commands.config.panel.retry_reply_off",
+      )}\n> - ${localizer(
+        locale,
+        view.fastRegenerationContinueEnabled
+          ? "commands.config.panel.continue_reply_on"
+          : "commands.config.panel.continue_reply_off",
+      )}`,
     },
   );
   return components;
@@ -3071,12 +3082,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     return components;
   }
   if (!view) return components;
-  const categoryMode =
-    view.stmCategories.length > 1 ||
-    (view.stmCategories.length === 1 && view.stmCategories[0]?.label.toLowerCase() !== "summary");
-  const categoryLines = view.stmCategories.length
-    ? view.stmCategories.map((category) => `> ${category.label}: ${category.description}`).join("\n")
-    : `> ${localizer(locale, "commands.choices.none")}`;
+  const autoSummarizationOffNote = (key: string) => (view.stmEnabled ? "" : `\n-# ${localizer(locale, key)}`);
   components.push(
     {
       type: ComponentType.TextDisplay,
@@ -3126,16 +3132,12 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
       type: ComponentType.TextDisplay,
       content: `> ${localizer(
         locale,
-        !view.stmEnabled
-          ? "commands.config.panel.stm_enabled_off"
-          : view.toolUseEnabled
-            ? "commands.config.panel.stm_enabled_on"
-            : "commands.config.panel.stm_enabled_tool_use_off",
+        view.stmEnabled ? "commands.config.panel.stm_enabled_on" : "commands.config.panel.stm_enabled_off",
       )}`,
     },
     {
       type: ComponentType.TextDisplay,
-      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? 5 })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? "supersede" })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_nudge_depth_value", { count: view.stmConfig?.nudge_injection_depth ?? 2 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}`,
+      content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/short-term-memory/#managing-short-term-memory)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? DEFAULT_STM_REFRESH_CADENCE })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? DEFAULT_STM_RENDER_MODE })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}${autoSummarizationOffNote("commands.config.panel.stm_parameters_auto_off_note")}`,
     },
     {
       type: ComponentType.ActionRow,
@@ -3149,9 +3151,40 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
         },
       ],
     },
+  );
+  const categoryText = view.stmCategories.map((category) => `${category.label}: ${category.description}`).join("\n");
+  const categoryEmptyState = categoryText ? "" : `\n> ${localizer(locale, "commands.choices.none")}`;
+  const stmCategoriesHeader = `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(
+    locale,
+    "commands.config.panel.stm_categories_description",
+  )}${categoryEmptyState}${autoSummarizationOffNote("commands.config.panel.stm_categories_auto_off_note")}`;
+  const stmPromptHeader = `**${localizer(locale, "commands.config.panel.stm_prompt_title")}**\n${localizer(
+    locale,
+    "commands.config.panel.stm_prompt_description",
+  )}${autoSummarizationOffNote("commands.config.panel.stm_prompt_auto_off_note")}`;
+  const baseAllowance = getBasePageTextAllowance(input, false);
+  const fixedTextLength =
+    measureFormattedPanelTextLength(components) +
+    measurePanelTextLength(`${stmCategoriesHeader}\n`) +
+    measurePanelTextLength(`${stmPromptHeader}\n`);
+  const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
+  const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 2);
+
+  const editCategoriesLabel = localizer(locale, "commands.config.panel.edit_stm_categories_button");
+  const editPromptLabel = localizer(locale, "commands.config.panel.edit_stm_prompt_button");
+  const renderedCategories = categoryText
+    ? renderFencedPreview(locale, categoryText, { budget: memoryPerValueBudget, actionLabel: editCategoriesLabel })
+    : "";
+  const instructions = view.stmConfig?.summarizer_instructions_override ?? DEFAULT_STM_SUMMARIZER_INSTRUCTIONS;
+  const renderedInstructions = renderFencedPreview(locale, instructions, {
+    budget: memoryPerValueBudget,
+    actionLabel: editPromptLabel,
+  });
+
+  components.push(
     {
       type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(locale, "commands.config.panel.stm_categories_description")}\n${categoryLines}`,
+      content: renderedCategories ? `${stmCategoriesHeader}\n${renderedCategories}` : stmCategoriesHeader,
     },
     {
       type: ComponentType.ActionRow,
@@ -3160,37 +3193,14 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "behavior-stm-categories-open", locale }),
-          label: localizer(locale, "commands.config.panel.edit_stm_categories_button"),
+          label: editCategoriesLabel,
           disabled: writesDisabled,
         },
       ],
     },
-  );
-  const toolDescription = view.stmConfig?.tool_description_override ?? DEFAULT_STM_TOOL_DESCRIPTION;
-  const updateNudge =
-    view.stmConfig?.update_nudge_override ?? (categoryMode ? SEED_CATEGORY_UPDATE_HINT : SEED_SUMMARY_UPDATE_HINT);
-  const stmPromptHeader = `**${localizer(locale, "commands.config.panel.stm_prompt_title")}**\n${localizer(
-    locale,
-    "commands.config.panel.stm_prompt_description",
-  )}\n`;
-  const baseAllowance = getBasePageTextAllowance(input, false);
-  const fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmPromptHeader) + 1;
-  const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
-  const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 2);
-
-  const renderedToolDescription = renderFencedPreview(locale, toolDescription, {
-    budget: memoryPerValueBudget,
-    actionLabel: localizer(locale, "commands.config.panel.edit_stm_prompt_button"),
-  });
-  const renderedUpdateNudge = renderFencedPreview(locale, updateNudge, {
-    budget: memoryPerValueBudget,
-    actionLabel: localizer(locale, "commands.config.panel.edit_stm_prompt_button"),
-  });
-
-  components.push(
     {
       type: ComponentType.TextDisplay,
-      content: `${stmPromptHeader}${renderedToolDescription}\n${renderedUpdateNudge}`,
+      content: renderedInstructions ? `${stmPromptHeader}\n${renderedInstructions}` : stmPromptHeader,
     },
     {
       type: ComponentType.ActionRow,
@@ -3199,7 +3209,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "behavior-stm-prompt-open", locale }),
-          label: localizer(locale, "commands.config.panel.edit_stm_prompt_button"),
+          label: editPromptLabel,
           disabled: writesDisabled,
         },
       ],

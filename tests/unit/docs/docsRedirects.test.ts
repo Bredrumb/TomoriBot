@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REDIRECTS_PATH = join(import.meta.dir, "../../../apps/docs/public/_redirects");
-// Cloudflare's documented caps; rules past them are dropped without any build or deploy error.
+// Cloudflare's documented caps: rules past them are dropped without any build or deploy error.
 const MAX_STATIC_RULES = 2000;
 const MAX_DYNAMIC_RULES = 100;
 

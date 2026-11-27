@@ -158,7 +158,6 @@ export default {
     tool_interact_with_recent_message: "Reaccionar o responder a un mensaje",
     tool_create_long_term_memory: "Guardar un recuerdo",
     tool_update_long_term_memory: "Actualizar un recuerdo",
-    tool_update_short_term_memory: "Actualizar la memoria a corto plazo",
     tool_process_youtube_video: "Ver un video de YouTube",
     idle_nudge_titles: {
       ping_user_check_in: "Saludo cordial",

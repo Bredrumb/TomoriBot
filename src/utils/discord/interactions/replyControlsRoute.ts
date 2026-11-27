@@ -1,11 +1,15 @@
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
+import { renderFallbackDetails } from "@/utils/discord/fallbackModelNotice";
 import {
   type FastRegenerationDecline,
-  REPLY_CONTROLS_NAMESPACE,
   REPLY_CONTROLS_VERSION,
+  resolveFallbackDetails,
   resolveFastRegeneration,
 } from "@/utils/discord/fastRegeneration";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { REPLY_CONTROLS_NAMESPACE } from "@/utils/discord/replyControlMessage";
+import { buildTextDisplayModal } from "@/utils/discord/textDisplayModal";
 import { replyPanelReceipt } from "@/utils/discord/ui/panel";
 import { localizer } from "@/utils/text/localizer";
 
@@ -18,12 +22,30 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
       !interaction.isButton() ||
       route.segments.length !== 2 ||
       !locale ||
-      (action !== "retry" && action !== "continue")
+      (action !== "retry" && action !== "continue" && action !== "fallback")
     ) {
       throw new Error("Invalid reply control");
     }
-    await interaction.deferUpdate();
-    const selection = await resolveFastRegeneration(
+    if (action === "fallback") {
+      const presserLocale = await resolveUserLocale(interaction);
+      const notice = resolveFallbackDetails(interaction.channelId, interaction.message.id);
+      if (notice) {
+        await interaction.showModal(
+          buildTextDisplayModal({
+            customId: "fallback_details_modal",
+            ...renderFallbackDetails(presserLocale, notice),
+          }),
+        );
+      } else {
+        await replyPanelReceipt(interaction, {
+          tone: "warning",
+          heading: localizer(presserLocale, "general.reply_controls.unavailable"),
+          detail: localizer(presserLocale, "general.reply_controls.stale"),
+        });
+      }
+      return;
+    }
+    const selection = resolveFastRegeneration(
       interaction.channelId,
       interaction.message.id,
       interaction.user.id,
@@ -40,6 +62,7 @@ export const replyControlsInteractionRoute: GlobalInteractionRoute = {
       });
       return;
     }
+    await interaction.deferUpdate();
     const member = interaction.inCachedGuild()
       ? interaction.member
       : await interaction.guild?.members.fetch(interaction.user.id);

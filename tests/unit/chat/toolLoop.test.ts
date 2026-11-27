@@ -1020,23 +1020,6 @@ describe("runToolLoop — contract tests", () => {
     expect(result.personaResponses[0]?.text).toBe(narration.join("\n"));
   });
 
-  it("update_short_term_memory with pre-tool text still ends the turn without a follow-up call", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
-
-    const { provider, capturedHistories } = makeProvider([
-      makeFunctionCallResult("update_short_term_memory", { content: "note" }, "Got it, noting that down."),
-    ]);
-    toolExecuteQueue.push({ success: true, data: { saved: true } });
-
-    const context = makeContext();
-    const result = await runToolLoop(makeParams(context, provider));
-
-    expect(result.status).toBe("completed");
-    expect(capturedHistories).toHaveLength(1);
-    expect(result.personaResponses[0]?.text).toBe("Got it, noting that down.");
-    expect(requiresFollowUpCalls).toHaveLength(0);
-  });
-
   it("an empty follow-up after delivered text completes only when the model had nothing to add", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const cases: Array<{ label: string; empty: StreamResult; needsFollowUp: boolean; expected: string }> = [
@@ -1164,22 +1147,6 @@ describe("runToolLoop — contract tests", () => {
     expect(events).not.toContain("send");
   });
 
-  it("successful STM update without pre-tool text disables further STM calls and continues", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const { provider, capturedHistories } = makeProvider([
-      makeFunctionCallResult("update_short_term_memory", { content: "note" }),
-      { status: "completed", accumulatedText: "Done." },
-    ]);
-    toolExecuteQueue.push({ success: true, data: { saved: true } });
-
-    const context = makeContext();
-    const result = await runToolLoop(makeParams(context, provider));
-
-    expect(result.status).toBe("completed");
-    expect(capturedHistories).toHaveLength(2);
-    expect(context.streamingContext.disableShortTermMemoryUpdate).toBe(true);
-  });
-
   it("clears a stale follow-up interrupt and lets the tool chain continue", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     hasStopRequest = true;
@@ -1247,7 +1214,7 @@ describe("runToolLoop — contract tests", () => {
     // silently drop the rest, so the call is refused outright.
     const truncatedCall: StreamResult = {
       status: "function_call",
-      data: { name: "update_short_term_memory", args: { scene_state: "bedroom" }, argumentsTruncated: true },
+      data: { name: "create_thread", args: { thread_name: "Tea break" }, argumentsTruncated: true },
     };
     const { provider, capturedHistories } = makeProvider([
       truncatedCall,
@@ -1268,12 +1235,12 @@ describe("runToolLoop — contract tests", () => {
       };
     }>;
     expect(history).toHaveLength(1);
-    expect(history[0]?.functionCall?.name).toBe("update_short_term_memory");
+    expect(history[0]?.functionCall?.name).toBe("create_thread");
     // The recovered subset is dropped, so the model is not shown a call it did not make.
     expect(history[0]?.functionCall?.args).toBeUndefined();
     const synthetic = history[0]?.functionResponse?.functionResponse?.response?.result;
     expect(synthetic?.status).toBe("tool_execution_failed");
-    expect(synthetic?.tool_name).toBe("update_short_term_memory");
+    expect(synthetic?.tool_name).toBe("create_thread");
     expect(synthetic?.reason).toContain("truncated");
 
     // The ordinary failure path emits a thought-log notice, so the refusal has to as well or
@@ -1314,7 +1281,7 @@ describe("runToolLoop — contract tests", () => {
 
     const truncatedCall: StreamResult = {
       status: "function_call",
-      data: { name: "update_short_term_memory", args: {}, argumentsTruncated: true },
+      data: { name: "create_thread", args: {}, argumentsTruncated: true },
     };
     const { provider } = makeProvider(Array.from({ length: 10 }, () => truncatedCall));
 

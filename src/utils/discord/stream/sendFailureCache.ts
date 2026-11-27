@@ -66,7 +66,7 @@ export function wasSendFailureLogged(error: unknown): boolean {
   return typeof error === "object" && error !== null && loggedSendFailures.has(error);
 }
 
-export function getBlockedSendReason(channelId: string): SendFailureReason | null {
+function readActiveEntry(channelId: string): SendFailureEntry | null {
   const entry = sendFailureCache.get(channelId);
   if (!entry) return null;
 
@@ -75,7 +75,15 @@ export function getBlockedSendReason(channelId: string): SendFailureReason | nul
     return null;
   }
 
-  return entry.reason;
+  return entry;
+}
+
+export function getBlockedSendReason(channelId: string): SendFailureReason | null {
+  return readActiveEntry(channelId)?.reason ?? null;
+}
+
+export function getBlockedSendRetryAt(channelId: string): number | null {
+  return readActiveEntry(channelId)?.expiresAt ?? null;
 }
 
 // Successful sends clear the cached block immediately because waiting out the full TTL delays recovery after an admin

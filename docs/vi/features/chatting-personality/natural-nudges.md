@@ -8,6 +8,7 @@ sidebar:
 Natural Nudges cho phép TomoriBot lên tiếng mà không cần được tag trước, theo hai cách:
 
 - **Gợi ý nhàn rỗi**: khi một kênh trở nên yên ắng, một trong các persona của bạn sẽ chọn một việc để làm, chẳng hạn như hỏi thăm ai đó, nối lại cuộc trò chuyện trước đó, nêu ra chủ đề mới hoặc diễn một hoạt cảnh ngắn với persona khác, rồi đăng tin nhắn bằng chính giọng điệu của mình.
+  - Một kênh sẽ không nhận được gợi ý nhàn rỗi mới cho đến khi có thành viên trả lời gợi ý gần nhất tại đó.
 - **Gợi ý chủ động**: khi các thành viên đang thảo luận về điều gì đó mà một persona yêu thích, persona đó sẽ tự động tham gia vào cuộc trò chuyện.
 
 Các gợi ý này được thiết kế để mang lại cảm giác tự nhiên như một người bạn ghé qua hỏi thăm:
@@ -110,7 +111,7 @@ Hoạt cảnh là một màn đối thoại ngắn giữa các persona, dài t�
 
 ### Mục tiêu ẩn
 
-Cùng với câu mở đầu, mỗi gợi ý nhàn rỗi cung cấp cho persona một mục tiêu nhỏ riêng tư, chẳng hạn như "tìm xem còn ai thích bộ anime này nữa không". Mục tiêu này gắn liền phía trên câu mở đầu và chỉ persona đó mới nhìn thấy, giúp persona tiếp tục theo đuổi mục tiêu trong các câu trả lời tiếp theo. Trong một hoạt cảnh, mỗi persona nhận được mục tiêu riêng mà persona khác không hề biết. Khi câu mở đầu trôi ra khỏi phạm vi ngữ cảnh mà persona ghi nhớ, mục tiêu sẽ biến mất. Mục tiêu ẩn không bao giờ đòi hỏi thông tin cá nhân, tiền bạc hay bất cứ điều gì ngoài phạm vi cuộc trò chuyện. Các thành viên có quyền xem ảnh chụp nhanh prompt có thể đọc được các mục tiêu này.
+Cùng với câu mở đầu, mỗi gợi ý nhàn rỗi cung cấp cho persona một mục tiêu nhỏ riêng tư, chẳng hạn như "tìm xem còn ai thích bộ anime này nữa không". Mục tiêu này gắn liền phía trên câu mở đầu và chỉ persona đó mới nhìn thấy, giúp persona tiếp tục theo đuổi mục tiêu trong các câu trả lời tiếp theo. Trong một hoạt cảnh, mỗi persona nhận được mục tiêu riêng mà persona khác không hề biết. Mục tiêu kết thúc khi persona bắt đầu một gợi ý nhàn rỗi khác trong kênh đó, hoặc khi câu mở đầu trôi ra khỏi lịch sử trò chuyện của persona. Mục tiêu ẩn không bao giờ đòi hỏi thông tin cá nhân, tiền bạc hay bất cứ điều gì ngoài phạm vi cuộc trò chuyện. Các thành viên có quyền xem ảnh chụp nhanh prompt có thể đọc được các mục tiêu này.
 
 ## Cài đặt
 

@@ -3,6 +3,7 @@ import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import { isReplyControlMessage } from "@/utils/discord/replyControlMessage";
 
 export interface PersonaTurnBlockResult {
   blockMessages: Message[];
@@ -28,10 +29,16 @@ export function findLastPersonaTurnBlock(options: {
   let targetPersonaKey = requestedPersona ? normalizeRenderModifierName(requestedPersona.persona_nickname) : null;
   let resolvedPersona = requestedPersona;
   const blockMessages: Message[] = [];
+  const referencedRows: Message[] = [];
 
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (!msg) continue;
+
+    if (msg.reference?.messageId && isReplyControlMessage(msg, clientUserId)) {
+      referencedRows.push(msg);
+      continue;
+    }
 
     if (!msg.webhookId) {
       if (clientUserId && msg.author.id === clientUserId && !msg.content.trim() && msg.embeds.length > 0) {
@@ -88,7 +95,10 @@ export function findLastPersonaTurnBlock(options: {
   }
 
   return {
-    blockMessages,
+    blockMessages: [
+      ...referencedRows.filter((row) => blockMessages.some((message) => message.id === row.reference?.messageId)),
+      ...blockMessages,
+    ],
     resolvedPersona,
     targetPersonaKey,
   };

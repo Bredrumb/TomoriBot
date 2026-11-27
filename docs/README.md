@@ -148,6 +148,7 @@ Supporting services that pipelines depend on.
 - [`architecture/subsystems/sharding.md`](./en/architecture/subsystems/sharding.md): shard topology, process ownership, coordination, shutdown, and per-shard health
 
 - [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
+- [`architecture/subsystems/reply-controls.md`](./en/architecture/subsystems/reply-controls.md) covers reply row delivery, visibility, and button interactions.
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
 

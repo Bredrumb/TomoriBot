@@ -8,12 +8,6 @@ export default {
         supersede_option: `取代（分類取代原始對話輪）`,
         crude_summary_option: `原始 + 摘要（兩者並列顯示）`,
       },
-      "prompt-edit": {
-        tool_description_label: `工具說明`,
-        tool_description_description: `向模型描述 STM 工具的方式。`,
-        update_nudge_label: `記憶提醒`,
-        update_nudge_description: `注入脈絡的提示詞，提醒模型使用 STM 工具。`,
-      },
       "categories-edit": {
         slot_1_label: `分類 1`,
         slot_2_label: `分類 2`,

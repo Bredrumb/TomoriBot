@@ -18,7 +18,7 @@ import { resolveSpeechTargets, speechTargetSource } from "@/utils/provider/speec
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
-import { applyToolActionAvailability, getAvailableToolSelectors } from "@/utils/tools/toolActions";
+import { applyToolActionAvailability } from "@/utils/tools/toolActions";
 
 export type ToolStateForContext = ToolAssemblyState;
 
@@ -310,7 +310,6 @@ export async function getAvailableToolsWithMCP(
     builtInTools = await assembleToolsForContext(builtInTools, {
       provider,
       state: stateForContext,
-      availableToolNames: new Set([...builtInTools.flatMap(getAvailableToolSelectors), ...mcpFunctionNames]),
     });
 
     const totalCount = builtInTools.length + mcpFunctionNames.length;

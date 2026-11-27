@@ -4,8 +4,8 @@ export default {
     restarting: `TomoriBot đang khởi động lại. Vui lòng thử lại sau giây lát.`,
     reply_controls: {
       unavailable: `Điều khiển phản hồi không khả dụng`,
-      only_triggerer: `Chỉ người đã kích hoạt phản hồi này mới có thể dùng các nút điều khiển của phản hồi đó.`,
-      stale: `Phản hồi này không còn khả dụng để thử lại hoặc tiếp tục.`,
+      only_triggerer: `Chỉ người đã kích hoạt phản hồi này mới có thể thử lại hoặc tiếp tục.`,
+      stale: `Các nút điều khiển của phản hồi này không còn khả dụng.`,
       newer_messages: `Các nút điều khiển này chỉ khả dụng khi phản hồi này là tin nhắn cuối cùng trong cuộc trò chuyện.`,
     },
     panel_notice: {

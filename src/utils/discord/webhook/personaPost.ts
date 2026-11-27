@@ -33,9 +33,9 @@ import {
   type ResolvedWebhookIdentity,
 } from "@/utils/discord/webhook/identity";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
+import { resolveAuthoringWebhook, resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
-import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import { dispatchWebhookWithIdentity, type WebhookIdentitySelection } from "@/utils/discord/webhook/personaDispatch";
 import { sendChannelMessageOnce, sendSelectedWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   classifyDiscordDeliveryFailure,
@@ -69,6 +69,7 @@ export interface PersonaPostContext {
   abortSignal?: AbortSignal;
   isExecutionCancelled?: () => boolean;
   holdResponseText?: boolean;
+  followupTo?: PersonaDeliveryReceipt;
   replyToMessage?: Message;
   locale?: string;
   replyNoticeState?: { attempted: boolean; sent: boolean };
@@ -85,7 +86,7 @@ export interface PersonaPostAuthor {
 }
 
 export type PersonaPostOutcome =
-  | { status: "sent"; message: Message; receipt: PersonaDeliveryReceipt }
+  | { status: "sent"; message: Message; receipt: PersonaDeliveryReceipt; webhook?: Webhook }
   | { status: DiscordDeliveryFailureKind; error: unknown };
 
 interface PersonaPostChannel {
@@ -218,6 +219,22 @@ export async function resolvePersonaPostAuthor(context: PersonaPostContext): Pro
       speaker: { personaId, kind: "copied" },
     };
   }
+  const previous = context.followupTo;
+  if (previous) {
+    const webhook =
+      previous.route === "webhook"
+        ? await resolveAuthoringWebhook(context.channel, previous.webhookId, context.webhook)
+        : undefined;
+    if (previous.route === "webhook" && !webhook)
+      throw new DiscordDeliveryError("pre_dispatch", new Error("Authoring webhook unavailable"));
+    return {
+      route: previous.route,
+      webhook: webhook ?? undefined,
+      identity: previous.identity,
+      speaker: previous.speaker ?? { personaId, kind: "appearance" },
+      sprite: previous.sprite,
+    };
+  }
   const guild = "guild" in context.channel ? context.channel.guild : null;
   const base = await resolvePersonaWebhookIdentity(context.persona, guild);
   const own = await resolveOwnAppearance(
@@ -279,7 +296,7 @@ async function sendPersonaPostAttempt(
     const author = await resolvePersonaPostAuthor(context);
     let message: Message;
     let identity = author.identity;
-    let webhookId: string | null = null;
+    let webhook: Webhook | undefined;
     const threadId = context.channel.isThread() ? context.channel.id : undefined;
     const allowedMentions = payload.allowedMentions ?? { parse: [], repliedUser: false };
     const serverDiscId = "guildId" in context.channel ? context.channel.guildId : undefined;
@@ -292,7 +309,7 @@ async function sendPersonaPostAttempt(
               botName: context.persona.persona_nickname,
             })
           : undefined;
-      const delivery = await dispatchWebhookWithIdentity(author.webhook, identity, async (selected) => {
+      const send = async (selected: WebhookIdentitySelection) => {
         assertCanDispatch(context);
         let noticeMessage: Message | undefined;
         if (notice) {
@@ -335,10 +352,13 @@ async function sendPersonaPostAttempt(
           }
           throw error;
         }
+      };
+      const delivery = await dispatchWebhookWithIdentity(author.webhook, identity, send, {
+        preserveWebhook: Boolean(context.followupTo),
       });
       message = delivery.result;
       identity = delivery.identity;
-      webhookId = delivery.webhookId;
+      webhook = delivery.webhook;
     } else {
       assertCanDispatch(context);
       dispatched = true;
@@ -359,7 +379,7 @@ async function sendPersonaPostAttempt(
       messageId: message.id,
       channelId: message.channelId,
       route: author.route,
-      webhookId,
+      webhookId: webhook?.id ?? null,
       identity,
       speaker: author.speaker,
       sprite: author.sprite,
@@ -367,11 +387,12 @@ async function sendPersonaPostAttempt(
     };
     recordPersonaDelivery(receipt, message);
     context.deliveryReceipts?.push(receipt);
-    return { status: "sent", message, receipt };
+    return { status: "sent", message, receipt, webhook };
   } catch (error) {
     const status = dispatched ? classifyDiscordDeliveryFailure(error) : "pre_dispatch";
     if (
       recoverInvalidWebhook &&
+      !context.followupTo &&
       status === "definite_refusal" &&
       isInvalidWebhookError(error) &&
       context.deliveryMode !== "user_impersonation"

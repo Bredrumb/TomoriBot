@@ -8,12 +8,6 @@ export default {
         supersede_option: `Supersede (categories replace crude turns)`,
         crude_summary_option: `Crude + summary (show both additively)`,
       },
-      "prompt-edit": {
-        tool_description_label: `Tool Description`,
-        tool_description_description: `How the STM tool is described to the model.`,
-        update_nudge_label: `Memory Nudge`,
-        update_nudge_description: `Prompt injected into context that nudges the model to use the STM tool.`,
-      },
       "categories-edit": {
         slot_1_label: `Category 1`,
         slot_2_label: `Category 2`,

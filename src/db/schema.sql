@@ -3520,17 +3520,21 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
 
 CREATE TABLE IF NOT EXISTS server_stm_configs (
   server_id                 INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
-  refresh_cadence           INT         NOT NULL DEFAULT 5,
+  refresh_cadence           INT         NOT NULL DEFAULT 10,
   render_mode               TEXT        NOT NULL DEFAULT 'crude_summary'
                                           CHECK (render_mode IN ('supersede', 'crude_summary')),
   crude_message_count       INT         NOT NULL DEFAULT 6,
-  tool_description_override TEXT,
-  update_nudge_override     TEXT,
-  nudge_injection_depth     INT         NOT NULL DEFAULT 2,
+  summarizer_instructions_override TEXT,
   content_injection_depth   INT         NOT NULL DEFAULT -1,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS stm_cadence_migration_145 (
+  server_id INT PRIMARY KEY REFERENCES server_stm_configs(server_id) ON DELETE CASCADE
+);
+
+SELECT add_column_if_not_exists('server_stm_configs', 'summarizer_instructions_override', 'TEXT');
 
 DROP TRIGGER IF EXISTS update_server_stm_configs_timestamp ON server_stm_configs;
 CREATE TRIGGER update_server_stm_configs_timestamp
@@ -3558,10 +3562,13 @@ CREATE TABLE IF NOT EXISTS short_term_memories (
   scope_kind           TEXT        NOT NULL CHECK (scope_kind IN ('server', 'user')),
   categories           JSONB       NOT NULL DEFAULT '{}',
   summary              TEXT,
+  summarized_through   TIMESTAMPTZ,
   turns_since_refresh  INT         NOT NULL DEFAULT 0,
   last_refreshed_turn  INT         NOT NULL DEFAULT 0,
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+SELECT add_column_if_not_exists('short_term_memories', 'summarized_through', 'TIMESTAMPTZ');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stm_scope_unique
   ON short_term_memories(

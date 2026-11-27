@@ -47,7 +47,7 @@ import {
   AGENDA_NOTICE_AUTHOR_ID,
   agendaNoticeId,
   formatAgendaNotice,
-  loadPersonaAgendas,
+  loadLatestPersonaAgenda,
 } from "@/modules/natural-nudges/runtime/agendas";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
@@ -468,7 +468,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   const userListSet = new Set<string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
   const minimalNoticeBodies = await resolveMinimalNoticeBodies(messagesArray);
-  const agendasByMessageId = await loadPersonaAgendas(
+  const latestAgenda = await loadLatestPersonaAgenda(
     answeringState.persona_id,
     messagesArray.map((message) => message.id),
   );
@@ -611,7 +611,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     const completionContent = [baseContent, ...completionSegments].filter(Boolean).join("\n");
     const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
 
-    const agenda = agendasByMessageId.get(message.id);
+    const agenda = latestAgenda?.messageId === message.id ? latestAgenda.agenda : undefined;
     if (agenda) {
       simplifiedMessages.push({
         id: agendaNoticeId(message.id),
@@ -786,11 +786,6 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   applyPromptLayoutInserts(contextItems, [
     { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
     { tag: "stm_content", items: contextBuild.memoryInjectionItems ?? [], depth: contextBuild.memoryInjectionDepth },
-    {
-      tag: "stm_nudge",
-      items: contextBuild.nudgeItem ? [contextBuild.nudgeItem] : [],
-      depth: contextBuild.nudgeInjectionDepth,
-    },
     { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
     { tag: "uncensor", items: uncensorTailMessage ? [uncensorTailMessage] : [] },
   ]);

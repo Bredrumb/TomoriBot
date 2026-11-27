@@ -22,5 +22,14 @@ export default {
       main_persona_description: `Persona Principal`,
       alter_persona_description: `Alterar Persona`,
     },
+    send_blocked: {
+      cannot_send_title: `Não Posso Enviar Mensagens Aqui`,
+      cannot_send_description: `Preciso das permissões **Ver Canal** e **Enviar Mensagens** neste canal (ou **Enviar Mensagens em Tópicos** em um tópico) para responder ao chat aqui, e pelo menos uma está faltando. Peça a um gerente do servidor que conceda ambas.`,
+      missing_permissions_description: `Não consegui ler minhas próprias permissões neste canal, então não estou respondendo ao chat aqui. Tente novamente em instantes e, se isso continuar acontecendo, verifique as permissões do meu cargo.`,
+      timed_out_title: `Estou de Castigo`,
+      timed_out_description: `Um moderador me colocou de castigo neste servidor, então o Discord bloqueia minhas mensagens até {time}. Remova o castigo do meu perfil de membro se quiser que eu responda antes.`,
+      send_refused_title: `O Discord Recusou Minha Última Mensagem`,
+      send_refused_description: `O Discord rejeitou minha última mensagem neste canal, geralmente porque uma permissão mudou ou fui colocada de castigo. Tentarei enviar neste canal novamente {time}.`,
+    },
   },
 };

@@ -4,7 +4,7 @@ import * as userCache from "@/utils/cache/userCache";
 import {
   attachTextDisplayModalCollector,
   buildTextDisplayModal,
-  buildTextDisplayModalButton,
+  buildTextDisplayModalRow,
 } from "@/utils/discord/textDisplayModal";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createUserRow } from "../../helpers/fixtures";
@@ -36,7 +36,7 @@ describe("text display modal", () => {
   });
 
   it("builds a simple secondary trigger button", () => {
-    const row = buildTextDisplayModalButton("tips", "What You Can Do").toJSON();
+    const row = buildTextDisplayModalRow([{ customId: "tips", label: "What You Can Do" }]).toJSON();
 
     expect(row.components[0]).toMatchObject({
       custom_id: "tips",

@@ -69,7 +69,6 @@ const STREAM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
 // continuation prefill.
 const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = 5000;
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
-const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 const TOOL_FAILURE_NOTICE_LIMIT = 1800;
 const TOOL_ARGUMENTS_TRUNCATED_REASON =
   "The provider truncated this tool call's arguments mid-payload, so the call was not executed and nothing was updated. Reissue the call with the complete arguments in one message.";
@@ -450,26 +449,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           );
         }
 
-        if (
-          toolOutcome.success &&
-          (await shouldEndAfterPreToolText(streamResult, toolOutcome.functionName, params.tomoriState.server_id))
-        ) {
-          if (review) {
-            const completed = await completeResponse();
-            if (completed) return completed;
-            continue;
-          }
-          return buildResult(
-            "completed",
-            params.context,
-            streamResults,
-            streamResult.accumulatedText ?? finalText,
-            detailsText,
-            thoughtLog,
-            toolResponseDelivered,
-          );
-        }
-
         break;
       }
       default: {
@@ -676,13 +655,12 @@ async function streamOnce(
     return result.status === "stopped_by_user" && sawStreamProgress ? { ...result, answeredBeforeStop: true } : result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop (such as /kill) runs no fallback, but the bounded settle still lets text the stream already
-      // posted reach short-term memory; a drafted reply was never posted, so it keeps only usage.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         const settled = await settleAbandonedStream(streamPromise);
         return {
           status: "stopped_by_user",
           usage: settled?.usage,
+          // Review mode buffers an unposted draft, so killing it must not write the draft into short-term memory.
           ...(params.context.responseReview
             ? {}
             : {
@@ -1169,11 +1147,6 @@ async function executeToolCall(
       imageMetadata: toolResult.imageMetadata,
     });
 
-  if (functionName === "update_short_term_memory" && toolResult.success) {
-    params.context.streamingContext.disableShortTermMemoryUpdate = true;
-    log.info("Short-term memory updated; disabling further STM calls for this turn");
-  }
-
   const functionResponse = toolResult.success
     ? buildSuccessfulFunctionResponse(toolResult, functionCall.name)
     : {
@@ -1323,18 +1296,6 @@ function resolveEnhancedContextItem(record: Record<string, unknown>, type: strin
     );
   }
   return stashedItem ?? record.enhanced_context_item;
-}
-
-async function shouldEndAfterPreToolText(
-  streamResult: StreamResult,
-  functionName: string,
-  serverId: number | undefined,
-): Promise<boolean> {
-  const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
-  if (!hasPreToolText) return false;
-  if (!TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName)) return false;
-  if (functionName === "update_short_term_memory") return true;
-  return !(await ToolRegistry.requiresFollowUp(functionName, serverId));
 }
 
 // Held NovelAI fragments, token-cap truncations, speaker-guard discards, and follow-up tools return false because a

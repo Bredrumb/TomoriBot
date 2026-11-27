@@ -6,7 +6,7 @@ aiGenerated: false
 
 *Aviso: Esta é uma tradução fornecida por conveniência. Em caso de conflito, a versão em inglês prevalece.*
 
-Última atualização: 2026-10-22
+Última atualização: 2026-11-27
 
 Esta política se aplica ao TomoriBot oficial hospedado no Discord, incluindo uso pessoal, uso em Servidores e solicitações patrocinadas. Se você usar hospedagem própria, você controla seus dados; esta política não se aplica à sua cópia.
 
@@ -81,7 +81,7 @@ Esses serviços podem processar dados fora do seu país e têm suas próprias po
 | Resumos da memória de curto prazo | 90 dias após a última atividade, por padrão |
 | Registros de erros | 90 dias |
 | Registros de desempenho e identificadores de mensagens do bot | 30 dias |
-| Registros do Natural Nudges | 30 dias; o objetivo privado da persona por até 90 dias |
+| Registros do Natural Nudges | 30 dias; o objetivo privado da persona por até 90 dias; o toque mais recente de cada canal é mantido, sem o membro mencionado nem o tópico, até que um toque mais novo naquele canal o substitua |
 | Registros de atualização de associação do Patreon | 30 dias, por padrão |
 | Registros de login do Patreon concluídos ou expirados | Elegíveis para exclusão após uma hora, por padrão |
 | Uso detalhado da assinatura | 90 dias; registros do período atual ficam até seu fim, se for posterior |

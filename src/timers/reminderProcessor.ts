@@ -398,7 +398,6 @@ export class ReminderProcessor {
           return;
         }
 
-        // Quota will not come back within the retry window, so the no-AI notice posts now instead of after five retries.
         if (getTextQuotaRefusalReason(args.textQuotaTriggerKey) === "exceeded") {
           await settle(async () => {
             await this.handleReminderExecutionFailure(
@@ -527,8 +526,6 @@ export class ReminderProcessor {
     }
   }
 
-  // A blacklisted creator is ignored without posting their content or counting a failure, so the schedule resumes if the
-  // blacklist is lifted.
   private async skipOccurrenceSilently(reminder: ReminderRow): Promise<void> {
     if (!reminder.reminder_id) return;
     const repetition = getReminderRepetition(reminder);
@@ -639,8 +636,6 @@ export class ReminderProcessor {
           cause,
         ));
       assertScheduledWorkActive(work);
-      // A posted quota notice is not a provider failure, so it must not push the schedule toward degraded retries or
-      // dead-schedule removal.
       const failedOccurrences =
         (reminder.failed_occurrence_count ?? 0) + (cause === "quota" && fallbackDelivered ? 0 : 1);
 
@@ -726,7 +721,6 @@ export class ReminderProcessor {
         footerKey,
       });
 
-      // A self-task's target is the bot itself, so a quota notice pings the member whose quota ran out.
       const mentionUserId = isSelfReminder
         ? isQuota
           ? (reminder.created_by_user_disc_id ?? undefined)

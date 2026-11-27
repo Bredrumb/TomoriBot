@@ -11,7 +11,7 @@ import { extractBridgeUserId } from "@/utils/bridges";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { extractTextDisplayContent } from "@/utils/discord/componentNoticeReader";
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
-import { getBlockedSendReason } from "@/utils/discord/stream/sendFailureCache";
+import { resolveBotSendBlock } from "@/utils/discord/botSendBlock";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
   doesMessageMatchTrigger,
@@ -60,14 +60,6 @@ import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageP
 import { isMessageProxyInstanceBotPresent } from "@/utils/messageProxy/guildPresence";
 import type { Message } from "discord.js";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
-
-// Cache-only lookup avoids a per-turn Discord round trip, and stale state self-corrects because the send path handles
-// 50013.
-function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
-  if (!client.user) return false;
-  const botMember = guild.members.cache.get(client.user.id);
-  return botMember?.isCommunicationDisabled() ?? false;
-}
 
 function resolveAdmissionNoticeLocale(incoming: ChatIncoming, languagePreference?: string): string {
   return (
@@ -331,27 +323,9 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   }
 
   if (!channelScope.isDMChannel && "permissionsFor" in channel) {
-    const permissions = client.user ? channel.permissionsFor(client.user) : null;
-    if (!permissions) {
-      return blocked("missing_channel_permissions");
-    }
-    const canSend = channelScope.isThreadChannel
-      ? permissions.has("SendMessagesInThreads")
-      : permissions.has("SendMessages");
-    if (!canSend) {
-      return blocked("cannot_send_in_channel");
-    }
-
-    // Timed-out members retain all permission bits even though Discord rejects sends with 50013, so check timeout
-    // state on the member.
-    if (isBotTimedOut(channel.guild, client)) {
-      return blocked("bot_timed_out_in_guild");
-    }
-
-    // Reactive backstop for unseen send refusals (cleared once a send lands) when permission and timeout checks
-    // still pass.
-    if (getBlockedSendReason(channel.id)) {
-      return blocked("recent_send_refused");
+    const sendBlock = resolveBotSendBlock(channel, channel.guild.members.me);
+    if (sendBlock) {
+      return blocked(sendBlock.reason);
     }
   }
 
@@ -707,6 +681,17 @@ function applyEffectiveMessageContent(message: Message, content: string): void {
 }
 
 export async function handleChatDisposition(admission: NonRunnableChatAdmission): Promise<void> {
+  const { client, message, isManuallyTriggered } = admission.incoming;
+  // Only direct addresses count because every message in a channel the bot can read but not post in is blocked.
+  const isDirectAddress = isManuallyTriggered || (client.user !== null && message.mentions.users.has(client.user.id));
+  if (admission.disposition === "blocked" && isDirectAddress) {
+    log.metric("chat_admission_blocked", {
+      reason: admission.reason,
+      guildId: message.guildId ?? "dm",
+      channelId: message.channelId,
+    });
+  }
+
   if (admission.error) {
     log.warn(`Chat admission ended with ${admission.disposition}: ${admission.reason}`, admission.error);
     return;
@@ -763,7 +748,6 @@ export async function resolveAdmissionChannelScope(
   guild: Guild | null;
   serverDiscId: string;
   isDMChannel: boolean;
-  isThreadChannel: boolean;
   isManuallyTriggered?: boolean;
 } | null> {
   const { client, message } = incoming;
@@ -779,7 +763,6 @@ export async function resolveAdmissionChannelScope(
       guild: message.guild,
       serverDiscId: message.guild?.id ?? userDiscId,
       isDMChannel: false,
-      isThreadChannel,
       isManuallyTriggered: incoming.isManuallyTriggered,
     };
   }
@@ -793,7 +776,6 @@ export async function resolveAdmissionChannelScope(
       guild: null,
       serverDiscId,
       isDMChannel: true,
-      isThreadChannel: false,
       isManuallyTriggered: true,
     };
   }

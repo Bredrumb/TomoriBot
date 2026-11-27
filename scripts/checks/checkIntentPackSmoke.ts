@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isDiscordLocaleCode } from "@/constants/locales";
-import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
-import { DELIBERATE_TOOL_PACK_KEYS, EXPLICIT_MEMORY_PACK_KEY } from "@/utils/text/localeIntentPacks";
+import { DELIBERATE_TOOL_PACK_KEYS } from "@/utils/text/localeIntentPacks";
 import { getLocaleStringList, getSupportedLocales, initializeLocalizer } from "@/utils/text/localizer";
 import {
   getDeliberateToolAllowedNames,
@@ -12,7 +11,6 @@ const MIN_REQUESTS_PER_TARGET = 3;
 
 interface SmokeRequests {
   deliberate?: Record<string, string[]>;
-  explicit_memory?: string[];
 }
 
 interface SmokeMiss {
@@ -76,21 +74,6 @@ async function main(): Promise<void> {
           detail: `expected one of [${expectedTools.join(", ")}], got [${allowed.join(", ")}]`,
         });
       }
-    }
-  }
-
-  if ((getLocaleStringList(locale, EXPLICIT_MEMORY_PACK_KEY) ?? []).length === 0) {
-    problems.push(`${EXPLICIT_MEMORY_PACK_KEY} is empty for ${locale}`);
-  }
-  const memoryRequests = requests.explicit_memory ?? [];
-  if (memoryRequests.length < MIN_REQUESTS_PER_TARGET) {
-    problems.push(`explicit_memory has ${memoryRequests.length} request(s); needs ${MIN_REQUESTS_PER_TARGET}`);
-  }
-  for (const request of memoryRequests) {
-    if (hasExplicitLongTermMemoryIntent(request)) {
-      passed++;
-    } else {
-      misses.push({ target: "explicit_memory", request, detail: "hasExplicitLongTermMemoryIntent returned false" });
     }
   }
 

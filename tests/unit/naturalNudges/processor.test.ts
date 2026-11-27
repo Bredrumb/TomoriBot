@@ -118,6 +118,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
   const scopes = spyOn(naturalNudgeRepository, "loadPersonaScopes").mockResolvedValue(new Map());
   const run = spyOn(runnerModule, "runIdleNudgeAttempt").mockResolvedValue("aborted");
   const topics = spyOn(naturalNudgeRepository, "loadRecentIdleNudgeTopics").mockResolvedValue([]);
+  const openers = spyOn(naturalNudgeRepository, "loadLatestIdleOpeners").mockResolvedValue(new Map());
   const drawPartners = spyOn(partnersModule, "drawScenePartners");
   const history: { recent: NaturalNudgeFireRow[]; latestIdleNudges: NaturalNudgeFireRow[] } = {
     recent: [],
@@ -144,6 +145,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     scopes,
     run,
     topics,
+    openers,
     spyOn(Math, "random").mockReturnValue(0),
     spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue({
       serverId: SERVER_ID,
@@ -204,6 +206,7 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     scopes,
     run,
     topics,
+    openers,
     drawPartners,
     history,
   };
@@ -686,6 +689,53 @@ describe("server nudge tuning", () => {
     setSystemTime(new Date(now.getTime() + 60 * 60 * 1000));
     await processor.processDueIdleNudges();
     expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a channel closed after its idle nudge until a human replies, even once the verdict window ends", async () => {
+    const { processor, run, openers } = fixture();
+    openers.mockResolvedValue(
+      new Map([
+        [CHANNEL_IDS[0], { openerMessageDiscId: "1300000000000000101", answered: false }],
+        [CHANNEL_IDS[1], { openerMessageDiscId: "1300000000000000102", answered: false }],
+      ]),
+    );
+    const replied = spyOn(channelsModule, "hasHumanReplyAfter").mockImplementation(
+      async (channel) => channel.id === CHANNEL_IDS[1],
+    );
+    spies.push(replied);
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].plannerChannels.map((channel) => channel.channel.id)).toEqual([CHANNEL_IDS[1]]);
+  });
+
+  it("re-reads a channel's replies after its idle nudge only until one is found", async () => {
+    const now = new Date();
+    setSystemTime(now);
+    const { processor, run, openers } = fixture();
+    openers.mockResolvedValue(
+      new Map([[CHANNEL_IDS[0], { openerMessageDiscId: "1300000000000000101", answered: false }]]),
+    );
+    const replied = spyOn(channelsModule, "hasHumanReplyAfter").mockResolvedValue(true);
+    spies.push(replied);
+    await processor.processDueIdleNudges();
+    await Bun.sleep(0);
+    setSystemTime(new Date(now.getTime() + 4 * 60 * 60 * 1000));
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(replied).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips planner model resolution when every quiet channel still waits on its last idle nudge", async () => {
+    const { processor, run, openers } = fixture();
+    openers.mockResolvedValue(
+      new Map(
+        CHANNEL_IDS.map((id, index) => [id, { openerMessageDiscId: `130000000000000010${index}`, answered: false }]),
+      ),
+    );
+    spies.push(spyOn(channelsModule, "hasHumanReplyAfter").mockResolvedValue(false));
+    await processor.processDueIdleNudges();
+    expect(run).not.toHaveBeenCalled();
+    expect(modelModule.resolvePlannerModel).not.toHaveBeenCalled();
   });
 
   it("draws only categories with positive server weights", async () => {

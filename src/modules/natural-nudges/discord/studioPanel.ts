@@ -169,7 +169,6 @@ const TOOL_KEYS: Record<NudgeToolName, string> = {
   interact_with_recent_message: "commands.nudge-studio.tool_interact_with_recent_message",
   create_long_term_memory: "commands.nudge-studio.tool_create_long_term_memory",
   update_long_term_memory: "commands.nudge-studio.tool_update_long_term_memory",
-  update_short_term_memory: "commands.nudge-studio.tool_update_short_term_memory",
   process_youtube_video: "commands.nudge-studio.tool_process_youtube_video",
 };
 

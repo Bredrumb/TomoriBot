@@ -81,18 +81,19 @@ export interface StreamingContext {
   disableYouTubeProcessing: boolean;
   disableProfilePictureProcessing?: boolean;
   disableGifProcessing?: boolean;
-  disableShortTermMemoryUpdate?: boolean;
   disableConditioningInteraction?: boolean;
-  disableCrossChannelMessage?: boolean; // Flag to prevent nested cross-channel dispatch during tool-driven cross-channel turns
-  explicitLongTermMemoryIntent?: boolean; // Flag to suppress STM tool nudges when the current user message explicitly asks for persistent memory
-  disableMessageMetadataContext?: boolean; // Flag to prevent reveal_message_metadata from being called more than once per turn
-  disableRecentMessageReplyTool?: boolean; // Allow reactions but block tool-sent replies when the stream is already replying
-  forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
-  isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
-  // Error recovery relies on credential scope because different scopes can share a provider.
+  disableCrossChannelMessage?: boolean;
+  disableMessageMetadataContext?: boolean;
+  // Blocks tool-sent replies when the stream is already replying (reactions stay allowed).
+  disableRecentMessageReplyTool?: boolean;
+  forceReason?: boolean;
+  isManuallyTriggered?: boolean;
+  suppressUserErrors?: boolean;
+  // Error recovery relies on this scope because different credential scopes can share a provider; omit only for
+  // non-chat calls without user routing.
   textCredentialSource?: "server" | "personal" | "supporter";
-  forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
+  // Suppresses user errors regardless of key availability when retrying fallbacks.
+  forceModelFallback?: boolean;
   // Each fallback attempt clears this held timeout notice, so the generation loop emits it only if no later attempt
   // replaces it.
   deferredTimeoutNotice?: { providerName: string; sawStreamProgress: boolean };
@@ -269,9 +270,6 @@ export interface ToolAssemblyState {
 export interface ToolAssemblyContext {
   provider: string;
   state: ToolAssemblyState;
-  // Pre-assembly tool names passed into assembleForContext so schema builders can inspect sibling availability
-  // without circular dependencies.
-  availableToolNames?: ReadonlySet<string>;
 }
 
 export interface Tool {

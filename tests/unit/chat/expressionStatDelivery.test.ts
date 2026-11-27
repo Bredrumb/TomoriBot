@@ -393,8 +393,9 @@ describe("emoji stats count only what Discord accepted", () => {
     context.simplifiedMessages = [
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
-    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
-    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const warm = spyOn(stm, "preWarmStmEntry").mockResolvedValue(undefined);
+    const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockResolvedValue(undefined);
     try {
       const result = makeResult({
         streamResults: [
@@ -417,6 +418,7 @@ describe("emoji stats count only what Discord accepted", () => {
         ],
       });
       await runPostTurnEffects(context, result);
+      await Bun.sleep(0);
       expect(memory).toHaveBeenCalledTimes(1);
       const stored = memory.mock.calls[0]?.[2] ?? [];
       expect(stored.filter((entry) => entry.role === "model").map((entry) => entry.content)).toEqual([
@@ -430,6 +432,7 @@ describe("emoji stats count only what Discord accepted", () => {
           .reduce((total, entry) => total + (entry.delta ?? 0), 0),
       ).toBe(22);
     } finally {
+      warm.mockRestore();
       memory.mockRestore();
       cadence.mockRestore();
     }
@@ -455,13 +458,15 @@ describe("emoji stats count only what Discord accepted", () => {
     first.simplifiedMessages = [
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
-    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
-    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const warm = spyOn(stm, "preWarmStmEntry").mockResolvedValue(undefined);
+    const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockResolvedValue(undefined);
     try {
       await runPostTurnEffects(
         first,
         makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: [] }),
       );
+      await Bun.sleep(0);
       expect(memory).not.toHaveBeenCalled();
       for (const personaId of [3, 4]) {
         const context = { ...first, currentPersona: createPersona({ persona_id: personaId, server_id: SERVER_ID }) };
@@ -475,6 +480,7 @@ describe("emoji stats count only what Discord accepted", () => {
           }),
         );
       }
+      await Bun.sleep(0);
       expect(first.textQuotaState?.consumed).toBe(true);
       expect(memory).toHaveBeenCalledTimes(2);
       expect(memory.mock.calls.map((call) => call[6])).toEqual([3, 4]);
@@ -492,6 +498,7 @@ describe("emoji stats count only what Discord accepted", () => {
       );
       expect(recorded).toHaveLength(before);
     } finally {
+      warm.mockRestore();
       memory.mockRestore();
       cadence.mockRestore();
     }

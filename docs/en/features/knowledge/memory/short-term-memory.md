@@ -12,10 +12,17 @@ temporary working context:
 - **Cross-channel context:** Recalls recent conversations from other channels, and across servers when
   cross-server recall is enabled.
 
-She only remembers conversations she took part in. She updates a channel's summary when she replies,
-and at no other time, so a busy channel where nobody talks to her leaves no memory. Each channel's
-short-term memory expires after 24 hours by default. If you opt out under `/personal config`, your
-messages are excluded from short-term memory.
+TomoriBot keeps short-term memory for conversations she takes part in. Server setup enables automatic
+summaries by default, with a summary every 10 replies. The summary runs in the background as a
+separate request to the same model, so your reply arrives without waiting for it. The extra request
+is billed to the same API key as the reply, including your personal key if you used one.
+
+Automatic summaries work with Tool Use off and with models that cannot call tools. The provider
+must support conversation summaries. NovelAI can still recall short-term memory and use summaries
+you edit manually.
+
+Short-term memory expires after a period of inactivity. If you opt out under
+`/personal config`, your messages are excluded from short-term memory.
 
 Fresh short-term memory and memory carrying other channels' content sit just above the latest four
 speaker turns. Older memory from this channel stays above the conversation at the default setting.
@@ -45,8 +52,9 @@ private-channel STM may leave.
 <!-- anchor: managing-short-term-memory -->
 
 You can view or correct the current channel's summary under `/config` > `Persona` > `Memories`.
-Server managers can adjust parameters or disable short-term memory under `/config` > `Behavior` >
-`Advanced Memory`, and review or clear active channel summaries under `/memories` > `Short-Term`.
+Server managers can change how often summaries refresh, set their own instructions for the
+summarizer, or turn automatic summaries off under `/config` > `Behavior` > `Advanced Memory`.
+They can review or clear active channel summaries under `/memories` > `Short-Term`.
 `/refresh` clears the current channel's memory.
 
 Use `{@userId}` in a summary or category to insert the person's current persona-specific nickname

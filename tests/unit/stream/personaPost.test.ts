@@ -37,6 +37,7 @@ import { GENERIC_WEBHOOK_AVATAR_URL } from "@/utils/discord/webhook/identity";
 import { classifyDiscordDeliveryFailure } from "@/utils/discord/webhook/deliveryOutcome";
 import { clearEmergencyCaches } from "@/utils/cache/emergencyCacheClearer";
 import { createPersona } from "../../helpers/fixtures";
+import { buildTextDisplayModalRow } from "@/utils/discord/textDisplayModal";
 
 const CHANNEL = "1400000000000000000";
 const BASE = "https://example.com/base.png";
@@ -444,11 +445,12 @@ describe("committed persona appearance", () => {
     }
   });
 
-  it("preserves the own sprite for a fallback notice after another persona and after bot fallback", async () => {
-    const { sendFallbackModelUsageNotice } = await import("@/utils/discord/fallbackModelNotice");
+  it("uses the reply sprite for a controls row after intervening persona and bot deliveries", async () => {
     for (const via of ["bot", "webhook"] as const) {
       const f = fixture(true, true);
       await f.deliverSprite();
+      const reply = f.context.deliveryReceipts?.at(-1);
+      if (!reply) throw new Error("Missing reply receipt");
       recordPersonaDelivery({
         messageId: "1500000000000000000",
         channelId: CHANNEL,
@@ -458,26 +460,22 @@ describe("committed persona appearance", () => {
         speaker: { personaId: via === "webhook" ? 8 : null, kind: "appearance" },
       });
       f.channel.lastMessageId = "1500000000000000000";
-      const on = mock();
-      const send = f.webhook.send.getMockImplementation();
-      if (!send) throw new Error("Missing sender");
-      f.webhook.send.mockImplementation(async (payload) =>
-        Object.assign(await send(payload), { createMessageComponentCollector: () => ({ on }) }),
-      );
-      await sendFallbackModelUsageNotice({
-        context: {
-          client: f.streamContext.client,
-          provider: "fixture",
-          channel: f.context.channel,
-          tomoriState: f.context.persona,
-          locale: "en-US",
-          streamContext: { disableYouTubeProcessing: false, deliveryReceipts: f.context.deliveryReceipts },
+      const outcome = await sendPersonaPost(
+        {
+          ...f.context,
+          webhook: f.streamContext.webhook,
+          followupTo: reply,
+          deliveryReceipts: undefined,
         },
-        failures: [],
-        successModel: f.context.persona.llm,
-      });
+        {
+          components: [
+            buildTextDisplayModalRow([{ customId: "reply-controls:v1:fallback:en-US", label: "Fallback Used" }]),
+          ],
+        },
+      );
+      if (outcome.status !== "sent") throw new Error("Missing controls receipt");
       expect(f.webhook.send.mock.calls.at(-1)?.[0]).toMatchObject({ username: "joy (Juno)", avatarURL: SPRITE });
-      expect(f.context.deliveryReceipts?.at(-1)).toMatchObject({
+      expect(outcome.receipt).toMatchObject({
         route: "webhook",
         speaker: { personaId: 7, kind: "identity_sprite" },
       });

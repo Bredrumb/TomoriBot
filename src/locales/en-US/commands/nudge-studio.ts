@@ -135,7 +135,6 @@ export default {
     tool_interact_with_recent_message: `React or reply to a message`,
     tool_create_long_term_memory: `Save a memory`,
     tool_update_long_term_memory: `Update a memory`,
-    tool_update_short_term_memory: `Update short-term memory`,
     tool_process_youtube_video: `Watch a YouTube video`,
     idle_nudge_titles: {
       ping_user_check_in: `Check-in`,

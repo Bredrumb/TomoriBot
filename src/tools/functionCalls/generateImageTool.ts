@@ -1409,8 +1409,7 @@ export class GenerateImageTool extends BaseTool {
       }
       quotaSpent = true;
 
-      // /kill stops awaiting this tool but cannot stop it, so a backend that ignores the signal
-      // still finishes here; posting now would deliver a reply the user killed.
+      // A backend that ignores /kill's abort signal still finishes here, so check again before posting.
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Image generation was cancelled." };
       }
@@ -1482,7 +1481,6 @@ export class GenerateImageTool extends BaseTool {
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return notifyProviderToolFailure(context, denied);
       if (context.abortSignal?.aborted) {
-        // Cancellation cannot recall a submitted request, so the provider still bills it and the unit stays spent.
         quotaSpent ||= providerRequested;
         return { success: false, error: "Image generation was cancelled." };
       }

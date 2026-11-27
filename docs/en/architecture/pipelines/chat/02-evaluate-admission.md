@@ -40,16 +40,22 @@ turns triggered by one of Tomori's own recent messages still resolve the human u
 
 ### Sendability validation
 
-Before loading persona configuration or calling models, guild channels pass three delivery checks:
+Before loading persona configuration or calling models, guild channels pass three delivery checks in
+`resolveBotSendBlock()` (`src/utils/discord/botSendBlock.ts`):
 
-1. **Permission bits**: verifies `SendMessages` in standard text channels or `SendMessagesInThreads`
-   in thread channels.
+1. **Permission bits**: verifies `ViewChannel` plus `SendMessages` in standard text channels or
+   `SendMessagesInThreads` in thread channels. discord.js does not apply Discord's rule that a member
+   without `ViewChannel` loses every other permission, so a private channel still reports the send bit.
 2. **Guild timeout**: checks `member.isCommunicationDisabled()` on the cached bot member. A timed-out bot
    retains its permission bits in Discord's bitfield, but Discord rejects sends with HTTP error 50013.
    Checking the cached member avoids a remote API call.
-3. **Recent refusal cache**: checks `getBlockedSendReason()` from `sendFailureCache`. This backstop catches
+3. **Recent refusal cache**: checks `getBlockedSendRetryAt()` from `sendFailureCache`. This backstop catches
    channels where Discord recently refused a send with 50013 or 50001, skipping generations until
    `SEND_FAILURE_RETRY_MS` expires or a subsequent send succeeds.
+
+These refusals are silent in the channel. `/respond` runs the same checks before acknowledging and answers
+with an ephemeral notice instead of starting a turn that admission would drop. `/ping` adds the same notice
+to its latency reply and makes that reply ephemeral.
 
 ### Message-proxy admission
 

@@ -42,12 +42,18 @@ export async function generateConversationSummaryCustom(
     });
 
     if (!response.success) {
-      await reportCustomSummaryFailure(
-        request,
-        new Error(`HTTP ${response.error.status}: ${response.error.errorBody}`),
-        response.error.status,
-      );
+      if (!request.deferFailureReport) {
+        await reportCustomSummaryFailure(
+          request,
+          new Error(`HTTP ${response.error.status}: ${response.error.errorBody}`),
+          response.error.status,
+        );
+      }
       return {
+        cause: Object.assign(new Error("Provider request failed"), {
+          status: response.error.status,
+          responseBody: response.error.errorBody.replaceAll(request.apiKey, "[REDACTED]"),
+        }),
         error:
           response.error.status === 0
             ? response.error.errorBody
@@ -66,8 +72,9 @@ export async function generateConversationSummaryCustom(
       summary: responseText,
     };
   } catch (error) {
-    await reportCustomSummaryFailure(request, error);
+    if (!request.deferFailureReport) await reportCustomSummaryFailure(request, error);
     return {
+      cause: error instanceof Error ? error : undefined,
       error: error instanceof Error ? error.message : "Unknown custom endpoint error",
     };
   }

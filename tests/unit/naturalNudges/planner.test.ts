@@ -328,6 +328,61 @@ describe("recent topic memory", () => {
       target.mockRestore();
     }
   });
+
+  it.each([
+    { topic: "Tea Blends!", status: "declined" },
+    { topic: "tea  blends", status: "declined" },
+    { topic: "rare tea blends", status: "planned" },
+    { topic: " ☕🌧 ", status: "declined" },
+    { topic: "🎸🔥", status: "planned" },
+  ])("declines a plan that repeats a recent topic despite the prompt rule: %j", async ({ topic, status }) => {
+    const persona = createPersona();
+    const resolve = spyOn(modelModule, "resolveNudgeModel").mockResolvedValue({
+      kind: "ready",
+      resolved: {
+        state: persona,
+        apiKey: "fixture-key",
+        capability: {
+          callStructuredJSON: async (_request, _schema, accepted) => ({
+            success: true,
+            data: accepted.parse({
+              proceed: true,
+              nudge: soloNudge.key,
+              channel: 2,
+              topic,
+              opener_direction: "Share a find.",
+              agenda: "Swap recommendations.",
+            }),
+          }),
+        },
+      },
+    });
+    const target = spyOn(modelModule, "resolveStructuredCallTarget").mockResolvedValue({
+      model: "fixture-model",
+      endpointUrl: undefined,
+      maxOutputTokens: 1000,
+    });
+    try {
+      const outcome = await planIdleNudge({
+        persona,
+        interests: [],
+        recentTopics: ["cello recital", "tea blends", "☕🌧"],
+        candidates: soloCandidates,
+        channels: [
+          { name: "general", description: null, transcript: "" },
+          { name: "tea", description: null, transcript: "" },
+        ],
+        plannerModel: { llmId: 1, slot: "nudge-planner" },
+        admitRequest: () => true,
+        target: null,
+      });
+      expect(outcome.status).toBe(status);
+      if (outcome.status === "declined") expect(outcome.reason).toBe("repeated_topic");
+    } finally {
+      resolve.mockRestore();
+      target.mockRestore();
+    }
+  });
 });
 
 describe("planner request budget", () => {

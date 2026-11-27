@@ -22,10 +22,11 @@ Em um DM, envie uma mensagem diretamente, sem qualquer palavra-gatilho ou menç�
 
 ### Controles de resposta
 
-Os gerentes de servidor podem ativar Tentar Novamente e Continuar em `/config` > `Comportamento` > `Comportamento de Gatilho` > `Controles de Resposta`. Apenas o membro que solicitou uma resposta pode usar os botões dela, e somente enquanto a resposta estiver no fim da conversa. Novas mensagens ocultam os botões. Excluir essas mensagens traz os botões de volta se a mesma resposta não utilizada voltar a ser a última. Usar um botão, uma nova resposta de persona ou `/refresh` desativa esses controles definitivamente.
+Os gerentes de servidor podem ativar Tentar Novamente e Continuar em `/config` > `Comportamento` > `Comportamento de Gatilho` > `Controles de Resposta`. O membro que solicitou a resposta pode usar qualquer uma das ações. Novas mensagens no canal ocultam a linha abaixo da resposta. Excluir essas mensagens traz a linha de volta se a mesma resposta continuar sendo a última. Um Tentar Novamente ou Continuar aceito, uma nova resposta de persona ou `/refresh` desativa a linha definitivamente.
 
 - `↻` refaz a resposta inteira, excluindo-a e pedindo para a mesma persona responder novamente. O bot precisa de `Gerenciar mensagens` para excluir respostas enviadas pela própria conta.
 - `→` pede para a mesma persona continuar em uma nova mensagem.
+- `Secundário Usado` mostra qual modelo respondeu e por que as tentativas anteriores falharam. Qualquer pessoa que consiga ver a linha pode abrir os detalhes, e a linha permanece visível. O botão pode aparecer mesmo quando Tentar Novamente e Continuar estão desativados.
 
 ### Gerenciando Palavras-Gatilho
 <!-- anchor: managing-trigger-words -->

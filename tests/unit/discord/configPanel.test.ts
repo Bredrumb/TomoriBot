@@ -1,7 +1,8 @@
 import { humanizerSettingsFromDegree } from "@/constants/humanizer";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
-import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
+import { type PersonaSpriteRow, serverStmConfigSchema, type StmCategoryRow, type TomoriState } from "@/types/db/schema";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
   CONFIG_CATEGORY_ORDER,
@@ -22,10 +23,11 @@ import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/components
 import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import { DEFAULT_STM_REFRESH_CADENCE, DEFAULT_STM_SUMMARIZER_INSTRUCTIONS } from "@/utils/memory/stmSummarizer";
 import { initializeLocalizer, hasLocaleKey, localizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse, expectForEveryLocale } from "../../helpers/localeCases";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
-import { expectSafePanelPayload } from "../../helpers/panelLimits";
+import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -133,6 +135,14 @@ const MEMORY_CATEGORIES: StmCategoryRow[] = [
   { server_id: 9, position: 0, label: "Summary", description: "Current summary" },
   { server_id: 9, position: 1, label: "People", description: "People in the scene" },
 ];
+
+const BEHAVIOR_MEMORY_VIEW = {
+  memoryTaggingEnabled: true,
+  channelMemoryEnabled: false,
+  stmEnabled: true,
+  stmConfig: null,
+  stmCategories: MEMORY_CATEGORIES,
+};
 
 const MEMORY_CONDITIONING: ConditioningGroup = {
   conditioningType: "reward",
@@ -1630,9 +1640,13 @@ describe("config Behavior pages", () => {
     const member = build(GUILD_MEMBER, { category: "behavior", page: "trigger", behaviorView });
     expect(walk(member).some((component) => component.content?.includes("Cascade limit: 3"))).toBe(false);
     expect(buttonFor(member, { action: "behavior-dtm-set", locale: "en-US", enabled: true })).toBeUndefined();
+
+    const dm = build(DM_OWNER, { category: "behavior", page: "trigger", behaviorView });
+    const nudgesHeading = localizedCopy("en-US", "commands.config.panel.page_plugins_natural_nudges");
+    expect(walk(dm).some((component) => component.content?.includes(`**${nudgesHeading}**`))).toBe(false);
   });
 
-  it("fits reply reaction controls with random triggers and a receipt across locales", () => {
+  it("shows the current reply-control states below the buttons within panel limits", () => {
     expectForEveryLocale((locale) => {
       const trigger = behaviorView.trigger.randomTriggers[0];
       if (!trigger) throw new Error("Expected a random trigger fixture");
@@ -1641,19 +1655,48 @@ describe("config Behavior pages", () => {
         trigger_id: index + 1,
         channel_disc_id: String(300000000000000000n + BigInt(index)),
       }));
-      const payload = build(GUILD_MANAGER, {
-        locale,
-        category: "behavior",
-        page: "trigger",
-        behaviorView: {
-          ...behaviorView,
-          trigger: { ...behaviorView.trigger, randomTriggers, fastRegenerationRetryEnabled: true },
-        },
-        receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
-      });
-      expect(buttonFor(payload, { action: "behavior-retry-set", locale, enabled: false })?.disabled).toBe(false);
-      expect(buttonFor(payload, { action: "behavior-continue-set", locale, enabled: true })?.disabled).toBe(false);
-      expectSafePanelPayload(payload, locale);
+      for (const [retryEnabled, continueEnabled] of [
+        [true, false],
+        [false, true],
+      ] as const) {
+        const payload = build(GUILD_MANAGER, {
+          locale,
+          category: "behavior",
+          page: "trigger",
+          behaviorView: {
+            ...behaviorView,
+            trigger: {
+              ...behaviorView.trigger,
+              randomTriggers,
+              fastRegenerationRetryEnabled: retryEnabled,
+              fastRegenerationContinueEnabled: continueEnabled,
+            },
+          },
+          receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+        });
+        expect(buttonFor(payload, { action: "behavior-retry-set", locale, enabled: !retryEnabled })?.disabled).toBe(
+          false,
+        );
+        const continueRoute = { action: "behavior-continue-set", locale, enabled: !continueEnabled } as const;
+        expect(buttonFor(payload, continueRoute)?.disabled).toBe(false);
+        const seen = walk(payload);
+        const continueIndex = seen.findIndex((component) => component.customId === buildConfigRouteId(continueRoute));
+        const summary = seen[continueIndex + 1]?.content ?? "";
+        expect(summary.split("\n").filter((line) => line.startsWith("> - "))).toHaveLength(2);
+        expect(summary).toMatch(
+          localizedProse(
+            locale,
+            retryEnabled ? "commands.config.panel.retry_reply_on" : "commands.config.panel.retry_reply_off",
+          ),
+        );
+        expect(summary).toMatch(
+          localizedProse(
+            locale,
+            continueEnabled ? "commands.config.panel.continue_reply_on" : "commands.config.panel.continue_reply_off",
+          ),
+        );
+        expectSafePanelPayload(payload, locale);
+      }
     });
   });
 
@@ -1712,14 +1755,7 @@ describe("config Behavior pages", () => {
         verbosity: "minimal" as const,
         speechTranscriptsEnabled: true,
       },
-      memory: {
-        memoryTaggingEnabled: true,
-        channelMemoryEnabled: false,
-        stmEnabled: true,
-        toolUseEnabled: true,
-        stmConfig: null,
-        stmCategories: MEMORY_CATEGORIES,
-      },
+      memory: BEHAVIOR_MEMORY_VIEW,
     };
     const experimental = build(GUILD_MANAGER, { category: "behavior", page: "experimental", behaviorView: d10View });
     const notices = build(GUILD_MANAGER, { category: "behavior", page: "notices", behaviorView: d10View });
@@ -1768,40 +1804,152 @@ describe("config Behavior pages", () => {
     expect(buttonFor(memory, { action: "behavior-stm-enabled-set", locale: "en-US", enabled: false })?.disabled).toBe(
       false,
     );
-
-    const memoryToolUseOff = build(GUILD_MANAGER, {
-      category: "behavior",
-      page: "memory",
-      behaviorView: { ...d10View, memory: { ...d10View.memory, toolUseEnabled: false } },
-    });
-    const toolUseOffSerialized = walk(memoryToolUseOff)
-      .map((component) => component.content ?? "")
-      .join("\n");
-    expect(toolUseOffSerialized).toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_tool_use_off"));
-    expect(toolUseOffSerialized).not.toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_on"));
   });
 
-  it("keeps the overflow removal selector off the ordinary Trigger page", () => {
+  it("renders STM instructions, the summary interval, and the automatic summarization states", () => {
+    const locale = "en-US";
+    const memory = build(GUILD_MANAGER, {
+      category: "behavior",
+      page: "memory",
+      behaviorView: { ...behaviorView, memory: BEHAVIOR_MEMORY_VIEW },
+    });
+    const instructions = "Keep unresolved plans and decisions.";
+    const memoryOff = build(GUILD_MANAGER, {
+      category: "behavior",
+      page: "memory",
+      behaviorView: {
+        ...behaviorView,
+        memory: {
+          ...BEHAVIOR_MEMORY_VIEW,
+          stmEnabled: false,
+          stmConfig: serverStmConfigSchema.parse({ server_id: 9, summarizer_instructions_override: instructions }),
+        },
+      },
+    });
+    const onText = collectTextDisplays(memory);
+    const offText = collectTextDisplays(memoryOff);
+    const title = localizedCopy(locale, "commands.config.panel.stm_prompt_title");
+    const onPrompt = onText.find((content) => content.startsWith(`**${title}**`));
+    const offPrompt = offText.find((content) => content.startsWith(`**${title}**`));
+    expect(onPrompt?.split("```markdown\n").slice(1)).toEqual([`${DEFAULT_STM_SUMMARIZER_INSTRUCTIONS}\n\`\`\``]);
+    expect(offPrompt?.split("```markdown\n").slice(1)).toEqual([`${instructions}\n\`\`\``]);
+    expect(buttonFor(memory, { action: "behavior-stm-prompt-open", locale })?.disabled).toBe(false);
+
+    const statusDescription = localizedProse(locale, "commands.config.panel.stm_enabled_description");
+    expect(onText[onText.findIndex((content) => statusDescription.test(content)) + 1]).toMatch(
+      localizedProse(locale, "commands.config.panel.stm_enabled_on"),
+    );
+    expect(offText[offText.findIndex((content) => statusDescription.test(content)) + 1]).toMatch(
+      localizedProse(locale, "commands.config.panel.stm_enabled_off"),
+    );
+
+    const parametersTitle = localizedCopy(locale, "commands.config.panel.stm_parameters_title");
+    const parameters = onText.find((content) => content.startsWith(`**[${parametersTitle}]`));
+    expect(parameters?.split("\n").filter((line) => line.startsWith("> "))).toEqual([
+      `> ${localizedCopy(locale, "commands.config.panel.stm_refresh_cadence_value", { count: DEFAULT_STM_REFRESH_CADENCE })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_render_mode_value", { mode: "crude_summary" })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_crude_messages_value", { count: 6 })}`,
+      `> ${localizedCopy(locale, "commands.config.panel.stm_content_depth_value", { count: -1 })}`,
+    ]);
+    for (const key of [
+      "commands.config.panel.stm_parameters_auto_off_note",
+      "commands.config.panel.stm_categories_auto_off_note",
+      "commands.config.panel.stm_prompt_auto_off_note",
+    ]) {
+      const note = localizedProse(locale, key);
+      expect(
+        offText.some((text) =>
+          note.test(
+            text
+              .split("\n")
+              .filter((line) => line.startsWith("-# "))
+              .join("\n"),
+          ),
+        ),
+      ).toBe(true);
+      expect(onText.join("\n")).not.toMatch(note);
+    }
+  });
+
+  it("keeps Advanced Memory within Discord's text cap when every STM category slot is full", () => {
+    const stmCategories = Array.from({ length: 5 }, (_, position) => {
+      const label = `Category ${position + 1}`;
+      return { server_id: 9, position, label, description: "A".repeat(1000 - label.length - 2) };
+    });
+    expectForEveryLocale((locale) => {
+      const payload = build(GUILD_MANAGER, {
+        locale,
+        category: "behavior",
+        page: "memory",
+        behaviorView: {
+          ...behaviorView,
+          memory: { ...BEHAVIOR_MEMORY_VIEW, stmEnabled: false, stmCategories },
+        },
+      });
+      expectSafePanelPayload(payload, locale);
+      const categoryTitle = localizedCopy(locale, "commands.config.panel.stm_categories_title");
+      const categories = collectTextDisplays(payload).find((content) => content.startsWith(`**${categoryTitle}**`));
+      expect(categories).toContain(`\n\`\`\`markdown\n${stmCategories[0]?.label}: `);
+      expect(categories).toContain("<!--");
+    });
+  });
+
+  it("fits Natural Nudges below the bounded schedule summary in every locale", () => {
     const first = behaviorView.trigger.randomTriggers[0];
+    const personas = Array.from({ length: RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE + 1 }, (_entry, index) =>
+      makePersona({
+        persona_id: index + 1,
+        persona_nickname: `Persona ${index + 1}`.padEnd(PERSONA_NICKNAME_MAX_LENGTH, "a"),
+      }),
+    );
+    const randomTriggers = Array.from({ length: CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY + 1 }, (_entry, index) => ({
+      ...first,
+      trigger_id: index + 1,
+      persona_id: personas[index % personas.length].persona_id,
+      channel_disc_id: String(300000000000000000n + BigInt(index)),
+      timer_hours: 168,
+      chance_percent: 100,
+    }));
     const overflowingView = {
       ...behaviorView,
-      trigger: {
-        ...behaviorView.trigger,
-        randomTriggers: Array.from({ length: 51 }, (_entry, index) => ({
-          ...first,
-          trigger_id: index + 1,
-        })),
-      },
+      trigger: { ...behaviorView.trigger, randomTriggers },
     };
-    const payload = build(GUILD_MANAGER, { category: "behavior", page: "trigger", behaviorView: overflowingView });
-    expect(buttonFor(payload, { action: "behavior-random-remove-open", locale: "en-US" })).toMatchObject({
-      disabled: false,
+    expectForEveryLocale((locale) => {
+      const remove = { action: "behavior-random-remove-open", locale } as const;
+      const naturalNudges = localizedCopy(locale, "commands.config.panel.page_plugins_natural_nudges");
+      const hint = localizedProse(locale, "commands.config.panel.trigger_natural_nudges_hint", {
+        plugins: localizedCopy(locale, "commands.config.panel.category_plugins"),
+        natural_nudges: naturalNudges,
+      });
+      for (const readStatus of ["fresh", "stale"] as const) {
+        const payload = build(GUILD_MANAGER, {
+          locale,
+          category: "behavior",
+          page: "trigger",
+          personas,
+          readStatus,
+          behaviorView: overflowingView,
+          receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+        });
+        expect(buttonFor(payload, remove)?.disabled).toBe(readStatus === "stale");
+        expect(buttonFor(payload, { action: "behavior-random-remove-select", locale })).toBeUndefined();
+        const seen = walk(payload);
+        expect(seen.some((component) => component.customId?.includes("beh-random-rem-page"))).toBe(false);
+        const summary =
+          seen.find((component) => component.content?.includes(`<#${randomTriggers[0].channel_disc_id}>`))?.content ??
+          "";
+        expect(summary).toMatch(
+          localizedProse(locale, "commands.config.panel.random_trigger_more", {
+            count: randomTriggers.length - 25,
+          }),
+        );
+        const afterRemove =
+          seen[seen.findIndex((component) => component.customId === buildConfigRouteId(remove)) + 1]?.content ?? "";
+        expect(afterRemove).toStartWith(`**${naturalNudges}**\n`);
+        expect(afterRemove).toMatch(hint);
+        expectSafePanelPayload(payload, `${locale}/${readStatus}`);
+      }
     });
-    expect(buttonFor(payload, { action: "behavior-random-remove-select", locale: "en-US" })).toBeUndefined();
-    expect(walk(payload).some((component) => component.customId?.includes("beh-random-rem-page") === true)).toBe(false);
-    expect(walk(payload).some((component) => component.content?.includes("more trigger(s) are on later pages"))).toBe(
-      true,
-    );
   });
 
   it("shows the removal-range selector and Cancel only inside the explicit removal-range state", () => {

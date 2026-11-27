@@ -79,8 +79,9 @@ export async function generateConversationSummaryGoogle(
 
     return { summary: responseText.trim() };
   } catch (error) {
-    log.error("Compact summary (Google) failed", error as Error);
+    if (!request.deferFailureReport) log.error("Compact summary (Google) failed", error as Error);
     return {
+      cause: error instanceof Error ? error : undefined,
       error: error instanceof Error ? error.message : "Unknown Google error",
     };
   }

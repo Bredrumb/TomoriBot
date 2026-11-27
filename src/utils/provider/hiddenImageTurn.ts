@@ -304,7 +304,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
-    disableShortTermMemoryUpdate: true,
     suppressTextOutput: true,
     suppressUserErrors: true,
     isManuallyTriggered: true,

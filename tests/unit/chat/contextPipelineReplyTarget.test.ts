@@ -1,6 +1,6 @@
 import { describe, expect, it, mock, spyOn } from "bun:test";
 import type { Message } from "discord.js";
-import { Collection, MessageReferenceType, MessageType } from "discord.js";
+import { ButtonStyle, Collection, ComponentType, MessageReferenceType, MessageType } from "discord.js";
 import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { ChatTurn } from "@/utils/chat/types";
@@ -31,6 +31,7 @@ describe("history reply context", () => {
     "queued-missing",
     "queued-deleted",
     "older-reply-control",
+    "reply-controls-row",
     "literal-system",
     "merged",
     "reset",
@@ -129,6 +130,31 @@ describe("history reply context", () => {
     ] as unknown as Message[];
     const replyBody = scenario === "literal-system" ? "[System: a literal quotation]" : messages[0].content;
     messages[0].content = replyBody;
+    if (scenario === "reply-controls-row") {
+      const author = { ...client.user, bot: true };
+      const components = [
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              label: "↻",
+              customId: "reply-controls:v1:retry:en-US",
+            },
+          ],
+        },
+      ];
+      Object.assign(messages[1], { author, components });
+      messages.splice(1, 0, {
+        ...base,
+        id: "controls",
+        author,
+        content: "",
+        components,
+        reference: { messageId: "target", channelId: channel.id, type: MessageReferenceType.Default },
+      } as unknown as Message);
+    }
     if (scenario === "merged") {
       messages.unshift({ ...messages[0], id: "followup", content: "and another thing", reference: null } as Message);
     }
@@ -260,7 +286,6 @@ describe("history reply context", () => {
       contextItems: [],
       tailDirectives: [],
       lowerPriorityTailDirectives: [],
-      nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
     });
     const metric = spyOn(log, "metric").mockImplementation(() => {});
@@ -345,6 +370,12 @@ describe("history reply context", () => {
       const reply = result.simplifiedMessages.find((message) => message.id === "reply");
       const target = result.simplifiedMessages.find((message) => message.id === "target");
       expect(fetchById).not.toHaveBeenCalled();
+      if (scenario === "reply-controls-row") {
+        expect(result.simplifiedMessages.map((message) => message.id)).toEqual(["target", "reply"]);
+        expect(target?.combinedMessageIds ?? []).not.toContain("controls");
+        expect(target?.content).toBe(messages[2].content);
+        return;
+      }
       if (forwardedThread) {
         expect(fetchReference).toHaveBeenCalledTimes(1);
         expect(reply?.imageAttachments).toHaveLength(1);

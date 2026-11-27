@@ -22,10 +22,11 @@ En un DM, envíe un mensaje directamente sin ninguna palabra de activación ni m
 
 ### Controles de respuesta
 
-Los administradores de servidores pueden habilitar Reintentar y Continuar en `/config` > `Comportamiento` > `Comportamiento de activación` > `Controles de respuesta`. Solo el miembro que originó una respuesta puede usar sus botones, y solo mientras la respuesta esté al final de la conversación. Los mensajes nuevos ocultan los botones. Eliminar esos mensajes vuelve a mostrar los botones si la misma respuesta sin usar vuelve a ser la última. Usar un botón, una respuesta más reciente de una persona o `/refresh` retira esos controles.
+Los administradores de servidores pueden habilitar Reintentar y Continuar en `/config` > `Comportamiento` > `Comportamiento de activación` > `Controles de respuesta`. El miembro que originó la respuesta puede usar cualquiera de las dos acciones. Los mensajes nuevos del canal ocultan la fila debajo de la respuesta. Eliminar esos mensajes la vuelve a mostrar si la misma respuesta vuelve a ser la última. Un Reintentar o Continuar aceptado, una respuesta más reciente de una persona o `/refresh` retiran la fila.
 
 - `↻` reintenta toda la respuesta eliminándola y pidiéndole a la misma persona que responda de nuevo. El bot necesita `Gestionar mensajes` para eliminar respuestas enviadas desde su propia cuenta.
 - `→` le pide a la misma persona que continúe en un mensaje nuevo.
+- `Respaldo utilizado` muestra qué modelo respondió y por qué fallaron los intentos anteriores. Cualquiera que pueda ver la fila puede abrir los detalles y la fila permanece visible. El botón puede aparecer incluso cuando Reintentar y Continuar están desactivados.
 
 ### Administrar palabras de activación
 <!-- anchor: managing-trigger-words -->

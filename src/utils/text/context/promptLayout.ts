@@ -6,12 +6,10 @@ type PromptZone = "system" | "reference" | "history" | "tail";
 
 type PromptVolatility = "static" | "slow" | "turn" | "clock";
 
-// Anchor modes differ: simplified-message inserts after that message's date spacer, whereas dialogue-depth counts
-// emitted history items from the end.
 type PromptAnchor =
   | { kind: "block" | "history" | "before-latest-pair" | "append" }
   | { kind: "simplified-message"; depth: number | "configured" }
-  | { kind: "dialogue-depth" | "tailSlot" };
+  | { kind: "tailSlot" };
 
 export const TAIL_SLOT_SPEAKER_TURNS = 4;
 export const STM_TAIL_SLOT = Symbol("stmTailSlot");
@@ -32,7 +30,6 @@ type PromptInsertTag =
   | "reunion_note"
   | "lower_priority_tail"
   | "stm_content"
-  | "stm_nudge"
   | "combined_tail"
   | "queued_reply"
   | "uncensor";
@@ -196,7 +193,6 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
   },
   { tag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK, zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "lower_priority_tail", zone: "tail", volatility: "turn", anchor: { kind: "before-latest-pair" } },
-  // STM content precedes its nudge so equal-depth inserts keep the content above the nudge.
   { tag: "stm_content", zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
   {
     tag: ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
@@ -218,7 +214,6 @@ export const PROMPT_LAYOUT: readonly PromptLayoutEntry[] = [
   { tag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, zone: "tail", volatility: "turn", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_USER_STATUS, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
   { tag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, zone: "tail", volatility: "clock", anchor: { kind: "tailSlot" } },
-  { tag: "stm_nudge", zone: "tail", volatility: "turn", anchor: { kind: "dialogue-depth" } },
   { tag: "combined_tail", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "queued_reply", zone: "tail", volatility: "turn", anchor: { kind: "append" } },
   { tag: "uncensor", zone: "tail", volatility: "static", anchor: { kind: "append" } },
@@ -330,8 +325,6 @@ export function applyPromptLayoutInserts(
                 (insert.depth ?? -1) < 0 ? tailIndex : resolveDialogueDepthIndex(items, insert.depth ?? 0);
               items.splice(fresh ? Math.max(tailIndex, depthIndex) : depthIndex, 0, item);
             } else items.splice(tailIndex, 0, item);
-          } else if (entry.anchor.kind === "dialogue-depth") {
-            insertAtDialogueDepth(items, item, insert.depth ?? 0);
           } else if (entry.anchor.kind === "append") items.push(item);
         }
       }
@@ -422,14 +415,6 @@ export function insertBeforeLatestDialoguePair(
 
   const insertAt = dialogueIndexes.length >= 2 ? dialogueIndexes[1] : dialogueIndexes[0];
   contextSegments.splice(insertAt, 0, injectedItem);
-}
-
-export function insertAtDialogueDepth(
-  items: StructuredContextItem[],
-  nudge: StructuredContextItem,
-  depth: number,
-): void {
-  items.splice(resolveDialogueDepthIndex(items, depth), 0, nudge);
 }
 
 function resolveDialogueDepthIndex(items: StructuredContextItem[], depth: number): number {

@@ -8,12 +8,6 @@ export default {
         supersede_option: `Substituir (categorias substituem turnos brutos)`,
         crude_summary_option: `Bruto + resumo (mostrar ambos de forma aditiva)`,
       },
-      "prompt-edit": {
-        tool_description_label: `Descrição da Ferramenta`,
-        tool_description_description: `Como a ferramenta de MCP é descrita para o modelo.`,
-        update_nudge_label: `Lembrete de Memória`,
-        update_nudge_description: `Prompt injetado no contexto que incentiva o modelo a usar a ferramenta de MCP.`,
-      },
       "categories-edit": {
         slot_1_label: `Categoria 1`,
         slot_2_label: `Categoria 2`,

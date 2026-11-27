@@ -93,9 +93,9 @@ store and its invalidators are described in [Caching](/architecture/subsystems/c
 Appearance memory is separate from the channel adjacency used to choose group-break usernames.
 Adjacent posts retain the exact delivered username; later posts resolve the remembered sprite
 against current sprite data. Webhook selection still uses the managed pool and the thread's parent,
-while receipts and appearance state use the actual destination thread. Expressions, fallback notices,
-media, and voice resolve the active persona through this same author contract, including tool-only turns.
-The channel's last speaker never selects a later artifact's author.
+while receipts and appearance state use the actual destination thread. Expressions, media, and voice
+resolve the active persona through this author contract, including tool-only turns. The
+[reply controls row](/architecture/subsystems/reply-controls/) uses the reply's delivery receipt.
 
 The shared sender distinguishes `sent`, `pre_dispatch`, `definite_refusal`, and `unconfirmed`.
 Avatar preparation finishes before dispatch, and cancellation is checked immediately before each
