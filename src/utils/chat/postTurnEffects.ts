@@ -1,9 +1,10 @@
+import { SnowflakeUtil } from "discord.js";
 import { persistMemoryRecall } from "@/utils/text/context/memoryRecall";
 import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
 import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import { recordLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
-import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
+import { incrementStmTurnCounter, preWarmStmEntry, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
@@ -13,16 +14,12 @@ import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { releaseTextQuotaForTrigger, textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { localizer } from "@/utils/text/localizer";
-import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
+import { cleanStmMessage, cleanStmText, startStmSummarizer } from "@/utils/memory/stmSummarizer";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
 import { channelLocks, queuePersonaJobsAtFront } from "@/utils/chat/channelQueue";
 import { getMatchLimit } from "@/utils/chat/personaQueue";
 import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
-import {
-  buildSpeakerGuardRetryDirective,
-  mergeInjectedContextItems,
-  stripInjectedContextAnnotations,
-} from "@/utils/chat/contextAnnotations";
+import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
 import {
   getSelfReplyChainState,
   setLastRespondedPersona,
@@ -603,23 +600,26 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
     const messagesToStore = context.simplifiedMessages
       .filter((message) => message.authorType === "user" || message.authorType === "persona")
       .map((message) => ({
+        ...cleanStmMessage(message),
         role: message.authorType === "user" ? ("user" as const) : ("model" as const),
-        // Strip turn-ephemeral [System: …] annotations (reply refs, metadata, reactions,
-        // media notices) so durable STM holds clean conversational text only.
-        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(message.content || "")),
         timestamp: Date.now(),
-        speakerName: message.authorType === "persona" ? message.personaName || message.authorName : message.authorName,
       }))
       .filter((message) => message.content.length > 0);
 
-    for (const response of result.personaResponses) {
-      messagesToStore.push({
-        role: "model",
-        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(response.text)),
-        timestamp: Date.now(),
-        speakerName: response.personaName,
-      });
-    }
+    const replyMessageId =
+      context.streamingContext.deliveryReceipts?.at(-1)?.messageId ?? result.firstDeliveredMessageId;
+    const replyTime = replyMessageId ? SnowflakeUtil.timestampFrom(replyMessageId) : Date.now();
+    const replies = result.personaResponses.map((response) => ({
+      role: "model" as const,
+      content: cleanStmText(response.text),
+      timestamp: replyTime,
+      speakerName: response.personaName,
+    }));
+    messagesToStore.push(...replies);
+
+    const serverId = context.isDMChannel ? null : context.serverDiscId;
+    const { answeringAttempt } = result;
+    const stmEnabled = context.tomoriState.config.short_term_memory_enabled;
 
     const personaIds = [
       ...new Set(
@@ -628,7 +628,13 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
     ];
     for (const personaId of personaIds.length > 0 ? personaIds : [null]) {
       const response = result.personaResponses.find((entry) => entry.personaId === personaId);
-      storeShortTermMemory(
+      await preWarmStmEntry(
+        serverId ? "server" : "user",
+        serverId ?? context.userDiscId,
+        context.channel.id,
+        personaId,
+      );
+      const stored = storeShortTermMemory(
         context.userDiscId,
         context.channel.id,
         messagesToStore,
@@ -640,12 +646,26 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
       );
       // Advance the scope cadence counter once per bot-participation cycle rather than per raw inbound message
       // (server-shared in guilds, user-scoped in DMs).
-      void incrementStmTurnCounter(
+      const incremented = incrementStmTurnCounter(
         context.channel.id,
-        context.isDMChannel ? null : context.serverDiscId,
-        context.isDMChannel ? context.userDiscId : null,
+        serverId,
+        serverId ? null : context.userDiscId,
         personaId,
       );
+      if (answeringAttempt) {
+        void startStmSummarizer({
+          serverId,
+          userId: context.userDiscId,
+          channelId: context.channel.id,
+          personaId,
+          internalServerId: context.tomoriState.server_id,
+          enabled: stmEnabled,
+          answeringAttempt,
+          history: context.simplifiedMessages,
+          replies,
+          ready: Promise.all([stored, incremented]),
+        });
+      }
     }
   } catch (error) {
     log.warn("Failed to store short-term memory, but conversation completed successfully", error);

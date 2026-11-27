@@ -328,7 +328,7 @@ describe("nudge persona mention handoffs", () => {
   it("queues explicit mentions once in text order and preserves system accounting without copying private goals", async () => {
     const { context, incoming, lockEntry } = nudgeTurn();
     const stats = spyOn(statRepository, "recordStat").mockImplementation(() => {});
-    const stm = spyOn(shortTermMemory, "storeShortTermMemory").mockImplementation(() => {});
+    const stm = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
     restores.push(stats, stm);
     incoming.injectedContextItems = [{ role: "system", parts: [{ type: "text", text: "private opener goal" }] }];
     getSelfReplyChainState(channelId).triggerCount = 7;

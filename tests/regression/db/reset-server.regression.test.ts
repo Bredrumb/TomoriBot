@@ -132,6 +132,7 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
       refresh_cadence = 17, render_mode = 'supersede', crude_message_count = 19,
       tool_description_override = '_rt_tool_override',
       update_nudge_override = '_rt_nudge_override',
+      summarizer_instructions_override = '_rt_summarizer_override',
       nudge_injection_depth = 7, content_injection_depth = 8
   `;
   await testSql`
@@ -312,13 +313,18 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
       expect(welcome.welcome_prompt).toBeNull();
 
       const [stm] = await testSql<
-        Array<{ tool_description_override: string | null; update_nudge_override: string | null }>
+        Array<{
+          tool_description_override: string | null;
+          update_nudge_override: string | null;
+          summarizer_instructions_override: string | null;
+        }>
       >`
-        SELECT tool_description_override, update_nudge_override
+        SELECT tool_description_override, update_nudge_override, summarizer_instructions_override
         FROM server_stm_configs WHERE server_id = ${targetServerId}
       `;
       expect(stm.tool_description_override).toBeNull();
       expect(stm.update_nudge_override).toBeNull();
+      expect(stm.summarizer_instructions_override).toBeNull();
     });
   });
 
@@ -439,7 +445,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
         SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${targetServerId}
       `;
       expect(stm).toBeDefined();
-      expect(stm.refresh_cadence).toBe(5);
+      expect(stm.refresh_cadence).toBe(10);
 
       const [chat] = await testSql<Array<HumanizerSettings>>`
         SELECT humanizer_streaming_enabled, humanizer_pacing_enabled,

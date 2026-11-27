@@ -256,6 +256,7 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "crude_message_count",
         "tool_description_override",
         "update_nudge_override",
+        "summarizer_instructions_override",
         "nudge_injection_depth",
         "content_injection_depth",
       ],

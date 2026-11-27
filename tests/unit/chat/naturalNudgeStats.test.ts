@@ -54,6 +54,7 @@ function makeContext(isNaturalNudge: boolean, threadParentId?: string): ChatTurn
     tomoriState,
     triggererUserId: 42,
     contextItems: [],
+    streamingContext: {},
     shouldSurfaceUserErrors: false,
     isUserImpersonation: false,
     isDMChannel: false,
@@ -197,9 +198,9 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
 
   it("stores short-term memory for human turns without treating generated exchanges as human relationships", async () => {
     const stored: string[] = [];
-    const storeSpy = spyOn(shortTermMemoryCache, "storeShortTermMemory").mockImplementation(((userDiscId: string) => {
+    const storeSpy = spyOn(shortTermMemoryCache, "storeShortTermMemory").mockImplementation(async (userDiscId) => {
       stored.push(userDiscId);
-    }) as typeof shortTermMemoryCache.storeShortTermMemory);
+    });
     const withHistory = (isNaturalNudge: boolean) => {
       const context = makeContext(isNaturalNudge);
       Object.assign(context, {

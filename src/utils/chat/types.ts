@@ -8,9 +8,11 @@ import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/contex
 import type {
   FunctionCall,
   FunctionResponseImageMetadata,
+  ProviderConfig,
   StreamResult,
   ThoughtLogPayload,
 } from "@/types/provider/interfaces";
+import type { StoredCredentialActivity } from "@/utils/security/apiKeyRetention";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
@@ -369,6 +371,14 @@ export interface GenerationTurnResult {
   personaResponses: ChatPersonaResponse[];
   toolResponseDelivered?: boolean;
   firstDeliveredMessageId?: string;
+  answeringAttempt?: {
+    providerName: string;
+    providerConfig: Pick<ProviderConfig, "apiKey" | "model">;
+    endpointUrl?: string;
+    activity?: StoredCredentialActivity;
+    usageContext?: ProviderUsageContext;
+    credentialSource: ChatTurnContext["textCredentialSource"];
+  };
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
 }

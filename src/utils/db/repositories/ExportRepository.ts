@@ -120,6 +120,7 @@ interface WorkspaceConfigProjectionRow {
   crude_message_count: number | null;
   tool_description_override: string | null;
   update_nudge_override: string | null;
+  summarizer_instructions_override: string | null;
   nudge_injection_depth: number | null;
   content_injection_depth: number | null;
 }
@@ -819,6 +820,7 @@ export class ExportRepository {
           stmc.crude_message_count AS crude_message_count,
           stmc.tool_description_override AS tool_description_override,
           stmc.update_nudge_override AS update_nudge_override,
+          stmc.summarizer_instructions_override AS summarizer_instructions_override,
           stmc.nudge_injection_depth AS nudge_injection_depth,
           stmc.content_injection_depth AS content_injection_depth
         FROM servers s
@@ -943,6 +945,7 @@ export class ExportRepository {
                   crude_message_count: configData.crude_message_count,
                   tool_description_override: configData.tool_description_override,
                   update_nudge_override: configData.update_nudge_override,
+                  summarizer_instructions_override: configData.summarizer_instructions_override,
                   nudge_injection_depth: configData.nudge_injection_depth,
                   content_injection_depth: configData.content_injection_depth,
                 },
