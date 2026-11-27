@@ -125,7 +125,11 @@ times. Token and model stats still record.
   lacks send permission, and channels whose last idle opener has no human reply after it
   (`loadLatestIdleOpeners` with `hasHumanReplyAfter`). The pending verdict covers only the server's
   newest opener for 12 hours, so this per-channel check is what stops a nudge from landing on an
-  ignored one. Fire-time admission still enforces send permission, the channel whitelist,
+  ignored one. `hasHumanReplyAfter`, which also decides that verdict, reads the page right after the
+  opener and, when that page is full, the newest page too, because Discord's `after` never reaches
+  past a long run of bot messages. Webhook messages count as replies only when they resolve to a
+  member through message-proxy attribution. The processor remembers a found reply per channel and
+  opener, so a reopened channel is not re-read on every lull. Fire-time admission still enforces send permission, the channel whitelist,
   and persona access.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
@@ -239,7 +243,10 @@ activity still controls dormancy.
   persona_id)`. Context rebuild and the prompt snapshot render an agenda above its opener only for
   that persona, and only the newest one in the visible history (`loadLatestPersonaAgenda` in
   `runtime/agendas.ts`), so older goals never stack. The agenda expires when a newer opener with an
-  agenda for that persona enters the same history, or when the opener leaves the context window.
+  agenda for that persona enters the same history, or when the opener leaves the context window. A
+  new idle opener's own turn (`naturalNudge.opensIdleNudge` with scene turn 0) skips stored agendas,
+  because its goal arrives in the opener context while its agenda row is written only after delivery.
+  An opener that cannot be anchored records no agenda row, so the previous goal stays in that case.
 - **Opener anchoring.** The fire row and agenda anchor to `GenerationTurnResult.firstDeliveredMessageId`,
   carried from the stream state. When a tool delivered the opener, the runner looks for the first
   bot or managed-webhook message after the anchor instead.

@@ -195,6 +195,13 @@ describe("Natural Nudges turn context", () => {
     expect(context.simplifiedMessages.find((message) => message.id === "persona-last")?.isSystemNotice).toBe(false);
   });
 
+  it("leaves the previous opener's agenda out of a new idle opener, which carries its own goal", async () => {
+    const { context } = await buildTurnContext({ toolNames: [], opensIdleNudge: true }, { agenda: "Check the map" });
+    expect(context.simplifiedMessages.some((message) => message.id === "synthetic-nudge-agenda-persona-last")).toBe(
+      false,
+    );
+  });
+
   it("admits the idle nudge's tools under Deliberate Tool Mode", async () => {
     const { context } = await buildTurnContext({ toolNames: ["web_search"] });
     expect(context.streamingContext.disableAllTools).not.toBe(true);

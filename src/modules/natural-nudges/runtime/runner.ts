@@ -464,7 +464,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
     injectedContextItems: [buildOpenerContextItem(attempt, planned.plan, idleNudgeTools)],
     manualSystemPrompt: scene && buildSceneTurnDirective(scene),
     sceneTurn: scene,
-    naturalNudge: { toolNames: idleNudgeTools, targetUserDiscId: attempt.target?.userDiscId },
+    naturalNudge: { toolNames: idleNudgeTools, targetUserDiscId: attempt.target?.userDiscId, opensIdleNudge: true },
     borrowsTriggerMessage: true,
     onGenerationResult: settle,
   });

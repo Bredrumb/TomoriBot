@@ -708,6 +708,23 @@ describe("server nudge tuning", () => {
     expect(run.mock.calls[0][0].plannerChannels.map((channel) => channel.channel.id)).toEqual([CHANNEL_IDS[1]]);
   });
 
+  it("re-reads a channel's replies after its idle nudge only until one is found", async () => {
+    const now = new Date();
+    setSystemTime(now);
+    const { processor, run, openers } = fixture();
+    openers.mockResolvedValue(
+      new Map([[CHANNEL_IDS[0], { openerMessageDiscId: "1300000000000000101", answered: false }]]),
+    );
+    const replied = spyOn(channelsModule, "hasHumanReplyAfter").mockResolvedValue(true);
+    spies.push(replied);
+    await processor.processDueIdleNudges();
+    await Bun.sleep(0);
+    setSystemTime(new Date(now.getTime() + 4 * 60 * 60 * 1000));
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(replied).toHaveBeenCalledTimes(1);
+  });
+
   it("skips planner model resolution when every quiet channel still waits on its last idle nudge", async () => {
     const { processor, run, openers } = fixture();
     openers.mockResolvedValue(

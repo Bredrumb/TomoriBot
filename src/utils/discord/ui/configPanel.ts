@@ -3074,10 +3074,14 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
   const categoryMode =
     view.stmCategories.length > 1 ||
     (view.stmCategories.length === 1 && view.stmCategories[0]?.label.toLowerCase() !== "summary");
-  const categoryLines = view.stmCategories.length
-    ? view.stmCategories.map((category) => `> ${category.label}: ${category.description}`).join("\n")
-    : `> ${localizer(locale, "commands.choices.none")}`;
+  const categoryText = view.stmCategories.map((category) => `${category.label}: ${category.description}`).join("\n");
   const autoSummarizationOffNote = (key: string) => (view.stmEnabled ? "" : `\n-# ${localizer(locale, key)}`);
+  const categoriesContent = (body: string) =>
+    `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(locale, "commands.config.panel.stm_categories_description")}\n${body}${autoSummarizationOffNote("commands.config.panel.stm_categories_auto_off_note")}`;
+  const categoriesDisplay: TextDisplayComponentData = {
+    type: ComponentType.TextDisplay,
+    content: categoriesContent(""),
+  };
   components.push(
     {
       type: ComponentType.TextDisplay,
@@ -3150,10 +3154,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
         },
       ],
     },
-    {
-      type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.stm_categories_title")}**\n${localizer(locale, "commands.config.panel.stm_categories_description")}\n${categoryLines}${autoSummarizationOffNote("commands.config.panel.stm_categories_auto_off_note")}`,
-    },
+    categoriesDisplay,
     {
       type: ComponentType.ActionRow,
       components: [
@@ -3177,8 +3178,18 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmPromptHeader) + 1;
   const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
-  const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 2);
+  // Categories share the budget with both prompt previews because five full category slots alone exceed Discord's
+  // 4,000-character message text cap.
+  const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 3);
 
+  categoriesDisplay.content = categoriesContent(
+    categoryText
+      ? renderFencedPreview(locale, categoryText, {
+          budget: memoryPerValueBudget,
+          actionLabel: localizer(locale, "commands.config.panel.edit_stm_categories_button"),
+        })
+      : `> ${localizer(locale, "commands.choices.none")}`,
+  );
   const renderedToolDescription = renderFencedPreview(locale, toolDescription, {
     budget: memoryPerValueBudget,
     actionLabel: localizer(locale, "commands.config.panel.edit_stm_prompt_button"),

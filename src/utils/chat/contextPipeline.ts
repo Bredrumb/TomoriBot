@@ -964,10 +964,12 @@ async function buildSimplifiedHistory(
     resolveMessageProxyMessageIdentitiesForHistory(messages),
     primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id)),
     resolveMinimalNoticeBodies(visibleRawMessages),
-    loadLatestPersonaAgenda(
-      turn.persona.persona_id,
-      visibleRawMessages.map((msg) => msg.id),
-    ),
+    incoming.naturalNudge?.opensIdleNudge && (incoming.sceneTurn?.turnIndex ?? 0) === 0
+      ? null
+      : loadLatestPersonaAgenda(
+          turn.persona.persona_id,
+          visibleRawMessages.map((msg) => msg.id),
+        ),
   ]);
 
   const missingReplyTargets = new Map<string, Message>();

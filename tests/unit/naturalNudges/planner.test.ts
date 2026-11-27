@@ -333,6 +333,8 @@ describe("recent topic memory", () => {
     { topic: "Tea Blends!", status: "declined" },
     { topic: "tea  blends", status: "declined" },
     { topic: "rare tea blends", status: "planned" },
+    { topic: " ☕🌧 ", status: "declined" },
+    { topic: "🎸🔥", status: "planned" },
   ])("declines a plan that repeats a recent topic despite the prompt rule: %j", async ({ topic, status }) => {
     const persona = createPersona();
     const resolve = spyOn(modelModule, "resolveNudgeModel").mockResolvedValue({
@@ -364,7 +366,7 @@ describe("recent topic memory", () => {
       const outcome = await planIdleNudge({
         persona,
         interests: [],
-        recentTopics: ["cello recital", "tea blends"],
+        recentTopics: ["cello recital", "tea blends", "☕🌧"],
         candidates: soloCandidates,
         channels: [
           { name: "general", description: null, transcript: "" },

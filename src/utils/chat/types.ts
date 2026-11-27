@@ -89,6 +89,8 @@ export interface NaturalNudgeTurn {
   toolNames: readonly string[];
   // Ping User target: restricts pings to this user and resolves {user} and triggerer name to them.
   targetUserDiscId?: string;
+  // The new opener carries its own goal while its agenda row does not exist yet, so its first turn skips stored agendas.
+  opensIdleNudge?: true;
 }
 
 export interface TomoriChatInput {

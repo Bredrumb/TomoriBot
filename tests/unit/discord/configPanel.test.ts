@@ -1803,6 +1803,37 @@ describe("config Behavior pages", () => {
     }
   });
 
+  it("keeps Advanced Memory within Discord's text cap when every STM category slot is full", () => {
+    const fullCategories: StmCategoryRow[] = Array.from({ length: 5 }, (_entry, position) => ({
+      server_id: 9,
+      position,
+      label: `Slot ${position}`,
+      description: "x".repeat(990),
+    }));
+    expectForEveryLocale((locale) => {
+      for (const stmEnabled of [true, false]) {
+        const payload = build(GUILD_MANAGER, {
+          locale,
+          category: "behavior",
+          page: "memory",
+          behaviorView: {
+            ...behaviorView,
+            memory: {
+              memoryTaggingEnabled: true,
+              channelMemoryEnabled: false,
+              stmEnabled,
+              toolUseEnabled: true,
+              stmConfig: null,
+              stmCategories: fullCategories,
+            },
+          },
+        });
+        const result = validateComponentsV2MessageLimits(payload);
+        expect(result.valid, `${locale} stm=${stmEnabled}: ${JSON.stringify(result.violations)}`).toBe(true);
+      }
+    });
+  });
+
   it("keeps the overflow removal selector off the ordinary Trigger page", () => {
     const first = behaviorView.trigger.randomTriggers[0];
     const overflowingView = {

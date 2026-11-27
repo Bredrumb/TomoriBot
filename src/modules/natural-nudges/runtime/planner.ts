@@ -167,12 +167,10 @@ export type PlannerOutcome =
     };
 
 // The prompt rule against repeats is advisory, so a label that differs only in case, spacing, or punctuation still
-// counts as the same subject.
+// counts as the same subject, while a symbol-only label keeps its symbols so two different ones never both become "".
 function topicKey(topic: string): string {
-  return topic
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+  const lowered = topic.toLowerCase();
+  return lowered.replace(/[^\p{L}\p{N}]+/gu, " ").trim() || lowered.trim();
 }
 
 function partnerNames(candidate: PlannerCandidate): string {
