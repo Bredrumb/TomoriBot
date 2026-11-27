@@ -3,12 +3,12 @@ title: "Natural Nudges"
 description: "Permita que as personas do TomoriBot iniciem conversas quando um canal do Discord ficar silencioso e entrem naquelas que combinam com seus interesses, em um ritmo adaptado à atividade do seu servidor."
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 O Natural Nudges permite que o TomoriBot fale sem ser mencionado, de duas maneiras:
 
 - **Toques Ociosos**: quando um canal fica silencioso, uma de suas personas escolhe algo para fazer, como saber como alguém está, retomar uma conversa anterior, trazer um novo assunto ou encenar uma breve conversa com outra persona, postando com a própria voz.
+  - Um canal não recebe um novo toque ocioso até que um membro responda ao último enviado nele.
 - **Toques Ativos**: quando os membros estão conversando sobre algo de que uma persona gosta, essa persona entra na conversa.
 
 Os toques foram pensados para parecer um amigo que aparece para conversar:
@@ -113,7 +113,7 @@ Uma cena é um breve diálogo entre personas, com duas a quatro mensagens de dur
 
 ### Objetivos ocultos
 
-Junto com a abertura, cada toque ocioso dá à persona uma pequena meta privada, como "descobrir quem mais gosta desse anime". A meta fica anexada acima da abertura e apenas essa persona a vê, para que continue buscando o objetivo em respostas posteriores. Em uma cena, cada persona recebe seu próprio objetivo, que as outras nunca veem. Quando a abertura sai do contexto que a persona lembra, a meta desaparece. Objetivos ocultos nunca pedem dados pessoais, dinheiro ou qualquer coisa fora do chat. Membros com permissão para usar o snapshot de prompt podem visualizá-los.
+Junto com a abertura, cada toque ocioso dá à persona uma pequena meta privada, como "descobrir quem mais gosta desse anime". A meta fica anexada acima da abertura e apenas essa persona a vê, para que continue buscando o objetivo em respostas posteriores. Em uma cena, cada persona recebe seu próprio objetivo, que as outras nunca veem. O objetivo termina quando a persona inicia outro toque ocioso naquele canal, ou quando a abertura sai do histórico de conversa da persona. Objetivos ocultos nunca pedem dados pessoais, dinheiro ou qualquer coisa fora do chat. Membros com permissão para usar o snapshot de prompt podem visualizá-los.
 
 ## Configurações
 
