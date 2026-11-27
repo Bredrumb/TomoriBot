@@ -44,9 +44,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("STM summarizer storage", () => {
         const [newServer] = await tx<{ server_id: number }[]>`
           INSERT INTO servers (server_disc_id) VALUES ('_rt_stm_cadence_custom') RETURNING server_id
         `;
+        await tx`INSERT INTO server_stm_configs (server_id, refresh_cadence) VALUES (${newServer.server_id}, 10)`;
         await tx.unsafe(down);
+        const [freshCustom] =
+          await tx`SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${newServer.server_id}`;
+        expect(freshCustom.refresh_cadence).toBe(10);
+        await tx`DELETE FROM server_stm_configs WHERE server_id = ${newServer.server_id}`;
         await tx`INSERT INTO server_stm_configs (server_id) VALUES (${fixtures.serverId})`;
-        await tx`INSERT INTO server_stm_configs (server_id, refresh_cadence) VALUES (${newServer.server_id}, 17)`;
+        await tx`INSERT INTO server_stm_configs (server_id, refresh_cadence) VALUES (${newServer.server_id}, 10)`;
         const [legacy] =
           await tx`SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${fixtures.serverId}`;
         expect(legacy.refresh_cadence).toBe(5);
@@ -57,7 +62,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("STM summarizer storage", () => {
         expect(migrated).toMatchObject({ refresh_cadence: 10, summarizer_instructions_override: null });
         const [custom] =
           await tx`SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${newServer.server_id}`;
-        expect(custom.refresh_cadence).toBe(17);
+        expect(custom.refresh_cadence).toBe(10);
         const [column] = await tx`
           SELECT data_type, is_nullable FROM information_schema.columns
           WHERE table_name = 'short_term_memories' AND column_name = 'summarized_through'
@@ -67,6 +72,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("STM summarizer storage", () => {
         const [restored] =
           await tx`SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${fixtures.serverId}`;
         expect(restored.refresh_cadence).toBe(5);
+        const [restoredCustom] =
+          await tx`SELECT refresh_cadence FROM server_stm_configs WHERE server_id = ${newServer.server_id}`;
+        expect(restoredCustom.refresh_cadence).toBe(10);
         const removed = await tx`
           SELECT column_name FROM information_schema.columns
           WHERE (table_name = 'server_stm_configs' AND column_name = 'summarizer_instructions_override')

@@ -583,6 +583,8 @@ function queueNaturalNudgeReplies(context: ChatTurnContext, result: GenerationTu
   });
 }
 
+const pendingStmWrites = new Map<string, Promise<void>>();
+
 async function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   // Generated nudges and persona reactions cannot establish a human relationship for Ping User.
   if (
@@ -628,46 +630,65 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
     ];
     for (const personaId of personaIds.length > 0 ? personaIds : [null]) {
       const response = result.personaResponses.find((entry) => entry.personaId === personaId);
-      await preWarmStmEntry(
+      const scopeKey = JSON.stringify([
         serverId ? "server" : "user",
         serverId ?? context.userDiscId,
         context.channel.id,
         personaId,
-      );
-      const stored = storeShortTermMemory(
-        context.userDiscId,
-        context.channel.id,
-        messagesToStore,
-        context.isDMChannel ? "DM" : context.serverDiscId,
-        context.serverName,
-        context.channelName,
-        personaId,
-        response?.personaLineageId ?? null,
-      );
-      // Advance the scope cadence counter once per bot-participation cycle rather than per raw inbound message
-      // (server-shared in guilds, user-scoped in DMs).
-      const incremented = incrementStmTurnCounter(
-        context.channel.id,
-        serverId,
-        serverId ? null : context.userDiscId,
-        personaId,
-      );
-      if (answeringAttempt && result.status !== "error" && result.status !== "timeout") {
-        void startStmSummarizer({
-          serverId,
-          userId: context.userDiscId,
-          channelId: context.channel.id,
+      ]);
+      const previous = pendingStmWrites.get(scopeKey);
+      const pending = (async () => {
+        await previous;
+        await preWarmStmEntry(
+          serverId ? "server" : "user",
+          serverId ?? context.userDiscId,
+          context.channel.id,
           personaId,
-          internalServerId: context.tomoriState.server_id,
-          triggererUserId: context.triggererUserId,
-          lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
-          enabled: stmEnabled,
-          answeringAttempt,
-          history: context.simplifiedMessages,
-          replies,
-          ready: Promise.all([stored, incremented]),
+        );
+        const stored = storeShortTermMemory(
+          context.userDiscId,
+          context.channel.id,
+          messagesToStore,
+          context.isDMChannel ? "DM" : context.serverDiscId,
+          context.serverName,
+          context.channelName,
+          personaId,
+          response?.personaLineageId ?? null,
+        );
+        // Advance the scope cadence counter once per bot-participation cycle rather than per raw inbound message
+        // (server-shared in guilds, user-scoped in DMs).
+        const incremented = incrementStmTurnCounter(
+          context.channel.id,
+          serverId,
+          serverId ? null : context.userDiscId,
+          personaId,
+        );
+        await incremented;
+        if (answeringAttempt && result.status !== "error" && result.status !== "timeout") {
+          void startStmSummarizer({
+            serverId,
+            userId: context.userDiscId,
+            channelId: context.channel.id,
+            personaId,
+            internalServerId: context.tomoriState.server_id,
+            triggererUserId: context.triggererUserId,
+            lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
+            enabled: stmEnabled,
+            answeringAttempt,
+            history: context.simplifiedMessages,
+            fetchedHistoryOldestTimestamp: context.fetchedHistoryOldestTimestamp,
+            replies,
+            ready: stored,
+          });
+        }
+      })()
+        .catch((error: unknown) =>
+          log.warn("Failed to store short-term memory, but conversation completed successfully", error),
+        )
+        .finally(() => {
+          if (pendingStmWrites.get(scopeKey) === pending) pendingStmWrites.delete(scopeKey);
         });
-      }
+      pendingStmWrites.set(scopeKey, pending);
     }
   } catch (error) {
     log.warn("Failed to store short-term memory, but conversation completed successfully", error);

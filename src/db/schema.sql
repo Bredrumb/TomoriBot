@@ -3530,6 +3530,10 @@ CREATE TABLE IF NOT EXISTS server_stm_configs (
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS stm_cadence_migration_145 (
+  server_id INT PRIMARY KEY REFERENCES server_stm_configs(server_id) ON DELETE CASCADE
+);
+
 SELECT add_column_if_not_exists('server_stm_configs', 'summarizer_instructions_override', 'TEXT');
 
 DROP TRIGGER IF EXISTS update_server_stm_configs_timestamp ON server_stm_configs;

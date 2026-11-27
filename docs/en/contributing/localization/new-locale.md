@@ -153,7 +153,7 @@ collisions again.
 ## 4. Author intent packs
 
 `tools.intent_packs` in the locale's `tools.ts` holds the keywords that detect requests in user
-messages: the `deliberate.*` tool targets and `explicit_memory`. Matching uses the union of every
+messages: the `deliberate.*` tool targets. Matching uses the union of every
 locale's pack, so a new pack improves detection for all users.
 
 - Write what native speakers type. Use the English entries to learn what each pack should catch, then
@@ -171,7 +171,7 @@ locale's pack, so a new pack improves detection for all users.
 - English deliberate packs stay empty: `deliberateToolMode.ts` already has the English patterns.
 
 To test a pack, write the requests before reading the pack (at least three casual requests per
-deliberate target and for `explicit_memory`), then run
+deliberate target), then run
 `bun run check-intent-packs --locale=<code> --requests=<file.json>`. Requests written after reading the
 pack reuse its wording and prove nothing.
 
