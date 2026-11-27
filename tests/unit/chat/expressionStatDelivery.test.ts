@@ -393,7 +393,7 @@ describe("emoji stats count only what Discord accepted", () => {
     context.simplifiedMessages = [
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
-    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
+    const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
     const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
     try {
       const result = makeResult({
@@ -455,7 +455,7 @@ describe("emoji stats count only what Discord accepted", () => {
     first.simplifiedMessages = [
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
-    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
+    const memory = spyOn(stm, "storeShortTermMemory").mockResolvedValue(undefined);
     const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
     try {
       await runPostTurnEffects(

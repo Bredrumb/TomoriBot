@@ -80,6 +80,7 @@ const workspaceRow: Record<string, unknown> = {
   crude_message_count: 10,
   tool_description_override: null,
   update_nudge_override: null,
+  summarizer_instructions_override: "Keep unresolved plans.",
   nudge_injection_depth: 1,
   content_injection_depth: 2,
 };
@@ -255,6 +256,7 @@ describe("v2 config export projections", () => {
       crude_message_count: 10,
       tool_description_override: null,
       update_nudge_override: null,
+      summarizer_instructions_override: "Keep unresolved plans.",
       nudge_injection_depth: 1,
       content_injection_depth: 2,
     });

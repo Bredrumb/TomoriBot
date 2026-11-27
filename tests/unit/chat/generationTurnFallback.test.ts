@@ -852,16 +852,30 @@ describe("runGenerationTurn fallback behavior", () => {
       },
     ]).flat();
     const originalItems = [...context.contextItems];
+    const activity = {
+      references: [],
+      requestKeyDigest: Bun.CryptoHasher.hash("sha256", "next-key", "hex"),
+    };
     rotationKeyQueue.push(
       { apiKey: "first-key", rotationKeyId: 11, isMainKey: false },
-      { apiKey: "next-key", rotationKeyId: 12, isMainKey: false },
+      {
+        apiKey: "next-key",
+        rotationKeyId: 12,
+        isMainKey: false,
+        usageContext: { storedCredentialActivity: activity },
+      },
     );
     subscriptionLimits.set("first-key", firstLimit);
     subscriptionLimits.set("next-key", nextLimit);
     queuedResults.push(personalRouteFailure(), successfulReply());
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
-    await runGenerationTurn(context, collectingSink());
+    const result = await runGenerationTurn(context, collectingSink());
     expect(toolLoopCalls.map((call) => call.apiKey)).toEqual(["first-key", "next-key"]);
+    expect(result.answeringAttempt).toMatchObject({
+      providerConfig: { apiKey: "next-key", model: "kayra-v1" },
+      activity,
+      credentialSource: "server",
+    });
     expect(subscriptionReads).toEqual([]);
     for (const call of toolLoopCalls) expect(call.contextItems.filter((item) => item.messageId)).toEqual(originalItems);
     for (const call of toolLoopCalls) {
