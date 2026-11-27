@@ -670,6 +670,9 @@ class ImportRepository {
       }
       const tablePatches = prepared.tablePatches.map((tablePatch) => ({ ...tablePatch, id: serverId }));
       await sql.begin(async (tx: SQL) => {
+        if (prepared.stmCategories !== undefined) {
+          await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
+        }
         for (const tablePatch of tablePatches) await this.updateConfigRow(tx, tablePatch);
         if (prepared.stmCategories !== undefined) await this.updateStmCategories(tx, serverId, prepared.stmCategories);
         if (prepared.nudges) await importNudgesSection(tx, serverId, prepared.nudges);

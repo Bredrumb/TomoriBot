@@ -303,6 +303,7 @@ class ResetRepository {
   // nudges after this resolves.
   async resetServerConfiguration(serverId: number): Promise<void> {
     await sql.begin(async (tx: SQL) => {
+      await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR NO KEY UPDATE`;
       await tx`
         INSERT INTO server_chat_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET

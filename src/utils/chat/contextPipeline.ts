@@ -53,7 +53,7 @@ import {
   buildQueuedReplyDirective,
   normalizeTailDirective,
 } from "@/utils/chat/contextDirectives";
-import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
+import { excludeMessagesAwaitingOwnTurn, oldestMessageAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import { recordChatContextHistory, recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { getSupersededMessageProxyOriginalMessageIds } from "@/utils/messageProxy/proxyExpectation";
 import {
@@ -732,6 +732,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
     fetchedHistoryOldestTimestamp: history.fetchedHistoryOldestTimestamp,
+    oldestQueuedMessageTimestamp: history.oldestQueuedMessageTimestamp,
     reactedMessages: history.reactedMessages,
     streamingContext,
     messageIdMap,
@@ -824,6 +825,7 @@ async function buildSimplifiedHistory(
 ): Promise<{
   simplifiedMessages: SimplifiedMessageForContext[];
   fetchedHistoryOldestTimestamp: number | undefined;
+  oldestQueuedMessageTimestamp: number | undefined;
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
@@ -864,6 +866,11 @@ async function buildSimplifiedHistory(
       log.warn(`[fastRegeneration] Could not load history anchor messageId=${trigger.id}`, error);
     }
   }
+  const oldestQueuedMessageTimestamp = oldestMessageAwaitingOwnTurn(
+    channel.id,
+    turn.lockedTurn.admission.message.id,
+    turn.allPersonas,
+  );
   const fetchedMessages = messages;
   const fetchedMessagesById = new Map<string, Message | null>(fetchedMessages.map((message) => [message.id, message]));
   await Promise.all(messages.map(verifyMessageWebhook));
@@ -1214,6 +1221,7 @@ async function buildSimplifiedHistory(
   return {
     simplifiedMessages,
     fetchedHistoryOldestTimestamp,
+    oldestQueuedMessageTimestamp,
     userIds,
     matrixUsers,
     syntheticUsers,

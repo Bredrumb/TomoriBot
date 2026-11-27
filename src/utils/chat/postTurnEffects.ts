@@ -52,7 +52,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await settleTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
   queueNaturalNudgeReplies(context, result);
-  await writeShortTermMemory(context, result);
+  writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
   rememberLastReplyUsage(context, result);
@@ -585,7 +585,7 @@ function queueNaturalNudgeReplies(context: ChatTurnContext, result: GenerationTu
 
 const pendingStmWrites = new Map<string, Promise<void>>();
 
-async function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): void {
   // Generated nudges and persona reactions cannot establish a human relationship for Ping User.
   if (
     context.turn.lockedTurn.admission.incoming.naturalNudge ||
@@ -663,8 +663,8 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
           serverId ? null : context.userDiscId,
           personaId,
         );
-        await incremented;
-        if (answeringAttempt && result.status !== "error" && result.status !== "timeout") {
+        const [, count] = await Promise.all([stored, incremented]);
+        if (count !== undefined && answeringAttempt && result.status !== "error" && result.status !== "timeout") {
           void startStmSummarizer({
             serverId,
             userId: context.userDiscId,
@@ -677,8 +677,9 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
             answeringAttempt,
             history: context.simplifiedMessages,
             fetchedHistoryOldestTimestamp: context.fetchedHistoryOldestTimestamp,
+            oldestQueuedMessageTimestamp: context.oldestQueuedMessageTimestamp,
             replies,
-            ready: stored,
+            ready: Promise.resolve(count),
           });
         }
       })()

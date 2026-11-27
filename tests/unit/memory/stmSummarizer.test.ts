@@ -17,6 +17,7 @@ import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { charsToTokensText } from "@/utils/text/tokenEstimate";
 import { createHash } from "node:crypto";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
 
 const userId = "1400000000000000001";
 const channelId = "1400000000000000002";
@@ -62,7 +63,7 @@ function createRequest(overrides: Partial<Parameters<typeof startStmSummarizer>[
       historyMessage("New question", marker + 1000),
     ],
     replies: [{ speakerName: "Mirri", content: "New answer" }],
-    ready: Promise.resolve(),
+    ready: Promise.resolve(DEFAULT_STM_REFRESH_CADENCE),
     ...overrides,
   } satisfies Parameters<typeof startStmSummarizer>[0];
 }
@@ -163,11 +164,12 @@ describe("background STM summaries", () => {
       expect(run).toBeDefined();
       await started.promise;
 
-      expect(startStmSummarizer({ ...request })).toBeUndefined();
+      await startStmSummarizer({ ...request });
       const [{ userPrompt }] = provider.mock.calls[0];
       expect(JSON.parse(userPrompt)).toEqual({
         previousMemory: "Previous memory",
         newMessages: [
+          { speakerName: "Rye", content: "Earlier question" },
           { speakerName: "Juno", content: "New question" },
           { speakerName: "Mirri", content: "New answer" },
         ],
@@ -184,6 +186,7 @@ describe("background STM summaries", () => {
         expect.objectContaining({ summary: "Previous memory", summarizedThrough: marker }),
         { summary: "Updated unknown_var memory" },
         marker + 1000,
+        expect.objectContaining({ serverId: statScope.serverId }),
       );
       expect(stats.mock.calls.flat()).toEqual([
         { ...statScope, metric: "tokens_in", delta: 20 },
@@ -330,9 +333,74 @@ describe("background STM summaries", () => {
         }),
       );
       const [{ userPrompt }] = provider.mock.calls[1];
-      expect(JSON.parse(userPrompt).newMessages).toContainEqual({ speakerName: "Juno", content: late.content });
+      expect(JSON.parse(userPrompt).newMessages).toContainEqual({
+        speakerName: "Juno",
+        content: `${question.content}\n${late.content}`,
+      });
       expect(JSON.parse(userPrompt).newMessages).toContainEqual(reply);
     } finally {
+      provider.mockRestore();
+      write.mockRestore();
+    }
+  });
+
+  it("keeps a queued omission and messages at the cursor eligible", async () => {
+    const provider = spyOn(featureExecutors, "generateConversationSummaryForProvider").mockResolvedValue({
+      summary: "Updated",
+    });
+    const write = spyOn(stm, "persistStmSummarization").mockResolvedValue(undefined);
+    try {
+      await startStmSummarizer(createRequest({ serverId, oldestQueuedMessageTimestamp: marker + 500 }));
+      expect(write.mock.calls[0][3]).toBe(marker);
+      await startStmSummarizer(createRequest({ serverId, history: [historyMessage("Queued", marker)] }));
+      expect(JSON.parse(provider.mock.calls[1][0].userPrompt).newMessages).toContainEqual({
+        speakerName: "Juno",
+        content: "Queued",
+      });
+    } finally {
+      provider.mockRestore();
+      write.mockRestore();
+    }
+  });
+
+  it("reports an actual own-key HTTP refusal once with the key redacted", async () => {
+    const fetch = stubGlobalFetch(() => new Response(`quota ${apiKey}`, { status: 429 }));
+    const warn = spyOn(log, "warn").mockImplementation(() => {});
+    const error = spyOn(log, "error").mockImplementation(async () => {});
+    const write = spyOn(stm, "persistStmSummarization").mockResolvedValue(undefined);
+    try {
+      await startStmSummarizer(createRequest({ serverId }));
+      expect(error).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("429");
+      expect(warn.mock.calls[0][0]).not.toContain(apiKey);
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+      write.mockRestore();
+    }
+  });
+
+  it("does not let a below-cadence request occupy a due request's slot", async () => {
+    const config = Promise.withResolvers<null>();
+    const configSpy = spyOn(shortTermMemoryRepository, "getStmConfig").mockReturnValueOnce(config.promise);
+    const provider = spyOn(featureExecutors, "generateConversationSummaryForProvider").mockResolvedValue({
+      summary: "Updated",
+    });
+    const write = spyOn(stm, "persistStmSummarization").mockResolvedValue(undefined);
+    try {
+      const earlier = startStmSummarizer(
+        createRequest({ serverId, ready: Promise.resolve(DEFAULT_STM_REFRESH_CADENCE - 1) }),
+      );
+      await startStmSummarizer(createRequest({ serverId }));
+      config.resolve(null);
+      await earlier;
+      expect(provider).toHaveBeenCalledTimes(1);
+    } finally {
+      config.resolve(null);
+      configSpy.mockRestore();
       provider.mockRestore();
       write.mockRestore();
     }
@@ -367,6 +435,11 @@ describe("STM category output", () => {
       people: "Juno",
     });
     expect(parseStmCategories("### Plans\n\n", categories, { plans: "Old" })).toEqual({});
+  });
+
+  it("parses a multiline category label", () => {
+    const labels = buildSlugMap([{ label: "Scene\nGoals" }]);
+    expect(parseStmCategories("### Scene\nGoals\nUpdated", labels, {})).toEqual({ scene_goals: "Updated" });
   });
 
   it("requires an exact known heading and caps the stored text", () => {

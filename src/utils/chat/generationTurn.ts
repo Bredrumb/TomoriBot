@@ -122,6 +122,7 @@ async function runGenerationAttempts(
     context.streamingContext.deliveredMessageRefs ??= [];
     const carried: DeliveredTurnOutput = { text: "", details: "", streamResults: [] };
     let supersededResult: GenerationTurnResult | undefined;
+    let deliveringAttempt: GenerationTurnResult["answeringAttempt"];
     // Starting index of the server fallback route (null until used) so the receipt knows when to offer personal
     // fallback opt-out.
     let serverRouteStartIndex: number | null = null;
@@ -220,6 +221,18 @@ async function runGenerationAttempts(
             attempt.activity,
           ),
         );
+        if (result.personaResponses.length > 0) {
+          const { apiKey, model } = attempt.providerConfig;
+          deliveringAttempt = {
+            providerName: attempt.provider.getInfo().name,
+            modelCodename: attempt.tomoriState.llm.llm_codename,
+            providerConfig: { apiKey, model },
+            endpointUrl: attempt.tomoriState.config.custom_endpoint_url ?? undefined,
+            activity: attempt.activity,
+            usageContext: context.usageContext,
+            credentialSource: attempt.credentialSource,
+          };
+        }
         supersededResult = result;
         if (carried.text && result.status === "empty_response" && !isRetryableEmptyResponse(result)) {
           result = { ...result, status: "completed" };
@@ -329,18 +342,7 @@ async function runGenerationAttempts(
         // After the errors are emitted, because a carried attempt's error was suppressed for the
         // retry and must not surface as a second embed.
         const finalResult = prependDeliveredOutput(result, context, carried);
-        if (finalResult.personaResponses.length > 0) {
-          const { apiKey, model } = attempt.providerConfig;
-          finalResult.answeringAttempt = {
-            providerName: attempt.provider.getInfo().name,
-            modelCodename: attempt.tomoriState.llm.llm_codename,
-            providerConfig: { apiKey, model },
-            endpointUrl: attempt.tomoriState.config.custom_endpoint_url ?? undefined,
-            activity: attempt.activity,
-            usageContext: context.usageContext,
-            credentialSource: attempt.credentialSource,
-          };
-        }
+        if (finalResult.personaResponses.length > 0) finalResult.answeringAttempt = deliveringAttempt;
         if (context.responseReview) finalResult.usageEntries = context.responseReview.usage;
         await responseSink.finalize(finalResult);
         return finalResult;

@@ -87,16 +87,22 @@ export async function generateConversationSummaryDeepseek(
 
     if (!response.ok) {
       const errorBody = await response.text();
-      log.error("DeepSeek compact summary request failed", new Error(errorBody), {
-        errorType: "DeepseekCompactHttpError",
-        metadata: {
-          model: request.model,
-          status: response.status,
-          errorBody,
-        },
-      });
+      if (!request.deferFailureReport) {
+        log.error("DeepSeek compact summary request failed", new Error(errorBody), {
+          errorType: "DeepseekCompactHttpError",
+          metadata: {
+            model: request.model,
+            status: response.status,
+            errorBody,
+          },
+        });
+      }
       return {
         error: `DeepSeek request failed (${response.status}): ${response.statusText}`,
+        cause: Object.assign(new Error("Provider request failed"), {
+          status: response.status,
+          responseBody: errorBody.replaceAll(request.apiKey, "[REDACTED]"),
+        }),
       };
     }
 
@@ -112,8 +118,9 @@ export async function generateConversationSummaryDeepseek(
 
     return { summary: responseText };
   } catch (error) {
-    log.error("DeepSeek compact summary failed", error as Error);
+    if (!request.deferFailureReport) log.error("DeepSeek compact summary failed", error as Error);
     return {
+      cause: error instanceof Error ? error : undefined,
       error: error instanceof Error ? error.message : "Unknown DeepSeek error",
     };
   }

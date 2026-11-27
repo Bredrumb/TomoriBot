@@ -307,6 +307,7 @@ export interface ChatTurnContext {
   expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
   fetchedHistoryOldestTimestamp?: number;
+  oldestQueuedMessageTimestamp?: number;
   reactedMessages: Message[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;

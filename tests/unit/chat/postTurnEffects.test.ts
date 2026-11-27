@@ -138,7 +138,7 @@ describe("post-turn memory persistence", () => {
 
     const warm = spyOn(shortTermMemory, "preWarmStmEntry").mockResolvedValue(undefined);
     const store = spyOn(shortTermMemory, "storeShortTermMemory").mockResolvedValue(undefined);
-    const increment = spyOn(shortTermMemory, "incrementStmTurnCounter").mockResolvedValue(undefined);
+    const increment = spyOn(shortTermMemory, "incrementStmTurnCounter").mockResolvedValue(10);
     const summarize = spyOn(stmSummarizer, "startStmSummarizer").mockReturnValue(undefined);
     const stats = spyOn(statRepository, "recordStat").mockImplementation(() => {});
     const text = "I packed a map.";

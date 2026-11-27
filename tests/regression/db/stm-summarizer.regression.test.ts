@@ -172,6 +172,53 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("STM summarizer storage", () => {
     });
   });
 
+  it("rejects stale category definitions and preserves increments queued behind a summary write", async () => {
+    const { personaId, personaLineageId } = fixtures;
+    const dm = { userId: scope.userId, channelId: "_rt_stm_summarizer_race", serverId: null, personaId };
+    const original = await shortTermMemoryRepository.getStmCategories(fixtures.serverId);
+    try {
+      await storeShortTermMemory(dm.userId, dm.channelId, [], "DM", undefined, undefined, personaId, personaLineageId);
+      await incrementStmTurnCounter(dm.channelId, null, dm.userId, personaId);
+      const entry = getShortTermMemoryForUserChannel(dm.userId, dm.channelId, personaId);
+      if (!entry) throw new Error("Missing DM STM fixture");
+      const snapshot = snapshotStmContent(entry);
+      const changed = [{ position: 0, label: "Plans", description: "Open plans" }];
+      expect(await shortTermMemoryRepository.upsertStmCategories(fixtures.serverId, changed)).toBe(true);
+      await persistStmSummarization(dm, snapshot, { summary: "Stale" }, 1700000000000, {
+        serverId: fixtures.serverId,
+        categories: original,
+      });
+      expect(entry.summary).toBeUndefined();
+      expect(entry.turnsSinceRefresh).toBe(1);
+
+      const locked = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const blocker = testSql.begin(async (tx) => {
+        await tx`SELECT stm_id FROM short_term_memories WHERE channel_disc_id = ${dm.channelId} FOR UPDATE`;
+        locked.resolve();
+        await release.promise;
+      });
+      await locked.promise;
+      const write = persistStmSummarization(dm, snapshot, { summary: "Fresh" }, 1700000000000, {
+        serverId: fixtures.serverId,
+        categories: changed,
+      });
+      const increment = incrementStmTurnCounter(dm.channelId, null, dm.userId, personaId);
+      release.resolve();
+      await blocker;
+      await write;
+      expect(await increment).toBe(1);
+      const [row] =
+        await testSql`SELECT turns_since_refresh FROM short_term_memories WHERE channel_disc_id = ${dm.channelId}`;
+      expect(row.turns_since_refresh).toBe(1);
+      expect(entry.turnsSinceRefresh).toBe(1);
+    } finally {
+      await shortTermMemoryRepository.upsertStmCategories(fixtures.serverId, original);
+      invalidateShortTermMemory(dm.userId, dm.channelId, personaId);
+      await testSql`DELETE FROM short_term_memories WHERE channel_disc_id = ${dm.channelId}`;
+    }
+  });
+
   it("saves a reply-only summary while preserving an unset history cursor", async () => {
     const { personaId, personaLineageId } = fixtures;
     const dm = { userId: scope.userId, channelId: "_rt_stm_summarizer_dm", serverId: null, personaId };
