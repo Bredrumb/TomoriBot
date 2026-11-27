@@ -8,12 +8,6 @@ export default {
         supersede_option: `Thay thế (danh mục thay thế lượt thô)`,
         crude_summary_option: `Thô + tóm tắt (hiển thị bổ sung cả hai)`,
       },
-      "prompt-edit": {
-        tool_description_label: `Mô tả công cụ`,
-        tool_description_description: `Cách mô tả công cụ STM cho model.`,
-        update_nudge_label: `Nhắc nhở bộ nhớ`,
-        update_nudge_description: `Prompt chèn vào ngữ cảnh để nhắc model dùng công cụ STM.`,
-      },
       "categories-edit": {
         slot_1_label: `Danh mục 1`,
         slot_2_label: `Danh mục 2`,

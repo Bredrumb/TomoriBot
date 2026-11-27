@@ -8,12 +8,6 @@ export default {
         supersede_option: `置き換え（カテゴリで生のやり取りを置換）`,
         crude_summary_option: `生＋要約（両方を併記）`,
       },
-      "prompt-edit": {
-        tool_description_label: `ツール説明`,
-        tool_description_description: `STMツールがモデルに提示する説明文。`,
-        update_nudge_label: `メモリの促し`,
-        update_nudge_description: `モデルにSTMツールの使用を促すためにコンテキストへ挿入されるプロンプト。`,
-      },
       "categories-edit": {
         slot_1_label: `カテゴリ 1`,
         slot_2_label: `カテゴリ 2`,

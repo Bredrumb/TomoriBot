@@ -150,7 +150,6 @@ export default {
     tool_interact_with_recent_message: "リアクションまたは返信",
     tool_create_long_term_memory: "記憶を保存",
     tool_update_long_term_memory: "記憶を更新",
-    tool_update_short_term_memory: "短期記憶を更新",
     tool_process_youtube_video: "YouTube動画を視聴",
     idle_nudge_titles: {
       ping_user_check_in: "近況確認",

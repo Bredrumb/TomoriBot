@@ -157,7 +157,6 @@ export default {
     tool_interact_with_recent_message: "Reagir ou responder a uma mensagem",
     tool_create_long_term_memory: "Salvar uma memória",
     tool_update_long_term_memory: "Atualizar uma memória",
-    tool_update_short_term_memory: "Atualizar a memória de curto prazo",
     tool_process_youtube_video: "Assistir a um vídeo do YouTube",
     idle_nudge_titles: {
       ping_user_check_in: "Como você está?",
