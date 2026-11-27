@@ -1363,7 +1363,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           });
           return;
         }
-        const modalPayload = buildSetupSettingsModal(locale, nonce, catalogs, draft.startingSettings);
+        const modalPayload = buildSetupSettingsModal(locale, nonce, catalogs, context, draft.startingSettings);
         await showRoutedRawModal(interaction, modalPayload);
         return;
       }

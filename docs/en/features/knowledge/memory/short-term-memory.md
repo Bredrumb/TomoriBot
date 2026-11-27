@@ -12,10 +12,10 @@ temporary working context:
 - **Cross-channel context:** Recalls recent conversations from other channels, and across servers when
   cross-server recall is enabled.
 
-TomoriBot keeps short-term memory for conversations she takes part in. When automatic summaries
-are on, she refreshes the summary every 10 replies by default. The summary runs in the background
-as a separate request to the same model, so your reply arrives without waiting for it. The extra
-request is billed to the same API key as the reply, including your personal key if you used one.
+TomoriBot keeps short-term memory for conversations she takes part in. Server setup enables automatic
+summaries by default, with a summary every 10 replies. The summary runs in the background as a
+separate request to the same model, so your reply arrives without waiting for it. The extra request
+is billed to the same API key as the reply, including your personal key if you used one.
 
 Automatic summaries work with Tool Use off and with models that cannot call tools. The provider
 must support conversation summaries. NovelAI can still recall short-term memory and use summaries
