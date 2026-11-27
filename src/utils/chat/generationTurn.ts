@@ -222,12 +222,12 @@ async function runGenerationAttempts(
           ),
         );
         if (result.personaResponses.length > 0) {
-          const { apiKey, model } = attempt.providerConfig;
+          const { apiKey, model, endpointUrl } = attempt.providerConfig;
           deliveringAttempt = {
             providerName: attempt.provider.getInfo().name,
             modelCodename: attempt.tomoriState.llm.llm_codename,
             providerConfig: { apiKey, model },
-            endpointUrl: attempt.tomoriState.config.custom_endpoint_url ?? undefined,
+            endpointUrl,
             activity: attempt.activity,
             usageContext: context.usageContext,
             credentialSource: attempt.credentialSource,

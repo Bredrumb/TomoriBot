@@ -1289,6 +1289,35 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls).toHaveLength(0);
   });
 
+  it("carries the resolved personal custom endpoint even when the state has no URL mirror", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-custom", "custom:42"),
+    );
+    context.personalTextProvider = "custom:42";
+    const endpointUrl = "https://example.invalid/resolved/v1";
+    const createConfig = fakeProvider.createConfig;
+    const config = spyOn(fakeProvider, "createConfig").mockImplementation(async (state, apiKey) => ({
+      ...(await createConfig(state, apiKey)),
+      endpointUrl,
+    }));
+    try {
+      queuedResults.push(successfulReply());
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      const result = await runGenerationTurn(context, collectingSink());
+
+      expect(context.tomoriState.config.custom_endpoint_url).toBeFalsy();
+      expect(result.answeringAttempt).toMatchObject({
+        credentialSource: "personal",
+        providerConfig: { apiKey: "personal-key", model: "personal-custom" },
+        endpointUrl,
+      });
+    } finally {
+      config.mockRestore();
+    }
+  });
+
   it("resolves the server route from the persona's server model rather than the personal overlay", async () => {
     const context = makePersonalContext(
       makeLlm(1, "server-primary"),
