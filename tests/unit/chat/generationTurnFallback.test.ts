@@ -559,7 +559,7 @@ const fakeProvider = {
       apiKey,
       model: tomoriState.llm.llm_codename,
       temperature: tomoriState.config.llm_temperature ?? 0.7,
-      ...(tomoriState.llm.has_tools && { tools: [{ name: "update_short_term_memory" }] }),
+      ...(tomoriState.llm.has_tools && { tools: [{ name: "create_thread" }] }),
     };
   },
   getInfo: () => ({ name: "google" }),
@@ -2329,7 +2329,7 @@ describe("runGenerationTurn fallback behavior", () => {
       ).toBe(true);
     });
 
-    it("drops the same-channel STM block and nudge on an attempt that sends no tools", async () => {
+    it("keeps same-channel and other-channel STM on an attempt that sends no tools", async () => {
       const context = makeContext(
         { ...makeLlm(1, "primary-model"), has_tools: true } as LlmRow,
         makeLlm(2, "toolless-fallback"),
@@ -2344,7 +2344,6 @@ describe("runGenerationTurn fallback behavior", () => {
           role: "user",
           parts: [{ type: "text", text: "this channel" }],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          requiresToolCalling: true,
         },
         { role: "user", parts: [{ type: "text", text: "hello" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
       ];
@@ -2360,7 +2359,10 @@ describe("runGenerationTurn fallback behavior", () => {
             .filter((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY)
             .map(contextItemText),
         ),
-      ).toEqual([["other channel", "this channel"], ["other channel"]]);
+      ).toEqual([
+        ["other channel", "this channel"],
+        ["other channel", "this channel"],
+      ]);
     });
   });
 });

@@ -23,6 +23,20 @@ import {
 } from "@/types/db/dataExport";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 
+const stmConfig = {
+  refresh_cadence: 5,
+  render_mode: "supersede" as const,
+  crude_message_count: 10,
+  content_injection_depth: 2,
+};
+
+const legacyStmConfig = {
+  ...stmConfig,
+  tool_description_override: "Retired tool description",
+  update_nudge_override: "Retired reminder",
+  nudge_injection_depth: 1,
+};
+
 function fullWorkspaceConfig(): Record<string, unknown> {
   return {
     llm_temperature: 0.7,
@@ -93,15 +107,7 @@ function fullWorkspaceConfig(): Record<string, unknown> {
     memory_tagging_enabled: true,
     channel_memory_enabled: true,
     welcome_prompt: "Welcome",
-    stm_config: {
-      refresh_cadence: 5,
-      render_mode: "supersede",
-      crude_message_count: 10,
-      tool_description_override: null,
-      update_nudge_override: null,
-      nudge_injection_depth: 1,
-      content_injection_depth: 2,
-    },
+    stm_config: legacyStmConfig,
     stm_categories: [{ position: 0, label: "Facts", description: "Known facts" }],
   };
 }
@@ -295,6 +301,16 @@ describe("v2 discriminator and strictness", () => {
   });
 });
 
+it("ignores retired STM settings in a v2 workspace export", () => {
+  const parsed = workspaceConfigExportSchema.parse({
+    version: EXPORT_V2_VERSION,
+    type: "workspace_config",
+    exported_at: "2026-01-01T00:00:00.000Z",
+    data: { memory: { stm_config: legacyStmConfig } },
+  });
+  expect(parsed.data.memory?.stm_config).toEqual(stmConfig);
+});
+
 describe("v1 adaptation", () => {
   it("maps a populated v1 workspace config and names both dropped workspace fields", () => {
     const result = adaptV1WorkspaceConfig(fullWorkspaceConfig());
@@ -313,6 +329,7 @@ describe("v1 adaptation", () => {
     expect(result.payload.chat?.welcome_prompt).toBe("Welcome");
     expect(result.payload.capabilities?.self_debug_enabled).toBe(true);
     expect(result.payload.capabilities?.tool_notice_hidden_keys).toEqual(["web_search"]);
+    expect(result.payload.memory?.stm_config).toEqual(stmConfig);
     expect(result.payload.memory?.stm_categories).toEqual([
       { position: 0, label: "Facts", description: "Known facts" },
     ]);

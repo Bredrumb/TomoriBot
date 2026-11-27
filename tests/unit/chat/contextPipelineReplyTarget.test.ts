@@ -260,7 +260,6 @@ describe("history reply context", () => {
       contextItems: [],
       tailDirectives: [],
       lowerPriorityTailDirectives: [],
-      nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
     });
     const metric = spyOn(log, "metric").mockImplementation(() => {});

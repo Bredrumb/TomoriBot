@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { Collection, type Client, type Guild, type Sticker } from "discord.js";
 import type { ToolContext } from "@/types/tool/interfaces";
+import { ToolRegistry } from "@/tools/toolRegistry";
 import { StickerTool } from "@/tools/functionCalls/stickerTool";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { buildServerStickerContextItem } from "@/utils/text/context/serverAssets";
@@ -36,7 +37,14 @@ function fixture(customs = [createCustomExpression()]) {
     () => customSpy.mockRestore(),
     () => nativeSpy.mockRestore(),
   );
-  return { guild, client, state, context, tool: new StickerTool() };
+  const tool = new StickerTool();
+  const loadTools = spyOn(ToolRegistry, "getAvailableToolsWithMCP").mockResolvedValue({
+    builtInTools: [tool],
+    mcpFunctionNames: [],
+    totalCount: 1,
+  });
+  restores.push(() => loadTools.mockRestore());
+  return { guild, client, state, context, tool, loadTools };
 }
 
 describe("custom sticker selection", () => {
@@ -107,7 +115,6 @@ describe("custom sticker selection", () => {
       toolPromptMacroResolver: createToolPromptMacroResolver({
         provider: state.llm.llm_provider,
         stateForContext: { ...state, server_id: String(state.server_id), activePersonaHasElevenlabsVoice: false },
-        availableToolNames: new Set(["select_sticker_for_response"]),
       }),
       convertMentions: async (text) => text,
     });
@@ -119,10 +126,10 @@ describe("custom sticker selection", () => {
     expect(text).not.toContain("persona_ids");
   });
   it("omits sticker context whenever the selection tool is unavailable for the turn", async () => {
-    const { client, guild, state } = fixture();
-    for (const overrides of [
+    const { client, guild, state, tool, loadTools } = fixture();
+    for (const { stickerAvailable = true, ...overrides } of [
       { deliberateToolAllowedNames: ["web_search"] },
-      { availableToolNames: new Set<string>() },
+      { stickerAvailable: false },
       { capabilities: { tool_use: false } },
       {
         stateForContext: {
@@ -133,6 +140,11 @@ describe("custom sticker selection", () => {
         },
       },
     ]) {
+      loadTools.mockResolvedValue({
+        builtInTools: stickerAvailable ? [tool] : [],
+        mcpFunctionNames: [],
+        totalCount: stickerAvailable ? 1 : 0,
+      });
       const item = await buildServerStickerContextItem({
         client,
         guildId: guild.id,
@@ -148,7 +160,6 @@ describe("custom sticker selection", () => {
           provider: state.llm.llm_provider,
           capabilities: resolvePromptCapabilityValues(state.config, state.llm.has_tools),
           stateForContext: { ...state, server_id: String(state.server_id), activePersonaHasElevenlabsVoice: false },
-          availableToolNames: new Set(["select_sticker_for_response"]),
           ...overrides,
         }),
         convertMentions: async (text) => text,

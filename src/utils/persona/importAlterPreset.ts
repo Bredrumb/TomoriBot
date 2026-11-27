@@ -15,7 +15,7 @@ import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import {
   DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
-  personaAuthoredIdleNudgesSchema,
+  personaAuthoredIdleNudgesImportSchema,
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 
@@ -65,7 +65,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
 
   let importedIdleNudges: PersonaAuthoredIdleNudge[] | undefined;
   if (presetData.natural_nudge_idle_nudges !== undefined) {
-    const parsedIdleNudges = personaAuthoredIdleNudgesSchema.safeParse(presetData.natural_nudge_idle_nudges);
+    const parsedIdleNudges = personaAuthoredIdleNudgesImportSchema.safeParse(presetData.natural_nudge_idle_nudges);
     if (!parsedIdleNudges.success) {
       return { ok: false, reason: "config_failed" };
     }

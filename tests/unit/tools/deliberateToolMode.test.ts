@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { getLocaleStringList, getSupportedLocales, initializeLocalizer } from "@/utils/text/localizer";
 import {
   DELIBERATE_TOOL_PACK_KEYS,
-  EXPLICIT_MEMORY_PACK_KEY,
   findIntentPackViolations,
   getIntentPackEntryProblem,
 } from "@/utils/text/localeIntentPacks";
@@ -17,7 +16,7 @@ import {
 
 import { createPersona } from "../../helpers/fixtures";
 
-const ALL_PACK_KEYS = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
+const ALL_PACK_KEYS = Object.values(DELIBERATE_TOOL_PACK_KEYS);
 
 describe("deliberate tool mode", () => {
   it("admits spontaneous stickers while retaining task restrictions", () => {

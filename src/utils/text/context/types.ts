@@ -113,7 +113,6 @@ export interface BuildContextParams {
   impersonatedUserPrompt?: string | null;
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;
-  explicitLongTermMemoryIntent?: boolean;
   // Sentinel value: undefined or null disables scoped filtering, whereas an empty array blocks all Deliberate Tool
   // Mode tools.
   deliberateToolAllowedNames?: readonly string[] | null;
@@ -131,9 +130,6 @@ export type BuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
-  nudgeItem?: StructuredContextItem;
-  // Depth from the end of dialogue history for `nudgeItem` injection: `0` inserts at the tail.
-  nudgeInjectionDepth?: number;
   // Deferred STM block used only when server content depth is >= 0, since negative depths inline it in
   // `contextItems`.
   memoryInjectionItems?: StructuredContextItem[];

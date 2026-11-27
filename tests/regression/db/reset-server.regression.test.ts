@@ -130,10 +130,8 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
     INSERT INTO server_stm_configs (server_id) VALUES (${serverId})
     ON CONFLICT (server_id) DO UPDATE SET
       refresh_cadence = 17, render_mode = 'supersede', crude_message_count = 19,
-      tool_description_override = '_rt_tool_override',
-      update_nudge_override = '_rt_nudge_override',
       summarizer_instructions_override = '_rt_summarizer_override',
-      nudge_injection_depth = 7, content_injection_depth = 8
+      content_injection_depth = 8
   `;
   await testSql`
     INSERT INTO server_welcome_configs (server_id) VALUES (${serverId})
@@ -314,17 +312,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server configuration reset: regression", (
 
       const [stm] = await testSql<
         Array<{
-          tool_description_override: string | null;
-          update_nudge_override: string | null;
           summarizer_instructions_override: string | null;
+          content_injection_depth: number;
         }>
       >`
-        SELECT tool_description_override, update_nudge_override, summarizer_instructions_override
+        SELECT summarizer_instructions_override, content_injection_depth
         FROM server_stm_configs WHERE server_id = ${targetServerId}
       `;
-      expect(stm.tool_description_override).toBeNull();
-      expect(stm.update_nudge_override).toBeNull();
       expect(stm.summarizer_instructions_override).toBeNull();
+      expect(stm.content_injection_depth).toBe(-1);
     });
   });
 

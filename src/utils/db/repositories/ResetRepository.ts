@@ -203,10 +203,7 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "refresh_cadence",
       "render_mode",
       "crude_message_count",
-      "tool_description_override",
-      "update_nudge_override",
       "summarizer_instructions_override",
-      "nudge_injection_depth",
       "content_injection_depth",
     ],
     preserved: [],
@@ -486,10 +483,7 @@ class ResetRepository {
           refresh_cadence = DEFAULT,
           render_mode = DEFAULT,
           crude_message_count = DEFAULT,
-          tool_description_override = DEFAULT,
-          update_nudge_override = DEFAULT,
           summarizer_instructions_override = DEFAULT,
-          nudge_injection_depth = DEFAULT,
           content_injection_depth = DEFAULT,
           updated_at = NOW()
       `;

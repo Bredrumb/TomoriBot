@@ -208,8 +208,6 @@ export async function reassembleWithPreset(
     tailDirectives: string[];
     lowerPriorityTailDirectives: string[];
     uncensorDirective?: string;
-    nudgeItem?: StructuredContextItem;
-    nudgeInjectionDepth?: number;
     memoryInjectionItems?: StructuredContextItem[];
     memoryInjectionDepth?: number;
     memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
@@ -222,8 +220,6 @@ export async function reassembleWithPreset(
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
-  nudgeItem?: StructuredContextItem;
-  nudgeInjectionDepth?: number;
   memoryInjectionItems?: StructuredContextItem[];
   memoryInjectionDepth?: number;
   memoryRecall?: import("@/utils/text/context/memoryRecall").MemoryRecallOutcome;
@@ -439,8 +435,6 @@ export async function reassembleWithPreset(
     tailDirectives: nativeOutput.tailDirectives,
     lowerPriorityTailDirectives: nativeOutput.lowerPriorityTailDirectives,
     uncensorDirective: nativeOutput.uncensorDirective,
-    nudgeItem: nativeOutput.nudgeItem,
-    nudgeInjectionDepth: nativeOutput.nudgeInjectionDepth,
     memoryInjectionItems: nativeOutput.memoryInjectionItems,
     memoryInjectionDepth: nativeOutput.memoryInjectionDepth,
     memoryRecall: nativeOutput.memoryRecall,

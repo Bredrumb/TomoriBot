@@ -163,7 +163,6 @@ export function appendInjectedContextItems(
 
 export {
   insertBeforeLatestDialoguePair,
-  insertAtDialogueDepth,
   speakerTurnStartIndexes,
 } from "@/utils/text/context/promptLayout";
 

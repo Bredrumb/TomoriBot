@@ -34,11 +34,11 @@ describe("shared streamed tool-argument recovery", () => {
     try {
       const result = parseAccumulatedToolArguments({
         adapterName: "TestAdapter",
-        toolName: "update_short_term_memory",
-        rawArguments: '{"scene":"the roof"',
+        toolName: "create_thread",
+        rawArguments: '{"thread_name":"the roof"',
       });
 
-      expect(result.args).toEqual({ scene: "the roof" });
+      expect(result.args).toEqual({ thread_name: "the roof" });
       expect(result.parsed).toBe(false);
       expect(result.truncated).toBe(true);
       expect(metrics).toEqual([
@@ -46,9 +46,9 @@ describe("shared streamed tool-argument recovery", () => {
           name: "tool_arguments_truncated",
           fields: {
             adapter: "TestAdapter",
-            tool_name: "update_short_term_memory",
+            tool_name: "create_thread",
             recovered_keys: 1,
-            argument_chars: 19,
+            argument_chars: 25,
           },
         },
       ]);

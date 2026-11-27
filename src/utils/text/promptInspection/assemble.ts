@@ -786,11 +786,6 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   applyPromptLayoutInserts(contextItems, [
     { tag: "lower_priority_tail", items: lowerPriorityTailMessage ? [lowerPriorityTailMessage] : [] },
     { tag: "stm_content", items: contextBuild.memoryInjectionItems ?? [], depth: contextBuild.memoryInjectionDepth },
-    {
-      tag: "stm_nudge",
-      items: contextBuild.nudgeItem ? [contextBuild.nudgeItem] : [],
-      depth: contextBuild.nudgeInjectionDepth,
-    },
     { tag: "combined_tail", items: combinedTailMessage ? [combinedTailMessage] : [] },
     { tag: "uncensor", items: uncensorTailMessage ? [uncensorTailMessage] : [] },
   ]);
