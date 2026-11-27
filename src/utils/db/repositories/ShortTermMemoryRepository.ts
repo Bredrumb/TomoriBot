@@ -1,6 +1,7 @@
+import { isDeepStrictEqual } from "node:util";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import type { ServerStmConfigRow, ShortTermMemoryRow, StmCategoryRow } from "@/types/db/schema";
-import { serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
+import { normalizeStmCategories, serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
 import {
   storeShortTermMemory,
   getShortTermMemoriesForUser,
@@ -21,6 +22,21 @@ import {
 } from "@/utils/cache/shortTermMemoryCache";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
+
+export type StmContent = { summary: string } | { categories: Record<string, string> };
+
+type StmCategory = Pick<StmCategoryRow, "position" | "label" | "description">;
+type StmContentRow = Pick<
+  ShortTermMemoryRow,
+  "scope_kind" | "summary" | "categories" | "summarized_through" | "last_refreshed_turn"
+> & { stm_id: number };
+
+const STM_SNAPSHOT_CHANGED = new Error("STM snapshot changed during the write");
+const DEFAULT_STM_CATEGORY = {
+  position: 0,
+  label: "summary",
+  description: "A running summary of recent events, topics, and context from this conversation.",
+} satisfies StmCategory;
 
 type ShortTermMemoryExportShape = {
   stm_config: {
@@ -104,6 +120,85 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
     clearShortTermMemoryForUser(userId);
   }
 
+  async writeSummarization(
+    scope: { serverId: string | null; userId: string; channelId: string; personaId: number | null },
+    snapshot: {
+      summary: string | undefined;
+      categories: Record<string, string>;
+      summarizedThrough: number | undefined;
+      lastRefreshedTurn: number;
+    },
+    content: StmContent,
+    summarizedThrough: number | undefined,
+    categorySnapshot: { serverId: number; categories: readonly StmCategory[] } | undefined,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    const { serverId, userId, channelId, personaId } = scope;
+    return await sql
+      .begin(async (tx) => {
+        if (categorySnapshot) {
+          await tx`SELECT server_id FROM servers WHERE server_id = ${categorySnapshot.serverId} FOR NO KEY UPDATE`;
+          const categories = await tx<StmCategory[]>`
+            SELECT position, label, description FROM stm_categories
+            WHERE server_id = ${categorySnapshot.serverId} ORDER BY position ASC
+          `;
+          if (
+            !isDeepStrictEqual(
+              (categories.length > 0 ? categories : [DEFAULT_STM_CATEGORY]).map(
+                ({ position, label, description }) => ({ position, label, description }),
+              ),
+              categorySnapshot.categories.map(({ position, label, description }) => ({ position, label, description })),
+            )
+          )
+            return false;
+        }
+        const rows = await tx<StmContentRow[]>`
+          SELECT stm_id, scope_kind, summary, categories, summarized_through, last_refreshed_turn
+          FROM short_term_memories
+          WHERE COALESCE(server_disc_id, '') = COALESCE(${serverId}, '')
+            AND channel_disc_id = ${channelId}
+            AND COALESCE(persona_id, 0) = COALESCE(${personaId}, 0)
+            AND ((scope_kind = 'user' AND user_disc_id = ${userId})
+              OR (scope_kind = 'server' AND user_disc_id IS NULL AND ${serverId}::TEXT IS NOT NULL))
+          ORDER BY stm_id
+          FOR UPDATE
+        `;
+        const liveRow = rows.find((row) => row.scope_kind === (serverId ? "server" : "user"));
+        if (
+          rows.length !== (serverId ? 2 : 1) ||
+          !liveRow ||
+          !isCurrent() ||
+          (liveRow.summary ?? undefined) !== snapshot.summary ||
+          liveRow.summarized_through?.getTime() !== snapshot.summarizedThrough ||
+          liveRow.last_refreshed_turn !== snapshot.lastRefreshedTurn ||
+          !isDeepStrictEqual(normalizeStmCategories(liveRow.categories), snapshot.categories)
+        ) {
+          return false;
+        }
+
+        const summary = "summary" in content ? content.summary : null;
+        const categories = "categories" in content ? JSON.stringify(content.categories) : null;
+        await tx`
+          UPDATE short_term_memories
+          SET summary = COALESCE(${summary}, summary),
+              categories = COALESCE(${categories}::JSONB, categories),
+              summarized_through = ${summarizedThrough === undefined ? null : new Date(summarizedThrough)}
+          WHERE stm_id IN (${rows[0].stm_id}, ${rows[1]?.stm_id ?? rows[0].stm_id})
+        `;
+        await tx`
+          UPDATE short_term_memories
+          SET turns_since_refresh = 0, last_refreshed_turn = last_refreshed_turn + 1
+          WHERE stm_id = ${liveRow.stm_id}
+        `;
+        if (!isCurrent()) throw STM_SNAPSHOT_CHANGED;
+        return true;
+      })
+      .catch((error: unknown) => {
+        if (error === STM_SNAPSHOT_CHANGED) return false;
+        throw error;
+      });
+  }
+
   async getStmConfig(serverId: number): Promise<ServerStmConfigRow | null> {
     try {
       const [row] = await withTransientDbRetry(
@@ -183,27 +278,13 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
 
       if (categories.length === 0) {
         // Fallback: return the implicit default so callers never get an empty list
-        return [
-          {
-            server_id: serverId,
-            position: 0,
-            label: "summary",
-            description: "A running summary of recent events, topics, and context from this conversation.",
-          },
-        ];
+        return [{ server_id: serverId, ...DEFAULT_STM_CATEGORY }];
       }
 
       return categories;
     } catch (error) {
       log.error(`[STMRepo] Failed to load stm_categories for server ${serverId}`, error);
-      return [
-        {
-          server_id: serverId,
-          position: 0,
-          label: "summary",
-          description: "A running summary of recent events, topics, and context from this conversation.",
-        },
-      ];
+      return [{ server_id: serverId, ...DEFAULT_STM_CATEGORY }];
     }
   }
 
