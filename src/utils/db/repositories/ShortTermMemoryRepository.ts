@@ -144,9 +144,11 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
           `;
           if (
             !isDeepStrictEqual(
-              (categories.length > 0 ? categories : [DEFAULT_STM_CATEGORY]).map(
-                ({ position, label, description }) => ({ position, label, description }),
-              ),
+              (categories.length > 0 ? categories : [DEFAULT_STM_CATEGORY]).map(({ position, label, description }) => ({
+                position,
+                label,
+                description,
+              })),
               categorySnapshot.categories.map(({ position, label, description }) => ({ position, label, description })),
             )
           )
